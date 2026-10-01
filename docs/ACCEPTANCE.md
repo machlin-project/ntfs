@@ -13,6 +13,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
+| Native filenames and hard links | Bounded reversible aliases and per-link UTF-16 manifests; inode identity separated from link spelling; native length, Unicode, hidden/DOS ordinals, response/scan exhaustion, faults and revocation | Five authored namespace images and component sweeps passed; installed case/normalization and Windows-authored namespace untested |
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
 | Reparse metadata | Microsoft framing, relative/absolute symlinks and junction targets, lossless UTF-16, fragmented/listed attributes, snapshot lifetime, opaque WOF/cloud classification and fail-closed traversal/data access | Synthetic tests passed; Windows-authored links and native translation untested |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
@@ -70,6 +71,15 @@ ADS bytes, exact stream inventories, case folding and unchanged image hashes
 under `artifacts/interoperability-stream-catalog/` and
 `artifacts/plan-ads-oracle.log`. Windows acceptance remains unrun.
 NATIVE-NAMESPACE.md defines the format and its remaining limits.
+
+Native filename projection subsequently passed all 23 suites after fixture
+changes (`artifacts/plan-names-budget-tests.log`), current component fault/budget
+checks, style and the unsigned app (`artifacts/plan-names-verified-*.log`). Five
+namespace images include twelve hard links and a 2,000-link tree. Required name
+manifest allocations/I/O passed 13/five failure positions; alias lookup passed
+17/six, with exactly-once failure replies, retry and zero tracked allocation
+leaks. Initial cache-insertion fault-test diagnosis is retained and explained in
+NATIVE-NAMESPACE.md. This is component acceptance, not installed namespace proof.
 
 Before/after release matrices each retain 400 measurements, independent full
 stream-byte oracles and unchanged input hashes. Metadata reuse removes repeated
@@ -193,8 +203,9 @@ During MFT bootstrap, each extension must be reachable through the decoded MFT
 prefix. Attribute-list streams must be fully addressable from their base record.
 NTFS compression supports the ordinary 16-cluster unit with clusters up to 4 KiB;
 larger compressed units are rejected.
-Unpaired UTF-16 names have no lossless FSKit UTF-8 presentation yet. These are
-limits, not successful feature tests. Dirty or otherwise flagged volumes are
+Unpaired, oversized and reserved filenames now have bounded native aliases and
+UTF-16 reverse manifests, qualified by component tests; installed projection and
+native normalization remain untested. Dirty or otherwise flagged volumes are
 refused without recovery. The mirror check covers MFT bootstrap record zero;
 mount is not a full filesystem consistency check. Distinct case-sensitive names
 with identical $UpCase keys produce UNSUPPORTED during lookup; full WSL/POSIX

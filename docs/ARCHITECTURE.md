@@ -33,7 +33,13 @@ UTF-16 units. It validates first-extent references without requiring content
 support; complete mappings are checked by stream open. Both FSKit protocols expose
 bounded read-only stream xattrs and a lossless reverse manifest, with owner
 admission before cached access. See NATIVE-NAMESPACE.md for format, limits and
-the remaining filename, authorization and unsupported-object contracts.
+the remaining authorization and unsupported-object contracts.
+The native name policy has its own adapter module. Original UTF-8 within NAME_MAX
+passes through; reserved, oversized and unpaired names use a sequence-bearing
+reference and visible-link ordinal in their owning directory. Bounded independent
+cursors resolve aliases and expose original UTF-16 manifests without moving a
+native enumeration continuation. Exhaustion is an error, never successful
+truncation. Native case/normalization and installed behavior remain unqualified.
 
 Reparse metadata uses the ordinary attribute reader, including resident values,
 fragmented nonresident mappings and sequence-checked attribute-list extensions.

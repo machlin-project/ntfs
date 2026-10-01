@@ -2,8 +2,62 @@
 
 The core preserves original UTF-16 code units and distinguishes names of directory
 links from the referenced inode. Native projection belongs to the adapter.
-Ordinary filenames still use strict UTF-8 conversion; bounded aliases for
-unpaired/oversized filenames and per-directory case policy remain required.
+Ordinary filenames retain their original UTF-8 bytes without normalization. The
+adapter supplies bounded reversible aliases for names that cannot be passed
+through. Per-directory case-sensitive lookup remains required; the current
+core lookup folds through the volume's $UpCase and rejects ambiguous collisions.
+
+## Filename projection
+
+A component that converts to valid UTF-8 within the native 255-byte NAME_MAX cap
+passes through, except leading-tilde names and native dot components. Oversized,
+unpaired and reserved names use `~ntfs-<16 reference hex>-<8 ordinal hex>`.
+The reference includes its MFT sequence; the ordinal counts visible directory
+links, excluding DOS aliases and hidden system records. The owning directory
+provides the remaining identity. Every leading-tilde literal is projected too,
+so a stored filename resembling an alias cannot shadow another projected link.
+Alias parsing accepts ASCII case variants and returns the canonical lowercase
+spelling. Malformed aliases never fall back to a stored literal name.
+
+Resolution opens an independent bounded directory cursor, selects that link,
+checks the full reference and confirms that its name requires projection before
+opening the sequence-checked node. Ordinary indexed lookup retains the stored
+name; an alias cannot be forged for a link that passes through. Lookup and
+enumeration return the same spelling. Hard links reuse one FSItem identity while
+retaining each link's own projected name. Aliases are deterministic for immutable
+media, not persistent paths across namespace changes or future writes.
+
+The directory xattr `org.machlin.ntfs.names` returns the original visible link
+inventory. Its binary little-endian format is independent of NSString:
+
+| Record | Fields in wire order |
+| --- | --- |
+| Header | Eight bytes `NTFSNAM` including NUL; uint32 version (1); uint32 entry count; uint64 sequence-bearing parent reference |
+| Each link | uint32 visible ordinal; uint64 sequence-bearing target reference; uint16 UTF-16 unit count; uint8 original namespace; uint8 zero reserved; exactly that many uint16 original units |
+
+There is no implicit padding or name terminator. This is checked directory
+metadata, not full namespace consistency acceptance: a later lookup also checks
+the referenced FILE record's sequence. The complete manifest is bounded by the
+native xattr response cap and fails with E2BIG rather than returning a successful
+partial inventory. The addressable directory xattr
+`org.machlin.ntfs.name.XXXXXXXX` returns the same format for one visible ordinal,
+with entry count one. Those per-link keys are omitted from listxattr so listing
+itself remains bounded. A client can recover an aliased link's original units
+even when the complete manifest exceeds the response budget.
+
+The default scan budget is 1,048,576 stored entries, including hidden/DOS entries;
+the native owner can select a smaller positive cap. A boundary entry can detect
+that the cap has been crossed. Enumeration reports EOVERFLOW and latches the
+failed continuation; retrying that cookie performs no further I/O and cannot
+turn exhaustion into a successful truncated listing. Rewind starts a new bounded
+cursor. Reverse-manifest exhaustion reports E2BIG. Independent reversal does not
+move a pending native enumeration entry. Resource admission and post-I/O checks
+apply to all these operations, and cleanup remains valid after revocation.
+
+Alias resolution currently scans from the directory root; index/checkpoint reuse
+is a separate measured optimization. NUL/slash wire names are rejected rather
+than projected. Unsupported default-stream adoption, native case/normalization
+behavior and Windows ACL authorization remain separate required contracts.
 
 ## Read-only alternate streams
 
@@ -56,6 +110,29 @@ default stream cannot currently be adopted by FSKit still need the separate
 unsupported-object metadata contract.
 
 ## Local evidence
+
+Five independently authored namespace images qualify twelve hard links with
+ordinary and boundary-size UTF-8, oversized BMP/surrogate-pair names, unpaired
+surrogates, composed/decomposed Unicode and reserved literals; hidden/DOS entries
+preserve visible ordinals. A 2,000-link B-tree exceeds the full-manifest budget
+while a single last-link response and lookup remain available. Corrupt NUL names
+and stale references fail their native operation. Smaller scan budgets verify
+sticky exhaustion and restart rather than successful truncation.
+
+Required-allocation sweeps disable the optional record cache: name manifests
+passed 13 allocation and five I/O failure positions; alias lookup passed 17
+allocation and six I/O positions. Every failure replies once, retries successfully
+and releases all tracked core allocations. Ordinary namespace/ADS cases retain
+the default cache. An initial fault-test expectation incorrectly required ENOMEM
+for best-effort cache insertion; diagnosis and the failed run remain under
+`artifacts/plan-names-diagnosis.log`, `artifacts/plan-names-cache-diagnosis.log`
+and `artifacts/plan-names-budget-fskit.log`.
+
+All 23 suites passed after the namespace fixture changes
+(`artifacts/plan-names-budget-tests.log`); current component, style and unsigned
+app checks passed under `artifacts/plan-names-verified-*.log`. Both protocol paths
+and the Swift bridge compile; installed alias/normalization behavior and native
+Windows-authored namespace acceptance remain unqualified.
 
 The core catalog suite passes fourteen inventories/rejections, exact surrogate
 and case-distinct names, source-node-independent lifetime, 28 allocation failures

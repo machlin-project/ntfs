@@ -65,7 +65,9 @@ The latter verifies measured read ranges against original fixture bytes, ADS,
 sparse/VDL/compression, explicit warmup, record-cache controls and serialized
 readers on both POSIX and memory callbacks. Neither executes native Windows APIs.
 The FSKit component also verifies bounded stream xattrs and their raw UTF-16
-reverse manifest; five image scenarios and limits appear in NATIVE-NAMESPACE.md.
+reverse manifest. Filename projection adds five namespace images, hard-link and
+lossless name reversal, response/scan exhaustion and complete required-allocation
+and read-failure sweeps. Their formats and limits appear in NATIVE-NAMESPACE.md.
 See CORE-QUALIFICATION.md for Windows-only acquisition and offline verification.
 
 For repeated optimized measurements use `scripts/benchmark.py`, an independently

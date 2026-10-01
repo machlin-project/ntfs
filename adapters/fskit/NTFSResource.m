@@ -200,20 +200,3 @@ ntfs_uuid(uint64_t serial)
 
 	return [[NSUUID alloc] initWithUUIDString:value];
 }
-
-FSFileName *
-ntfs_filename(const uint16_t *units, size_t length)
-{
-	char bytes[NTFS_UTF8_NAME_MAX];
-	size_t count, i;
-
-	for (i = 0; i < length; i++) {
-		if (units[i] == 0 || units[i] == '/') {
-			return nil;
-		}
-	}
-	if (ntfs_utf16_to_utf8(units, length, bytes, sizeof(bytes), &count) != NTFS_OK) {
-		return nil;
-	}
-	return [FSFileName nameWithBytes:bytes length:count];
-}

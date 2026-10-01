@@ -95,6 +95,7 @@ INDEX_LARGE = 1
 COLLATION_FILENAME = 1
 NAMESPACE_POSIX = 0
 NAMESPACE_WIN32 = 1
+NAMESPACE_DOS = 2
 FILE_ATTRIBUTE_DIRECTORY = 0x10000000
 FILE_ATTRIBUTE_SPARSE = 0x200
 FILE_ATTRIBUTE_COMPRESSED = 0x800
@@ -463,6 +464,99 @@ def catalog_fixtures(output, image, contents):
     save('instance', common + [resident(ATTR_LIST, missing_instance, list_instance)], extension)
 
 
+def namespace_fixtures(output, image, contents):
+    """A directory link identifies a name independently of its hard-linked inode."""
+    number = FILE_RECORDS['hello.txt']
+    target = file_reference(number)
+    payload = contents['hello.txt']
+    leaf_entries = 5  # Fits 255-unit keys in the authored 4-KiB index block.
+    native_component_bytes = 255
+    large_name_prefix_units = 4
+    large_count = 2000  # A complete reverse manifest exceeds the 1-MiB response cap.
+
+    def units(name):
+        encoded = name.encode('utf-16le', errors='surrogatepass')
+        return struct.unpack('<' + 'H' * (len(encoded) // U16_BYTES), encoded)
+
+    def order(name):
+        original = units(name)
+        folded = tuple(u - ord('a') + ord('A') if ord('a') <= u <= ord('z') else u
+                       for u in original)
+        return folded, original
+
+    def build(names, hidden=False):
+        blocks = []
+        links = len(names)
+        metadata_name, dos_name = '!metadata', 'AAA~1'
+        if hidden:
+            names = sorted([*names, metadata_name, dos_name], key=order)
+
+        def link(name, child=None):
+            if hidden and name == metadata_name:
+                return entry(name, VOLUME_RECORD, child=child)
+            namespace = NAMESPACE_DOS if hidden and name == dos_name else NAMESPACE_WIN32
+            return entry(name, number, len(payload), child=child, namespace=namespace)
+
+        def subtree(first, last):
+            if last - first <= leaf_entries:
+                content = [link(names[i]) for i in range(first, last)]
+                terminal = None
+            else:
+                middle = first + (last - first) // 2
+                left = subtree(first, middle)
+                terminal = subtree(middle + 1, last)
+                content = [link(names[middle], child=left)]
+            vcn = len(blocks)
+            blocks.append(index_block(vcn, content, terminal))
+            return vcn
+
+        root_child = subtree(0, len(names))
+        if (INDEX_LCN + len(blocks)) * CLUSTER > IMAGE_SIZE:
+            return None
+        changed = bytearray(image)
+        for vcn, block in enumerate(blocks):
+            put_data(changed, INDEX_LCN + vcn, block)
+        put_record(changed, ROOT_RECORD,
+                   directory_record(entry(child=root_child), len(blocks)))
+        put_record(changed, number, file_record(number,
+                   [standard(), resident(DATA, payload, 1)], links=links))
+        bitmap = bytearray(IMAGE_SIZE // CLUSTER // BYTE_BITS)
+        for cluster in range(max(ALLOCATED_CLUSTERS, INDEX_LCN + len(blocks))):
+            bitmap[cluster // BYTE_BITS] |= 1 << (cluster % BYTE_BITS)
+        put_record(changed, BITMAP_RECORD, file_record(BITMAP_RECORD,
+                   [standard(), resident(DATA, bitmap, 1)]))
+        return changed
+
+    names = sorted(['hello.txt', 'a' * NAME_MAX_UNITS, 'Ω' * NAME_MAX_UNITS,
+                    '😀' * (NAME_MAX_UNITS // 2) + 'x', 'bad\ud800name', 'bad\udc00name',
+                    '~literal', '~ntfs-0007000000000018-00000000',
+                    'é.txt', 'e\u0301.txt', '.', '..'], key=order)
+    (output / 'namespace.img').write_bytes(build(names))
+    (output / 'namespace-hidden.img').write_bytes(build(names, hidden=True))
+    expected = []
+    for ordinal, name in enumerate(names):
+        try:
+            literal = name.encode('utf-8')
+        except UnicodeEncodeError:
+            literal = None
+        if literal is None or len(literal) > native_component_bytes or name.startswith('~') or name in ('.', '..'):
+            native = f'~ntfs-{target:016x}-{ordinal:08x}'
+        else:
+            native = name
+        expected.append({'units': list(units(name)), 'native': native, 'reference': target})
+    (output / 'namespace.json').write_text(json.dumps(expected, indent=2) + '\n')
+    (output / 'namespace-invalid.img').write_bytes(build(['\0bad']))
+    stale = build(names)
+    put_record(stale, number, file_record(number,
+               [standard(), resident(DATA, payload, 1)], sequence=FILE_SEQUENCE + 1))
+    (output / 'namespace-stale.img').write_bytes(stale)
+    large_names = [f'{i:04d}' + 'Ω' * (NAME_MAX_UNITS - large_name_prefix_units)
+                   for i in range(large_count)]
+    large = build(large_names)
+    if large is not None:
+        (output / 'namespace-large.img').write_bytes(large)
+
+
 def fragmented_mft(image, nonresident_list=False, damage=None):
     """Each extension reveals the mapping needed to reach the next one.
 
@@ -645,6 +739,7 @@ def main():
     image, contents, boot = make_image()
     reparse_fixtures(output, image)
     catalog_fixtures(output, image, contents)
+    namespace_fixtures(output, image, contents)
     (output / 'standard.img').write_bytes(image)
     legacy_image, _, _ = make_image(legacy=True)
     (output / 'ntfs30.img').write_bytes(legacy_image)

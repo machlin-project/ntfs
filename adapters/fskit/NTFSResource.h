@@ -32,4 +32,3 @@ enum {
 
 NSError *ntfs_error(enum ntfs_result result);
 NSUUID *ntfs_uuid(uint64_t serial);
-FSFileName *ntfs_filename(const uint16_t *units, size_t length);

@@ -33,6 +33,8 @@ targets:
       - NTFSFileSystem.h
       - NTFSResource.m
       - NTFSResource.h
+      - NTFSNames.m
+      - NTFSNames.h
       - NTFSVolume.m
       - NTFSVolume.h
       - NTFSLegacyVolume.m

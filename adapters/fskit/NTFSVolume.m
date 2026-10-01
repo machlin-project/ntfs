@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSVolume.h"
+#import "NTFSNames.h"
 #include <errno.h>
 #include <unistd.h>
 #include <limits.h>
@@ -8,7 +9,6 @@
 
 enum {
 	NTFS_FSKIT_ITEM_LIMIT = 16384,
-	NTFS_FSKIT_DIRECTORY_COOKIE_LIMIT = 1048576,
 	NTFS_FSKIT_STREAM_LIMIT = 1024,
 	NTFS_FSKIT_XATTR_SIZE_BITS = 20,
 	NTFS_FSKIT_XATTR_BYTES = (1u << NTFS_FSKIT_XATTR_SIZE_BITS) - 1,
@@ -23,6 +23,8 @@ enum {
 
 static NSString *const streamManifestName = @"org.machlin.ntfs.streams";
 static NSString *const streamAliasPrefix = @"org.machlin.ntfs.stream.";
+static NSString *const namesManifestName = @"org.machlin.ntfs.names";
+static NSString *const nameEntryPrefix = @"org.machlin.ntfs.name.";
 
 /* Native xattrs have a bounded name; the immutable catalog supplies the reverse
  * mapping. These byte-array records preserve original UTF-16 without NSString. */
@@ -55,9 +57,9 @@ stream_alias(uint32_t index)
 }
 
 static BOOL
-stream_alias_index(FSFileName *name, uint32_t *out)
+ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 {
-	NSData *prefix = [streamAliasPrefix dataUsingEncoding:NSASCIIStringEncoding];
+	NSData *prefix = [aliasPrefix dataUsingEncoding:NSASCIIStringEncoding];
 	NSData *data = name.data;
 	const uint8_t *bytes = data.bytes;
 	size_t i;
@@ -91,6 +93,8 @@ stream_alias_index(FSFileName *name, uint32_t *out)
 	struct ntfs_dirent pendingEntry;
 	BOOL pending;
 	uint64_t position;
+	uint32_t inspectedEntries;
+	enum ntfs_result cursorFailure;
 	struct ntfs_stat stat;
 }
 @property(weak) NTFSVolume *owner;
@@ -105,13 +109,6 @@ item_id(uint64_t reference)
 									    : (FSItemID)reference;
 }
 
-static BOOL
-visible(const struct ntfs_dirent *entry)
-{
-	return (entry->reference & NTFS_REFERENCE_RECORD_MASK) >= NTFS_FIRST_USER_RECORD &&
-	    entry->name_namespace != NTFS_NAMESPACE_DOS;
-}
-
 @implementation NTFSVolume {
 	struct ntfs_volume *_core;
 	struct ntfs_info _info;
@@ -119,15 +116,28 @@ visible(const struct ntfs_dirent *entry)
 	NSMutableDictionary<NSNumber *, NTFSItem *> *_items;
 	FSDirectoryVerifier _directoryVerifier;
 	uint64_t _freeClusters;
+	uint32_t _maximumDirectoryEntries;
 	BOOL _active;
 }
 
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource
 {
+	return [self initWithCore:core
+			   resource:resource
+	    maximumDirectoryEntries:NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT];
+}
+
+- (instancetype)initWithCore:(struct ntfs_volume *)core
+		    resource:(NTFSResource *)resource
+     maximumDirectoryEntries:(uint32_t)maximum
+{
 	struct ntfs_info info;
 	uint64_t freeClusters;
 	NSString *label;
 
+	if (maximum == 0 || maximum > NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
+		return nil;
+	}
 	ntfs_get_info(core, &info);
 	if (ntfs_count_free_clusters(core, &freeClusters) != NTFS_OK) {
 		return nil;
@@ -141,6 +151,7 @@ visible(const struct ntfs_dirent *entry)
 		_info = info;
 		_resource = resource;
 		_freeClusters = freeClusters;
+		_maximumDirectoryEntries = maximum;
 		_items = [NSMutableDictionary dictionary];
 		_directoryVerifier =
 		    ((uint64_t)arc4random() << (sizeof(uint32_t) * CHAR_BIT)) | arc4random() | 1;
@@ -213,6 +224,9 @@ visible(const struct ntfs_dirent *entry)
 	NTFSItem *item;
 
 	result = ntfs_node_stat(node, &stat);
+	if (result == NTFS_OK && !_resource.isAvailable) {
+		result = NTFS_IO;
+	}
 	if (result != NTFS_OK) {
 		ntfs_node_close(node);
 		*error = ntfs_error(result);
@@ -277,6 +291,9 @@ visible(const struct ntfs_dirent *entry)
 	size_t length;
 	struct ntfs_node *node = NULL;
 	struct ntfs_dirent entry;
+	uint64_t reference;
+	uint32_t ordinal;
+	BOOL projected;
 	enum ntfs_result result;
 	NTFSItem *parent;
 
@@ -293,26 +310,63 @@ visible(const struct ntfs_dirent *entry)
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
-		result = ntfs_utf8_to_utf16(
-		    name.data.bytes, name.data.length, units, NTFS_NAME_MAX, &length);
-		if (result == NTFS_OK) {
-			result = ntfs_lookup_entry(parent->node, units, length, &node, &entry);
+		if (name.data.length > NTFS_FSKIT_NATIVE_NAME_BYTES) {
+			*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+						     code:ENAMETOOLONG
+						 userInfo:nil];
+			return nil;
 		}
-		if (result == NTFS_OK && !visible(&entry)) {
+		if (ntfs_native_name_reserved(name)) {
 			result = NTFS_NOT_FOUND;
+			if (ntfs_native_alias_parse(name, &reference, &ordinal)) {
+				result = ntfs_native_entry_at(
+				    parent->node, ordinal, _maximumDirectoryEntries, &entry);
+				if (result == NTFS_END ||
+				    (result == NTFS_OK && entry.reference != reference)) {
+					result = NTFS_NOT_FOUND;
+				}
+				if (result == NTFS_OK) {
+					result = ntfs_native_entry_name(
+					    &entry, ordinal, stored, &projected);
+					if (result == NTFS_OK && !projected) {
+						result = NTFS_NOT_FOUND;
+					}
+				}
+				if (result == NTFS_OK) {
+					result = ntfs_node_open(_core, reference, &node);
+				}
+			}
+		} else {
+			result = ntfs_utf8_to_utf16(
+			    name.data.bytes, name.data.length, units, NTFS_NAME_MAX, &length);
+			if (result == NTFS_OK) {
+				result =
+				    ntfs_lookup_entry(parent->node, units, length, &node, &entry);
+			}
+			if (result == NTFS_OK) {
+				result = ntfs_native_entry_name(&entry, 0, stored, &projected);
+				if (result == NTFS_OK && projected) {
+					result = NTFS_NOT_FOUND;
+				}
+			}
+		}
+		if (result == NTFS_OK && !ntfs_native_entry_visible(&entry)) {
+			result = NTFS_NOT_FOUND;
+		}
+		if (result == NTFS_OK && !_resource.isAvailable) {
+			result = NTFS_IO;
 		}
 		if (result != NTFS_OK) {
 			ntfs_node_close(node);
+			*stored = nil;
 			*error = ntfs_error(result);
 			return nil;
 		}
-		*stored = ntfs_filename(entry.name, entry.name_length);
-		if (*stored == nil) {
-			ntfs_node_close(node);
-			*error = ntfs_error(NTFS_UNSUPPORTED);
-			return nil;
+		parent = [self adoptNode:node error:error];
+		if (parent == nil) {
+			*stored = nil;
 		}
-		return [self adoptNode:node error:error];
+		return parent;
 	}
 }
 
@@ -442,6 +496,9 @@ visible(const struct ntfs_dirent *entry)
 		}
 		names =
 		    [NSMutableArray arrayWithObject:[FSFileName nameWithString:streamManifestName]];
+		if (value->stat.directory) {
+			[names addObject:[FSFileName nameWithString:namesManifestName]];
+		}
 		for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
 			result = ntfs_stream_catalog_entry(catalog, i, &name);
 			if (result != NTFS_OK) {
@@ -526,7 +583,7 @@ visible(const struct ntfs_dirent *entry)
 	NSMutableData *data = nil;
 	NSData *manifest;
 	uint64_t size;
-	uint32_t index;
+	uint32_t index = 0;
 	size_t completed = 0;
 	enum ntfs_result result;
 
@@ -542,6 +599,40 @@ visible(const struct ntfs_dirent *entry)
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
+		if ([name.data isEqualToData:[FSFileName nameWithString:namesManifestName].data] ||
+		    ordinal_xattr_index(name, nameEntryPrefix, &index)) {
+			if (!value->stat.directory) {
+				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+							     code:ENOATTR
+							 userInfo:nil];
+				return nil;
+			}
+			result = ntfs_native_names_manifest(value->node, value->stat.reference,
+			    _maximumDirectoryEntries,
+			    ![name.data
+				isEqualToData:[FSFileName nameWithString:namesManifestName].data],
+			    index, NTFS_FSKIT_XATTR_BYTES, &manifest);
+			if (result == NTFS_NOT_FOUND) {
+				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+							     code:ENOATTR
+							 userInfo:nil];
+				return nil;
+			}
+			if (result == NTFS_RANGE) {
+				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+							     code:E2BIG
+							 userInfo:nil];
+				return nil;
+			}
+			if (result == NTFS_OK && !_resource.isAvailable) {
+				result = NTFS_IO;
+			}
+			if (result != NTFS_OK) {
+				*error = ntfs_error(result);
+				return nil;
+			}
+			return manifest;
+		}
 		catalog = [self catalogForItem:value error:error];
 		if (catalog == NULL) {
 			return nil;
@@ -554,7 +645,7 @@ visible(const struct ntfs_dirent *entry)
 			}
 			return manifest;
 		}
-		if (!stream_alias_index(name, &index) ||
+		if (!ordinal_xattr_index(name, streamAliasPrefix, &index) ||
 		    ntfs_stream_catalog_entry(catalog, index, &streamName) != NTFS_OK ||
 		    streamName.length == 0) {
 			*error = [NSError errorWithDomain:NSPOSIXErrorDomain
@@ -603,6 +694,7 @@ visible(const struct ntfs_dirent *entry)
 	struct ntfs_stat stat;
 	FSFileName *name;
 	FSItemAttributes *attrs;
+	BOOL projected;
 	enum ntfs_result result;
 
 	@synchronized(self) {
@@ -614,7 +706,7 @@ visible(const struct ntfs_dirent *entry)
 		if (item == nil) {
 			return ntfs_error(NTFS_STALE);
 		}
-		if (cookie > NTFS_FSKIT_DIRECTORY_COOKIE_LIMIT ||
+		if (cookie > _maximumDirectoryEntries ||
 		    (cookie != 0 && verifier != _directoryVerifier)) {
 			return ntfs_error(NTFS_INVALID);
 		}
@@ -622,23 +714,35 @@ visible(const struct ntfs_dirent *entry)
 			ntfs_directory_close(item->cursor);
 			item->cursor = NULL;
 			item->position = 0;
+			item->inspectedEntries = 0;
+			item->cursorFailure = NTFS_OK;
 			item->pending = NO;
 			result = ntfs_directory_open(item->node, &item->cursor);
 			if (result != NTFS_OK) {
 				return ntfs_error(result);
 			}
 		}
+		if (item->cursorFailure != NTFS_OK) {
+			return ntfs_error(item->cursorFailure);
+		}
 		for (;;) {
 			if (!item->pending) {
 				result = ntfs_directory_next(item->cursor, &item->pendingEntry);
 				if (result == NTFS_END) {
+					if (!_resource.isAvailable) {
+						return ntfs_error(NTFS_IO);
+					}
 					return item->position < cookie ? ntfs_error(NTFS_INVALID)
 								       : nil;
 				}
 				if (result != NTFS_OK) {
 					return ntfs_error(result);
 				}
-				if (!visible(&item->pendingEntry)) {
+				if (item->inspectedEntries++ == _maximumDirectoryEntries) {
+					item->cursorFailure = NTFS_RANGE;
+					return ntfs_error(NTFS_RANGE);
+				}
+				if (!ntfs_native_entry_visible(&item->pendingEntry)) {
 					continue;
 				}
 				item->pending = YES;
@@ -648,10 +752,10 @@ visible(const struct ntfs_dirent *entry)
 				item->position++;
 				continue;
 			}
-			name =
-			    ntfs_filename(item->pendingEntry.name, item->pendingEntry.name_length);
-			if (name == nil) {
-				return ntfs_error(NTFS_UNSUPPORTED);
+			result = ntfs_native_entry_name(
+			    &item->pendingEntry, (uint32_t)item->position, &name, &projected);
+			if (result != NTFS_OK) {
+				return ntfs_error(result);
 			}
 			attrs = nil;
 			if (attributes) {
@@ -669,6 +773,9 @@ visible(const struct ntfs_dirent *entry)
 					return ntfs_error(NTFS_UNSUPPORTED);
 				}
 				attrs = [self attributesForStat:&stat];
+			}
+			if (!_resource.isAvailable) {
+				return ntfs_error(NTFS_IO);
 			}
 			if (![packer packEntryWithName:name
 					      itemType:(item->pendingEntry.file_attributes &
@@ -781,7 +888,7 @@ visible(const struct ntfs_dirent *entry)
 
 - (NSInteger)maximumNameLength
 {
-	return NTFS_UTF8_NAME_MAX;
+	return NTFS_FSKIT_NATIVE_NAME_BYTES;
 }
 
 - (BOOL)restrictsOwnershipChanges

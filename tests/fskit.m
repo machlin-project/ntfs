@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSVolume.h"
+#import "NTFSNames.h"
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
@@ -15,6 +16,7 @@
 @property(getter=isRevoked) BOOL revoked;
 @property BOOL revokeDuringRead;
 @property NSUInteger reads;
+@property NSUInteger failReadAt;
 @end
 @implementation TestReader
 
@@ -46,7 +48,7 @@
 	if (self.revokeDuringRead) {
 		self.revoked = YES;
 	}
-	if (self.failed) {
+	if (self.failed || self.reads == self.failReadAt) {
 		*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EIO userInfo:nil];
 		return 0;
 	}
@@ -58,12 +60,34 @@
 
 @interface FaultResource : NTFSResource
 @property BOOL failAllocation;
+@property NSUInteger allocations;
+@property NSUInteger failAllocationAt;
+@property NSUInteger liveAllocations;
 @end
 @implementation FaultResource
 
 - (void *)allocateSize:(size_t)size
 {
-	return self.failAllocation ? NULL : [super allocateSize:size];
+	void *bytes;
+
+	self.allocations++;
+	if (self.failAllocation || self.allocations == self.failAllocationAt) {
+		return NULL;
+	}
+	bytes = [super allocateSize:size];
+	if (bytes != NULL) {
+		self.liveAllocations++;
+	}
+	return bytes;
+}
+
+- (void)releaseBytes:(void *)bytes size:(size_t)size
+{
+	if (bytes != NULL) {
+		assert(self.liveAllocations != 0);
+		self.liveAllocations--;
+	}
+	[super releaseBytes:bytes size:size];
 }
 
 @end
@@ -408,9 +432,9 @@ test_ads(NSData *image, NSString *fileName, const uint16_t *name, uint16_t nameL
 	replies = 0;
 	[volume listXattrsOfItem:item
 		    replyHandler:^(NSArray<FSFileName *> *names, NSError *e) {
-		      assert(e == nil && names.count == 2);
+		      assert(e == nil && names.count == (fileName == nil ? 3u : 2u));
 		      assert([names[0].data isEqualToData:manifestName.data] &&
-			  [names[1].data isEqualToData:alias.data]);
+			  [names.lastObject.data isEqualToData:alias.data]);
 		      replies++;
 		    }];
 	assert(replies == 1);
@@ -508,6 +532,547 @@ test_ads(NSData *image, NSString *fileName, const uint16_t *name, uint16_t nameL
 	assert([volume xattrsForItem:item error:&error] == nil && error.code == ESTALE);
 }
 
+struct test_names_header {
+	uint8_t signature[8], version[4], entries[4], parent[8];
+};
+
+struct test_names_entry {
+	uint8_t index[4], file[8], units[2], name_namespace, reserved;
+};
+
+enum {
+	TEST_NAMES_MANIFEST_VERSION = 1,
+	TEST_NAMESPACE_ROOT_SEQUENCE = 1,
+	TEST_NAMESPACE_FILE_SEQUENCE = 7,
+	TEST_NAMESPACE_FILE_RECORD = 24,
+	TEST_NAMESPACE_OMEGA = 0x03a9
+};
+
+static void
+check_names_manifest(
+    NSData *data, NSArray<NSDictionary *> *names, NSUInteger first, NSUInteger count)
+{
+	const struct test_names_header *header;
+	const struct test_names_entry *entry;
+	const uint8_t *bytes = data.bytes;
+	NSArray<NSNumber *> *units;
+	NSDictionary *expected;
+	size_t position = sizeof(*header), i, j;
+
+	assert(data != nil && data.length >= sizeof(*header));
+	header = (const void *)bytes;
+	assert(memcmp(header->signature, "NTFSNAM", sizeof(header->signature)) == 0);
+	assert(
+	    test_little(header->version, sizeof(header->version)) == TEST_NAMES_MANIFEST_VERSION &&
+	    test_little(header->entries, sizeof(header->entries)) == count);
+	assert(test_little(header->parent, sizeof(header->parent)) ==
+	    (((uint64_t)TEST_NAMESPACE_ROOT_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT) |
+		NTFS_ROOT_RECORD));
+	for (i = first; i < first + count; i++) {
+		expected = names[i - first];
+		units = expected[@"units"];
+		assert(sizeof(*entry) <= data.length - position);
+		entry = (const void *)(bytes + position);
+		assert(test_little(entry->index, sizeof(entry->index)) == i &&
+		    test_little(entry->file, sizeof(entry->file)) ==
+			[expected[@"reference"] unsignedLongLongValue]);
+		assert(test_little(entry->units, sizeof(entry->units)) == units.count &&
+		    entry->name_namespace == NTFS_NAMESPACE_WIN32 && entry->reserved == 0);
+		position += sizeof(*entry);
+		for (j = 0; j < units.count; j++) {
+			assert(sizeof(uint16_t) <= data.length - position);
+			assert(test_little(bytes + position, sizeof(uint16_t)) ==
+			    units[j].unsignedIntValue);
+			position += sizeof(uint16_t);
+		}
+	}
+	assert(position == data.length);
+}
+
+static void
+test_namespace(NSData *image, NSArray<NSDictionary *> *names)
+{
+	TestReader *reader = [[TestReader alloc] init];
+	FaultResource *resource;
+	NTFSLegacyVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_volume *core = NULL;
+	FSItem *root, *file, *identity = nil;
+	FSFileName *stored, *alias;
+	FSItemAttributes *attributes;
+	NSError *error = nil;
+	TestPacker *packer;
+	NSData *manifest;
+	NSMutableArray<NSString *> *enumerated = [NSMutableArray array];
+	NSMutableArray<NSString *> *expected = [NSMutableArray array];
+	FSDirectoryCookie cookie = 0;
+	NSUInteger i, reads, ordinary = NSNotFound, projected = NSNotFound;
+	__block NSUInteger replies = 0;
+	size_t completed;
+	uint8_t buffer[TEST_READ_WINDOW_BYTES];
+	const char payload[] = "Hello from NTFS.\n";
+
+	assert(image != nil && names.count != 0);
+	reader.image = image;
+	resource = [[FaultResource alloc] initWithReader:reader];
+	env = [resource environment];
+	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
+	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	root = [volume activate:&error];
+	assert(root != nil && error == nil && volume.maximumNameLength == NAME_MAX);
+	resource.failAllocation = YES;
+	[volume getXattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+		       ofItem:root
+		 replyHandler:^(NSData *value, NSError *e) {
+		   assert(value == nil && e.code == ENOMEM);
+		   replies++;
+		 }];
+	assert(replies == 1);
+	resource.failAllocation = NO;
+	[volume getXattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+		       ofItem:root
+		 replyHandler:^(NSData *value, NSError *e) {
+		   assert(e == nil);
+		   check_names_manifest(value, names, 0, names.count);
+		   replies++;
+		 }];
+	assert(replies == 2);
+	for (i = 0; i < names.count; i++) {
+		[expected addObject:names[i][@"native"]];
+		if ([expected.lastObject hasPrefix:@"~ntfs-"]) {
+			projected = i;
+		} else {
+			ordinary = i;
+		}
+	}
+	for (i = 0; i <= names.count / TEST_DIRECTORY_BATCH_CAPACITY + 1; i++) {
+		packer = [[TestPacker alloc] init];
+		packer.capacity = TEST_DIRECTORY_BATCH_CAPACITY;
+		packer.names = [NSMutableArray array];
+		assert([volume enumerate:root
+				  cookie:cookie
+				verifier:cookie == 0 ? 0 : volume.directoryVerifier
+			      attributes:YES
+				  packer:(FSDirectoryEntryPacker *)packer] == nil);
+		[enumerated addObjectsFromArray:packer.names];
+		if (packer.names.count == 0) {
+			break;
+		}
+		cookie = packer.lastCookie;
+	}
+	assert([enumerated isEqualToArray:expected] &&
+	    [NSSet setWithArray:enumerated].count == names.count);
+	for (i = 0; i < names.count; i++) {
+		alias = [FSFileName nameWithString:expected[i]];
+		assert(alias.data.length <= NAME_MAX);
+		file = [volume lookup:alias inDirectory:root storedName:&stored error:&error];
+		assert(file != nil && error == nil && [stored.data isEqualToData:alias.data]);
+		assert(identity == nil || identity == file);
+		identity = file;
+		attributes = [volume attributes:file error:&error];
+		assert(error == nil && attributes.linkCount == names.count);
+		assert([volume readItem:file
+				 offset:0
+				  bytes:buffer
+				 length:sizeof(buffer)
+			      completed:&completed] == NTFS_OK &&
+		    completed == sizeof(payload) - 1 && memcmp(buffer, payload, completed) == 0);
+		manifest = [volume
+		    xattrNamed:[FSFileName nameWithString:
+				       [NSString stringWithFormat:@"org.machlin.ntfs.name.%08x",
+					   (uint32_t)i]]
+			ofItem:root
+			 error:&error];
+		assert(error == nil);
+		check_names_manifest(manifest, @[ names[i] ], i, 1);
+	}
+	assert(ordinary != NSNotFound && projected != NSNotFound);
+	alias = [FSFileName nameWithString:[expected[projected] uppercaseString]];
+	assert([volume lookup:alias inDirectory:root storedName:&stored error:&error] == identity &&
+	    [stored.string isEqualToString:expected[projected]]);
+	alias =
+	    [FSFileName nameWithString:[NSString stringWithFormat:@"~ntfs-0007000000000018-%08x",
+					   (uint32_t)ordinary]];
+	assert([volume lookup:alias inDirectory:root storedName:&stored error:&error] == nil &&
+	    stored == nil && error.code == ENOENT);
+	alias =
+	    [FSFileName nameWithString:[NSString stringWithFormat:@"~ntfs-0008000000000018-%08x",
+					   (uint32_t)projected]];
+	assert([volume lookup:alias inDirectory:root storedName:&stored error:&error] == nil &&
+	    stored == nil && error.code == ENOENT);
+	reads = reader.reads;
+	assert([volume lookup:[FSFileName nameWithString:@"~literal"]
+		   inDirectory:root
+		    storedName:&stored
+			 error:&error] == nil &&
+	    error.code == ENOENT);
+	assert([volume lookup:[FSFileName nameWithString:@"~ntfs-0000000000000018-00000000"]
+		   inDirectory:root
+		    storedName:&stored
+			 error:&error] == nil &&
+	    error.code == ENOENT);
+	assert(reader.reads == reads);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.name.ffffffff"]
+			   ofItem:root
+			    error:&error] == nil &&
+	    error.code == E2BIG);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.name.000000ff"]
+			   ofItem:root
+			    error:&error] == nil &&
+	    error.code == ENOATTR);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+			   ofItem:identity
+			    error:&error] == nil &&
+	    error.code == ENOATTR);
+	alias = [FSFileName nameWithString:[@"x" stringByPaddingToLength:NAME_MAX + 1
+							      withString:@"x"
+							 startingAtIndex:0]];
+	assert([volume lookup:alias inDirectory:root storedName:&stored error:&error] == nil &&
+	    stored == nil && error.code == ENAMETOOLONG);
+	/* Reversal and lookups must not advance a pending native enumeration entry. */
+	packer = [[TestPacker alloc] init];
+	packer.capacity = 0;
+	packer.names = [NSMutableArray array];
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer] == nil &&
+	    packer.names.count == 0);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+			   ofItem:root
+			    error:&error] != nil &&
+	    error == nil);
+	packer.capacity = 1;
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer] == nil &&
+	    [packer.names.firstObject isEqualToString:expected[0]]);
+	manifest = [volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.name.00000000"]
+			       ofItem:root
+				error:&error];
+	check_names_manifest(manifest, @[ names[0] ], 0, 1);
+	packer.names = [NSMutableArray array];
+	assert([volume enumerate:root
+			  cookie:packer.lastCookie
+			verifier:volume.directoryVerifier
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer] == nil &&
+	    [packer.names.firstObject isEqualToString:expected[1]]);
+	reader.revokeDuringRead = YES;
+	replies = 0;
+	[volume getXattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+		       ofItem:root
+		 replyHandler:^(NSData *value, NSError *e) {
+		   assert(value == nil && e.code == EIO);
+		   replies++;
+		 }];
+	assert(replies == 1 && !resource.isAvailable);
+	reads = reader.reads;
+	assert([volume lookup:[FSFileName nameWithString:expected[projected]]
+		   inDirectory:root
+		    storedName:&stored
+			 error:&error] == nil &&
+	    error.code == EIO);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.name.00000000"]
+			   ofItem:root
+			    error:&error] == nil &&
+	    error.code == EIO && reader.reads == reads);
+	[volume invalidate];
+	assert(reader.reads == reads);
+}
+
+static void
+test_namespace_large(NSData *image)
+{
+	enum { ENTRY_COUNT = 2000, PREFIX_UNITS = 4 };
+
+	TestReader *reader = [[TestReader alloc] init];
+	NTFSResource *resource;
+	NTFSLegacyVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_volume *core = NULL;
+	FSItem *root, *file;
+	FSFileName *stored, *alias;
+	NSError *error = nil;
+	NSData *manifest;
+	NSMutableArray<NSNumber *> *units = [NSMutableArray array];
+	NSDictionary *expected;
+	NSString *prefix;
+	NSUInteger i;
+
+	assert(image != nil);
+	reader.image = image;
+	resource = [[NTFSResource alloc] initWithReader:reader];
+	env = [resource environment];
+	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
+	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	root = [volume activate:&error];
+	assert(root != nil && error == nil);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+			   ofItem:root
+			    error:&error] == nil &&
+	    error.code == E2BIG);
+	/* A bounded single-link response remains available after complete-list overflow. */
+	prefix = [NSString stringWithFormat:@"%04u", ENTRY_COUNT - 1];
+	for (i = 0; i < PREFIX_UNITS; i++) {
+		[units addObject:@([prefix characterAtIndex:i])];
+	}
+	for (i = PREFIX_UNITS; i < NTFS_NAME_MAX; i++) {
+		[units addObject:@(TEST_NAMESPACE_OMEGA)];
+	}
+	expected = @{
+		@"units" : units,
+		@"reference" :
+		    @(((uint64_t)TEST_NAMESPACE_FILE_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT) |
+			TEST_NAMESPACE_FILE_RECORD)
+	};
+	/* The consumer accepts the selected ordinal rather than treating it as a page. */
+	manifest = [volume
+	    xattrNamed:[FSFileName
+			   nameWithString:[NSString stringWithFormat:@"org.machlin.ntfs.name.%08x",
+					      ENTRY_COUNT - 1]]
+		ofItem:root
+		 error:&error];
+	assert(error == nil &&
+	    manifest.length ==
+		sizeof(struct test_names_header) + sizeof(struct test_names_entry) +
+		    NTFS_NAME_MAX * sizeof(uint16_t));
+	check_names_manifest(manifest, @[ expected ], ENTRY_COUNT - 1, 1);
+	alias =
+	    [FSFileName nameWithString:[NSString stringWithFormat:@"~ntfs-0007000000000018-%08x",
+					   ENTRY_COUNT - 1]];
+	file = [volume lookup:alias inDirectory:root storedName:&stored error:&error];
+	assert(file != nil && error == nil && [stored.data isEqualToData:alias.data]);
+	[volume invalidate];
+}
+
+static void
+test_namespace_rejection(NSData *image, BOOL stale)
+{
+	TestReader *reader = [[TestReader alloc] init];
+	NTFSResource *resource;
+	NTFSLegacyVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_volume *core = NULL;
+	FSItem *root;
+	FSFileName *stored;
+	NSError *error = nil;
+	TestPacker *packer;
+
+	assert(image != nil);
+	reader.image = image;
+	resource = [[NTFSResource alloc] initWithReader:reader];
+	env = [resource environment];
+	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
+	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	root = [volume activate:&error];
+	assert(root != nil);
+	assert([volume lookup:[FSFileName nameWithString:@"~ntfs-0007000000000018-00000000"]
+		   inDirectory:root
+		    storedName:&stored
+			 error:&error] == nil &&
+	    stored == nil && error.code == (stale ? ESTALE : EIO));
+	packer = [[TestPacker alloc] init];
+	packer.names = [NSMutableArray array];
+	packer.capacity = 1;
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer]
+		   .code == (stale ? ESTALE : EIO));
+	if (!stale) {
+		assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+				   ofItem:root
+				    error:&error] == nil &&
+		    error.code == EIO);
+	}
+	[volume invalidate];
+}
+
+static void
+namespace_operation(NTFSLegacyVolume *volume, FSItem *root, NSArray<NSDictionary *> *names,
+    BOOL lookup, int expectedError)
+{
+	FSFileName *alias = [FSFileName nameWithString:names.lastObject[@"native"]];
+	__block NSUInteger replies = 0;
+
+	if (lookup) {
+		[volume
+		    lookupItemNamed:alias
+			inDirectory:root
+		       replyHandler:^(FSItem *item, FSFileName *stored, NSError *error) {
+			 if (error.code != expectedError) {
+				 fprintf(stderr, "Namespace alias error: expected=%d actual=%ld\n",
+				     expectedError, (long)error.code);
+			 }
+			 assert(error.code == expectedError);
+			 if (expectedError == 0) {
+				 assert(item != nil && [stored.data isEqualToData:alias.data]);
+			 } else {
+				 assert(item == nil && stored == nil);
+			 }
+			 replies++;
+		       }];
+	} else {
+		[volume getXattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+			       ofItem:root
+			 replyHandler:^(NSData *value, NSError *error) {
+			   assert(error.code == expectedError);
+			   if (expectedError == 0) {
+				   check_names_manifest(value, names, 0, names.count);
+			   } else {
+				   assert(value == nil);
+			   }
+			   replies++;
+			 }];
+	}
+	assert(replies == 1);
+}
+
+static void
+namespace_fault_run(NSData *image, NSArray<NSDictionary *> *names, BOOL lookup,
+    NSUInteger failAllocation, NSUInteger failRead, NSUInteger *allocations, NSUInteger *reads)
+{
+	TestReader *reader = [[TestReader alloc] init];
+	FaultResource *resource;
+	NTFSLegacyVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_limits limits;
+	struct ntfs_volume *core = NULL;
+	FSItem *root;
+	NSError *error = nil;
+	NSUInteger startAllocations, startReads;
+	int expectedError;
+
+	reader.image = image;
+	resource = [[FaultResource alloc] initWithReader:reader];
+	env = [resource environment];
+	/* Cache insertion is best effort. Disable it for the sweep of allocations
+	 * that are required to complete an operation; ordinary cases keep it enabled. */
+	ntfs_default_limits(&limits);
+	limits.record_cache_entries = 0;
+	assert(ntfs_mount(&env, &limits, &core) == NTFS_OK);
+	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	root = [volume activate:&error];
+	assert(root != nil && error == nil);
+	startAllocations = resource.allocations;
+	startReads = reader.reads;
+	resource.failAllocationAt = failAllocation == 0 ? 0 : startAllocations + failAllocation;
+	reader.failReadAt = failRead == 0 ? 0 : startReads + failRead;
+	expectedError = failAllocation != 0 ? ENOMEM : failRead != 0 ? EIO : 0;
+	namespace_operation(volume, root, names, lookup, expectedError);
+	if (allocations != NULL) {
+		*allocations = resource.allocations - startAllocations;
+	}
+	if (reads != NULL) {
+		*reads = reader.reads - startReads;
+	}
+	resource.failAllocationAt = 0;
+	reader.failReadAt = 0;
+	if (expectedError != 0) {
+		namespace_operation(volume, root, names, lookup, 0);
+	}
+	[volume invalidate];
+	assert(resource.liveAllocations == 0);
+}
+
+static void
+test_namespace_faults(NSData *image, NSArray<NSDictionary *> *names)
+{
+	NSUInteger mode, i, allocations, reads;
+
+	for (mode = 0; mode < 2; mode++) {
+		namespace_fault_run(image, names, mode != 0, 0, 0, &allocations, &reads);
+		assert(allocations != 0 && reads != 0);
+		for (i = 1; i <= allocations; i++) {
+			namespace_fault_run(image, names, mode != 0, i, 0, NULL, NULL);
+		}
+		for (i = 1; i <= reads; i++) {
+			namespace_fault_run(image, names, mode != 0, 0, i, NULL, NULL);
+		}
+		printf("PASS: namespace %s, %lu allocation and %lu I/O failure positions, "
+		       "exactly one reply, retry and cleanup\n",
+		    mode == 0 ? "manifest" : "alias", (unsigned long)allocations,
+		    (unsigned long)reads);
+	}
+}
+
+static void
+test_namespace_budget(NSData *image, NSArray<NSDictionary *> *names)
+{
+	enum { SCAN_LIMIT = 4, VISIBLE_PREFIX = 3 };
+
+	TestReader *reader = [[TestReader alloc] init];
+	FaultResource *resource;
+	NTFSLegacyVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_volume *core = NULL;
+	FSItem *root;
+	NSError *error = nil;
+	TestPacker *packer;
+	NSData *manifest;
+	NSUInteger reads;
+
+	reader.image = image;
+	resource = [[FaultResource alloc] initWithReader:reader];
+	env = [resource environment];
+	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
+	assert([[NTFSLegacyVolume alloc] initWithCore:core
+					     resource:resource
+			      maximumDirectoryEntries:0] == nil);
+	assert([[NTFSLegacyVolume alloc] initWithCore:core
+					     resource:resource
+			      maximumDirectoryEntries:NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT + 1] == nil);
+	volume = [[NTFSLegacyVolume alloc] initWithCore:core
+					       resource:resource
+				maximumDirectoryEntries:SCAN_LIMIT];
+	root = [volume activate:&error];
+	assert(root != nil && error == nil);
+	packer = [[TestPacker alloc] init];
+	packer.names = [NSMutableArray array];
+	packer.capacity = names.count;
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer]
+		    .code == EOVERFLOW &&
+	    packer.names.count == VISIBLE_PREFIX && packer.lastCookie == VISIBLE_PREFIX);
+	/* Retry cannot turn the exhausted cursor into successful truncated enumeration. */
+	reads = reader.reads;
+	assert([volume enumerate:root
+			  cookie:packer.lastCookie
+			verifier:volume.directoryVerifier
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer]
+		    .code == EOVERFLOW &&
+	    reader.reads == reads && packer.names.count == VISIBLE_PREFIX);
+	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
+			   ofItem:root
+			    error:&error] == nil &&
+	    error.code == E2BIG);
+	manifest = [volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.name.00000000"]
+			       ofItem:root
+				error:&error];
+	assert(error == nil);
+	check_names_manifest(manifest, @[ names[0] ], 0, 1);
+	/* A new rewind resets the failed continuation while preserving the same cap. */
+	packer.names = [NSMutableArray array];
+	packer.capacity = 1;
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer] == nil &&
+	    [packer.names.firstObject isEqualToString:names[0][@"native"]]);
+	[volume invalidate];
+	assert(resource.liveAllocations == 0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -517,6 +1082,7 @@ main(int argc, char **argv)
 		const uint16_t notes[] = {'n', 'o', 't', 'e', 's'};
 		uint16_t longName[NTFS_NAME_MAX];
 		NSMutableData *fragmented;
+		NSArray<NSDictionary *> *names;
 		uint8_t *bytes;
 		size_t i;
 
@@ -551,8 +1117,39 @@ main(int argc, char **argv)
 		test_ads([NSData dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:
 								@"catalog-fragmented.img"]],
 		    @"hello.txt", notes, sizeof(notes) / sizeof(notes[0]), 1, fragmented, YES);
+		names = [NSJSONSerialization JSONObjectWithData:
+			[NSData dataWithContentsOfFile:
+				[fixtures stringByAppendingPathComponent:@"namespace.json"]]
+							options:0
+							  error:nil];
+		test_namespace([NSData dataWithContentsOfFile:
+				       [fixtures stringByAppendingPathComponent:@"namespace.img"]],
+		    names);
+		test_namespace(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"namespace-hidden.img"]],
+		    names);
+		test_namespace_faults(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"namespace.img"]],
+		    names);
+		test_namespace_budget(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"namespace-hidden.img"]],
+		    names);
+		test_namespace_large([NSData dataWithContentsOfFile:
+			[fixtures stringByAppendingPathComponent:@"namespace-large.img"]]);
+		test_namespace_rejection(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"namespace-invalid.img"]],
+		    NO);
+		test_namespace_rejection(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"namespace-stale.img"]],
+		    YES);
 		puts("PASS: FSKit resource alignment/short I/O, identity, canonical names, "
-		     "pagination, ADS/UTF-16 projection and bounded replies, concurrent reads, "
+		     "pagination, lossless filename/ADS projection and bounded replies, concurrent "
+		     "reads, "
 		     "revocation and teardown");
 	}
 	return 0;

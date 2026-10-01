@@ -109,6 +109,15 @@ NTFS-3G image geometries with byte and stream-inventory comparisons. Follow
 NATIVE-NAMESPACE.md for format and limits. Do not promote these results to
 installed ADS acceptance or close unsupported-default-stream adoption.
 
+Native filenames also have a bounded reversible projection in NTFSNames.m.
+Oversized/unpaired/reserved names use parent-directory link ordinals and full file
+references; raw UTF-16 directory/per-link xattrs supply the reverse mapping.
+Five authored namespace images, hidden/DOS accounting, scan/response exhaustion,
+allocation/read failure sweeps and exactly-once replies pass current component
+checks. Aliases do not move enumeration continuations and remain deterministic
+only for immutable media. Installed names, per-directory case policy and native
+normalization are still required; alias lookup currently scans from the root.
+
 See ACCEPTANCE.md for exact results and generated log locations. Do not repeat
 the completed MFT bootstrap work as a new feature, or interpret this checkpoint
 as Windows/native mount acceptance. No writable core contract is implemented.
@@ -189,9 +198,9 @@ native acceptance.
 4. Check compression and sparse behavior with Windows-generated files, including
    allocation-size conventions, mixed/partial units and fragmented attributes.
    Current decoder boundary vectors and large logical-offset tests are synthetic.
-5. Define lossless presentation for unpaired UTF-16 names and case-sensitive NTFS
-   directories. Current product advertises case-insensitive lookup and has no
-   complete WSL/POSIX namespace contract.
+5. Qualify the implemented lossless filename projection in an installed mount.
+   Implement and qualify per-directory case policy. Current product advertises
+   case-insensitive lookup and has no complete WSL/POSIX namespace contract.
 6. Qualify the reparse metadata reader with Windows-authored links. Define target
    translation and namespace ownership before enabling native symlink/junction
    behavior. WOF, cloud placeholders, third-party GUID owners and WSL tags require

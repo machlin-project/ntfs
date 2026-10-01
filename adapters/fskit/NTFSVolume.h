@@ -5,6 +5,11 @@
 /* Takes core ownership only on success. The resource remains retained until
  * all child objects are invalidated and the core is unmounted. */
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource;
+/* Native namespace work budget, including hidden metadata and DOS aliases.
+ * The ordinary initializer uses the default cap; limits are never silent skips. */
+- (instancetype)initWithCore:(struct ntfs_volume *)core
+		    resource:(NTFSResource *)resource
+     maximumDirectoryEntries:(uint32_t)maximum;
 - (void)invalidate;
 - (FSItem *)activate:(NSError **)error;
 - (FSItem *)lookup:(FSFileName *)name

@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
+#include "fixture.h"
 
 @interface TestReader : NSObject <NTFSBlockReader>
 @property NSData *image;
@@ -14,12 +16,12 @@
 
 - (uint64_t)blockSize
 {
-	return 512;
+	return TEST_SECTOR_BYTES;
 }
 
 - (uint64_t)physicalBlockSize
 {
-	return 4096;
+	return TEST_PHYSICAL_BLOCK_BYTES;
 }
 
 - (uint64_t)blockCount
@@ -32,9 +34,10 @@
 	    length:(size_t)length
 	     error:(NSError **)error
 {
-	assert(offset >= 0 && (uint64_t)offset % 4096 == 0 && length % 4096 == 0);
-	assert((uintptr_t)buffer % 4096 == 0 && (uint64_t)offset <= self.image.length &&
-	    length <= self.image.length - (size_t)offset);
+	assert(offset >= 0 && (uint64_t)offset % TEST_PHYSICAL_BLOCK_BYTES == 0 &&
+	    length % TEST_PHYSICAL_BLOCK_BYTES == 0);
+	assert((uintptr_t)buffer % TEST_PHYSICAL_BLOCK_BYTES == 0 &&
+	    (uint64_t)offset <= self.image.length && length <= self.image.length - (size_t)offset);
 	self.reads++;
 	if (self.failed) {
 		*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EIO userInfo:nil];
@@ -74,6 +77,9 @@
 static void
 test_volume(NSData *image)
 {
+	enum { SMALL_UNALIGNED_OFFSET = 3, MUTATION_REPLY_COUNT = 2 };
+
+	const char hello[] = "Hello from NTFS.\n";
 	TestReader *reader = [[TestReader alloc] init];
 	NTFSResource *resource;
 	NTFSLegacyVolume *volume;
@@ -88,20 +94,23 @@ test_volume(NSData *image)
 	FSDirectoryCookie cookie = 0;
 	enum ntfs_result status;
 	size_t done;
-	uint8_t buffer[1025];
+	uint8_t buffer[TEST_MFT_RECORD_BYTES + 1];
 	NSUInteger before, batch, i;
 	__block NSUInteger replies = 0;
 
 	reader.image = image;
 	resource = [[NTFSResource alloc] initWithReader:reader];
 	assert(resource != nil);
-	assert([resource readAt:511 bytes:buffer length:sizeof(buffer)] == NTFS_OK);
-	assert(memcmp(buffer, (const uint8_t *)image.bytes + 511, sizeof(buffer)) == 0);
+	assert([resource readAt:TEST_SECTOR_BYTES - 1 bytes:buffer
+			 length:sizeof(buffer)] == NTFS_OK);
+	assert(memcmp(buffer, (const uint8_t *)image.bytes + TEST_SECTOR_BYTES - 1,
+		   sizeof(buffer)) == 0);
 	reader.shortRead = YES;
-	assert([resource readAt:3 bytes:buffer length:8] == NTFS_IO);
+	assert([resource readAt:SMALL_UNALIGNED_OFFSET bytes:buffer
+			 length:sizeof(uint64_t)] == NTFS_IO);
 	reader.shortRead = NO;
 	before = reader.reads;
-	assert([resource readAt:UINT64_MAX bytes:buffer length:8] == NTFS_IO &&
+	assert([resource readAt:UINT64_MAX bytes:buffer length:sizeof(uint64_t)] == NTFS_IO &&
 	    reader.reads == before);
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
@@ -120,9 +129,9 @@ test_volume(NSData *image)
 			 error:&error];
 	assert(file == again);
 	attrs = [volume attributes:file error:&error];
-	assert(error == nil && attrs.size == 17 && attrs.mode == 0400);
+	assert(error == nil && attrs.size == sizeof(hello) - 1 && attrs.mode == S_IRUSR);
 	status = [volume readItem:file offset:0 bytes:buffer length:sizeof(buffer) completed:&done];
-	assert(status == NTFS_OK && done == 17 && memcmp(buffer, "Hello from NTFS.\n", done) == 0);
+	assert(status == NTFS_OK && done == sizeof(hello) - 1 && memcmp(buffer, hello, done) == 0);
 	assert([volume readItem:file offset:-1 bytes:buffer length:1
 		      completed:&done] == NTFS_INVALID &&
 	    done == 0);
@@ -139,10 +148,10 @@ test_volume(NSData *image)
 		   assert(a == nil && e.code == EROFS);
 		   replies++;
 		 }];
-	assert(replies == 2);
-	for (batch = 0; batch < 8; batch++) {
+	assert(replies == MUTATION_REPLY_COUNT);
+	for (batch = 0; batch <= TEST_FILE_COUNT / TEST_DIRECTORY_BATCH_CAPACITY + 1; batch++) {
 		packer = [[TestPacker alloc] init];
-		packer.capacity = 2;
+		packer.capacity = TEST_DIRECTORY_BATCH_CAPACITY;
 		packer.names = [NSMutableArray array];
 		error = [volume enumerate:root
 				   cookie:cookie
@@ -156,7 +165,8 @@ test_volume(NSData *image)
 		}
 		cookie = packer.lastCookie;
 	}
-	assert(names.count == 9 && [NSSet setWithArray:names].count == 9);
+	assert(
+	    names.count == TEST_FILE_COUNT && [NSSet setWithArray:names].count == TEST_FILE_COUNT);
 	packer = [[TestPacker alloc] init];
 	packer.capacity = 1;
 	packer.names = [NSMutableArray array];
@@ -184,25 +194,30 @@ test_volume(NSData *image)
 			error:&error];
 	assert(file != nil);
 	reader.failed = YES;
-	assert([volume readItem:file offset:4090 bytes:buffer length:513
+	assert([volume readItem:file
+			 offset:TEST_CLUSTER_BYTES - TEST_CROSS_CLUSTER_PREFIX_BYTES
+			  bytes:buffer
+			 length:TEST_READ_WINDOW_BYTES
 		      completed:&done] == NTFS_IO);
 	reader.failed = NO;
-	dispatch_apply(64, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(size_t index) {
-	  uint8_t bytes[513];
-	  size_t completed, j;
-	  enum ntfs_result result;
+	dispatch_apply(TEST_CONCURRENT_READS,
+	    dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(size_t index) {
+	      uint8_t bytes[TEST_READ_WINDOW_BYTES];
+	      size_t completed, j;
+	      enum ntfs_result result;
 
-	  result = [volume readItem:file
-			     offset:(off_t)index
-			      bytes:bytes
-			     length:sizeof(bytes)
-			  completed:&completed];
-	  assert(result == NTFS_OK && completed == sizeof(bytes));
-	  for (j = 0; j < completed; j++) {
-		  assert(bytes[j] == (uint8_t)((index + j) * 13 + 7));
-	  }
-	});
-	for (i = 0; i < 3; i++) {
+	      result = [volume readItem:file
+				 offset:(off_t)index
+				  bytes:bytes
+				 length:sizeof(bytes)
+			      completed:&completed];
+	      assert(result == NTFS_OK && completed == sizeof(bytes));
+	      for (j = 0; j < completed; j++) {
+		      assert(bytes[j] ==
+			  (uint8_t)((index + j) * TEST_PATTERN_MULTIPLIER + TEST_PATTERN_ADDEND));
+	      }
+	    });
+	for (i = 0; i < TEST_INVALIDATE_REPETITIONS; i++) {
 		[volume invalidate];
 	}
 	assert([volume readItem:file offset:0 bytes:buffer length:1 completed:&done] == NTFS_STALE);

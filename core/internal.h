@@ -4,6 +4,29 @@
 #include <ntfs/ntfs.h>
 #include "disk.h"
 
+/* Implementation budgets are distinct from disk-format fields. */
+enum {
+	NTFS_MAX_RECORD_BYTES = 65536,
+	NTFS_MAX_CLUSTER_BYTES = 65536,
+	NTFS_MAX_CONFIGURED_RUNS = 1048576,
+	NTFS_MAX_CONFIGURED_ATTRIBUTE_LIST = 16777216,
+	NTFS_MAX_CONFIGURED_RECORD_CACHE = 4096,
+	NTFS_MAX_CONFIGURED_DIRECTORY_NODES = 1048576,
+	NTFS_DIRECTORY_DEPTH = 32,
+	NTFS_MAX_IO = 1048576,
+	NTFS_BITMAP_SCAN_BYTES = 4096,
+	NTFS_RUN_INITIAL_CAPACITY = 8,
+	NTFS_VISITED_INITIAL_CAPACITY = 64,
+	NTFS_VECTOR_GROWTH = 2,
+	NTFS_VISITED_LOAD_DENOMINATOR = 2,
+	NTFS_COMPRESSION_BUFFERS = 2,
+	NTFS_VCN_HASH_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE
+};
+
+/* Odd multiplicative factor derived from the golden ratio; hash sequential VCNs
+ * using the upper half of the full-width product. */
+#define NTFS_VCN_HASH_MULTIPLIER UINT64_C(11400714819323198485)
+
 struct ntfs_run {
 	uint64_t vcn, length, lcn;
 };
@@ -75,10 +98,12 @@ enum ntfs_result ntfs_stream_from_attr(
 enum ntfs_result ntfs_stream_append(struct ntfs_stream *, const struct ntfs_attr_view *);
 enum ntfs_result ntfs_attribute_open(
     struct ntfs_node *, uint32_t, const uint16_t *, size_t, struct ntfs_stream **);
+enum ntfs_result ntfs_mft_open(struct ntfs_volume *, uint8_t *, struct ntfs_stream **);
 enum ntfs_result ntfs_stream_raw(struct ntfs_stream *, uint64_t, void *, size_t);
 enum ntfs_result ntfs_stream_exact(struct ntfs_stream *, uint64_t, void *, size_t);
 const struct ntfs_run *ntfs_run_find(const struct ntfs_stream *, uint64_t);
 int ntfs_name_compare(struct ntfs_volume *, const uint16_t *, size_t, const uint8_t *, size_t);
 enum ntfs_result ntfs_node_by_number(struct ntfs_volume *, uint64_t, struct ntfs_node **);
+enum ntfs_result ntfs_node_metadata(struct ntfs_node *, struct ntfs_stat *);
 
 #endif

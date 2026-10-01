@@ -14,11 +14,26 @@ extern "C" {
 #define NTFS_NAME_MAX 255u
 #define NTFS_UTF8_NAME_MAX (NTFS_NAME_MAX * 3u)
 #define NTFS_ROOT_RECORD 5u
+#define NTFS_FIRST_USER_RECORD 16u
 #define NTFS_REFERENCE_RECORD_MASK UINT64_C(0x0000ffffffffffff)
 #define NTFS_REFERENCE_SEQUENCE_SHIFT 48u
 #define NTFS_ATTRIBUTE_DATA 0x80u
 #define NTFS_ATTRIBUTE_REPARSE_POINT 0xc0u
 #define NTFS_FILE_ATTRIBUTE_DIRECTORY 0x10000000u
+
+enum ntfs_name_namespace {
+	NTFS_NAMESPACE_POSIX = 0,
+	NTFS_NAMESPACE_WIN32 = 1,
+	NTFS_NAMESPACE_DOS = 2,
+	NTFS_NAMESPACE_WIN32_DOS = 3
+};
+
+enum {
+	NTFS_DEFAULT_MAX_RUNS = 65536,
+	NTFS_DEFAULT_MAX_ATTRIBUTE_LIST = 1048576,
+	NTFS_DEFAULT_RECORD_CACHE_ENTRIES = 64,
+	NTFS_DEFAULT_MAX_DIRECTORY_NODES = 65536
+};
 
 enum ntfs_result {
 	NTFS_OK,
@@ -58,10 +73,10 @@ struct ntfs_environment {
 };
 
 struct ntfs_limits {
-	uint32_t max_runs;	       /* Per stream, default 65536. */
-	uint32_t max_attribute_list;   /* Bytes, default 1 MiB. */
-	uint32_t record_cache_entries; /* Default 64; zero disables cache. */
-	uint32_t max_directory_nodes;  /* Per iterator, default 65536. */
+	uint32_t max_runs;	       /* Per stream. */
+	uint32_t max_attribute_list;   /* Bytes. */
+	uint32_t record_cache_entries; /* Zero disables the cache. */
+	uint32_t max_directory_nodes;  /* Per iterator. */
 };
 
 struct ntfs_info {
@@ -124,19 +139,22 @@ enum ntfs_result ntfs_root(struct ntfs_volume *, struct ntfs_node **);
 enum ntfs_result ntfs_node_open(struct ntfs_volume *, uint64_t reference, struct ntfs_node **);
 void ntfs_node_close(struct ntfs_node *);
 enum ntfs_result ntfs_node_stat(struct ntfs_node *, struct ntfs_stat *);
+/* Lookup folds names through $UpCase. Distinct names with the same folded key
+ * return UNSUPPORTED instead of selecting an arbitrary case-sensitive entry. */
 enum ntfs_result ntfs_lookup(struct ntfs_node *, const uint16_t *, size_t, struct ntfs_node **);
 /* Also returns the stored name, preserving case and hard-link provenance. */
 enum ntfs_result ntfs_lookup_entry(
     struct ntfs_node *, const uint16_t *, size_t, struct ntfs_node **, struct ntfs_dirent *);
 /* Streams remain valid after closing their source node. Empty name = default data.
- * Named data streams are exposed as NTFS streams, never silently as POSIX xattrs. */
+ * Stream names use exact UTF-16 matching; each stream has independent data flags.
+ * Named data streams also exist on directories. Native xattr mapping is separate. */
 enum ntfs_result ntfs_stream_open(
     struct ntfs_node *, const uint16_t *, size_t, struct ntfs_stream **);
 void ntfs_stream_close(struct ntfs_stream *);
 uint64_t ntfs_stream_size(const struct ntfs_stream *);
 enum ntfs_result ntfs_stream_read(struct ntfs_stream *, uint64_t, void *, size_t, size_t *);
 /* Persistent in-order B-tree cursor: linear enumeration, bounded depth and memory.
- * NTFS_END is stable; DOS aliases are returned with namespace=2 for caller policy. */
+ * NTFS_END is stable; NTFS_NAMESPACE_DOS aliases are returned for caller policy. */
 enum ntfs_result ntfs_directory_open(struct ntfs_node *, struct ntfs_directory **);
 enum ntfs_result ntfs_directory_next(struct ntfs_directory *, struct ntfs_dirent *);
 void ntfs_directory_close(struct ntfs_directory *);

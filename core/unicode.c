@@ -1,6 +1,37 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 
+enum {
+	UNICODE_ASCII_LIMIT = 0x80,
+	UNICODE_TWO_BYTE_LIMIT = 0x800,
+	UNICODE_BMP_LIMIT = 0x10000,
+	UNICODE_MAX_CODE_POINT = 0x10ffff,
+	UTF16_HIGH_FIRST = 0xd800,
+	UTF16_HIGH_LAST = 0xdbff,
+	UTF16_LOW_FIRST = 0xdc00,
+	UTF16_LOW_LAST = 0xdfff,
+	UTF16_SURROGATE_BITS = 10,
+	UTF16_SURROGATE_MASK = (1u << UTF16_SURROGATE_BITS) - 1,
+	UTF16_PAIR_UNITS = 2,
+	UTF8_CONTINUATION_PREFIX = 0x80,
+	UTF8_CONTINUATION_PREFIX_MASK = 0xc0,
+	UTF8_CONTINUATION_MASK = 0x3f,
+	UTF8_CONTINUATION_BITS = 6,
+	UTF8_TWO_PREFIX = 0xc0,
+	UTF8_TWO_FIRST = 0xc2,
+	UTF8_TWO_LAST = 0xdf,
+	UTF8_TWO_MASK = 0x1f,
+	UTF8_TWO_BYTES = 2,
+	UTF8_THREE_PREFIX = 0xe0,
+	UTF8_THREE_LAST = 0xef,
+	UTF8_THREE_MASK = 0x0f,
+	UTF8_THREE_BYTES = 3,
+	UTF8_FOUR_PREFIX = 0xf0,
+	UTF8_FOUR_LAST = 0xf4,
+	UTF8_FOUR_MASK = 0x07,
+	UTF8_FOUR_BYTES = 4
+};
+
 enum ntfs_result
 ntfs_utf8_to_utf16(const char *input, size_t size, uint16_t *out, size_t capacity, size_t *written)
 {
@@ -19,22 +50,22 @@ ntfs_utf8_to_utf16(const char *input, size_t size, uint16_t *out, size_t capacit
 	}
 	while (i < size) {
 		b = s[i++];
-		if (b < 0x80) {
+		if (b < UNICODE_ASCII_LIMIT) {
 			code = b;
 			tails = 0;
 			minimum = 0;
-		} else if (b >= 0xc2 && b <= 0xdf) {
-			code = b & 0x1f;
-			tails = 1;
-			minimum = 0x80;
-		} else if (b >= 0xe0 && b <= 0xef) {
-			code = b & 0x0f;
-			tails = 2;
-			minimum = 0x800;
-		} else if (b >= 0xf0 && b <= 0xf4) {
-			code = b & 7;
-			tails = 3;
-			minimum = 0x10000;
+		} else if (b >= UTF8_TWO_FIRST && b <= UTF8_TWO_LAST) {
+			code = b & UTF8_TWO_MASK;
+			tails = UTF8_TWO_BYTES - 1;
+			minimum = UNICODE_ASCII_LIMIT;
+		} else if (b >= UTF8_THREE_PREFIX && b <= UTF8_THREE_LAST) {
+			code = b & UTF8_THREE_MASK;
+			tails = UTF8_THREE_BYTES - 1;
+			minimum = UNICODE_TWO_BYTE_LIMIT;
+		} else if (b >= UTF8_FOUR_PREFIX && b <= UTF8_FOUR_LAST) {
+			code = b & UTF8_FOUR_MASK;
+			tails = UTF8_FOUR_BYTES - 1;
+			minimum = UNICODE_BMP_LIMIT;
 		} else {
 			return NTFS_INVALID;
 		}
@@ -43,21 +74,22 @@ ntfs_utf8_to_utf16(const char *input, size_t size, uint16_t *out, size_t capacit
 		}
 		for (j = 0; j < tails; j++) {
 			b = s[i++];
-			if ((b & 0xc0) != 0x80) {
+			if ((b & UTF8_CONTINUATION_PREFIX_MASK) != UTF8_CONTINUATION_PREFIX) {
 				return NTFS_INVALID;
 			}
-			code = (code << 6) | (b & 0x3f);
+			code = (code << UTF8_CONTINUATION_BITS) | (b & UTF8_CONTINUATION_MASK);
 		}
-		if (code < minimum || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) {
+		if (code < minimum || code > UNICODE_MAX_CODE_POINT ||
+		    (code >= UTF16_HIGH_FIRST && code <= UTF16_LOW_LAST)) {
 			return NTFS_INVALID;
 		}
-		if (code >= 0x10000) {
-			if (capacity - n < 2) {
+		if (code >= UNICODE_BMP_LIMIT) {
+			if (capacity - n < UTF16_PAIR_UNITS) {
 				return NTFS_RANGE;
 			}
-			code -= 0x10000;
-			out[n++] = (uint16_t)(0xd800 | (code >> 10));
-			out[n++] = (uint16_t)(0xdc00 | (code & 0x3ff));
+			code -= UNICODE_BMP_LIMIT;
+			out[n++] = (uint16_t)(UTF16_HIGH_FIRST | (code >> UTF16_SURROGATE_BITS));
+			out[n++] = (uint16_t)(UTF16_LOW_FIRST | (code & UTF16_SURROGATE_MASK));
 		} else {
 			if (n == capacity) {
 				return NTFS_RANGE;
@@ -85,15 +117,20 @@ ntfs_utf16_to_utf8(const uint16_t *input, size_t size, char *out, size_t capacit
 	}
 	while (i < size) {
 		code = input[i++];
-		if (code >= 0xd800 && code <= 0xdbff) {
-			if (i == size || input[i] < 0xdc00 || input[i] > 0xdfff) {
+		if (code >= UTF16_HIGH_FIRST && code <= UTF16_HIGH_LAST) {
+			if (i == size || input[i] < UTF16_LOW_FIRST || input[i] > UTF16_LOW_LAST) {
 				return NTFS_INVALID;
 			}
-			code = 0x10000 + ((code - 0xd800) << 10) + (input[i++] - 0xdc00);
-		} else if (code >= 0xdc00 && code <= 0xdfff) {
+			code = UNICODE_BMP_LIMIT +
+			    ((code - UTF16_HIGH_FIRST) << UTF16_SURROGATE_BITS) +
+			    (input[i++] - UTF16_LOW_FIRST);
+		} else if (code >= UTF16_LOW_FIRST && code <= UTF16_LOW_LAST) {
 			return NTFS_INVALID;
 		}
-		count = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+		count = code < UNICODE_ASCII_LIMIT  ? 1
+		    : code < UNICODE_TWO_BYTE_LIMIT ? UTF8_TWO_BYTES
+		    : code < UNICODE_BMP_LIMIT	    ? UTF8_THREE_BYTES
+						    : UTF8_FOUR_BYTES;
 		if (count > capacity - n) {
 			return NTFS_RANGE;
 		}
@@ -101,10 +138,14 @@ ntfs_utf16_to_utf8(const uint16_t *input, size_t size, char *out, size_t capacit
 			out[n++] = (char)code;
 		} else {
 			for (j = count - 1; j > 0; j--) {
-				out[n + j] = (char)(0x80 | (code & 0x3f));
-				code >>= 6;
+				out[n + j] = (char)(UTF8_CONTINUATION_PREFIX |
+				    (code & UTF8_CONTINUATION_MASK));
+				code >>= UTF8_CONTINUATION_BITS;
 			}
-			out[n] = (char)((count == 2 ? 0xc0 : count == 3 ? 0xe0 : 0xf0) | code);
+			out[n] = (char)((count == UTF8_TWO_BYTES	    ? UTF8_TWO_PREFIX
+						: count == UTF8_THREE_BYTES ? UTF8_THREE_PREFIX
+									    : UTF8_FOUR_PREFIX) |
+			    code);
 			n += count;
 		}
 	}
@@ -120,8 +161,9 @@ ntfs_name_compare(struct ntfs_volume *v, const uint16_t *name, size_t length, co
 	uint16_t a, b;
 
 	for (i = 0; i < count; i++) {
-		a = ntfs_u16(v->upcase + (size_t)name[i] * 2);
-		b = ntfs_u16(v->upcase + (size_t)ntfs_u16(other + i * 2) * 2);
+		a = ntfs_u16(v->upcase + (size_t)name[i] * NTFS_UTF16_UNIT_BYTES);
+		b = ntfs_u16(v->upcase +
+		    (size_t)ntfs_u16(other + i * NTFS_UTF16_UNIT_BYTES) * NTFS_UTF16_UNIT_BYTES);
 		if (a != b) {
 			return a < b ? -1 : 1;
 		}

@@ -5,21 +5,26 @@ uint16_t
 ntfs_u16(const void *p)
 {
 	const uint8_t *b = p;
-	return (uint16_t)(b[0] | (uint16_t)b[1] << 8);
+
+	return (uint16_t)(b[0] | (uint16_t)b[1] << NTFS_BITS_PER_BYTE);
 }
 
 uint32_t
 ntfs_u32(const void *p)
 {
 	const uint8_t *b = p;
-	return (uint32_t)ntfs_u16(b) | (uint32_t)ntfs_u16(b + 2) << 16;
+
+	return (uint32_t)ntfs_u16(b) |
+	    (uint32_t)ntfs_u16(b + sizeof(uint16_t)) << (sizeof(uint16_t) * NTFS_BITS_PER_BYTE);
 }
 
 uint64_t
 ntfs_u64(const void *p)
 {
 	const uint8_t *b = p;
-	return (uint64_t)ntfs_u32(b) | (uint64_t)ntfs_u32(b + 4) << 32;
+
+	return (uint64_t)ntfs_u32(b) |
+	    (uint64_t)ntfs_u32(b + sizeof(uint32_t)) << (sizeof(uint32_t) * NTFS_BITS_PER_BYTE);
 }
 
 void
@@ -28,6 +33,7 @@ ntfs_copy(void *to, const void *from, size_t n)
 	uint8_t *d = to;
 	const uint8_t *s = from;
 	size_t i;
+
 	for (i = 0; i < n; i++) {
 		d[i] = s[i];
 	}
@@ -38,6 +44,7 @@ ntfs_zero(void *to, size_t n)
 {
 	uint8_t *d = to;
 	size_t i;
+
 	for (i = 0; i < n; i++) {
 		d[i] = 0;
 	}
@@ -48,6 +55,7 @@ ntfs_equal(const void *a, const void *b, size_t n)
 {
 	const uint8_t *x = a, *y = b;
 	size_t i;
+
 	for (i = 0; i < n; i++) {
 		if (x[i] != y[i]) {
 			return false;
@@ -66,6 +74,7 @@ void *
 ntfs_alloc(struct ntfs_volume *v, size_t n)
 {
 	void *p;
+
 	if (n == 0) {
 		return NULL;
 	}
@@ -101,10 +110,10 @@ ntfs_io(struct ntfs_volume *v, uint64_t offset, void *buffer, size_t size)
 void
 ntfs_default_limits(struct ntfs_limits *l)
 {
-	l->max_runs = 65536;
-	l->max_attribute_list = 1048576;
-	l->record_cache_entries = 64;
-	l->max_directory_nodes = 65536;
+	l->max_runs = NTFS_DEFAULT_MAX_RUNS;
+	l->max_attribute_list = NTFS_DEFAULT_MAX_ATTRIBUTE_LIST;
+	l->record_cache_entries = NTFS_DEFAULT_RECORD_CACHE_ENTRIES;
+	l->max_directory_nodes = NTFS_DEFAULT_MAX_DIRECTORY_NODES;
 }
 
 const char *
@@ -126,15 +135,16 @@ ntfs_decode_time(uint64_t ticks, struct ntfs_time *out)
 	if (ticks >= NTFS_TIME_EPOCH) {
 		delta = ticks - NTFS_TIME_EPOCH;
 		out->seconds = (int64_t)(delta / NTFS_TIME_TICKS);
-		out->nanoseconds = (uint32_t)(delta % NTFS_TIME_TICKS) * 100;
+		out->nanoseconds =
+		    (uint32_t)(delta % NTFS_TIME_TICKS) * NTFS_TIME_NANOSECONDS_PER_TICK;
 	} else {
 		delta = NTFS_TIME_EPOCH - ticks;
 		out->seconds = -(int64_t)(delta / NTFS_TIME_TICKS);
 		out->nanoseconds = 0;
 		if (delta % NTFS_TIME_TICKS != 0) {
 			out->seconds--;
-			out->nanoseconds =
-			    (uint32_t)(NTFS_TIME_TICKS - delta % NTFS_TIME_TICKS) * 100;
+			out->nanoseconds = (uint32_t)(NTFS_TIME_TICKS - delta % NTFS_TIME_TICKS) *
+			    NTFS_TIME_NANOSECONDS_PER_TICK;
 		}
 	}
 }

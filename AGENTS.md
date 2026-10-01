@@ -16,6 +16,9 @@ Core C is freestanding: explicit allocator and exact read callbacks, no FSKit,
 Foundation, libc allocation, native errno or LXNU dependencies. NTFS disk bytes
 are untrusted. Use named wire fields, checked arithmetic, bounded iteration,
 sequence-checked file references and fail-closed unsupported-feature handling.
+Give format values, policy limits and buffer sizes meaningful names. Derive field
+offsets from wire structures and sizeof/offsetof. Fixture authors must use named
+fields and geometry constants too; unexplained numeric offsets are not acceptable.
 Use .clang-format from the selected Xcode toolchain; declarations start each
 block, braces surround control flow, one statement per line, English source.
 

@@ -19,24 +19,24 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 		return NTFS_INVALID;
 	}
 	while (in < size) {
-		if (size - in < 2) {
+		if (size - in < NTFS_LZNT1_HEADER_BYTES) {
 			return NTFS_CORRUPT;
 		}
 		header = ntfs_u16(src + in);
-		in += 2;
+		in += NTFS_LZNT1_HEADER_BYTES;
 		if (header == 0) {
 			break;
 		}
-		if ((header & 0x7000u) != 0x3000u) {
+		if ((header & NTFS_LZNT1_SIGNATURE_MASK) != NTFS_LZNT1_SIGNATURE) {
 			return NTFS_CORRUPT;
 		}
-		chunk = (header & 0x0fffu) + 1u;
+		chunk = (header & NTFS_LZNT1_LENGTH_MASK) + 1u;
 		if (chunk > size - in) {
 			return NTFS_CORRUPT;
 		}
 		end = in + chunk;
 		base = out;
-		if ((header & 0x8000u) == 0) {
+		if ((header & NTFS_LZNT1_COMPRESSED) == 0) {
 			if (chunk > capacity - out) {
 				return NTFS_RANGE;
 			}
@@ -46,33 +46,39 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 		} else {
 			while (in < end) {
 				flags = src[in++];
-				for (bit = 0; bit < 8 && in < end; bit++) {
+				for (bit = 0; bit < NTFS_BITS_PER_BYTE && in < end; bit++) {
 					if ((flags & (1u << bit)) == 0) {
-						if (out == capacity ||
-						    out - base == NTFS_LZNT1_CHUNK) {
+						if (out - base == NTFS_LZNT1_CHUNK) {
 							return NTFS_CORRUPT;
+						}
+						if (out == capacity) {
+							return NTFS_RANGE;
 						}
 						dst[out++] = src[in++];
 					} else {
-						if (end - in < 2 || out == base) {
+						if (end - in < NTFS_LZNT1_TOKEN_BYTES ||
+						    out == base) {
 							return NTFS_CORRUPT;
 						}
 						token = ntfs_u16(src + in);
-						in += 2;
-						mask = 0x0fff;
-						shift = 12;
+						in += NTFS_LZNT1_TOKEN_BYTES;
+						mask = NTFS_LZNT1_LENGTH_MASK;
+						shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
 						position = out - base - 1;
-						while (position >= 16) {
+						while (
+						    position >= NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD) {
 							mask >>= 1;
 							shift--;
 							position >>= 1;
 						}
 						displacement = (token >> shift) + 1u;
-						length = (token & mask) + 3u;
+						length = (token & mask) + NTFS_LZNT1_MIN_MATCH;
 						if (displacement > out - base ||
-						    length > NTFS_LZNT1_CHUNK - (out - base) ||
-						    length > capacity - out) {
+						    length > NTFS_LZNT1_CHUNK - (out - base)) {
 							return NTFS_CORRUPT;
+						}
+						if (length > capacity - out) {
+							return NTFS_RANGE;
 						}
 						for (i = 0; i < length; i++) {
 							dst[out] = dst[out - displacement];
@@ -84,7 +90,8 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 		}
 		/* A following chunk starts on a 4 KiB output boundary. Short
 		 * final chunks are legal; interior short chunks are corrupt. */
-		if (out - base != NTFS_LZNT1_CHUNK && in + 1 < size && ntfs_u16(src + in) != 0) {
+		if (out - base != NTFS_LZNT1_CHUNK && size - in >= NTFS_LZNT1_HEADER_BYTES &&
+		    ntfs_u16(src + in) != 0) {
 			return NTFS_CORRUPT;
 		}
 	}

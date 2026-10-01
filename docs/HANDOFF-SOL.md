@@ -23,8 +23,17 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
   proprietary licensing boundary. There is no disk write capability.
 - Immutable resource lifetime, counted children, bounded runs/attribute lists/
   directory depth, atomic fixup verification and sequence-checked references.
+- Incremental MFT bootstrap through resident/nonresident attribute lists. Only
+  already mapped MFT runs may locate the next extension; the fixtures erase the
+  original contiguous MFT to catch accidental physical-address assumptions.
+- Strict index ordering and inherited key bounds, plus explicit rejection of
+  ambiguous folded names across both leaf and separator/child boundaries.
 - $UpCase-based lookup, stored-name return, sparse/VDL zeroing, ADS and LZNT1
   handling, including fragmented and partial final compression units.
+- Independent stream flags: an unencrypted ADS remains readable beside an
+  encrypted default stream. Exact UTF-16 stream-name matching is documented.
+- Named format constants, wire structures and separate resource budgets. Keep
+  fixture offsets and geometry explicit; avoid unexplained numeric values.
 - Complete separate legacy/modern FSKit protocol classes. Their read completion
   signatures differ; do not advertise both protocol families on one class.
 - A retained resource owner through C callbacks, synchronized operation admission,
@@ -60,6 +69,21 @@ Luna (`gpt-6-luna`); diagnosis, implementation and acceptance belong to the curr
 main task owner. FSKit VM preparation belongs to Sol (`gpt-6.1-sol`); one agent
 owns a VM at a time. Give workers absolute directories and bounded tasks.
 
+## Core handoff checkpoint
+
+The core is ready for the next integration and compatibility work. Ten sanitized
+suites cover the standard and NTFS 3.0 images, two fragmented MFT bootstrap
+layouts, a nested index, byte-level image contracts, stream boundaries, decoder
+vectors, bounded mutations and build-environment isolation. Allocation/read fault sweeps run on
+all five filesystem layouts and verify release accounting. The stream suite
+checks mixed compression units, cache retry after failed reads, zero-I/O sparse
+reads across 4 GiB, initialized-data boundaries, EOF and source-node lifetime.
+Decoder vectors exercise every length/displacement split transition.
+
+See ACCEPTANCE.md for exact results and generated log locations. Do not repeat
+the completed MFT bootstrap work as a new feature, or interpret this checkpoint
+as Windows/native mount acceptance. No writable core contract is implemented.
+
 ## First continuation: native read-only acceptance
 
 The unsigned app is produced under
@@ -90,13 +114,18 @@ this from a successful mount or from source compilation.
    Current handcrafted images target individual contracts; mkntfs tests provide
    independent ordinary formatting, data and indexes. Neither closes Windows
    interoperability for every format feature.
-2. Add fragmented $MFT bootstrap through $ATTRIBUTE_LIST, including extensions
-   located outside the initially reachable MFT runs. Current mount rejects this
-   layout explicitly. Do not recursively trust records before their runs resolve.
-3. Support extension placement of large attribute lists and exercise cycles,
-   duplicate segments, VCN gaps and every allocation/read failure boundary.
-4. Expand compressed/sparse edge coverage with Windows-generated files, malformed
-   chunk boundaries, large logical offsets and unusually fragmented attributes.
+2. Validate the completed MFT bootstrap and attribute-list reader against real
+   Windows-created fragmented metadata. Add each observed layout as an independent
+   regression. A next extension outside all already decoded MFT runs is rejected;
+   do not replace this with guessed addresses. NTFS-3G's format notes require the
+   attribute list's own mapping pairs to fit in its base record; extension
+   placement of that mapping is not an assumed missing feature.
+3. Extend sustained fuzzing with Windows-derived seeds and independent mutation
+   strategies. Current bounded runs and fault sweeps are evidence, not exhaustive
+   validation of hostile media. Preserve malformed-list and tree-bound tests.
+4. Check compression and sparse behavior with Windows-generated files, including
+   allocation-size conventions, mixed/partial units and fragmented attributes.
+   Current decoder boundary vectors and large logical-offset tests are synthetic.
 5. Define lossless presentation for unpaired UTF-16 names and case-sensitive NTFS
    directories. Current product advertises case-insensitive lookup and has no
    complete WSL/POSIX namespace contract.

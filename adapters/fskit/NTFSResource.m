@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { NTFS_RESOURCE_WINDOW = 1048576, NTFS_CORE_MEMORY_LIMIT = 64 * 1048576 };
-
 static enum ntfs_result
 resource_read(void *context, uint64_t offset, void *buffer, size_t length)
 {
@@ -37,9 +35,9 @@ resource_release(void *context, void *buffer, size_t size)
 	uint64_t block = reader.blockSize, count = reader.blockCount;
 	uint64_t alignment = MAX(reader.physicalBlockSize, block);
 
-	if (block == 0 || count == 0 || count > INT64_MAX / block || alignment < 512 ||
-	    alignment > 65536 || (alignment & (alignment - 1)) != 0 ||
-	    count * block % alignment != 0) {
+	if (block == 0 || count == 0 || count > INT64_MAX / block ||
+	    alignment < NTFS_RESOURCE_MIN_ALIGNMENT || alignment > NTFS_RESOURCE_MAX_ALIGNMENT ||
+	    (alignment & (alignment - 1)) != 0 || count * block % alignment != 0) {
 		return nil;
 	}
 	self = [super init];
@@ -182,7 +180,7 @@ NSUUID *
 ntfs_uuid(uint64_t serial)
 {
 	NSString *value = [NSString stringWithFormat:@"4d434c4e-%04llx-4e54-8f53-%012llx",
-	    (unsigned long long)(serial >> 48),
+	    (unsigned long long)(serial >> NTFS_REFERENCE_SEQUENCE_SHIFT),
 	    (unsigned long long)(serial & NTFS_REFERENCE_RECORD_MASK)];
 
 	return [[NSUUID alloc] initWithUUIDString:value];

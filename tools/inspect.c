@@ -6,6 +6,8 @@
 #include <string.h>
 #include <inttypes.h>
 
+enum { INSPECT_READ_BUFFER_BYTES = 1048576 };
+
 static enum ntfs_result
 resolve(struct ntfs_volume *v, const char *path, struct ntfs_node **out)
 {
@@ -106,7 +108,7 @@ main(int argc, char **argv)
 			goto finish;
 		}
 		while ((result = ntfs_directory_next(directory, &entry)) == NTFS_OK) {
-			if (entry.name_namespace == 2) {
+			if (entry.name_namespace == NTFS_NAMESPACE_DOS) {
 				continue;
 			}
 			result = ntfs_utf16_to_utf8(
@@ -131,13 +133,14 @@ main(int argc, char **argv)
 		if (result != NTFS_OK) {
 			goto finish;
 		}
-		buffer = malloc(1048576);
+		buffer = malloc(INSPECT_READ_BUFFER_BYTES);
 		if (buffer == NULL) {
 			result = NTFS_NO_MEMORY;
 			goto finish;
 		}
 		do {
-			result = ntfs_stream_read(stream, offset, buffer, 1048576, &done);
+			result = ntfs_stream_read(
+			    stream, offset, buffer, INSPECT_READ_BUFFER_BYTES, &done);
 			if (result != NTFS_OK) {
 				break;
 			}

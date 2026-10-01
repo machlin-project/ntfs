@@ -19,7 +19,7 @@ To collect a local baseline:
 
 ```sh
 python3 scripts/build.py .build-release --release
-.build-release/ntfs-benchmark artifacts/interoperability-final/ntfs-s512-c4096.img large.bin
+.build-release/ntfs-benchmark artifacts/interoperability-core-ready/ntfs-s512-c4096.img large.bin
 ```
 
 The tool reports elapsed time, bytes, device calls and metadata cache hits for
@@ -30,10 +30,11 @@ media performance, Finder behavior or an advantage over another driver. Raw
 measurements belong under ignored artifacts. Do not claim SOTA or a throughput
 win without a matched independent baseline.
 
-The initial release-build run completed and is recorded in
-`artifacts/benchmark-posix.json`, with build output in
-`artifacts/final-release-build.log`. This establishes that the measurement path
-works; native performance qualification and comparative repetitions remain open.
+The core handoff release-build run is recorded in
+`artifacts/benchmark-core-ready.json`, with build output in
+`artifacts/core-ready-release.log`. This establishes that the measurement path
+works after the metadata/lookup changes; native performance qualification and
+comparative repetitions remain open.
 
 Before optimizing the installed product, establish these profiles with hashes,
 device-call counts, peak memory, CPU and latency percentiles:

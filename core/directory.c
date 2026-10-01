@@ -4,6 +4,7 @@
 struct index_frame {
 	uint8_t *bytes;
 	size_t allocation, position, end;
+	const struct ntfs_disk_filename *lower, *upper, *previous;
 	bool descended;
 };
 
@@ -18,6 +19,33 @@ struct ntfs_directory {
 };
 
 static const uint16_t index_name[] = {'$', 'I', '3', '0'};
+
+static int
+key_compare(struct ntfs_volume *v, const struct ntfs_disk_filename *left,
+    const struct ntfs_disk_filename *right)
+{
+	const uint8_t *a = (const uint8_t *)left + sizeof(*left);
+	const uint8_t *b = (const uint8_t *)right + sizeof(*right);
+	size_t i, count = left->length < right->length ? left->length : right->length;
+	uint16_t x, y;
+	int sensitive = 0;
+
+	/* Filename collation uses $UpCase first, then the original UTF-16 units
+	 * to order names that differ only in case. Keep both comparisons. */
+	for (i = 0; i < count; i++) {
+		x = ntfs_u16(a + i * NTFS_UTF16_UNIT_BYTES);
+		y = ntfs_u16(b + i * NTFS_UTF16_UNIT_BYTES);
+		if (sensitive == 0 && x != y) {
+			sensitive = x < y ? -1 : 1;
+		}
+		x = ntfs_u16(v->upcase + (size_t)x * NTFS_UTF16_UNIT_BYTES);
+		y = ntfs_u16(v->upcase + (size_t)y * NTFS_UTF16_UNIT_BYTES);
+		if (x != y) {
+			return x < y ? -1 : 1;
+		}
+	}
+	return left->length == right->length ? sensitive : left->length < right->length ? -1 : 1;
+}
 
 static enum ntfs_result
 entry_at(const struct index_frame *frame, const struct ntfs_disk_index_entry **out)
@@ -35,8 +63,8 @@ entry_at(const struct index_frame *frame, const struct ntfs_disk_index_entry **o
 	key_length = ntfs_u16(entry->key_length);
 	flags = ntfs_u16(entry->flags);
 	trailer = (flags & NTFS_INDEX_CHILD) != 0 ? sizeof(uint64_t) : 0;
-	if ((flags & ~(NTFS_INDEX_CHILD | NTFS_INDEX_END)) != 0 || length % 8 != 0 ||
-	    length < sizeof(*entry) + trailer ||
+	if ((flags & ~(NTFS_INDEX_CHILD | NTFS_INDEX_END)) != 0 ||
+	    length % NTFS_WIRE_ALIGNMENT != 0 || length < sizeof(*entry) + trailer ||
 	    !ntfs_bounds(frame->position, length, frame->end) ||
 	    key_length > length - sizeof(*entry) - trailer) {
 		return NTFS_CORRUPT;
@@ -50,8 +78,8 @@ entry_at(const struct index_frame *frame, const struct ntfs_disk_index_entry **o
 			return NTFS_CORRUPT;
 		}
 		key = (const void *)((const uint8_t *)entry + sizeof(*entry));
-		if (key->length == 0 || key->name_namespace > 3 ||
-		    sizeof(*key) + (size_t)key->length * 2 != key_length ||
+		if (key->length == 0 || key->name_namespace > NTFS_NAMESPACE_WIN32_DOS ||
+		    sizeof(*key) + (size_t)key->length * NTFS_UTF16_UNIT_BYTES != key_length ||
 		    ntfs_u64(entry->reference) >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0) {
 			return NTFS_CORRUPT;
 		}
@@ -65,10 +93,9 @@ validate_frame(struct ntfs_directory *d, struct index_frame *f, size_t header_of
 {
 	const struct ntfs_disk_index_header *header;
 	const struct ntfs_disk_index_entry *entry;
-	const struct ntfs_disk_filename *key;
+	const struct ntfs_disk_filename *key, *previous = NULL;
 	struct index_frame scan;
-	uint16_t previous[NTFS_NAME_MAX];
-	size_t previous_length = 0, entries, used, allocated, i;
+	size_t entries, used, allocated;
 	enum ntfs_result result;
 	bool terminal = false;
 
@@ -79,8 +106,9 @@ validate_frame(struct ntfs_directory *d, struct index_frame *f, size_t header_of
 	entries = ntfs_u32(header->entries_offset);
 	used = ntfs_u32(header->used);
 	allocated = ntfs_u32(header->allocated);
-	if (entries < sizeof(*header) || entries % 8 != 0 || used < entries || used > allocated ||
-	    allocated > f->allocation - header_offset || (header->flags & ~NTFS_INDEX_LARGE) != 0) {
+	if (entries < sizeof(*header) || entries % NTFS_WIRE_ALIGNMENT != 0 || used < entries ||
+	    used > allocated || allocated > f->allocation - header_offset ||
+	    (header->flags & ~NTFS_INDEX_LARGE) != 0) {
 		return NTFS_CORRUPT;
 	}
 	f->position = header_offset + entries;
@@ -103,15 +131,12 @@ validate_frame(struct ntfs_directory *d, struct index_frame *f, size_t header_of
 		if (ntfs_u64(key->parent) != d->reference) {
 			return NTFS_CORRUPT;
 		}
-		if (previous_length != 0 &&
-		    ntfs_name_compare(d->volume, previous, previous_length,
-			(const uint8_t *)key + sizeof(*key), key->length) > 0) {
+		if ((previous != NULL && key_compare(d->volume, previous, key) >= 0) ||
+		    (f->lower != NULL && key_compare(d->volume, f->lower, key) >= 0) ||
+		    (f->upper != NULL && key_compare(d->volume, key, f->upper) >= 0)) {
 			return NTFS_CORRUPT;
 		}
-		previous_length = key->length;
-		for (i = 0; i < previous_length; i++) {
-			previous[i] = ntfs_u16((const uint8_t *)key + sizeof(*key) + i * 2);
-		}
+		previous = key;
 		scan.position += ntfs_u16(entry->length);
 	}
 	return terminal ? NTFS_OK : NTFS_CORRUPT;
@@ -120,7 +145,7 @@ validate_frame(struct ntfs_directory *d, struct index_frame *f, size_t header_of
 static size_t
 hash_vcn(uint64_t vcn, uint32_t capacity)
 {
-	return (size_t)((vcn * UINT64_C(11400714819323198485)) >> 32) & (capacity - 1u);
+	return (size_t)((vcn * NTFS_VCN_HASH_MULTIPLIER) >> NTFS_VCN_HASH_SHIFT) & (capacity - 1u);
 }
 
 static enum ntfs_result
@@ -136,8 +161,9 @@ visit(struct ntfs_directory *d, uint64_t vcn)
 	if (d->visited_count == d->volume->limits.max_directory_nodes) {
 		return NTFS_RANGE;
 	}
-	if (d->visited_count * 2 >= d->visited_capacity) {
-		capacity = d->visited_capacity == 0 ? 64 : d->visited_capacity * 2;
+	if (d->visited_count * NTFS_VISITED_LOAD_DENOMINATOR >= d->visited_capacity) {
+		capacity = d->visited_capacity == 0 ? NTFS_VISITED_INITIAL_CAPACITY
+						    : d->visited_capacity * NTFS_VECTOR_GROWTH;
 		table = ntfs_alloc(d->volume, (size_t)capacity * sizeof(*table));
 		if (table == NULL) {
 			return NTFS_NO_MEMORY;
@@ -173,6 +199,7 @@ descend(struct ntfs_directory *d, const struct ntfs_disk_index_entry *entry)
 {
 	struct ntfs_volume *v = d->volume;
 	struct index_frame *f;
+	const struct index_frame *parent;
 	const struct ntfs_disk_index_block *block;
 	uint64_t vcn, offset, bit;
 	uint32_t unit;
@@ -197,11 +224,12 @@ descend(struct ntfs_directory *d, const struct ntfs_disk_index_entry *entry)
 		return NTFS_CORRUPT;
 	}
 	bit = offset / v->info.index_size;
-	result = ntfs_stream_exact(d->bitmap, bit / 8, &allocated, 1);
+	result =
+	    ntfs_stream_exact(d->bitmap, bit / NTFS_BITS_PER_BYTE, &allocated, sizeof(allocated));
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if ((allocated & (1u << (bit % 8))) == 0) {
+	if ((allocated & (1u << (bit % NTFS_BITS_PER_BYTE))) == 0) {
 		return NTFS_CORRUPT;
 	}
 	result = visit(d, vcn);
@@ -210,6 +238,12 @@ descend(struct ntfs_directory *d, const struct ntfs_disk_index_entry *entry)
 	}
 	f = &d->stack[d->depth];
 	ntfs_zero(f, sizeof(*f));
+	parent = &d->stack[d->depth - 1];
+	/* Bounds point into live ancestors, which outlive every child frame. */
+	f->lower = parent->previous != NULL ? parent->previous : parent->lower;
+	f->upper = (ntfs_u16(entry->flags) & NTFS_INDEX_END) != 0
+	    ? parent->upper
+	    : (const void *)((const uint8_t *)entry + sizeof(*entry));
 	f->allocation = v->info.index_size;
 	f->bytes = ntfs_alloc(v, f->allocation);
 	if (f->bytes == NULL) {
@@ -225,7 +259,8 @@ descend(struct ntfs_directory *d, const struct ntfs_disk_index_entry *entry)
 	}
 	block = (const void *)f->bytes;
 	if (ntfs_u64(block->vcn) != vcn || ntfs_u16(block->mst.usa_offset) < sizeof(*block) ||
-	    ntfs_u16(block->mst.usa_offset) + (size_t)ntfs_u16(block->mst.usa_count) * 2 >
+	    ntfs_u16(block->mst.usa_offset) +
+		    (size_t)ntfs_u16(block->mst.usa_count) * NTFS_MST_WORD_BYTES >
 		offsetof(struct ntfs_disk_index_block, header) +
 		    ntfs_u32(block->header.entries_offset)) {
 		return NTFS_CORRUPT;
@@ -249,6 +284,9 @@ ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
 	if (node == NULL) {
 		return NTFS_INVALID;
 	}
+	if (node->volume->children == UINT32_MAX) {
+		return NTFS_RANGE;
+	}
 	record = (const void *)node->record;
 	if ((ntfs_u16(record->flags) & NTFS_RECORD_DIRECTORY) == 0) {
 		return NTFS_NOT_DIRECTORY;
@@ -260,7 +298,8 @@ ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
 	d->volume = node->volume;
 	d->reference = node->reference;
 	d->volume->children++;
-	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ROOT, index_name, 4, &root);
+	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ROOT, index_name,
+	    sizeof(index_name) / sizeof(index_name[0]), &root);
 	if (result != NTFS_OK) {
 		goto finish;
 	}
@@ -285,12 +324,13 @@ ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
 	if (result != NTFS_OK) {
 		goto finish;
 	}
-	result =
-	    ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION, index_name, 4, &d->allocation);
+	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION, index_name,
+	    sizeof(index_name) / sizeof(index_name[0]), &d->allocation);
 	if (result == NTFS_NOT_FOUND) {
 		result = NTFS_OK;
 	} else if (result == NTFS_OK) {
-		result = ntfs_attribute_open(node, NTFS_ATTR_BITMAP, index_name, 4, &d->bitmap);
+		result = ntfs_attribute_open(node, NTFS_ATTR_BITMAP, index_name,
+		    sizeof(index_name) / sizeof(index_name[0]), &d->bitmap);
 		if (result == NTFS_OK &&
 		    (d->allocation->resident || d->allocation->flags != 0 ||
 			d->allocation->initialized != d->allocation->size ||
@@ -328,19 +368,15 @@ ntfs_directory_close(struct ntfs_directory *d)
 	ntfs_free(v, d, sizeof(*d));
 }
 
-enum ntfs_result
-ntfs_directory_next(struct ntfs_directory *d, struct ntfs_dirent *out)
+static enum ntfs_result
+next_entry(struct ntfs_directory *d, const struct ntfs_disk_index_entry **out)
 {
 	struct index_frame *f;
 	const struct ntfs_disk_index_entry *entry;
 	const struct ntfs_disk_filename *key;
 	enum ntfs_result result;
 	uint16_t flags;
-	size_t i;
 
-	if (d == NULL || out == NULL) {
-		return NTFS_INVALID;
-	}
 	if (d->failure != NTFS_OK) {
 		return d->failure;
 	}
@@ -367,21 +403,87 @@ ntfs_directory_next(struct ntfs_directory *d, struct ntfs_dirent *out)
 			continue;
 		}
 		key = (const void *)((const uint8_t *)entry + sizeof(*entry));
-		ntfs_zero(out, sizeof(*out));
-		out->reference = ntfs_u64(entry->reference);
-		out->parent_reference = ntfs_u64(key->parent);
-		out->size = ntfs_u64(key->size);
-		out->file_attributes = ntfs_u32(key->attributes);
-		out->name_namespace = key->name_namespace;
-		out->name_length = key->length;
-		for (i = 0; i < key->length; i++) {
-			out->name[i] = ntfs_u16((const uint8_t *)key + sizeof(*key) + i * 2);
-		}
+		f->previous = key;
 		f->position += ntfs_u16(entry->length);
 		f->descended = false;
+		*out = entry;
 		return NTFS_OK;
 	}
 	return NTFS_END;
+}
+
+static void
+copy_entry(const struct ntfs_disk_index_entry *entry, struct ntfs_dirent *out)
+{
+	const struct ntfs_disk_filename *key =
+	    (const void *)((const uint8_t *)entry + sizeof(*entry));
+	size_t i;
+
+	ntfs_zero(out, sizeof(*out));
+	out->reference = ntfs_u64(entry->reference);
+	out->parent_reference = ntfs_u64(key->parent);
+	out->size = ntfs_u64(key->size);
+	out->file_attributes = ntfs_u32(key->attributes);
+	out->name_namespace = key->name_namespace;
+	out->name_length = key->length;
+	for (i = 0; i < key->length; i++) {
+		out->name[i] =
+		    ntfs_u16((const uint8_t *)key + sizeof(*key) + i * NTFS_UTF16_UNIT_BYTES);
+	}
+}
+
+enum ntfs_result
+ntfs_directory_next(struct ntfs_directory *d, struct ntfs_dirent *out)
+{
+	const struct ntfs_disk_index_entry *entry;
+	enum ntfs_result result;
+
+	if (d == NULL || out == NULL) {
+		return NTFS_INVALID;
+	}
+	result = next_entry(d, &entry);
+	if (result == NTFS_OK) {
+		copy_entry(entry, out);
+	}
+	return result;
+}
+
+static enum ntfs_result
+seek_name(struct ntfs_directory *d, const uint16_t *name, size_t length)
+{
+	struct index_frame *f;
+	const struct ntfs_disk_index_entry *entry;
+	const struct ntfs_disk_filename *key;
+	enum ntfs_result result;
+	int comparison;
+
+	for (;;) {
+		f = &d->stack[d->depth - 1];
+		result = entry_at(f, &entry);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		comparison = -1;
+		key = NULL;
+		if ((ntfs_u16(entry->flags) & NTFS_INDEX_END) == 0) {
+			key = (const void *)((const uint8_t *)entry + sizeof(*entry));
+			comparison = ntfs_name_compare(d->volume, name, length,
+			    (const uint8_t *)key + sizeof(*key), key->length);
+		}
+		if (comparison > 0) {
+			f->previous = key;
+			f->position += ntfs_u16(entry->length);
+			continue;
+		}
+		if ((ntfs_u16(entry->flags) & NTFS_INDEX_CHILD) == 0) {
+			return NTFS_OK;
+		}
+		f->descended = true;
+		result = descend(d, entry);
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
 }
 
 enum ntfs_result
@@ -389,19 +491,19 @@ ntfs_lookup_entry(struct ntfs_node *parent, const uint16_t *name, size_t length,
     struct ntfs_node **out, struct ntfs_dirent *found)
 {
 	struct ntfs_directory *d = NULL;
-	struct index_frame *f;
 	const struct ntfs_disk_index_entry *entry;
 	const struct ntfs_disk_filename *key;
 	uint64_t reference = 0;
 	enum ntfs_result result;
-	uint16_t flags;
 	size_t i;
-	int comparison;
 
 	if (out == NULL) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;
+	if (found != NULL) {
+		ntfs_zero(found, sizeof(*found));
+	}
 	if (parent == NULL || name == NULL || length == 0 || length > NTFS_NAME_MAX) {
 		return NTFS_INVALID;
 	}
@@ -414,52 +516,45 @@ ntfs_lookup_entry(struct ntfs_node *parent, const uint16_t *name, size_t length,
 	if (result != NTFS_OK) {
 		return result;
 	}
-	for (;;) {
-		f = &d->stack[d->depth - 1];
-		result = entry_at(f, &entry);
-		if (result != NTFS_OK) {
-			break;
-		}
-		flags = ntfs_u16(entry->flags);
-		comparison = -1;
-		if ((flags & NTFS_INDEX_END) == 0) {
+	result = seek_name(d, name, length);
+	if (result == NTFS_OK) {
+		result = next_entry(d, &entry);
+		if (result == NTFS_END) {
+			result = NTFS_NOT_FOUND;
+		} else if (result == NTFS_OK) {
 			key = (const void *)((const uint8_t *)entry + sizeof(*entry));
-			comparison = ntfs_name_compare(parent->volume, name, length,
-			    (const uint8_t *)key + sizeof(*key), key->length);
-			if (comparison == 0) {
+			if (ntfs_name_compare(parent->volume, name, length,
+				(const uint8_t *)key + sizeof(*key), key->length) != 0) {
+				result = NTFS_NOT_FOUND;
+			} else {
 				reference = ntfs_u64(entry->reference);
 				if (found != NULL) {
-					ntfs_zero(found, sizeof(*found));
-					found->reference = reference;
-					found->parent_reference = ntfs_u64(key->parent);
-					found->size = ntfs_u64(key->size);
-					found->file_attributes = ntfs_u32(key->attributes);
-					found->name_namespace = key->name_namespace;
-					found->name_length = key->length;
-					for (i = 0; i < key->length; i++) {
-						found->name[i] = ntfs_u16(
-						    (const uint8_t *)key + sizeof(*key) + i * 2);
-					}
+					copy_entry(entry, found);
 				}
-				break;
 			}
 		}
-		if (comparison < 0) {
-			if ((flags & NTFS_INDEX_CHILD) == 0) {
-				result = NTFS_NOT_FOUND;
-				break;
+	}
+	if (result == NTFS_OK) {
+		/* Case-insensitive lookup cannot choose between distinct POSIX
+		 * names that fold alike. The lower-bound cursor also catches a
+		 * collision split across a separator and its neighboring child. */
+		result = next_entry(d, &entry);
+		if (result == NTFS_END) {
+			result = NTFS_OK;
+		} else if (result == NTFS_OK) {
+			key = (const void *)((const uint8_t *)entry + sizeof(*entry));
+			if (ntfs_name_compare(parent->volume, name, length,
+				(const uint8_t *)key + sizeof(*key), key->length) == 0) {
+				result = NTFS_UNSUPPORTED;
 			}
-			result = descend(d, entry);
-			if (result != NTFS_OK) {
-				break;
-			}
-		} else {
-			f->position += ntfs_u16(entry->length);
 		}
 	}
 	ntfs_directory_close(d);
 	if (result == NTFS_OK) {
 		result = ntfs_node_open(parent->volume, reference, out);
+	}
+	if (result != NTFS_OK && found != NULL) {
+		ntfs_zero(found, sizeof(*found));
 	}
 	return result;
 }

@@ -60,7 +60,8 @@ find_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name
 		match = true;
 		for (i = 0; i < name_length; i++) {
 			if (name[i] !=
-			    ntfs_u16(attr.bytes + ntfs_u16(attr.disk->name_offset) + i * 2)) {
+			    ntfs_u16(attr.bytes + ntfs_u16(attr.disk->name_offset) +
+				i * NTFS_UTF16_UNIT_BYTES)) {
 				match = false;
 				break;
 			}
@@ -79,9 +80,9 @@ find_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name
 	return found ? NTFS_OK : NTFS_CORRUPT;
 }
 
-enum ntfs_result
-ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size_t name_length,
-    struct ntfs_stream **out)
+static enum ntfs_result
+attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size_t name_length,
+    bool bootstrap, struct ntfs_stream **out)
 {
 	struct ntfs_volume *v = node->volume;
 	struct ntfs_attr_view a, list_attr;
@@ -148,12 +149,13 @@ ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name,
 		}
 		entry = (const void *)(bytes + offset);
 		length = ntfs_u16(entry->length);
-		if (length < sizeof(*entry) || length % 8 != 0 ||
+		if (length < sizeof(*entry) || length % NTFS_WIRE_ALIGNMENT != 0 ||
 		    !ntfs_bounds(offset, length, list_size) ||
 		    (entry->name_length != 0 &&
-			(entry->name_offset < sizeof(*entry) || entry->name_offset % 2 != 0 ||
-			    !ntfs_bounds(
-				entry->name_offset, (size_t)entry->name_length * 2, length))) ||
+			(entry->name_offset < sizeof(*entry) ||
+			    entry->name_offset % NTFS_UTF16_UNIT_BYTES != 0 ||
+			    !ntfs_bounds(entry->name_offset,
+				(size_t)entry->name_length * NTFS_UTF16_UNIT_BYTES, length))) ||
 		    ntfs_u32(entry->type) == NTFS_ATTR_LIST) {
 			result = NTFS_CORRUPT;
 			goto finish;
@@ -165,7 +167,8 @@ ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name,
 		match = true;
 		for (i = 0; i < name_length; i++) {
 			if (name[i] !=
-			    ntfs_u16((const uint8_t *)entry + entry->name_offset + i * 2)) {
+			    ntfs_u16((const uint8_t *)entry + entry->name_offset +
+				i * NTFS_UTF16_UNIT_BYTES)) {
 				match = false;
 				break;
 			}
@@ -185,11 +188,24 @@ ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name,
 			result = NTFS_CORRUPT;
 			goto finish;
 		}
+		if (bootstrap && stream == NULL && reference != node->reference) {
+			result = NTFS_CORRUPT;
+			goto finish;
+		}
 		if (reference == node->reference) {
 			record = node->record;
 		} else {
+			/* The next MFT extent record must be reachable through the
+			 * prefix already decoded. Never guess its physical address
+			 * or recurse through an unvalidated mapping. */
+			if (bootstrap) {
+				v->mft = stream;
+			}
 			result =
 			    ntfs_record_read(v, reference & NTFS_REFERENCE_RECORD_MASK, &record);
+			if (bootstrap) {
+				v->mft = NULL;
+			}
 			if (result != NTFS_OK) {
 				goto finish;
 			}
@@ -221,6 +237,12 @@ ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name,
 		}
 		result = stream == NULL ? ntfs_stream_from_attr(v, &a, &stream)
 					: ntfs_stream_append(stream, &a);
+		if (result == NTFS_OK && bootstrap &&
+		    (stream->resident || stream->flags != 0 || stream->run_count == 0 ||
+			stream->runs[0].lcn != v->mft_lcn || stream->initialized != stream->size ||
+			stream->size % v->info.record_size != 0)) {
+			result = NTFS_CORRUPT;
+		}
 		if (record != node->record) {
 			ntfs_free(v, record, v->info.record_size);
 		}
@@ -245,20 +267,57 @@ finish:
 }
 
 enum ntfs_result
+ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size_t name_length,
+    struct ntfs_stream **out)
+{
+	return attribute_open(node, type, name, name_length, false, out);
+}
+
+enum ntfs_result
+ntfs_mft_open(struct ntfs_volume *v, uint8_t *record, struct ntfs_stream **out)
+{
+	const struct ntfs_disk_record *header = (const void *)record;
+	struct ntfs_node node;
+	enum ntfs_result result;
+
+	*out = NULL;
+	if (v->mft != NULL || ntfs_u64(header->base_reference) != 0 ||
+	    (ntfs_u16(header->flags) & NTFS_RECORD_DIRECTORY) != 0) {
+		return NTFS_CORRUPT;
+	}
+	node.volume = v;
+	node.reference = (uint64_t)ntfs_u16(header->sequence) << NTFS_REFERENCE_SEQUENCE_SHIFT;
+	node.record = record;
+	result = attribute_open(&node, NTFS_ATTRIBUTE_DATA, NULL, 0, true, out);
+	return result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
+}
+
+enum ntfs_result
 ntfs_stream_open(
     struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_stream **out)
 {
 	struct ntfs_stat st;
+	size_t i;
 	enum ntfs_result result;
 
 	if (out == NULL) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;
-	if (node == NULL) {
+	if (node == NULL || length > NTFS_NAME_MAX || (length != 0 && name == NULL)) {
 		return NTFS_INVALID;
 	}
-	result = ntfs_node_stat(node, &st);
+	for (i = 0; i < length; i++) {
+		if (name[i] == 0 || name[i] == '/' || name[i] == '\\' || name[i] == ':') {
+			return NTFS_INVALID;
+		}
+	}
+	if (node->volume->children == UINT32_MAX) {
+		return NTFS_RANGE;
+	}
+	/* Stream compression/encryption state is independent. Opening one named
+	 * stream must not decode or require support for the unnamed stream. */
+	result = ntfs_node_metadata(node, &st);
 	if (result != NTFS_OK) {
 		return result;
 	}

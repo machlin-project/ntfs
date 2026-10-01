@@ -9,6 +9,9 @@ ntfs_node_by_number(struct ntfs_volume *v, uint64_t number, struct ntfs_node **o
 	enum ntfs_result result;
 
 	*out = NULL;
+	if (v->children == UINT32_MAX) {
+		return NTFS_RANGE;
+	}
 	node = ntfs_alloc(v, sizeof(*node));
 	if (node == NULL) {
 		return NTFS_NO_MEMORY;
@@ -77,12 +80,11 @@ ntfs_node_close(struct ntfs_node *node)
 }
 
 enum ntfs_result
-ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
+ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 {
 	const struct ntfs_disk_record *r;
 	const struct ntfs_disk_standard *si;
 	const struct ntfs_disk_standard_extension *extended;
-	struct ntfs_stream *s = NULL;
 	struct ntfs_attr_view a;
 	const uint8_t *value;
 	size_t length;
@@ -102,7 +104,8 @@ ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
 		return result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
 	}
 	result = ntfs_attr_value(&a, &value, &length);
-	if (result != NTFS_OK || length < sizeof(*si)) {
+	if (result != NTFS_OK || a.flags != 0 || length < sizeof(*si) ||
+	    (length > sizeof(*si) && length < sizeof(*si) + sizeof(*extended))) {
 		return NTFS_CORRUPT;
 	}
 	si = (const void *)value;
@@ -115,6 +118,19 @@ ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
 	if (length >= sizeof(*si) + sizeof(*extended)) {
 		extended = (const void *)(value + sizeof(*si));
 		st->security_id = ntfs_u32(extended->security_id);
+	}
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
+{
+	struct ntfs_stream *s = NULL;
+	enum ntfs_result result;
+
+	result = ntfs_node_metadata(node, st);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	if (st->directory || st->reparse) {
 		return NTFS_OK;

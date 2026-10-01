@@ -11,6 +11,13 @@ python = find_program('python3')
 fixture = custom_target('fixtures', output: 'fixture.stamp', command: [python, files('tests/fixtures.py'), meson.current_build_dir() / 'fixtures', '@OUTPUT@'], build_by_default: true)
 unit = executable('ntfs-unit', 'tests/unit.c', include_directories: [inc, include_directories('core')], link_with: [posix, core], c_args: ['-D_POSIX_C_SOURCE=200809L', '-Wdeclaration-after-statement'])
 test('unit', unit, args: [meson.current_build_dir() / 'fixtures/standard.img'], depends: fixture, timeout: 120)
+streams = executable('ntfs-stream-tests', 'tests/streams.c', include_directories: inc, link_with: [posix, core], c_args: ['-Wdeclaration-after-statement'])
+test('streams', streams, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
+codec = executable('ntfs-codec-tests', 'tests/codec.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('codec', codec)
+foreach layout : ['mft-resident-list', 'mft-nonresident-list', 'nested-index', 'ntfs30']
+  test(layout, unit, args: [meson.current_build_dir() / 'fixtures' / (layout + '.img')], depends: fixture, timeout: 120)
+endforeach
 test('images', python, args: [files('tests/check_images.py'), inspector.full_path(), meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 fuzz = executable('ntfs-fuzz-smoke', 'tests/fuzz.c', include_directories: inc, link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE'])
 test('fuzz-smoke', fuzz, args: [meson.current_build_dir() / 'fixtures/standard.img'], depends: fixture, timeout: 120)

@@ -9,13 +9,16 @@ ntfs_fixup(void *buffer, size_t size, const char *magic)
 	size_t offset, count, i, tail;
 	uint16_t sequence;
 
-	if (size < sizeof(*m) || size % NTFS_MST_STRIDE != 0 || !ntfs_equal(m->magic, magic, 4)) {
+	if (size < sizeof(*m) || size % NTFS_MST_STRIDE != 0 ||
+	    !ntfs_equal(m->magic, magic, sizeof(m->magic))) {
 		return NTFS_CORRUPT;
 	}
 	offset = ntfs_u16(m->usa_offset);
 	count = ntfs_u16(m->usa_count);
-	if (count != size / NTFS_MST_STRIDE + 1 || offset < sizeof(*m) || offset % 2 != 0 ||
-	    !ntfs_bounds(offset, count * 2, NTFS_MST_STRIDE - 2)) {
+	if (count != size / NTFS_MST_STRIDE + 1 || offset < sizeof(*m) ||
+	    offset % NTFS_MST_WORD_BYTES != 0 ||
+	    !ntfs_bounds(
+		offset, count * NTFS_MST_WORD_BYTES, NTFS_MST_STRIDE - NTFS_MST_WORD_BYTES)) {
 		return NTFS_CORRUPT;
 	}
 	sequence = ntfs_u16(bytes + offset);
@@ -24,14 +27,15 @@ ntfs_fixup(void *buffer, size_t size, const char *magic)
 	}
 	/* Validate all tails before changing any byte, so failure is atomic. */
 	for (i = 1; i < count; i++) {
-		tail = i * NTFS_MST_STRIDE - 2;
+		tail = i * NTFS_MST_STRIDE - NTFS_MST_WORD_BYTES;
 		if (ntfs_u16(bytes + tail) != sequence) {
 			return NTFS_CORRUPT;
 		}
 	}
 	for (i = 1; i < count; i++) {
-		tail = i * NTFS_MST_STRIDE - 2;
-		ntfs_copy(bytes + tail, bytes + offset + i * 2, 2);
+		tail = i * NTFS_MST_STRIDE - NTFS_MST_WORD_BYTES;
+		ntfs_copy(
+		    bytes + tail, bytes + offset + i * NTFS_MST_WORD_BYTES, NTFS_MST_WORD_BYTES);
 	}
 	return NTFS_OK;
 }
@@ -44,13 +48,13 @@ ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs
 	const struct ntfs_disk_nonresident *n;
 	size_t minimum, name_end, value_offset;
 
-	if (!ntfs_bounds(*position, 4, size)) {
+	if (!ntfs_bounds(*position, sizeof(uint32_t), size)) {
 		return NTFS_CORRUPT;
 	}
 	if (ntfs_u32(record + *position) == NTFS_ATTR_END) {
 		return NTFS_END;
 	}
-	if (*position % 8 != 0 || !ntfs_bounds(*position, sizeof(*d), size)) {
+	if (*position % NTFS_WIRE_ALIGNMENT != 0 || !ntfs_bounds(*position, sizeof(*d), size)) {
 		return NTFS_CORRUPT;
 	}
 	d = (const void *)(record + *position);
@@ -60,7 +64,7 @@ ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs
 	a->type = ntfs_u32(d->type);
 	a->flags = ntfs_u16(d->flags);
 	a->instance = ntfs_u16(d->instance);
-	if (d->nonresident > 1 || a->type == 0 || a->length % 8 != 0 ||
+	if (d->nonresident > 1 || a->type == 0 || a->length % NTFS_WIRE_ALIGNMENT != 0 ||
 	    !ntfs_bounds(*position, a->length, size)) {
 		return NTFS_CORRUPT;
 	}
@@ -74,11 +78,12 @@ ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs
 	name_end = minimum;
 	if (d->name_length != 0) {
 		name_end = ntfs_u16(d->name_offset);
-		if (name_end < minimum || name_end % 2 != 0 ||
-		    !ntfs_bounds(name_end, (size_t)d->name_length * 2, a->length)) {
+		if (name_end < minimum || name_end % NTFS_UTF16_UNIT_BYTES != 0 ||
+		    !ntfs_bounds(
+			name_end, (size_t)d->name_length * NTFS_UTF16_UNIT_BYTES, a->length)) {
 			return NTFS_CORRUPT;
 		}
-		name_end += (size_t)d->name_length * 2;
+		name_end += (size_t)d->name_length * NTFS_UTF16_UNIT_BYTES;
 	}
 	if (d->nonresident) {
 		n = (const void *)(a->bytes + sizeof(*d));
@@ -115,10 +120,11 @@ ntfs_record_validate(void *buffer, size_t size)
 	position = ntfs_u16(r->attrs_offset);
 	flags = ntfs_u16(r->flags);
 	if (ntfs_u32(r->allocated) != size || used > size || position < sizeof(*r) ||
-	    position % 8 != 0 || (flags & NTFS_RECORD_IN_USE) == 0 ||
+	    position % NTFS_WIRE_ALIGNMENT != 0 || (flags & NTFS_RECORD_IN_USE) == 0 ||
 	    (flags & ~(NTFS_RECORD_IN_USE | NTFS_RECORD_DIRECTORY)) != 0 ||
 	    ntfs_u16(r->sequence) == 0 || ntfs_u16(r->mst.usa_offset) < sizeof(*r) ||
-	    ntfs_u16(r->mst.usa_offset) + (size_t)ntfs_u16(r->mst.usa_count) * 2 > position) {
+	    ntfs_u16(r->mst.usa_offset) + (size_t)ntfs_u16(r->mst.usa_count) * NTFS_MST_WORD_BYTES >
+		position) {
 		return NTFS_CORRUPT;
 	}
 	do {
@@ -147,7 +153,8 @@ ntfs_attr_find(const uint8_t *record, size_t size, uint32_t type, const uint16_t
 		}
 		match = true;
 		for (i = 0; i < length; i++) {
-			if (ntfs_u16(a.bytes + ntfs_u16(a.disk->name_offset) + i * 2) != name[i]) {
+			if (ntfs_u16(a.bytes + ntfs_u16(a.disk->name_offset) +
+				i * NTFS_UTF16_UNIT_BYTES) != name[i]) {
 				match = false;
 				break;
 			}
@@ -200,7 +207,7 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 	if (record == NULL) {
 		return NTFS_NO_MEMORY;
 	}
-	for (i = 0; i < v->limits.record_cache_entries; i++) {
+	for (i = 0; v->cache != NULL && i < v->limits.record_cache_entries; i++) {
 		if (v->cache[i].bytes != NULL && v->cache[i].number == number) {
 			ntfs_copy(record, v->cache[i].bytes, v->info.record_size);
 			v->cache[i].stamp = ++v->clock;
@@ -222,7 +229,7 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 		ntfs_free(v, record, v->info.record_size);
 		return result;
 	}
-	if (v->limits.record_cache_entries != 0) {
+	if (v->cache != NULL) {
 		if (v->cache[victim].bytes == NULL) {
 			v->cache[victim].bytes = ntfs_alloc(v, v->info.record_size);
 		}

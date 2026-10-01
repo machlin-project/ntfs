@@ -22,6 +22,13 @@ exercises the real adapter against a bounded fake resource in-process; it neithe
 mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds a
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
+The fuzzer authors 1-MiB physical images instead of retaining unused 8-MiB tails
+for every corpus entry. All fixture payload locations and large logical sparse
+sizes are preserved. The corpus directory includes the input-size bound so older
+full-image corpora remain available without being loaded into the compact run.
+The process RSS budget stays 1 GiB, independently of the harness's 8-MiB core
+allocation budget. A corpus-growth RSS failure is still a failed fuzz run and
+must be reported and diagnosed before retrying.
 
 Some Xcode distributions omit the libFuzzer runtime. In that case, pass an
 explicit full LLVM compiler, for example `--compiler /opt/homebrew/opt/llvm/bin/clang`.

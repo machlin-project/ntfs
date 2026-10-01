@@ -5,8 +5,19 @@
 #include <stddef.h>
 
 enum {
+	NTFS_BITS_PER_BYTE = 8,
+	NTFS_WIRE_ALIGNMENT = 8,
+	NTFS_UTF16_UNIT_BYTES = sizeof(uint16_t),
+	NTFS_UTF16_CODE_UNITS = UINT16_MAX + 1u,
 	NTFS_BOOT_BYTES = 512,
+	NTFS_BOOT_SIGNATURE = 0xaa55,
+	NTFS_SECTOR_MIN_BYTES = 512,
+	NTFS_SECTOR_MAX_BYTES = 4096,
+	NTFS_SIZE_CODE_EXPONENT_FLAG = 0x80,
+	NTFS_VOLUME_MAJOR_VERSION = 3,
+	NTFS_VOLUME_MAX_MINOR_VERSION = 1,
 	NTFS_MST_STRIDE = 512,
+	NTFS_MST_WORD_BYTES = sizeof(uint16_t),
 	NTFS_ATTR_STANDARD = 0x10,
 	NTFS_ATTR_LIST = 0x20,
 	NTFS_ATTR_FILENAME = 0x30,
@@ -27,24 +38,36 @@ enum {
 	NTFS_INDEX_END = 2,
 	NTFS_INDEX_LARGE = 1,
 	NTFS_COLLATION_FILENAME = 1,
-	NTFS_NAMESPACE_DOS = 2,
 	NTFS_VOLUME_DIRTY = 1,
 	NTFS_MFT_RECORD = 0,
 	NTFS_VOLUME_RECORD = 3,
 	NTFS_BITMAP_RECORD = 6,
 	NTFS_UPCASE_RECORD = 10,
-	NTFS_UPCASE_BYTES = 131072,
-	NTFS_MAX_RECORD_BYTES = 65536,
-	NTFS_DIRECTORY_DEPTH = 32,
-	NTFS_COMPRESSION_CLUSTERS = 16,
+	NTFS_UPCASE_BYTES = NTFS_UTF16_CODE_UNITS * NTFS_UTF16_UNIT_BYTES,
+	NTFS_COMPRESSION_UNIT_SHIFT = 4,
+	NTFS_COMPRESSION_CLUSTERS = 1u << NTFS_COMPRESSION_UNIT_SHIFT,
+	NTFS_COMPRESSION_MAX_CLUSTER_BYTES = 4096,
 	NTFS_LZNT1_CHUNK = 4096,
-	NTFS_MAX_IO = 1048576
+	NTFS_LZNT1_HEADER_BYTES = sizeof(uint16_t),
+	NTFS_LZNT1_TOKEN_BYTES = sizeof(uint16_t),
+	NTFS_LZNT1_SIGNATURE_MASK = 0x7000,
+	NTFS_LZNT1_SIGNATURE = 0x3000,
+	NTFS_LZNT1_COMPRESSED = 0x8000,
+	NTFS_LZNT1_LENGTH_MASK = 0x0fff,
+	NTFS_LZNT1_TOKEN_INITIAL_SHIFT = 12,
+	NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD = 16,
+	NTFS_LZNT1_MIN_MATCH = 3,
+	NTFS_RUN_LENGTH_WIDTH_MASK = 0x0f,
+	NTFS_RUN_OFFSET_WIDTH_SHIFT = 4,
+	NTFS_RUN_INTEGER_BYTES = sizeof(uint64_t),
+	NTFS_RUN_NEGATIVE_FLAG = 0x80
 };
 
 #define NTFS_ATTR_END UINT32_C(0xffffffff)
 #define NTFS_HOLE UINT64_MAX
 #define NTFS_TIME_EPOCH UINT64_C(116444736000000000)
 #define NTFS_TIME_TICKS UINT64_C(10000000)
+#define NTFS_TIME_NANOSECONDS_PER_TICK 100u
 
 /* Every wire field is an array of bytes: alignment and host endian independent. */
 struct ntfs_disk_boot {
@@ -65,6 +88,11 @@ struct ntfs_disk_record {
 	struct ntfs_disk_mst mst;
 	uint8_t lsn[8], sequence[2], links[2], attrs_offset[2], flags[2];
 	uint8_t used[4], allocated[4], base_reference[8], next_instance[2];
+};
+
+/* NTFS 3.1 adds these fields before the update sequence array. Earlier records
+ * have only the common header. The reader does not require this optional tail. */
+struct ntfs_disk_record_extension {
 	uint8_t reserved[2], record_number[4];
 };
 
@@ -128,7 +156,8 @@ struct ntfs_disk_index_entry {
 };
 
 _Static_assert(sizeof(struct ntfs_disk_boot) == 512, "boot layout");
-_Static_assert(sizeof(struct ntfs_disk_record) == 48, "record layout");
+_Static_assert(sizeof(struct ntfs_disk_record) == 42, "common record layout");
+_Static_assert(sizeof(struct ntfs_disk_record_extension) == 6, "NTFS 3.1 record extension");
 _Static_assert(sizeof(struct ntfs_disk_nonresident) == 48, "attribute layout");
 _Static_assert(sizeof(struct ntfs_disk_filename) == 66, "filename layout");
 _Static_assert(sizeof(struct ntfs_disk_attr_list) == 26, "attribute list layout");

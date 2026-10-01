@@ -21,7 +21,8 @@ append_run(struct ntfs_stream *s, uint64_t vcn, uint64_t count, uint64_t lcn)
 		return NTFS_RANGE;
 	}
 	if (s->run_count == s->run_capacity) {
-		capacity = s->run_capacity == 0 ? 8 : s->run_capacity * 2;
+		capacity = s->run_capacity == 0 ? NTFS_RUN_INITIAL_CAPACITY
+						: s->run_capacity * NTFS_VECTOR_GROWTH;
 		if (capacity > s->volume->limits.max_runs) {
 			capacity = s->volume->limits.max_runs;
 		}
@@ -63,16 +64,17 @@ ntfs_stream_append(struct ntfs_stream *s, const struct ntfs_attr_view *a)
 	p = a->bytes + ntfs_u16(n->mapping_offset);
 	end = a->bytes + a->length;
 	while (p < end && *p != 0) {
-		count_bytes = *p & 15u;
-		offset_bytes = *p >> 4;
+		count_bytes = *p & NTFS_RUN_LENGTH_WIDTH_MASK;
+		offset_bytes = *p >> NTFS_RUN_OFFSET_WIDTH_SHIFT;
 		p++;
-		if (count_bytes == 0 || count_bytes > 8 || offset_bytes > 8 ||
+		if (count_bytes == 0 || count_bytes > NTFS_RUN_INTEGER_BYTES ||
+		    offset_bytes > NTFS_RUN_INTEGER_BYTES ||
 		    (size_t)(end - p) < count_bytes + offset_bytes) {
 			return NTFS_CORRUPT;
 		}
 		count = 0;
 		for (i = 0; i < count_bytes; i++) {
-			count |= (uint64_t)p[i] << (i * 8);
+			count |= (uint64_t)p[i] << (i * NTFS_BITS_PER_BYTE);
 		}
 		p += count_bytes;
 		if (count == 0 || count > INT64_MAX || vcn > INT64_MAX - count ||
@@ -83,11 +85,11 @@ ntfs_stream_append(struct ntfs_stream *s, const struct ntfs_attr_view *a)
 		if (offset_bytes != 0) {
 			raw = 0;
 			for (i = 0; i < offset_bytes; i++) {
-				raw |= (uint64_t)p[i] << (i * 8);
+				raw |= (uint64_t)p[i] << (i * NTFS_BITS_PER_BYTE);
 			}
-			if ((p[offset_bytes - 1] & 0x80) != 0) {
-				if (offset_bytes < 8) {
-					raw |= UINT64_MAX << (offset_bytes * 8);
+			if ((p[offset_bytes - 1] & NTFS_RUN_NEGATIVE_FLAG) != 0) {
+				if (offset_bytes < NTFS_RUN_INTEGER_BYTES) {
+					raw |= UINT64_MAX << (offset_bytes * NTFS_BITS_PER_BYTE);
 				}
 				magnitude = ~raw + 1;
 				if (magnitude > lcn) {
@@ -194,7 +196,8 @@ ntfs_stream_from_attr(
 			}
 		}
 		if ((s->flags & NTFS_ATTR_COMPRESSED) != 0) {
-			if (s->compression_unit != 4 || v->info.cluster_size > 4096) {
+			if (s->compression_unit != NTFS_COMPRESSION_UNIT_SHIFT ||
+			    v->info.cluster_size > NTFS_COMPRESSION_MAX_CLUSTER_BYTES) {
 				result = NTFS_UNSUPPORTED;
 			}
 		} else if (s->compression_unit != 0 && (s->flags & NTFS_ATTR_SPARSE) == 0) {
@@ -284,7 +287,7 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 		return NTFS_OK;
 	}
 	if (s->compression_buffer == NULL) {
-		s->compression_buffer = ntfs_alloc(s->volume, size * 2);
+		s->compression_buffer = ntfs_alloc(s->volume, size * NTFS_COMPRESSION_BUFFERS);
 		if (s->compression_buffer == NULL) {
 			return NTFS_NO_MEMORY;
 		}
@@ -329,7 +332,7 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 	} else {
 		result = ntfs_lznt1_decode(source, packed, s->compression_buffer, size, &produced);
 		if (result != NTFS_OK) {
-			return result;
+			return result == NTFS_RANGE ? NTFS_CORRUPT : result;
 		}
 		needed = s->initialized > start ? s->initialized - start : 0;
 		if (needed > size) {
@@ -436,7 +439,7 @@ ntfs_stream_close(struct ntfs_stream *s)
 	}
 	ntfs_free(v, s->value, s->value_allocation);
 	ntfs_free(v, s->runs, (size_t)s->run_capacity * sizeof(*s->runs));
-	ntfs_free(
-	    v, s->compression_buffer, (size_t)v->info.cluster_size * NTFS_COMPRESSION_CLUSTERS * 2);
+	ntfs_free(v, s->compression_buffer,
+	    (size_t)v->info.cluster_size * NTFS_COMPRESSION_CLUSTERS * NTFS_COMPRESSION_BUFFERS);
 	ntfs_free(v, s, sizeof(*s));
 }

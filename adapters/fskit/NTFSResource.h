@@ -2,6 +2,13 @@
 #import <FSKit/FSKit.h>
 #include <ntfs/ntfs.h>
 
+enum {
+	NTFS_RESOURCE_WINDOW = 1048576,
+	NTFS_CORE_MEMORY_LIMIT = 64 * 1048576,
+	NTFS_RESOURCE_MIN_ALIGNMENT = 512,
+	NTFS_RESOURCE_MAX_ALIGNMENT = 65536
+};
+
 @protocol NTFSBlockReader <NSObject>
 @property(readonly) uint64_t blockSize;
 @property(readonly) uint64_t blockCount;

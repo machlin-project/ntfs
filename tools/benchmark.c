@@ -7,6 +7,15 @@
 #include <string.h>
 #include <time.h>
 
+enum {
+	BENCHMARK_LOOKUPS = 1000,
+	BENCHMARK_READS = 100,
+	BENCHMARK_FILE_LIMIT = 64 * 1048576,
+	BENCHMARK_READ_BUFFER_BYTES = 1048576
+};
+
+#define NANOSECONDS_PER_SECOND UINT64_C(1000000000)
+
 static uint64_t
 now(void)
 {
@@ -15,7 +24,7 @@ now(void)
 	if (clock_gettime(CLOCK_MONOTONIC, &time) != 0) {
 		abort();
 	}
-	return (uint64_t)time.tv_sec * UINT64_C(1000000000) + (uint64_t)time.tv_nsec;
+	return (uint64_t)time.tv_sec * NANOSECONDS_PER_SECOND + (uint64_t)time.tv_nsec;
 }
 
 int
@@ -52,7 +61,7 @@ main(int argc, char **argv)
 		goto finish;
 	}
 	begin = now();
-	for (iteration = 0; iteration < 1000; iteration++) {
+	for (iteration = 0; iteration < BENCHMARK_LOOKUPS; iteration++) {
 		result = ntfs_lookup(root, name, name_length, &node);
 		if (result != NTFS_OK) {
 			goto finish;
@@ -68,21 +77,22 @@ main(int argc, char **argv)
 	if (result != NTFS_OK) {
 		goto finish;
 	}
-	if (ntfs_stream_size(stream) > 67108864) {
+	if (ntfs_stream_size(stream) > BENCHMARK_FILE_LIMIT) {
 		result = NTFS_RANGE;
 		goto finish;
 	}
-	buffer = malloc(1048576);
+	buffer = malloc(BENCHMARK_READ_BUFFER_BYTES);
 	if (buffer == NULL) {
 		result = NTFS_NO_MEMORY;
 		goto finish;
 	}
 	ntfs_get_io_statistics(v, &before);
 	begin = now();
-	for (iteration = 0; iteration < 100; iteration++) {
+	for (iteration = 0; iteration < BENCHMARK_READS; iteration++) {
 		offset = 0;
 		do {
-			result = ntfs_stream_read(stream, offset, buffer, 1048576, &done);
+			result = ntfs_stream_read(
+			    stream, offset, buffer, BENCHMARK_READ_BUFFER_BYTES, &done);
 			if (result != NTFS_OK) {
 				goto finish;
 			}
@@ -92,12 +102,12 @@ main(int argc, char **argv)
 	}
 	elapsed = now() - begin;
 	ntfs_get_io_statistics(v, &after);
-	printf(
-	    "{\"profile\":\"warm POSIX image, 100 full reads and 1000 lookups\",\"bytes\":%" PRIu64
-	    ",\"read_ns\":%" PRIu64 ",\"lookup_ns\":%" PRIu64 ",\"device_calls\":%" PRIu64
-	    ",\"device_bytes\":%" PRIu64 ",\"metadata_cache_hits\":%" PRIu64 "}\n",
-	    bytes, elapsed, lookup_ns, after.read_calls - before.read_calls,
-	    after.read_bytes - before.read_bytes, after.record_cache_hits);
+	printf("{\"profile\":\"warm POSIX image, %u full reads and %u lookups\",\"bytes\":%" PRIu64
+	       ",\"read_ns\":%" PRIu64 ",\"lookup_ns\":%" PRIu64 ",\"device_calls\":%" PRIu64
+	       ",\"device_bytes\":%" PRIu64 ",\"metadata_cache_hits\":%" PRIu64 "}\n",
+	    BENCHMARK_READS, BENCHMARK_LOOKUPS, bytes, elapsed, lookup_ns,
+	    after.read_calls - before.read_calls, after.read_bytes - before.read_bytes,
+	    after.record_cache_hits);
 finish:
 	free(buffer);
 	ntfs_stream_close(stream);

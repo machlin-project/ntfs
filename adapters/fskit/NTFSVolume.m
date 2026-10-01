@@ -2,6 +2,15 @@
 #import "NTFSVolume.h"
 #include <errno.h>
 #include <unistd.h>
+#include <limits.h>
+#include <sys/stat.h>
+
+enum {
+	NTFS_FSKIT_ITEM_LIMIT = 16384,
+	NTFS_FSKIT_DIRECTORY_COOKIE_LIMIT = 1048576,
+	NTFS_READ_ONLY_FILE_MODE = S_IRUSR,
+	NTFS_READ_ONLY_DIRECTORY_MODE = S_IRUSR | S_IXUSR
+};
 
 @interface NTFSItem : FSItem {
       @public
@@ -28,7 +37,8 @@ item_id(uint64_t reference)
 static BOOL
 visible(const struct ntfs_dirent *entry)
 {
-	return (entry->reference & NTFS_REFERENCE_RECORD_MASK) >= 16 && entry->name_namespace != 2;
+	return (entry->reference & NTFS_REFERENCE_RECORD_MASK) >= NTFS_FIRST_USER_RECORD &&
+	    entry->name_namespace != NTFS_NAMESPACE_DOS;
 }
 
 @implementation NTFSVolume {
@@ -61,7 +71,8 @@ visible(const struct ntfs_dirent *entry)
 		_resource = resource;
 		_freeClusters = freeClusters;
 		_items = [NSMutableDictionary dictionary];
-		_directoryVerifier = ((uint64_t)arc4random() << 32) | arc4random() | 1;
+		_directoryVerifier =
+		    ((uint64_t)arc4random() << (sizeof(uint32_t) * CHAR_BIT)) | arc4random() | 1;
 	}
 	return self;
 }
@@ -136,7 +147,7 @@ visible(const struct ntfs_dirent *entry)
 		ntfs_node_close(node);
 		return item;
 	}
-	if (_items.count >= 16384) {
+	if (_items.count >= NTFS_FSKIT_ITEM_LIMIT) {
 		ntfs_node_close(node);
 		*error = ntfs_error(NTFS_NO_MEMORY);
 		return nil;
@@ -238,7 +249,7 @@ visible(const struct ntfs_dirent *entry)
 	 * translation is a separate, unaccepted contract. */
 	attrs.uid = geteuid();
 	attrs.gid = getegid();
-	attrs.mode = stat->directory ? 0500 : 0400;
+	attrs.mode = stat->directory ? NTFS_READ_ONLY_DIRECTORY_MODE : NTFS_READ_ONLY_FILE_MODE;
 	attrs.type = stat->directory ? FSItemTypeDirectory : FSItemTypeFile;
 	attrs.fileID = item_id(stat->reference);
 	attrs.linkCount = stat->links;
@@ -299,7 +310,8 @@ visible(const struct ntfs_dirent *entry)
 		if (item == nil) {
 			return ntfs_error(NTFS_STALE);
 		}
-		if (cookie > 1048576 || (cookie != 0 && verifier != _directoryVerifier)) {
+		if (cookie > NTFS_FSKIT_DIRECTORY_COOKIE_LIMIT ||
+		    (cookie != 0 && verifier != _directoryVerifier)) {
 			return ntfs_error(NTFS_INVALID);
 		}
 		if (cookie == 0 || item->cursor == NULL || item->position != cookie) {
@@ -444,7 +456,7 @@ visible(const struct ntfs_dirent *entry)
 	FSStatFSResult *s = [[FSStatFSResult alloc] initWithFileSystemTypeName:@"machlinntfs"];
 
 	s.blockSize = _info.cluster_size;
-	s.ioSize = 1048576;
+	s.ioSize = NTFS_RESOURCE_WINDOW;
 	s.totalBlocks = _info.cluster_count;
 	s.freeBlocks = _freeClusters;
 	s.availableBlocks = 0;
@@ -493,7 +505,7 @@ visible(const struct ntfs_dirent *entry)
 
 - (NSInteger)maximumFileSizeInBits
 {
-	return 63;
+	return sizeof(int64_t) * CHAR_BIT - 1;
 }
 
 @end

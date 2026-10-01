@@ -19,6 +19,9 @@ hold a counted volume lifetime; unmount returns BUSY while nodes, public streams
 or iterators remain open. Streams own decoded metadata independently of source
 nodes. The FSKit adapter supplies serialized admission and closes every child
 before unloading its retained resource. Removal and failed reads return I/O errors.
+The resource owner permanently latches FSKit revocation. Admission checks precede
+cached stream and metadata operations, and a completed read is checked again;
+cleanup remains permitted on a failed owner without further device reads.
 Opening a named stream reads file metadata independently of the default stream:
 an encrypted default stream does not prevent opening a separate unencrypted ADS.
 Stream names match exact UTF-16 units; filename lookup has a different contract.

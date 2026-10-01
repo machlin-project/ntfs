@@ -18,7 +18,8 @@ implementation is linked into the product.
 
 Implemented reading includes MFT/attribute lists, resident and fragmented data,
 sparse and uninitialized ranges, alternate data streams, LZNT1, indexed directory
-enumeration and $UpCase lookup. The FSKit app and extension build unsigned; direct
+enumeration and $UpCase lookup. The FSKit app and extension build with personal
+development signing and pass strict signature verification; direct
 adapter tests and independent NTFS-3G image comparisons pass. Native installation
 and Windows-authored corpus acceptance are still required. Core and FSKit tests
 run with `make test` and `python3 scripts/test_fskit.py`; build the app with

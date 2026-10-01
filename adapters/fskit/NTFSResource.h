@@ -13,6 +13,7 @@ enum {
 @property(readonly) uint64_t blockSize;
 @property(readonly) uint64_t blockCount;
 @property(readonly) uint64_t physicalBlockSize;
+@property(readonly, getter=isRevoked) BOOL revoked;
 - (size_t)readInto:(void *)buffer
 	startingAt:(off_t)offset
 	    length:(size_t)length
@@ -25,6 +26,8 @@ enum {
 - (void *)allocateSize:(size_t)size;
 - (void)releaseBytes:(void *)bytes size:(size_t)size;
 - (enum ntfs_result)readAt:(uint64_t)offset bytes:(void *)buffer length:(size_t)length;
+/* Revocation permanently fails this owner; cleanup remains valid. */
+@property(readonly, getter=isAvailable) BOOL available;
 @end
 
 NSError *ntfs_error(enum ntfs_result result);

@@ -125,6 +125,14 @@ visible(const struct ntfs_dirent *entry)
 	return value.owner == self && value->node != NULL ? value : nil;
 }
 
+- (enum ntfs_result)admissionResult
+{
+	if (_core == NULL || !_active) {
+		return NTFS_STALE;
+	}
+	return _resource.isAvailable ? NTFS_OK : NTFS_IO;
+}
+
 - (NTFSItem *)adoptNode:(struct ntfs_node *)node error:(NSError **)error
 {
 	struct ntfs_stat stat;
@@ -172,6 +180,10 @@ visible(const struct ntfs_dirent *entry)
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
+		if (!_resource.isAvailable) {
+			*error = ntfs_error(NTFS_IO);
+			return nil;
+		}
 		result = ntfs_root(_core, &root);
 		if (result != NTFS_OK) {
 			*error = ntfs_error(result);
@@ -198,6 +210,11 @@ visible(const struct ntfs_dirent *entry)
 	*error = nil;
 	*stored = nil;
 	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
 		parent = [self checkedItem:directory];
 		if (parent == nil) {
 			*error = ntfs_error(NTFS_STALE);
@@ -229,9 +246,15 @@ visible(const struct ntfs_dirent *entry)
 - (FSItemAttributes *)attributes:(FSItem *)item error:(NSError **)error
 {
 	NTFSItem *value;
+	enum ntfs_result result;
 
 	*error = nil;
 	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
 		value = [self checkedItem:item];
 		if (value == nil) {
 			*error = ntfs_error(NTFS_STALE);
@@ -274,6 +297,10 @@ visible(const struct ntfs_dirent *entry)
 
 	*completed = 0;
 	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			return result;
+		}
 		value = [self checkedItem:item];
 		if (value == nil) {
 			return NTFS_STALE;
@@ -287,6 +314,10 @@ visible(const struct ntfs_dirent *entry)
 		if (result == NTFS_OK) {
 			result = ntfs_stream_read(
 			    value->stream, (uint64_t)offset, bytes, length, completed);
+		}
+		if (result == NTFS_OK && !_resource.isAvailable) {
+			*completed = 0;
+			result = NTFS_IO;
 		}
 		return result;
 	}
@@ -306,6 +337,10 @@ visible(const struct ntfs_dirent *entry)
 	enum ntfs_result result;
 
 	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			return ntfs_error(result);
+		}
 		item = [self checkedItem:directory];
 		if (item == nil) {
 			return ntfs_error(NTFS_STALE);
@@ -410,7 +445,7 @@ visible(const struct ntfs_dirent *entry)
 
 	(void)options;
 	@synchronized(self) {
-		error = _active ? nil : ntfs_error(NTFS_STALE);
+		error = ntfs_error([self admissionResult]);
 	}
 	reply(error);
 }
@@ -426,7 +461,9 @@ visible(const struct ntfs_dirent *entry)
 
 	(void)flags;
 	@synchronized(self) {
-		error = _core != NULL ? nil : ntfs_error(NTFS_STALE);
+		error = ntfs_error(_core == NULL ? NTFS_STALE
+			: _resource.isAvailable	 ? NTFS_OK
+						 : NTFS_IO);
 	}
 	reply(error);
 }

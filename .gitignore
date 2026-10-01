@@ -2,6 +2,7 @@
 /artifacts/
 /vendor/
 /adapters/fskit/*.xcodeproj/
+/adapters/fskit/.project-signed.yml
 __pycache__/
 .DS_Store
 *.profraw

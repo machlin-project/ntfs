@@ -10,6 +10,8 @@
 @property NSData *image;
 @property BOOL shortRead;
 @property BOOL failed;
+@property(getter=isRevoked) BOOL revoked;
+@property BOOL revokeDuringRead;
 @property NSUInteger reads;
 @end
 @implementation TestReader
@@ -39,6 +41,9 @@
 	assert((uintptr_t)buffer % TEST_PHYSICAL_BLOCK_BYTES == 0 &&
 	    (uint64_t)offset <= self.image.length && length <= self.image.length - (size_t)offset);
 	self.reads++;
+	if (self.revokeDuringRead) {
+		self.revoked = YES;
+	}
 	if (self.failed) {
 		*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EIO userInfo:nil];
 		return 0;
@@ -224,6 +229,100 @@ test_volume(NSData *image)
 	assert([volume activate:&error] == nil && error.code == ESTALE);
 }
 
+static void
+test_revocation(NSData *image)
+{
+	TestReader *reader;
+	NTFSResource *resource;
+	NTFSLegacyVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_volume *core;
+	FSItem *root, *resident, *compressed;
+	FSFileName *stored;
+	NSError *error = nil;
+	TestPacker *packer;
+	uint8_t buffer[TEST_READ_WINDOW_BYTES];
+	size_t done;
+	NSUInteger reads;
+	__block NSUInteger replies = 0;
+
+	reader = [[TestReader alloc] init];
+	reader.image = image;
+	resource = [[NTFSResource alloc] initWithReader:reader];
+	env = [resource environment];
+	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
+	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	root = [volume activate:&error];
+	assert(root != nil && error == nil);
+	resident = [volume lookup:[FSFileName nameWithString:@"hello.txt"]
+		      inDirectory:root
+		       storedName:&stored
+			    error:&error];
+	compressed = [volume lookup:[FSFileName nameWithString:@"compressed.bin"]
+			inDirectory:root
+			 storedName:&stored
+			      error:&error];
+	assert(resident != nil && compressed != nil);
+	assert([volume readItem:resident
+			 offset:0
+			  bytes:buffer
+			 length:sizeof(buffer)
+		      completed:&done] == NTFS_OK);
+	assert([volume readItem:compressed
+			 offset:0
+			  bytes:buffer
+			 length:sizeof(buffer)
+		      completed:&done] == NTFS_OK);
+	reads = reader.reads;
+	reader.revoked = YES;
+	assert([volume readItem:resident offset:0 bytes:buffer length:1
+		      completed:&done] == NTFS_IO &&
+	    done == 0);
+	assert([volume readItem:compressed offset:0 bytes:buffer length:1
+		      completed:&done] == NTFS_IO &&
+	    done == 0);
+	assert([volume attributes:resident error:&error] == nil && error.code == EIO);
+	assert([volume lookup:[FSFileName nameWithString:@"hello.txt"]
+		   inDirectory:root
+		    storedName:&stored
+			 error:&error] == nil &&
+	    error.code == EIO);
+	packer = [[TestPacker alloc] init];
+	packer.capacity = 1;
+	packer.names = [NSMutableArray array];
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer]
+		   .code == EIO);
+	[volume synchronizeWithFlags:0
+			replyHandler:^(NSError *e) {
+			  assert(e.code == EIO);
+			  replies++;
+			}];
+	assert(replies == 1 && reader.reads == reads);
+	/* A reused reader cannot revive the failed owner. Reclamation and teardown
+	 * release retained children without attempting any more device I/O. */
+	reader.revoked = NO;
+	assert(!resource.isAvailable);
+	assert([volume readItem:compressed offset:0 bytes:buffer length:1
+		      completed:&done] == NTFS_IO);
+	[volume reclaimItem:resident
+	       replyHandler:^(NSError *e) {
+		 assert(e == nil);
+	       }];
+	[volume invalidate];
+	assert(reader.reads == reads);
+	assert([volume readItem:compressed offset:0 bytes:buffer length:1
+		      completed:&done] == NTFS_STALE);
+
+	resource = [[NTFSResource alloc] initWithReader:reader];
+	reader.revokeDuringRead = YES;
+	assert([resource readAt:0 bytes:buffer length:sizeof(buffer)] == NTFS_IO);
+	assert(!resource.isAvailable);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -234,8 +333,9 @@ main(int argc, char **argv)
 		image = [NSData dataWithContentsOfFile:@(argv[1])];
 		assert(image != nil);
 		test_volume(image);
+		test_revocation(image);
 		puts("PASS: FSKit resource alignment/short I/O, identity, canonical names, "
-		     "pagination, read-only replies, concurrent reads and teardown");
+		     "pagination, read-only replies, concurrent reads, revocation and teardown");
 	}
 	return 0;
 }

@@ -39,6 +39,8 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
 - A retained resource owner through C callbacks, synchronized operation admission,
   canonical FSItem identities, replayable directory cookies, explicit EROFS for
   every implemented mutation and invalidation of all children before release.
+  Resource revocation permanently fails admission, including cached stream reads;
+  reclaim and teardown must still release children without device I/O.
 - Separate component/build/mount evidence. NTFS-3G reverse-engineered format facts
   are valid engineering references; copying GPL implementation into this closed
   product is not part of the implementation plan.
@@ -86,18 +88,29 @@ as Windows/native mount acceptance. No writable core contract is implemented.
 
 ## First continuation: native read-only acceptance
 
-The unsigned app is produced under
+Unsigned builds use
 `artifacts/fskit/DerivedData/Build/Products/Debug/Machlin NTFS.app`.
+A personally signed Release build passed strict deep signature verification;
+its isolated output is under `artifacts/native-signing/build2/`.
 Build with an explicit personal team using `scripts/build_fskit.py --team TEAM`
-only when preparing the dedicated test VM. Verify the personal identity and
-entitlements; keep provisioning state out of Git. The initial native target is
+only when preparing the dedicated test VM. The script supports an isolated
+`--derived-data`, matching app/extension `--build-number` and `--clean`. Explicit
+manual profiles require both `--app-profile` and `--extension-profile`.
+Verify the personal identity, entitlements and the guest's provisioning UDID
+against the profile before installation; keep provisioning state out of Git.
+The initial native target is
 macOS 26.5+, with a distinct macOS 27 protocol path requiring its own runtime test.
 
 Use the Machlin lab only from `/Users/darekhta/Development/machlin/lab`, after
 reading its current VM instructions. Do not take over an ext4 or kernel VM that
 another task owns. Select/create a disposable stock macOS test VM and document
-its path and ownership in ignored generated state before installation. No NTFS
-test VM is allocated by this handoff.
+its path and ownership in ignored generated state before installation. The
+continuation created `lab/vm/ntfs-fskit-stock-26`, configured for four CPUs and
+8 GiB RAM. It remains stopped: both VM slots belonged to other tasks, so boot
+failed before guest identity or transport verification. Do not stop those tasks'
+guests. Ownership and boot evidence are in `lab/artifacts/ntfs-fskit/`.
+The user redirected continuation to the core; resume native acceptance when a
+dedicated VM slot becomes available and that work is requested.
 
 Install/enable the app inside that VM, explicitly select the `machlinntfs`
 filesystem and capture evidence of the loaded module/build. Verify hashes for all

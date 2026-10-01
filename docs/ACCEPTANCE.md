@@ -1,7 +1,7 @@
 # Acceptance
 
 The delivered scope is a bounded read-only core and FSKit development product.
-Local core, adapter component, unsigned app-build and independent-image checks
+Local core, adapter component, signed app-build and independent-image checks
 passed. Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
@@ -15,8 +15,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Resource safety | Allocation/read failure sweeps on five layouts, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Coverage-guided fuzzing | Bounded libFuzzer/ASan/UBSan using full LLVM; 171,809 executions in 121 seconds on compact physical images | Completed without reported crash or sanitizer finding; ongoing fuzzing required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned resource reads, short/error I/O, item identity, stored names, pagination/replay, EROFS, concurrent reads and teardown under ASan/UBSan | Passed in-process on macOS 26.6.2 |
-| FSKit application | Host app and embedded extension, legacy/modern protocol sources, unsigned Xcode build | Build passed; macOS 27 runtime untested |
+| FSKit component | Aligned resource reads, short/error I/O, permanent resource revocation including cached data, item identity, stored names, pagination/replay, EROFS, concurrent reads and teardown under ASan/UBSan | Passed in-process on macOS 26.6.2 |
+| FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Signed Release build passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Windows-authored metadata, sparse/compressed edge cases, native repair and roundtrip evidence | Not run |
 | Write/recovery | Native log, allocation, namespace transactions, crash matrix | Not implemented |
@@ -65,6 +65,21 @@ Generated local evidence is under ignored paths:
 - `artifacts/core-ready-fuzz.log` and `core-ready-compact-images.log`.
 - `artifacts/core-ready-release.log` and `benchmark-core-ready.json`.
 - `.build/meson-logs/testlog.json` contains individual sanitized test results.
+
+The continuation also passed the adapter component tests after adding a permanent
+revocation latch. Cached resident and compressed reads, metadata, lookup and
+enumeration fail once the resource is revoked; reclaim and teardown remain usable
+without further device I/O. The signed Release app and embedded extension passed
+strict deep signature verification. This does not verify installation, enabled
+module state or a provisioning profile authorizing the test guest. Evidence is in
+`artifacts/native-revocation-*.log`, `artifacts/native-signing-build2.log` and
+`artifacts/native-signing/`.
+
+An independent `ntfs-fskit-stock-26` guest was cloned and left stopped. Its first
+boot was blocked by the macOS concurrent-VM limit while both slots belonged to
+other tasks. No existing VM was stopped or modified. The user subsequently
+redirected continuation to the core; native acceptance is deferred. Generated
+ownership and boot evidence remain in the lab's `artifacts/ntfs-fskit/` directory.
 
 The initial fuzz build with Xcode could not link because that distribution lacks
 the libFuzzer runtime. It executed no fuzz inputs. The successful run used the

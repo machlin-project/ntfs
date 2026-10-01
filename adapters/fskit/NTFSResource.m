@@ -28,6 +28,7 @@ resource_release(void *context, void *buffer, size_t size)
 	size_t _alignment;
 	void *_window;
 	size_t _allocatedBytes;
+	BOOL _revoked;
 }
 
 - (instancetype)initWithReader:(id<NTFSBlockReader>)reader
@@ -55,6 +56,16 @@ resource_release(void *context, void *buffer, size_t size)
 - (void)dealloc
 {
 	free(_window);
+}
+
+- (BOOL)isAvailable
+{
+	@synchronized(self) {
+		if (_reader.isRevoked) {
+			_revoked = YES;
+		}
+		return !_revoked;
+	}
 }
 
 - (struct ntfs_environment)environment
@@ -96,10 +107,14 @@ resource_release(void *context, void *buffer, size_t size)
 	NSError *error;
 
 	@synchronized(self) {
-		if (offset > _size || length > _size - offset || (length != 0 && buffer == NULL)) {
+		if (!self.isAvailable || offset > _size || length > _size - offset ||
+		    (length != 0 && buffer == NULL)) {
 			return NTFS_IO;
 		}
 		while (length != 0) {
+			if (!self.isAvailable) {
+				return NTFS_IO;
+			}
 			start = offset - offset % _alignment;
 			prefix = (size_t)(offset - start);
 			take = MIN(length, NTFS_RESOURCE_WINDOW - prefix);
@@ -112,7 +127,7 @@ resource_release(void *context, void *buffer, size_t size)
 					   startingAt:(off_t)start
 					       length:total
 						error:&error];
-			if (error != nil || completed != total) {
+			if (error != nil || completed != total || !self.isAvailable) {
 				return NTFS_IO;
 			}
 			memcpy(bytes, (uint8_t *)_window + prefix, take);

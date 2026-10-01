@@ -1,0 +1,77 @@
+name: NTFSFSKit
+options:
+  deploymentTarget:
+    macOS: '26.5'
+settings:
+  base:
+    CLANG_ENABLE_MODULES: YES
+    CLANG_ENABLE_OBJC_ARC: YES
+    GCC_C_LANGUAGE_STANDARD: c11
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_VERSION: '5.0'
+    MACOSX_DEPLOYMENT_TARGET: '26.5'
+    MARKETING_VERSION: '0.1.0'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  NTFSCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - ../../core
+      - ../../include
+    settings:
+      base:
+        HEADER_SEARCH_PATHS: $(SRCROOT)/../../include
+        OTHER_CFLAGS: -ffreestanding -fno-builtin -Wdeclaration-after-statement
+        SKIP_INSTALL: YES
+  NTFSExtension:
+    type: extensionkit-extension
+    platform: macOS
+    sources:
+      - NTFSExtension.swift
+      - NTFSFileSystem.m
+      - NTFSFileSystem.h
+      - NTFSResource.m
+      - NTFSResource.h
+      - NTFSVolume.m
+      - NTFSVolume.h
+      - NTFSLegacyVolume.m
+      - NTFSModernVolume.m
+      - BridgingHeader.h
+    dependencies:
+      - target: NTFSCore
+      - sdk: FSKit.framework
+      - sdk: ExtensionFoundation.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.machlin.ntfs.filesystem
+        INFOPLIST_FILE: Extension-Info.plist
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: Extension.entitlements
+        ENABLE_APP_SANDBOX: YES
+        SWIFT_OBJC_BRIDGING_HEADER: BridgingHeader.h
+        HEADER_SEARCH_PATHS: $(SRCROOT)/../../include
+        OTHER_CFLAGS: -Wdeclaration-after-statement -Wno-deprecated-declarations
+        SKIP_INSTALL: YES
+  NTFSApp:
+    type: application
+    platform: macOS
+    sources:
+      - App.swift
+    dependencies:
+      - target: NTFSExtension
+        embed: true
+    settings:
+      base:
+        PRODUCT_NAME: Machlin NTFS
+        PRODUCT_BUNDLE_IDENTIFIER: org.machlin.ntfs
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: App.entitlements
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Machlin NTFS
+schemes:
+  NTFSApp:
+    build:
+      targets:
+        NTFSApp: all

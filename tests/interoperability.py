@@ -6,6 +6,10 @@ import hashlib
 import json
 import subprocess
 import time
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from environment import tool_environment
 
 BYTE_VALUES = 256
 LARGE_FILE_BYTES = 2 * 1024 * 1024 + BYTE_VALUES
@@ -25,6 +29,7 @@ for path in (*tools.values(), args.reader):
     if not path.is_file():
         raise SystemExit(f'Required executable missing: {path}')
 report = {'profiles': [], 'status': 'running', 'windows_acceptance': 'not run'}
+environment = tool_environment()
 report_path = args.output / 'report.json'
 report_path.write_text(json.dumps(report, indent=2) + '\n')
 payloads = {'empty.txt': b'', 'small.txt': b'Independent NTFS fixture\n',
@@ -40,7 +45,8 @@ with (args.output / 'commands.log').open('w') as log:
     def run(command, capture=False):
         log.write(' '.join(map(str, command)) + '\n')
         log.flush()
-        return subprocess.run(list(map(str, command)), check=True, stdout=subprocess.PIPE if capture else log, stderr=log).stdout
+        return subprocess.run(list(map(str, command)), check=True, env=environment,
+                              stdout=subprocess.PIPE if capture else log, stderr=log).stdout
 
     for sector, cluster in GEOMETRIES:
         image = args.output / f'ntfs-s{sector}-c{cluster}.img'
@@ -63,6 +69,12 @@ with (args.output / 'commands.log').open('w') as log:
             assert actual == oracle == expected, (sector, cluster, name)
         assert run([args.reader, image, 'cat', '/SMALL.TXT'], True) == payloads['small.txt']
         assert run([args.reader, image, 'cat', '/small.txt', 'notes'], True) == (args.output / 'ads.bin').read_bytes()
+        root_reference = json.loads(run([args.reader, image, 'info-json'], True))['root_reference']
+        small_name = 'small.txt'.encode('utf-16-be').hex()
+        small = json.loads(run([args.reader, image, 'lookup-ref', root_reference, small_name], True))
+        stream_names = [json.loads(line)['name_utf16'] for line in
+                        run([args.reader, image, 'streams-ref', small['reference']], True).splitlines()]
+        assert stream_names == [[], [ord(unit) for unit in 'notes']]
         after = hashlib.sha256(image.read_bytes()).hexdigest()
         assert before == after, 'read-only implementation changed the image'
         report['profiles'].append({'sector': sector, 'cluster': cluster, 'files': len(payloads), 'sha256': after, 'seconds': round(time.monotonic() - started, 3), 'info': info, 'result': 'pass'})

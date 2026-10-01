@@ -31,8 +31,8 @@ validate_stream(struct ntfs_stream *s)
 	return NTFS_OK;
 }
 
-static enum ntfs_result
-find_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name,
+enum ntfs_result
+ntfs_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name,
     size_t name_length, uint16_t instance, uint64_t lowest, struct ntfs_attr_view *out)
 {
 	const struct ntfs_disk_record *header = (const void *)record;
@@ -289,7 +289,7 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 				goto finish;
 			}
 		}
-		result = find_listed_attribute(
+		result = ntfs_listed_attribute(
 		    record, type, name, name_length, ntfs_u16(entry->instance), lowest, &a);
 		if (result == NTFS_NOT_FOUND) {
 			result = NTFS_CORRUPT;

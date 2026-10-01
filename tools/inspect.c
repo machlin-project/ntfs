@@ -154,12 +154,15 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 	struct ntfs_directory *directory = NULL;
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_reparse *reparse = NULL;
+	struct ntfs_stream_catalog *catalog = NULL;
+	struct ntfs_stream_name stream_name;
 	struct ntfs_reparse_info info;
 	struct ntfs_dirent entry;
 	struct ntfs_stat st;
 	uint16_t name[NTFS_NAME_MAX], *target = NULL;
 	uint64_t reference;
 	size_t length = 0, capacity = 0;
+	uint32_t stream_index;
 	enum ntfs_result result;
 
 	if (argc < 4 || argc > 5) {
@@ -187,6 +190,21 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 		}
 		if (result == NTFS_END) {
 			result = NTFS_OK;
+		}
+	} else if (strcmp(argv[2], "streams-ref") == 0 && argc == 4) {
+		result = ntfs_stream_catalog_open(node, NTFS_MAX_STREAM_CATALOG_ENTRIES, &catalog);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		for (stream_index = 0; stream_index < ntfs_stream_catalog_count(catalog);
+		    stream_index++) {
+			result = ntfs_stream_catalog_entry(catalog, stream_index, &stream_name);
+			if (result != NTFS_OK) {
+				goto finish;
+			}
+			printf("{\"name_utf16\":");
+			json_name(stream_name.units, stream_name.length);
+			puts("}");
 		}
 	} else if (strcmp(argv[2], "lookup-ref") == 0 && argc == 5) {
 		result = parse_name(argv[4], name, &length);
@@ -243,6 +261,7 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 	}
 finish:
 	free(target);
+	ntfs_stream_catalog_close(catalog);
 	ntfs_reparse_close(reparse);
 	ntfs_directory_close(directory);
 	ntfs_stream_close(stream);
@@ -327,7 +346,8 @@ main(int argc, char **argv)
 		fprintf(stderr,
 		    "usage: ntfs-inspect IMAGE info|ls|stat|cat|reparse [PATH] [STREAM]\n"
 		    "       ntfs-inspect IMAGE info-json\n"
-		    "       ntfs-inspect IMAGE stat-ref|ls-ref|reparse-ref HEX_REFERENCE\n"
+		    "       ntfs-inspect IMAGE stat-ref|ls-ref|reparse-ref|streams-ref "
+		    "HEX_REFERENCE\n"
 		    "       ntfs-inspect IMAGE cat-ref|lookup-ref HEX_REFERENCE [UTF16_HEX]\n");
 		return 2;
 	}

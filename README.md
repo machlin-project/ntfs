@@ -35,5 +35,8 @@ The no-VM continuation adds reference-based lossless inspection, Windows corpus
 acquisition/verification tools, standalone parser fuzz targets, an MS-DTYP security
 descriptor decoder and repeated portable workload measurements. Verified metadata
 reuse has a measured benefit for attribute-list opens. `$Secure` resolution,
-authorization, WOF, native name/stream/link projection and recovery remain open;
+authorization, WOF, native filename/link projection and recovery remain open;
 see [the complete continuation scope](docs/CORE-QUALIFICATION.md).
+Stored stream names now have a bounded immutable catalog and read-only FSKit
+xattr projection with a lossless UTF-16 reverse manifest; see
+[native namespace contracts](docs/NATIVE-NAMESPACE.md) for tested scope and limits.

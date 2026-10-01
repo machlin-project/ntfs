@@ -17,6 +17,7 @@ IMAGE_SIZE = 8 * 1024 * 1024
 BYTE_BITS = 8
 BYTE_VALUES = 1 << BYTE_BITS
 U16_BYTES = struct.calcsize('<H')
+NAME_MAX_UNITS = 255
 U64_BYTES = struct.calcsize('<Q')
 U64_MAX = (1 << (U64_BYTES * BYTE_BITS)) - 1
 FIXUP_SEQUENCE = 0xA55A
@@ -410,6 +411,58 @@ def reparse_fixtures(output, image):
                      resident(REPARSE_POINT, junction, REPARSE_INSTANCE)])
 
 
+def catalog_fixtures(output, image, contents):
+    """Independent stream-name inventories; content validation remains separate."""
+    number = FILE_RECORDS['hello.txt']
+    base_reference = file_reference(number)
+    extension_reference = file_reference(ATTRIBUTE_EXTENSION_RECORD)
+    list_instance, default_instance, named_instance = 2, 1, 3
+    payload = b'catalog payload'
+    names = ('$DATA', 'NOTES', 'notes', 'Ω', '\ud800')
+
+    def save(label, attributes, extension=None):
+        changed = bytearray(image)
+        put_record(changed, number, file_record(number, attributes))
+        if extension is not None:
+            put_record(changed, ATTRIBUTE_EXTENSION_RECORD, extension)
+        (output / ('catalog-' + label + '.img')).write_bytes(changed)
+
+    common = [standard(), resident(DATA, contents['hello.txt'], default_instance)]
+    save('long-unpaired', common + [
+        resident(DATA, payload, named_instance, '\ud800' + 'x' * (NAME_MAX_UNITS - 1))])
+    oversized_stream_bytes = 2 * 1024 * 1024
+    save('oversized', common + [nonresident(
+        DATA, [(oversized_stream_bytes // CLUSTER, None)], oversized_stream_bytes,
+        named_instance, 'notes', flags=SPARSE)])
+    fragmented_runs = [(1, lcn) for lcn in DATA_LCNS['fragmented.bin']]
+    save('fragmented', common + [nonresident(
+        DATA, fragmented_runs, FRAGMENTED_BYTES, named_instance, 'notes')])
+    save('duplicate', common + [
+        resident(DATA, payload, named_instance, 'notes'),
+        resident(DATA, payload, named_instance + 1, 'notes')])
+    ordinary = list_entry(base_reference, 0, 0, SI)
+    ordinary += list_entry(base_reference, default_instance, 0, DATA)
+    save('unlisted-base', common + [resident(ATTR_LIST, ordinary, list_instance),
+                                  resident(DATA, payload, named_instance, 'notes')])
+    named_entries = b''.join(list_entry(extension_reference, instance, 0, DATA, name)
+                              for instance, name in enumerate(names))
+    extension_attributes = [resident(DATA, payload, instance, name)
+                            for instance, name in enumerate(names)]
+    extension = file_record(ATTRIBUTE_EXTENSION_RECORD, extension_attributes,
+                            base=base_reference)
+    save('listed', common + [resident(ATTR_LIST, ordinary + named_entries, list_instance)],
+         extension)
+    stale_entries = ordinary + list_entry(
+        file_reference(ATTRIBUTE_EXTENSION_RECORD, FILE_SEQUENCE + 1), 0, 0, DATA, names[0])
+    save('stale', common + [resident(ATTR_LIST, stale_entries, list_instance)], extension)
+    wrong_extension = file_record(ATTRIBUTE_EXTENSION_RECORD, extension_attributes,
+                                  base=file_reference(FILE_RECORDS['middle.dat']))
+    save('wrong-base', common + [
+        resident(ATTR_LIST, ordinary + named_entries, list_instance)], wrong_extension)
+    missing_instance = ordinary + list_entry(extension_reference, len(names), 0, DATA, names[0])
+    save('instance', common + [resident(ATTR_LIST, missing_instance, list_instance)], extension)
+
+
 def fragmented_mft(image, nonresident_list=False, damage=None):
     """Each extension reveals the mapping needed to reach the next one.
 
@@ -591,6 +644,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     image, contents, boot = make_image()
     reparse_fixtures(output, image)
+    catalog_fixtures(output, image, contents)
     (output / 'standard.img').write_bytes(image)
     legacy_image, _, _ = make_image(legacy=True)
     (output / 'ntfs30.img').write_bytes(legacy_image)

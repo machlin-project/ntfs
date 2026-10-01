@@ -4,19 +4,90 @@
 #include <unistd.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <string.h>
 
 enum {
 	NTFS_FSKIT_ITEM_LIMIT = 16384,
 	NTFS_FSKIT_DIRECTORY_COOKIE_LIMIT = 1048576,
+	NTFS_FSKIT_STREAM_LIMIT = 1024,
+	NTFS_FSKIT_XATTR_SIZE_BITS = 20,
+	NTFS_FSKIT_XATTR_BYTES = (1u << NTFS_FSKIT_XATTR_SIZE_BITS) - 1,
+	NTFS_STREAM_MANIFEST_VERSION = 1,
+	NTFS_HEX_DIGITS_PER_BYTE = 2,
+	NTFS_HEX_NIBBLE_BITS = 4,
+	NTFS_HEX_DECIMAL_DIGITS = 10,
+	NTFS_STREAM_ALIAS_DIGITS = sizeof(uint32_t) * NTFS_HEX_DIGITS_PER_BYTE,
 	NTFS_READ_ONLY_FILE_MODE = S_IRUSR,
 	NTFS_READ_ONLY_DIRECTORY_MODE = S_IRUSR | S_IXUSR
 };
+
+static NSString *const streamManifestName = @"org.machlin.ntfs.streams";
+static NSString *const streamAliasPrefix = @"org.machlin.ntfs.stream.";
+
+/* Native xattrs have a bounded name; the immutable catalog supplies the reverse
+ * mapping. These byte-array records preserve original UTF-16 without NSString. */
+struct stream_manifest_header {
+	uint8_t magic[8], version[4], count[4], reference[8];
+};
+
+struct stream_manifest_entry {
+	uint8_t index[4], name_length[2], reserved[2];
+};
+
+_Static_assert(sizeof(struct stream_manifest_header) == 24, "stream manifest header");
+_Static_assert(sizeof(struct stream_manifest_entry) == 8, "stream manifest entry");
+
+static void
+store_little(uint8_t *bytes, size_t width, uint64_t value)
+{
+	size_t i;
+
+	for (i = 0; i < width; i++) {
+		bytes[i] = (uint8_t)(value >> (i * CHAR_BIT));
+	}
+}
+
+static FSFileName *
+stream_alias(uint32_t index)
+{
+	return [FSFileName nameWithString:[NSString stringWithFormat:@"%@%0*x", streamAliasPrefix,
+					      NTFS_STREAM_ALIAS_DIGITS, index]];
+}
+
+static BOOL
+stream_alias_index(FSFileName *name, uint32_t *out)
+{
+	NSData *prefix = [streamAliasPrefix dataUsingEncoding:NSASCIIStringEncoding];
+	NSData *data = name.data;
+	const uint8_t *bytes = data.bytes;
+	size_t i;
+	uint32_t value = 0, digit;
+
+	*out = 0;
+	if (data.length != prefix.length + NTFS_STREAM_ALIAS_DIGITS ||
+	    memcmp(bytes, prefix.bytes, prefix.length) != 0) {
+		return NO;
+	}
+	for (i = prefix.length; i < data.length; i++) {
+		if (bytes[i] >= '0' && bytes[i] <= '9') {
+			digit = bytes[i] - '0';
+		} else if (bytes[i] >= 'a' && bytes[i] <= 'f') {
+			digit = bytes[i] - 'a' + NTFS_HEX_DECIMAL_DIGITS;
+		} else {
+			return NO;
+		}
+		value = (value << NTFS_HEX_NIBBLE_BITS) | digit;
+	}
+	*out = value;
+	return YES;
+}
 
 @interface NTFSItem : FSItem {
       @public
 	struct ntfs_node *node;
 	struct ntfs_stream *stream;
 	struct ntfs_directory *cursor;
+	struct ntfs_stream_catalog *catalog;
 	struct ntfs_dirent pendingEntry;
 	BOOL pending;
 	uint64_t position;
@@ -84,6 +155,8 @@ visible(const struct ntfs_dirent *entry)
 
 - (void)releaseItem:(NTFSItem *)item
 {
+	ntfs_stream_catalog_close(item->catalog);
+	item->catalog = NULL;
 	ntfs_directory_close(item->cursor);
 	item->cursor = NULL;
 	ntfs_stream_close(item->stream);
@@ -323,6 +396,202 @@ visible(const struct ntfs_dirent *entry)
 	}
 }
 
+- (struct ntfs_stream_catalog *)catalogForItem:(NTFSItem *)item error:(NSError **)error
+{
+	enum ntfs_result result;
+
+	if (item->catalog == NULL) {
+		result =
+		    ntfs_stream_catalog_open(item->node, NTFS_FSKIT_STREAM_LIMIT, &item->catalog);
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return NULL;
+		}
+	}
+	if (!_resource.isAvailable) {
+		*error = ntfs_error(NTFS_IO);
+		return NULL;
+	}
+	return item->catalog;
+}
+
+- (NSArray<FSFileName *> *)xattrsForItem:(FSItem *)item error:(NSError **)error
+{
+	NTFSItem *value;
+	NSMutableArray<FSFileName *> *names;
+	struct ntfs_stream_catalog *catalog;
+	struct ntfs_stream_name name;
+	uint32_t i;
+	enum ntfs_result result;
+
+	*error = nil;
+	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		value = [self checkedItem:item];
+		if (value == nil) {
+			*error = ntfs_error(NTFS_STALE);
+			return nil;
+		}
+		catalog = [self catalogForItem:value error:error];
+		if (catalog == NULL) {
+			return nil;
+		}
+		names =
+		    [NSMutableArray arrayWithObject:[FSFileName nameWithString:streamManifestName]];
+		for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
+			result = ntfs_stream_catalog_entry(catalog, i, &name);
+			if (result != NTFS_OK) {
+				*error = ntfs_error(result);
+				return nil;
+			}
+			if (name.length != 0) {
+				[names addObject:stream_alias(i)];
+			}
+		}
+		if (!_resource.isAvailable) {
+			*error = ntfs_error(NTFS_IO);
+			return nil;
+		}
+		return names;
+	}
+}
+
+- (NSData *)streamManifest:(NTFSItem *)item
+		   catalog:(struct ntfs_stream_catalog *)catalog
+		     error:(NSError **)error
+{
+	struct stream_manifest_header *header;
+	struct stream_manifest_entry *entry;
+	struct ntfs_stream_name name;
+	NSMutableData *data;
+	uint8_t *bytes;
+	size_t size = sizeof(*header), position, j;
+	uint32_t i, count = 0;
+	enum ntfs_result result;
+
+	for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
+		result = ntfs_stream_catalog_entry(catalog, i, &name);
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		if (name.length != 0) {
+			size += sizeof(*entry) + (size_t)name.length * sizeof(uint16_t);
+			count++;
+		}
+	}
+	if (size > NTFS_FSKIT_XATTR_BYTES) {
+		*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:E2BIG userInfo:nil];
+		return nil;
+	}
+	data = [NSMutableData dataWithLength:size];
+	bytes = data.mutableBytes;
+	header = (void *)bytes;
+	memcpy(header->magic, "NTFSADS", sizeof(header->magic));
+	store_little(header->version, sizeof(header->version), NTFS_STREAM_MANIFEST_VERSION);
+	store_little(header->count, sizeof(header->count), count);
+	store_little(header->reference, sizeof(header->reference), item->stat.reference);
+	position = sizeof(*header);
+	for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
+		result = ntfs_stream_catalog_entry(catalog, i, &name);
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		if (name.length == 0) {
+			continue;
+		}
+		entry = (void *)(bytes + position);
+		store_little(entry->index, sizeof(entry->index), i);
+		store_little(entry->name_length, sizeof(entry->name_length), name.length);
+		position += sizeof(*entry);
+		for (j = 0; j < name.length; j++) {
+			store_little(bytes + position, sizeof(uint16_t), name.units[j]);
+			position += sizeof(uint16_t);
+		}
+	}
+	return data;
+}
+
+- (NSData *)xattrNamed:(FSFileName *)name ofItem:(FSItem *)item error:(NSError **)error
+{
+	NTFSItem *value;
+	struct ntfs_stream_catalog *catalog;
+	struct ntfs_stream_name streamName;
+	struct ntfs_stream *stream = NULL;
+	NSMutableData *data = nil;
+	NSData *manifest;
+	uint64_t size;
+	uint32_t index;
+	size_t completed = 0;
+	enum ntfs_result result;
+
+	*error = nil;
+	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		value = [self checkedItem:item];
+		if (value == nil) {
+			*error = ntfs_error(NTFS_STALE);
+			return nil;
+		}
+		catalog = [self catalogForItem:value error:error];
+		if (catalog == NULL) {
+			return nil;
+		}
+		if ([name.data isEqualToData:[FSFileName nameWithString:streamManifestName].data]) {
+			manifest = [self streamManifest:value catalog:catalog error:error];
+			if (manifest != nil && !_resource.isAvailable) {
+				*error = ntfs_error(NTFS_IO);
+				return nil;
+			}
+			return manifest;
+		}
+		if (!stream_alias_index(name, &index) ||
+		    ntfs_stream_catalog_entry(catalog, index, &streamName) != NTFS_OK ||
+		    streamName.length == 0) {
+			*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+						     code:ENOATTR
+						 userInfo:nil];
+			return nil;
+		}
+		result =
+		    ntfs_stream_open(value->node, streamName.units, streamName.length, &stream);
+		if (result == NTFS_OK) {
+			size = ntfs_stream_size(stream);
+			if (size > NTFS_FSKIT_XATTR_BYTES) {
+				ntfs_stream_close(stream);
+				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+							     code:E2BIG
+							 userInfo:nil];
+				return nil;
+			}
+			data = [NSMutableData dataWithLength:(NSUInteger)size];
+			result = ntfs_stream_read(
+			    stream, 0, data.mutableBytes, (size_t)size, &completed);
+			if (result == NTFS_OK && completed != size) {
+				result = NTFS_IO;
+			}
+		}
+		ntfs_stream_close(stream);
+		if (result == NTFS_OK && !_resource.isAvailable) {
+			result = NTFS_IO;
+		}
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		return data;
+	}
+}
+
 - (NSError *)enumerate:(FSItem *)directory
 		cookie:(FSDirectoryCookie)cookie
 	      verifier:(FSDirectoryVerifier)verifier
@@ -527,12 +796,12 @@ visible(const struct ntfs_dirent *entry)
 
 - (NSInteger)maximumXattrSize
 {
-	return 0;
+	return NTFS_FSKIT_XATTR_BYTES;
 }
 
 - (NSInteger)maximumXattrSizeInBits
 {
-	return 0;
+	return NTFS_FSKIT_XATTR_SIZE_BITS;
 }
 
 - (uint64_t)maximumFileSize

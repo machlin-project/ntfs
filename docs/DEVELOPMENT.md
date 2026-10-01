@@ -59,11 +59,13 @@ The workflow is prepared for macOS/Linux core checks and independent Linux image
 tests, but remote CI is unverified until the owner creates a private repository.
 
 `corpus-contract` and `workload-contract` are regular sanitized suites. The former
-checks reference-addressed inspection, independently expected stream bytes,
-hard-link consistency, original UTF-16 and truthful partial acquisition reporting.
+checks reference-addressed inspection, independently expected stream bytes and
+inventories, hard-link consistency, original UTF-16 and truthful partial reporting.
 The latter verifies measured read ranges against original fixture bytes, ADS,
 sparse/VDL/compression, explicit warmup, record-cache controls and serialized
 readers on both POSIX and memory callbacks. Neither executes native Windows APIs.
+The FSKit component also verifies bounded stream xattrs and their raw UTF-16
+reverse manifest; five image scenarios and limits appear in NATIVE-NAMESPACE.md.
 See CORE-QUALIFICATION.md for Windows-only acquisition and offline verification.
 
 For repeated optimized measurements use `scripts/benchmark.py`, an independently

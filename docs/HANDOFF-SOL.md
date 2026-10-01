@@ -93,10 +93,21 @@ lossless host-endian UTF-16 targets. Every output range is checked before copyin
 WOF/cloud and unknown Microsoft payloads remain opaque; GUID framing is rejected
 as UNSUPPORTED, including Microsoft-tagged candidates. The metadata snapshot has
 no path-following behavior. Ordinary reads/traversal remain fail-closed.
-Twenty-three image contracts plus decoder vectors and 45 allocation/six I/O
+Twenty-six image contracts plus decoder vectors and 45 allocation/six I/O
 failure positions passed. The direct FSKit component and four-geometry NTFS-3G
 oracle also passed after adding the core guards. See ACCEPTANCE.md for retained
 fuzz evidence and limits. No Windows-authored reparse corpus has been tested.
+
+The stream catalog and both FSKit xattr protocol paths are implemented. The
+catalog preserves exact names, including unpaired UTF-16 and unsupported stream
+encodings, while data opening remains independently validated. The adapter uses
+short ordinal aliases and a lossless reverse manifest, with a 1,024-entry item cap
+and bounded responses. Reclaim/unmount closes catalogs; revocation gates cached
+operations. All 23 core suites, expanded adapter tests and the current unsigned
+app passed, followed by a bounded image fuzz campaign and four independent
+NTFS-3G image geometries with byte and stream-inventory comparisons. Follow
+NATIVE-NAMESPACE.md for format and limits. Do not promote these results to
+installed ADS acceptance or close unsupported-default-stream adoption.
 
 See ACCEPTANCE.md for exact results and generated log locations. Do not repeat
 the completed MFT bootstrap work as a new feature, or interpret this checkpoint
@@ -153,7 +164,7 @@ absent/NULL/empty ACL states. Its independent vectors and 61-second fuzz campaig
 pass. `$Secure` resolution, identity mapping and authorization are still needed;
 parser success does not grant access or interpret callback conditions.
 
-The current 22-suite sanitized checkpoint, freestanding check and post-cache
+The current 23-suite sanitized checkpoint, freestanding check and expanded
 FSKit component tests pass. `ntfs-workload` and `scripts/benchmark.py` add repeated
 POSIX/memory profiles with original-byte and image-integrity checks. Live-node
 metadata reuse removes repeated presence-validation allocations and has a measured
@@ -189,7 +200,8 @@ native acceptance.
    into a symlink.
 7. Implement $Secure/security-descriptor resolution and an owning authorization
    policy. Current mode/UID/GID are a single-user read-only presentation, not
-   Windows ACL enforcement. EFS and native ACL/xattr translation remain absent.
+   Windows ACL enforcement. EFS and native Windows ACL translation remain absent;
+   the read-only ADS xattr projection is separately defined in NATIVE-NAMESPACE.md.
 
 ## Writable and product continuation
 

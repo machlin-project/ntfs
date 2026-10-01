@@ -219,5 +219,43 @@
 	reply(nil, ntfs_error(NTFS_UNSUPPORTED));
 }
 
+- (void)getXattrNamed:(FSFileName *)name
+	       ofItem:(FSItem *)item
+	      context:(FSContext *)context
+	 replyHandler:(void (^)(FSGetXattrResult *, NSError *))reply
+{
+	NSError *error = nil;
+	NSData *data = [self xattrNamed:name ofItem:item error:&error];
+
+	(void)context;
+	reply(data != nil ? [[FSGetXattrResult alloc] initWithXattrValue:data] : nil, error);
+}
+
+- (void)listXattrsOfItem:(FSItem *)item
+		 context:(FSContext *)context
+	    replyHandler:(void (^)(FSListXattrsResult *, NSError *))reply
+{
+	NSError *error = nil;
+	NSArray<FSFileName *> *names = [self xattrsForItem:item error:&error];
+
+	(void)context;
+	reply(names != nil ? [[FSListXattrsResult alloc] initWithXattrNames:names] : nil, error);
+}
+
+- (void)setXattrNamed:(FSFileName *)name
+	       toData:(NSData *)data
+	       onItem:(FSItem *)item
+	       policy:(FSSetXattrPolicy)policy
+	      context:(FSContext *)context
+	 replyHandler:(void (^)(FSSetXattrResult *, NSError *))reply
+{
+	(void)name;
+	(void)data;
+	(void)item;
+	(void)policy;
+	(void)context;
+	reply(nil, ntfs_error(NTFS_READ_ONLY));
+}
+
 @end
 #endif

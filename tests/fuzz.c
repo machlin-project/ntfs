@@ -14,6 +14,7 @@ enum {
 	FUZZ_READ_BUFFER_BYTES = 1024,
 	FUZZ_REPARSE_NAME_UNITS = 128,
 	FUZZ_DIRECTORY_ENTRIES = 64,
+	FUZZ_STREAM_NAMES = 32,
 	FUZZ_MUTATIONS = 2000,
 	FUZZ_MUTATION_REGION = 512 * 1024,
 	FUZZ_BITS_PER_BYTE = 8
@@ -36,11 +37,13 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	struct ntfs_directory *directory = NULL;
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_reparse *reparse = NULL;
+	struct ntfs_stream_catalog *catalog = NULL;
+	struct ntfs_stream_name stream_name;
 	struct ntfs_reparse_info reparse_info;
 	struct ntfs_dirent entry;
 	uint8_t buffer[FUZZ_READ_BUFFER_BYTES];
 	uint16_t reparse_name[FUZZ_REPARSE_NAME_UNITS];
-	size_t i, count;
+	size_t i, j, count;
 
 	(void)ntfs_reparse_decode(data, size, &reparse_info);
 	if (ntfs_mount(&env, &limits, &v) == NTFS_OK && ntfs_root(v, &root) == NTFS_OK &&
@@ -49,6 +52,23 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;
 		    i++) {
 			if (ntfs_node_open(v, entry.reference, &node) == NTFS_OK) {
+				if (ntfs_stream_catalog_open(node, FUZZ_STREAM_NAMES, &catalog) ==
+				    NTFS_OK) {
+					for (j = 0; j < ntfs_stream_catalog_count(catalog); j++) {
+						if (ntfs_stream_catalog_entry(catalog, (uint32_t)j,
+							&stream_name) == NTFS_OK &&
+						    stream_name.length != 0 &&
+						    ntfs_stream_open(node, stream_name.units,
+							stream_name.length, &stream) == NTFS_OK) {
+							(void)ntfs_stream_read(stream, 0, buffer,
+							    sizeof(buffer), &count);
+							ntfs_stream_close(stream);
+							stream = NULL;
+						}
+					}
+					ntfs_stream_catalog_close(catalog);
+					catalog = NULL;
+				}
 				if (ntfs_reparse_open(node, &reparse) == NTFS_OK) {
 					ntfs_reparse_get_info(reparse, &reparse_info);
 					(void)ntfs_reparse_name(reparse,

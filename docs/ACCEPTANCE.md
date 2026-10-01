@@ -12,6 +12,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
+| Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
 | Reparse metadata | Microsoft framing, relative/absolute symlinks and junction targets, lossless UTF-16, fragmented/listed attributes, snapshot lifetime, opaque WOF/cloud classification and fail-closed traversal/data access | Synthetic tests passed; Windows-authored links and native translation untested |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
@@ -35,7 +36,7 @@ nine file hashes across all five layouts, ordering, case folding, ADS, four dama
 images and 31 additional format/continuation/rejection cases. Unsupported and corrupt
 inputs passing their rejection tests do not establish support for those layouts.
 
-The no-VM continuation now passes 22 sanitized suites, including six standalone
+The no-VM continuation now passes 23 sanitized suites, including six standalone
 parser mutation targets, corpus/workload contracts, metadata-cache fault/retry
 checks, security descriptor vectors and its standalone mutation target. Evidence
 is retained in `artifacts/plan-security-tests.log`. After reviewing reparse presence,
@@ -56,6 +57,19 @@ The foundation campaigns precede metadata reuse. Subsequent image campaigns pass
 `artifacts/fuzz-reparse-presence/`. The latter reported peak RSS 613 MiB and no
 crash or sanitizer finding. The current unsigned app and extension also built
 after that fix (`artifacts/plan-guard-app-build.log`); neither was installed.
+
+The stream catalog and native xattr projection subsequently passed all 23 suites,
+freestanding targets, expanded component tests, style and the current unsigned
+app build under `artifacts/plan-ads-*.log`. The catalog suite covers fourteen
+inventories/rejections and 28 allocation/one I/O failure positions. Five adapter
+scenarios cover native stream manifests, exact UTF-16, bounded responses, retry
+and revocation. Image fuzzing completed 55,509 executions in 61 seconds with peak
+RSS 682 MiB and no reported finding under `artifacts/fuzz-stream-catalog/`.
+Four independent image geometries subsequently passed 100 file-byte oracles each,
+ADS bytes, exact stream inventories, case folding and unchanged image hashes
+under `artifacts/interoperability-stream-catalog/` and
+`artifacts/plan-ads-oracle.log`. Windows acceptance remains unrun.
+NATIVE-NAMESPACE.md defines the format and its remaining limits.
 
 Before/after release matrices each retain 400 measurements, independent full
 stream-byte oracles and unchanged input hashes. Metadata reuse removes repeated
@@ -83,7 +97,7 @@ cover every token length/displacement split and short/overlong output buffers.
 NTFS 3.0 acceptance here covers synthetic common-header records; no Windows 2000
 authored corpus has been tested.
 
-The reparse suite adds standalone decoder vectors and 23 image contracts.
+The reparse suite adds standalone decoder vectors and 26 image contracts.
 It checks resident, fragmented nonresident and attribute-list storage, targets
 whose print and substitute names appear in either order, unpaired surrogate
 preservation, capacity checks before copying, source-node closure and BUSY unmount.
@@ -188,6 +202,8 @@ namespace semantics remain open. Stream names use exact UTF-16 matching. The
 adapter uses a single-user read-only mode/UID/GID presentation and rejects reparse
 items; it does not enforce Windows ACLs.
 Directory enumeration requesting attributes can fail on unsupported files.
-Named streams are available through the core and inspector, without a native
-xattr mapping. Per-volume operations are serialized, with a 64-MiB core memory
+Named streams now have a bounded read-only xattr projection and reverse manifest
+in both FSKit protocol paths, qualified only by component/build tests. Unsupported
+default streams can still prevent item adoption, and installed projection remains
+untested. Per-volume operations are serialized, with a 64-MiB core memory
 budget and 16,384 live FSItem limit. No read/write claim may omit these limits.

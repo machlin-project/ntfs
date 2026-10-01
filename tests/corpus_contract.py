@@ -136,6 +136,12 @@ def main():
             report = corpus.verify(path, reader, directory / 'report.json')
             assert report['status'] == 'pass', report
             assert report['corpus_provenance'].startswith('independent synthetic'), report
+            for entry in manifest['entries']:
+                observed = [json.loads(line)['name_utf16'] for line in corpus.tool(
+                    reader, directory / 'volume.img', 'streams-ref',
+                    entry['reference']).splitlines()]
+                expected_names = sorted(stream['name_utf16'] for stream in entry.get('streams', []))
+                assert observed == expected_names, (observed, expected_names)
             damaged = deepcopy(manifest)
             damaged['entries'][-1]['streams'][0]['sha256'] = '0' * len(hashlib.sha256().hexdigest())
             path.write_text(json.dumps(damaged) + '\n')

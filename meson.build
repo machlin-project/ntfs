@@ -1,7 +1,7 @@
 project('machlin-ntfs', 'c', version: '0.1.0', default_options: ['c_std=c11', 'warning_level=3', 'werror=true', 'buildtype=debugoptimized'])
 cc = meson.get_compiler('c')
 inc = include_directories('include', 'adapters/posix')
-core_sources = files('core/support.c', 'core/record.c', 'core/stream.c', 'core/lznt1.c', 'core/attribute.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c', 'core/security.c')
+core_sources = files('core/support.c', 'core/record.c', 'core/stream.c', 'core/lznt1.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c', 'core/security.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
 posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directories: inc, c_args: ['-D_POSIX_C_SOURCE=200809L'], install: false)
@@ -41,3 +41,5 @@ metadata_cache = executable('ntfs-metadata-cache-tests', ['tests/metadata_cache.
 test('metadata-cache', metadata_cache, args: [meson.current_build_dir() / 'fixtures/metadata-presence-list.img'], depends: fixture, timeout: 120)
 security = executable('ntfs-security-tests', 'tests/security.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('security', security)
+catalog = executable('ntfs-catalog-tests', ['tests/catalog.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('catalog', catalog, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)

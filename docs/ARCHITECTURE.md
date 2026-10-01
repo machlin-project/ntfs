@@ -28,6 +28,13 @@ Opening a named stream reads file metadata independently of the default stream:
 an encrypted default stream does not prevent opening a separate unencrypted ADS.
 Stream names match exact UTF-16 units; filename lookup has a different contract.
 
+The stream-name catalog is an independent immutable snapshot, sorted by exact
+UTF-16 units. It validates first-extent references without requiring content
+support; complete mappings are checked by stream open. Both FSKit protocols expose
+bounded read-only stream xattrs and a lossless reverse manifest, with owner
+admission before cached access. See NATIVE-NAMESPACE.md for format, limits and
+the remaining filename, authorization and unsupported-object contracts.
+
 Reparse metadata uses the ordinary attribute reader, including resident values,
 fragmented nonresident mappings and sequence-checked attribute-list extensions.
 `ntfs_reparse_open` owns a snapshot bounded by Windows' 16-KiB complete-buffer

@@ -57,7 +57,9 @@ enum {
 	NTFS_DEFAULT_MAX_RUNS = 65536,
 	NTFS_DEFAULT_MAX_ATTRIBUTE_LIST = 1048576,
 	NTFS_DEFAULT_RECORD_CACHE_ENTRIES = 64,
-	NTFS_DEFAULT_MAX_DIRECTORY_NODES = 65536
+	NTFS_DEFAULT_MAX_DIRECTORY_NODES = 65536,
+	/* An immutable stream-name snapshot stays below 3 MiB at this cap. */
+	NTFS_MAX_STREAM_CATALOG_ENTRIES = 4096
 };
 
 enum ntfs_result {
@@ -84,6 +86,7 @@ struct ntfs_node;
 struct ntfs_stream;
 struct ntfs_directory;
 struct ntfs_reparse;
+struct ntfs_stream_catalog;
 
 /* The caller serializes a volume and all its children. The resource must remain
  * immutable and exclusively owned for their lifetime. There is no write callback.
@@ -146,6 +149,11 @@ struct ntfs_dirent {
 	uint16_t name[NTFS_NAME_MAX];
 };
 
+struct ntfs_stream_name {
+	uint16_t length;
+	uint16_t units[NTFS_NAME_MAX];
+};
+
 struct ntfs_io_statistics {
 	uint64_t read_calls, read_bytes, record_cache_hits, record_cache_misses;
 };
@@ -192,6 +200,19 @@ enum ntfs_result ntfs_lookup_entry(
  * Named data streams also exist on directories. Native xattr mapping is separate. */
 enum ntfs_result ntfs_stream_open(
     struct ntfs_node *, const uint16_t *, size_t, struct ntfs_stream **);
+/* Inventory of stored $DATA names, including the unnamed stream. Names are
+ * sorted by exact UTF-16 units, without folding or conversion; encrypted and
+ * provider-owned streams remain visible. This checks first-extent references and
+ * headers, not complete stream mappings or content support. Stream open performs
+ * those checks separately. The immutable snapshot survives source-node close.
+ * maximum_entries must be between one and NTFS_MAX_STREAM_CATALOG_ENTRIES. */
+enum ntfs_result ntfs_stream_catalog_open(
+    struct ntfs_node *, uint32_t maximum_entries, struct ntfs_stream_catalog **);
+uint32_t ntfs_stream_catalog_count(const struct ntfs_stream_catalog *);
+/* Zero-based indexed copying, with END and zeroed output after the last entry. */
+enum ntfs_result ntfs_stream_catalog_entry(
+    const struct ntfs_stream_catalog *, uint32_t, struct ntfs_stream_name *);
+void ntfs_stream_catalog_close(struct ntfs_stream_catalog *);
 void ntfs_stream_close(struct ntfs_stream *);
 uint64_t ntfs_stream_size(const struct ntfs_stream *);
 enum ntfs_result ntfs_stream_read(struct ntfs_stream *, uint64_t, void *, size_t, size_t *);

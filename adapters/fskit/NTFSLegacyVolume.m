@@ -167,6 +167,38 @@
 	reply(nil, ntfs_error(NTFS_UNSUPPORTED));
 }
 
+- (void)getXattrNamed:(FSFileName *)name
+	       ofItem:(FSItem *)item
+	 replyHandler:(void (^)(NSData *, NSError *))reply
+{
+	NSError *error = nil;
+	NSData *data = [self xattrNamed:name ofItem:item error:&error];
+
+	reply(data, error);
+}
+
+- (void)listXattrsOfItem:(FSItem *)item
+	    replyHandler:(void (^)(NSArray<FSFileName *> *, NSError *))reply
+{
+	NSError *error = nil;
+	NSArray<FSFileName *> *names = [self xattrsForItem:item error:&error];
+
+	reply(names, error);
+}
+
+- (void)setXattrNamed:(FSFileName *)name
+	       toData:(NSData *)data
+	       onItem:(FSItem *)item
+	       policy:(FSSetXattrPolicy)policy
+	 replyHandler:(void (^)(NSError *))reply
+{
+	(void)name;
+	(void)data;
+	(void)item;
+	(void)policy;
+	reply(ntfs_error(NTFS_READ_ONLY));
+}
+
 @end
 
 NTFSVolume *

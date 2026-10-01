@@ -1,49 +1,254 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/ntfs.h>
 #include "image.h"
+#include "path.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 
-enum { INSPECT_READ_BUFFER_BYTES = 1048576 };
+enum {
+	INSPECT_READ_BUFFER_BYTES = 1048576,
+	HEX_RADIX = 16,
+	HEX_DECIMAL_DIGITS = 10,
+	HEX_NIBBLE_BITS = 4,
+	HEX_DIGITS_PER_BYTE = 2,
+	HEX_U16_DIGITS = sizeof(uint16_t) * HEX_DIGITS_PER_BYTE,
+	HEX_REFERENCE_DIGITS = sizeof(uint64_t) * HEX_DIGITS_PER_BYTE
+};
+
+static int
+hex_digit(char byte)
+{
+	if (byte >= '0' && byte <= '9') {
+		return byte - '0';
+	}
+	if (byte >= 'a' && byte <= 'f') {
+		return byte - 'a' + HEX_DECIMAL_DIGITS;
+	}
+	if (byte >= 'A' && byte <= 'F') {
+		return byte - 'A' + HEX_DECIMAL_DIGITS;
+	}
+	return -1;
+}
 
 static enum ntfs_result
-resolve(struct ntfs_volume *v, const char *path, struct ntfs_node **out)
+parse_hex(const char *text, uint64_t *value)
 {
-	struct ntfs_node *node = NULL, *child = NULL;
-	uint16_t name[NTFS_NAME_MAX];
-	const char *end;
-	size_t length;
+	size_t length = strlen(text), i;
+	int digit;
+
+	*value = 0;
+	if (length == 0 || length > HEX_REFERENCE_DIGITS) {
+		return NTFS_INVALID;
+	}
+	for (i = 0; i < length; i++) {
+		digit = hex_digit(text[i]);
+		if (digit < 0) {
+			return NTFS_INVALID;
+		}
+		*value = *value * HEX_RADIX + (unsigned)digit;
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+parse_name(const char *text, uint16_t *name, size_t *units)
+{
+	size_t bytes = strlen(text), i;
+	int digit;
+
+	*units = 0;
+	if (bytes % HEX_U16_DIGITS != 0 || bytes / HEX_U16_DIGITS > NTFS_NAME_MAX) {
+		return NTFS_INVALID;
+	}
+	for (i = 0; i < bytes; i++) {
+		digit = hex_digit(text[i]);
+		if (digit < 0) {
+			return NTFS_INVALID;
+		}
+		if (i % HEX_U16_DIGITS == 0) {
+			name[i / HEX_U16_DIGITS] = 0;
+		}
+		name[i / HEX_U16_DIGITS] =
+		    (uint16_t)((name[i / HEX_U16_DIGITS] << HEX_NIBBLE_BITS) | (unsigned)digit);
+	}
+	*units = bytes / HEX_U16_DIGITS;
+	return NTFS_OK;
+}
+
+static void
+json_name(const uint16_t *name, size_t length)
+{
+	size_t i;
+
+	putchar('[');
+	for (i = 0; i < length; i++) {
+		printf("%s%u", i == 0 ? "" : ",", (unsigned)name[i]);
+	}
+	putchar(']');
+}
+
+static void
+json_entry(const struct ntfs_dirent *entry)
+{
+	printf("{\"reference\":\"%016" PRIx64 "\",\"parent_reference\":\"%016" PRIx64
+	       "\",\"size\":\"%" PRIu64 "\",\"file_attributes\":%" PRIu32
+	       ",\"namespace\":%u,\"name_utf16\":",
+	    entry->reference, entry->parent_reference, entry->size, entry->file_attributes,
+	    entry->name_namespace);
+	json_name(entry->name, entry->name_length);
+	puts("}");
+}
+
+static void
+json_stat(const struct ntfs_stat *st)
+{
+	printf("{\"reference\":\"%016" PRIx64 "\",\"size\":\"%" PRIu64
+	       "\",\"allocated_size\":\"%" PRIu64 "\",\"links\":%u,\"directory\":%s,"
+	       "\"reparse\":%s,\"file_attributes\":%" PRIu32 ",\"security_id\":%" PRIu32
+	       ",\"created\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32
+	       "},\"modified\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32
+	       "},\"changed\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32
+	       "},\"accessed\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32 "}}\n",
+	    st->reference, st->size, st->allocated_size, st->links,
+	    st->directory ? "true" : "false", st->reparse ? "true" : "false", st->file_attributes,
+	    st->security_id, st->created.seconds, st->created.nanoseconds, st->modified.seconds,
+	    st->modified.nanoseconds, st->changed.seconds, st->changed.nanoseconds,
+	    st->accessed.seconds, st->accessed.nanoseconds);
+}
+
+static enum ntfs_result
+copy_stream(struct ntfs_stream *stream)
+{
+	uint8_t *buffer;
+	uint64_t offset = 0;
+	size_t done;
 	enum ntfs_result result;
 
-	result = ntfs_root(v, &node);
-	*out = NULL;
-	while (result == NTFS_OK && *path != 0) {
-		if (*path == '/') {
-			path++;
-			continue;
+	buffer = malloc(INSPECT_READ_BUFFER_BYTES);
+	if (buffer == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	do {
+		result = ntfs_stream_read(stream, offset, buffer, INSPECT_READ_BUFFER_BYTES, &done);
+		if (result != NTFS_OK) {
+			break;
 		}
-		end = strchr(path, '/');
-		if (end == NULL) {
-			end = path + strlen(path);
+		if (fwrite(buffer, 1, done, stdout) != done) {
+			result = NTFS_IO;
+			break;
 		}
-		result =
-		    ntfs_utf8_to_utf16(path, (size_t)(end - path), name, NTFS_NAME_MAX, &length);
-		if (result == NTFS_OK) {
-			result = ntfs_lookup(node, name, length, &child);
-		}
-		ntfs_node_close(node);
-		node = child;
-		child = NULL;
-		path = end;
+		offset += done;
+	} while (done != 0);
+	free(buffer);
+	return result;
+}
+
+/* Numeric references and UTF-16 units avoid locale, normalization and argv's
+ * inability to carry unpaired surrogates. All commands remain read-only. */
+static enum ntfs_result
+inspect_reference(struct ntfs_volume *v, int argc, char **argv)
+{
+	struct ntfs_node *node = NULL, *child = NULL;
+	struct ntfs_directory *directory = NULL;
+	struct ntfs_stream *stream = NULL;
+	struct ntfs_reparse *reparse = NULL;
+	struct ntfs_reparse_info info;
+	struct ntfs_dirent entry;
+	struct ntfs_stat st;
+	uint16_t name[NTFS_NAME_MAX], *target = NULL;
+	uint64_t reference;
+	size_t length = 0, capacity = 0;
+	enum ntfs_result result;
+
+	if (argc < 4 || argc > 5) {
+		return NTFS_INVALID;
+	}
+	result = parse_hex(argv[3], &reference);
+	if (result == NTFS_OK) {
+		result = ntfs_node_open(v, reference, &node);
 	}
 	if (result != NTFS_OK) {
-		ntfs_node_close(node);
-		return result;
+		goto finish;
 	}
-	*out = node;
-	return NTFS_OK;
+	if (strcmp(argv[2], "stat-ref") == 0 && argc == 4) {
+		result = ntfs_node_stat(node, &st);
+		if (result == NTFS_OK) {
+			json_stat(&st);
+		}
+	} else if (strcmp(argv[2], "ls-ref") == 0 && argc == 4) {
+		result = ntfs_directory_open(node, &directory);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		while ((result = ntfs_directory_next(directory, &entry)) == NTFS_OK) {
+			json_entry(&entry);
+		}
+		if (result == NTFS_END) {
+			result = NTFS_OK;
+		}
+	} else if (strcmp(argv[2], "lookup-ref") == 0 && argc == 5) {
+		result = parse_name(argv[4], name, &length);
+		if (result == NTFS_OK) {
+			result = ntfs_lookup_entry(node, name, length, &child, &entry);
+		}
+		if (result == NTFS_OK) {
+			json_entry(&entry);
+		}
+	} else if (strcmp(argv[2], "cat-ref") == 0) {
+		if (argc == 5) {
+			result = parse_name(argv[4], name, &length);
+		}
+		if (result == NTFS_OK) {
+			result = ntfs_stream_open(node, name, length, &stream);
+		}
+		if (result == NTFS_OK) {
+			result = copy_stream(stream);
+		}
+	} else if (strcmp(argv[2], "reparse-ref") == 0 && argc == 4) {
+		result = ntfs_reparse_open(node, &reparse);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		ntfs_reparse_get_info(reparse, &info);
+		capacity = info.substitute_length > info.print_length ? info.substitute_length
+								      : info.print_length;
+		if (capacity != 0) {
+			target = malloc(capacity * sizeof(*target));
+			if (target == NULL) {
+				result = NTFS_NO_MEMORY;
+				goto finish;
+			}
+		}
+		printf("{\"tag\":%" PRIu32 ",\"kind\":%u,\"flags\":%" PRIu32, info.tag, info.kind,
+		    info.flags);
+		if (info.kind == NTFS_REPARSE_SYMLINK || info.kind == NTFS_REPARSE_MOUNT_POINT) {
+			result = ntfs_reparse_name(
+			    reparse, NTFS_REPARSE_SUBSTITUTE_NAME, target, capacity, &length);
+			if (result == NTFS_OK) {
+				printf(",\"substitute_utf16\":");
+				json_name(target, length);
+				result = ntfs_reparse_name(
+				    reparse, NTFS_REPARSE_PRINT_NAME, target, capacity, &length);
+			}
+			if (result == NTFS_OK) {
+				printf(",\"print_utf16\":");
+				json_name(target, length);
+			}
+		}
+		puts("}");
+	} else {
+		result = NTFS_INVALID;
+	}
+finish:
+	free(target);
+	ntfs_reparse_close(reparse);
+	ntfs_directory_close(directory);
+	ntfs_stream_close(stream);
+	ntfs_node_close(child);
+	ntfs_node_close(node);
+	return result;
 }
 
 static enum ntfs_result
@@ -113,15 +318,17 @@ main(int argc, char **argv)
 	struct ntfs_dirent entry;
 	uint16_t stream_name[NTFS_NAME_MAX];
 	char name[NTFS_UTF8_NAME_MAX + 1];
-	uint8_t *buffer = NULL;
 	size_t done, length = 0;
-	uint64_t offset = 0, free_clusters;
+	uint64_t free_clusters;
 	enum ntfs_result result;
 	int error;
 
 	if (argc < 3) {
-		fprintf(
-		    stderr, "usage: ntfs-inspect IMAGE info|ls|stat|cat|reparse [PATH] [STREAM]\n");
+		fprintf(stderr,
+		    "usage: ntfs-inspect IMAGE info|ls|stat|cat|reparse [PATH] [STREAM]\n"
+		    "       ntfs-inspect IMAGE info-json\n"
+		    "       ntfs-inspect IMAGE stat-ref|ls-ref|reparse-ref HEX_REFERENCE\n"
+		    "       ntfs-inspect IMAGE cat-ref|lookup-ref HEX_REFERENCE [UTF16_HEX]\n");
 		return 2;
 	}
 	error = ntfs_image_open(argv[1], &image);
@@ -131,6 +338,28 @@ main(int argc, char **argv)
 	}
 	result = ntfs_mount(&image.environment, NULL, &v);
 	if (result != NTFS_OK) {
+		goto finish;
+	}
+	if (strcmp(argv[2], "info-json") == 0 && argc == 3) {
+		ntfs_get_info(v, &info);
+		result = ntfs_root(v, &node);
+		if (result == NTFS_OK) {
+			result = ntfs_node_stat(node, &st);
+		}
+		if (result == NTFS_OK) {
+			printf("{\"serial\":\"%016" PRIx64 "\",\"size_bytes\":\"%" PRIu64
+			       "\",\"cluster_count\":\"%" PRIu64
+			       "\",\"sector_size\":%u,\"cluster_size\":%u,\"record_size\":%u,"
+			       "\"index_size\":%u,\"volume_flags\":%u,\"major_version\":%u,"
+			       "\"minor_version\":%u,\"root_reference\":\"%016" PRIx64 "\"}\n",
+			    info.serial, info.size_bytes, info.cluster_count, info.sector_size,
+			    info.cluster_size, info.record_size, info.index_size, info.volume_flags,
+			    info.major_version, info.minor_version, st.reference);
+		}
+		goto finish;
+	}
+	if (strstr(argv[2], "-ref") != NULL) {
+		result = inspect_reference(v, argc, argv);
 		goto finish;
 	}
 	if (strcmp(argv[2], "info") == 0) {
@@ -146,7 +375,7 @@ main(int argc, char **argv)
 		}
 		goto finish;
 	}
-	result = resolve(v, argc > 3 ? argv[3] : "/", &node);
+	result = ntfs_tool_resolve(v, argc > 3 ? argv[3] : "/", &node);
 	if (result != NTFS_OK) {
 		goto finish;
 	}
@@ -193,28 +422,11 @@ main(int argc, char **argv)
 		if (result != NTFS_OK) {
 			goto finish;
 		}
-		buffer = malloc(INSPECT_READ_BUFFER_BYTES);
-		if (buffer == NULL) {
-			result = NTFS_NO_MEMORY;
-			goto finish;
-		}
-		do {
-			result = ntfs_stream_read(
-			    stream, offset, buffer, INSPECT_READ_BUFFER_BYTES, &done);
-			if (result != NTFS_OK) {
-				break;
-			}
-			if (fwrite(buffer, 1, done, stdout) != done) {
-				result = NTFS_IO;
-				break;
-			}
-			offset += done;
-		} while (done != 0);
+		result = copy_stream(stream);
 	} else {
 		result = NTFS_INVALID;
 	}
 finish:
-	free(buffer);
 	ntfs_directory_close(directory);
 	ntfs_stream_close(stream);
 	ntfs_reparse_close(reparse);

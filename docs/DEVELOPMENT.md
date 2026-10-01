@@ -22,6 +22,11 @@ exercises the real adapter against a bounded fake resource in-process; it neithe
 mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds a
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
+Use `--target all` for the image and seven standalone parser targets, or select
+`mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`
+or `security`. The time budget applies per target. Each campaign retains its own
+binary, log and report; persistent corpora remain under the selected `--output`.
+Image mutation can preserve FILE/INDX fixups and alter validated inner spans.
 The fuzzer authors 1-MiB physical images instead of retaining unused 8-MiB tails
 for every corpus entry. All fixture payload locations and large logical sparse
 sizes are preserved. The corpus directory includes the input-size bound so older
@@ -31,7 +36,7 @@ allocation budget. A corpus-growth RSS failure is still a failed fuzz run and
 must be reported and diagnosed before retrying.
 
 Reparse fixture generation supplies both full images and small standalone
-`.reparse` buffers. The fuzzer seeds both forms, exercises the standalone decoder
+`.reparse` buffers. The reparse target seeds standalone buffers; image fuzzing exercises the decoder
 and opens/copies reparse metadata through the public node API. Inspect metadata
 without following Windows targets using
 `.build/ntfs-inspect .build/fixtures/reparse-relative.img reparse /hello.txt`.
@@ -52,3 +57,17 @@ format includes environment values; do not invoke it with ambient credentials or
 display entire unreviewed reports. CI uploads only selected generated reports.
 The workflow is prepared for macOS/Linux core checks and independent Linux image
 tests, but remote CI is unverified until the owner creates a private repository.
+
+`corpus-contract` and `workload-contract` are regular sanitized suites. The former
+checks reference-addressed inspection, independently expected stream bytes,
+hard-link consistency, original UTF-16 and truthful partial acquisition reporting.
+The latter verifies measured read ranges against original fixture bytes, ADS,
+sparse/VDL/compression, explicit warmup, record-cache controls and serialized
+readers on both POSIX and memory callbacks. Neither executes native Windows APIs.
+See CORE-QUALIFICATION.md for Windows-only acquisition and offline verification.
+
+For repeated optimized measurements use `scripts/benchmark.py`, an independently
+supplied original stream payload and a new artifact directory; see PERFORMANCE.md.
+The runner checks Meson's selected release/sanitizer options and never displays
+its complete option/environment reports. It records each run and integrity check,
+including failures, instead of overwriting earlier output.

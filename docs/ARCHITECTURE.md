@@ -49,9 +49,11 @@ their content is not decoded. GUID framing remains UNSUPPORTED. Microsoft-tagged
 buffers whose size fits only the GUID envelope also report UNSUPPORTED; this is
 not validation of the GUID or its provider payload.
 Ordinary data reads and directory traversal reject reparse nodes. An attribute
-existing without its standard-information flag is corrupt, including when it is
-listed in an extension record. Checking for such an attribute can read an attribute
-list even for an ordinary file. FSKit continues to reject reparse items until its
+existing without its standard-information flag is corrupt. Presence checks scan
+both the base record and the complete attribute-list envelope, regardless of name;
+an omitted base attribute or invalid named reparse attribute cannot evade the guard.
+Checking absence can read an attribute list even for an ordinary file. FSKit
+continues to reject reparse items until its
 own target-translation, namespace and authorization contracts are defined.
 
 An MFT record cache contains only validated immutable records and has an explicit
@@ -65,6 +67,21 @@ Changing compression units invalidates the cache before I/O; a failed fill canno
 leave a valid tag on partially replaced data. Direct LZNT1 decoding distinguishes
 insufficient output capacity from corrupt input. A decoded unit exceeding its
 on-disk unit size is corrupt at the stream boundary.
+
+A live node caches standard-information metadata and the checked reparse-presence
+result only after that complete operation succeeds. The cache has no separate
+allocation or owner, inherits the record snapshot's immutable-media lifetime and
+is never populated by failed I/O, allocation or corruption checks. Sizes and runs
+of individual streams still undergo ordinary attribute validation. FSKit admission
+checks continue to gate cached operations after permanent revocation.
+
+The standalone security decoder in `ntfs/security.h` owns MS-DTYP byte framing.
+It returns original control bits, lossless SID values, checked component spans,
+and distinct absent/NULL/empty ACL states. It validates known ACE layouts, optional
+object GUIDs and callback/application spans without sorting or interpreting
+conditions. Unknown ACE bodies remain explicitly opaque. No input pointer becomes
+a native identity or access grant. Resolving `$Secure` and enforcing authorization
+are separate owning contracts and remain incomplete.
 
 Directory enumeration owns an explicit stack of at most 32 index frames, a
 bounded hash set of visited child VCNs and a persistent in-order cursor. Lookup

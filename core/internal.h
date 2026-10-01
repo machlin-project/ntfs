@@ -65,6 +65,10 @@ struct ntfs_node {
 	struct ntfs_volume *volume;
 	uint64_t reference;
 	uint8_t *record;
+	/* Valid only after complete metadata and reparse-presence validation.
+	 * The immutable medium and this node's record snapshot share one lifetime. */
+	struct ntfs_stat metadata;
+	bool metadata_verified;
 };
 
 struct ntfs_attr_view {
@@ -98,6 +102,10 @@ enum ntfs_result ntfs_stream_from_attr(
 enum ntfs_result ntfs_stream_append(struct ntfs_stream *, const struct ntfs_attr_view *);
 enum ntfs_result ntfs_attribute_open(
     struct ntfs_node *, uint32_t, const uint16_t *, size_t, struct ntfs_stream **);
+enum ntfs_result ntfs_attribute_list_read(struct ntfs_node *, uint8_t **, size_t *);
+enum ntfs_result ntfs_list_entry_at(
+    const uint8_t *, size_t, size_t *, const struct ntfs_disk_attr_list **);
+enum ntfs_result ntfs_attribute_type_present(struct ntfs_node *, uint32_t, bool *);
 enum ntfs_result ntfs_mft_open(struct ntfs_volume *, uint8_t *, struct ntfs_stream **);
 enum ntfs_result ntfs_stream_raw(struct ntfs_stream *, uint64_t, void *, size_t);
 enum ntfs_result ntfs_stream_exact(struct ntfs_stream *, uint64_t, void *, size_t);

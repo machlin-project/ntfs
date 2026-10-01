@@ -1,13 +1,12 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/ntfs.h>
+#include "fuzz_device.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
 enum {
-	FUZZ_MEMORY_BUDGET = 8 * 1024 * 1024,
-	FUZZ_READ_BUDGET = 4096,
 	FUZZ_MAX_RUNS = 1024,
 	FUZZ_MAX_ATTRIBUTE_LIST = 65536,
 	FUZZ_CACHE_ENTRIES = 4,
@@ -25,63 +24,11 @@ enum {
 #define FUZZ_RANDOM_MULTIPLIER UINT32_C(1664525)
 #define FUZZ_RANDOM_INCREMENT UINT32_C(1013904223)
 
-struct fuzz_device {
-	const uint8_t *data;
-	size_t size, memory, reads;
-};
-
-union fuzz_allocation {
-	max_align_t alignment;
-	size_t size;
-};
-
-static void *
-fuzz_allocate(void *context, size_t size)
-{
-	struct fuzz_device *d = context;
-	union fuzz_allocation *p;
-
-	if (size > FUZZ_MEMORY_BUDGET - d->memory) {
-		return NULL;
-	}
-	p = malloc(sizeof(*p) + size);
-	if (p == NULL) {
-		return NULL;
-	}
-	p->size = size;
-	d->memory += size;
-	return p + 1;
-}
-
-static void
-fuzz_release(void *context, void *memory, size_t size)
-{
-	struct fuzz_device *d = context;
-	union fuzz_allocation *p = (union fuzz_allocation *)memory - 1;
-
-	assert(p->size == size);
-	d->memory -= size;
-	free(p);
-}
-
-static enum ntfs_result
-fuzz_read(void *context, uint64_t offset, void *memory, size_t size)
-{
-	struct fuzz_device *d = context;
-
-	if (++d->reads > FUZZ_READ_BUDGET || offset > d->size || size > d->size - offset) {
-		return NTFS_IO;
-	}
-	memcpy(memory, d->data + offset, size);
-	return NTFS_OK;
-}
-
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
-	struct fuzz_device d = {data, size, 0, 0};
-	struct ntfs_environment env = {
-	    NTFS_API_VERSION, &d, size, fuzz_read, fuzz_allocate, fuzz_release};
+	struct fuzz_device d = {.data = data, .size = size};
+	struct ntfs_environment env = fuzz_environment(&d);
 	struct ntfs_limits limits = {
 	    FUZZ_MAX_RUNS, FUZZ_MAX_ATTRIBUTE_LIST, FUZZ_CACHE_ENTRIES, FUZZ_MAX_DIRECTORY_NODES};
 	struct ntfs_volume *v = NULL;

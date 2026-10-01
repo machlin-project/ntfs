@@ -15,24 +15,55 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
 | Reparse metadata | Microsoft framing, relative/absolute symlinks and junction targets, lossless UTF-16, fragmented/listed attributes, snapshot lifetime, opaque WOF/cloud classification and fail-closed traversal/data access | Synthetic tests passed; Windows-authored links and native translation untested |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
-| Coverage-guided fuzzing | Bounded libFuzzer/ASan/UBSan using full LLVM; latest run 90,737 executions in 61 seconds on compact images and standalone reparse buffers | Completed without reported crash or sanitizer finding; ongoing fuzzing required |
+| Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
 | FSKit component | Aligned resource reads, short/error I/O, permanent resource revocation including cached data, item identity, stored names, pagination/replay, EROFS, concurrent reads and teardown under ASan/UBSan | Passed in-process on macOS 26.6.2 |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
-| Windows corpus | Windows-authored metadata, sparse/compressed edge cases, native repair and roundtrip evidence | Not run |
+| Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
 | Write/recovery | Native log, allocation, namespace transactions, crash matrix | Not implemented |
+| Security descriptors | MS-DTYP SID/ACL/ACE/self-relative framing, component spans and absent/NULL/empty ACL states | Standalone parser and fuzz vectors passed; `$Secure` and authorization remain incomplete |
 | Security and special data | $Secure/ACL policy, reparse target resolution, EFS and WOF/cloud content decoding | Not implemented |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
-| Performance baseline | Unsanitized optimized build; 100 full reads and 1,000 lookups against a warm POSIX image | Measurement recorded; native performance unmeasured |
+| Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-`make test` passed eleven suites: primitives/lifecycle on five filesystem layouts,
+The original core handoff passed eleven suites: primitives/lifecycle on five filesystem layouts,
 stream boundaries, decoder vectors, reparse metadata, image contracts,
 deterministic fuzz smoke and build-environment isolation. The image suite checks
 nine file hashes across all five layouts, ordering, case folding, ADS, four damaged
 images and 31 additional format/continuation/rejection cases. Unsupported and corrupt
 inputs passing their rejection tests do not establish support for those layouts.
+
+The no-VM continuation now passes 22 sanitized suites, including six standalone
+parser mutation targets, corpus/workload contracts, metadata-cache fault/retry
+checks, security descriptor vectors and its standalone mutation target. Evidence
+is retained in `artifacts/plan-security-tests.log`. After reviewing reparse presence,
+all 22 suites, freestanding targets, formatting and the direct FSKit component
+passed again under `artifacts/plan-reparse-presence-*.log`. The reparse suite now
+includes 26 image contracts: base attributes omitted from a list and invalid named
+reparse attributes cannot become ordinary data after clearing the flag. Permanent
+revocation still precedes cached operations.
+
+Seven 30-second campaigns (image and the six original standalone parsers) passed
+under `artifacts/fuzz-parser-foundation/`. The new security target completed
+10,147,598 executions in 61 seconds with reported peak RSS 520 MiB and no crash or
+sanitizer finding, retained under `artifacts/fuzz-security-descriptor/`. These are
+bounded campaigns, not exhaustive hostile-media or Windows compatibility proof.
+The foundation campaigns precede metadata reuse. Subsequent image campaigns passed
+55,504 executions after reuse and 53,473 after the reviewed presence fix, each in
+61 seconds, under `artifacts/fuzz-verified-metadata/` and
+`artifacts/fuzz-reparse-presence/`. The latter reported peak RSS 613 MiB and no
+crash or sanitizer finding. The current unsigned app and extension also built
+after that fix (`artifacts/plan-guard-app-build.log`); neither was installed.
+
+Before/after release matrices each retain 400 measurements, independent full
+stream-byte oracles and unchanged input hashes. Metadata reuse removes repeated
+presence-validation allocations and improves the measured open/lookup profiles;
+data-read changes are mixed. PERFORMANCE.md records exact scope, counts and
+remaining optimization requirements. CORE-QUALIFICATION.md retains every agreed
+functional and optimization deliverable without treating this checkpoint as
+completion of the full continuation.
 
 | Fault sweep layout | Allocation failure positions | I/O failure positions |
 | --- | ---: | ---: |

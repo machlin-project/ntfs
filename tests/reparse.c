@@ -472,6 +472,11 @@ main(int argc, char **argv)
 	    {.filename = "reparse-unflagged-extension.img",
 		.result = NTFS_CORRUPT,
 		.unflagged = true},
+	    {.filename = "reparse-unlisted-base.img", .result = NTFS_CORRUPT, .unflagged = true},
+	    {.filename = "reparse-named-unflagged.img", .result = NTFS_CORRUPT, .unflagged = true},
+	    {.filename = "reparse-named-listed-unflagged.img",
+		.result = NTFS_CORRUPT,
+		.unflagged = true},
 	    {"reparse-directory.img", NTFS_OK, NTFS_REPARSE_MOUNT_POINT,
 		NTFS_REPARSE_TAG_MOUNT_POINT, absolute_name, display_name, UNITS(absolute_name),
 		UNITS(display_name), 0, true, false}};

@@ -141,6 +141,27 @@ this from a successful mount or from source compilation.
 
 ## Core compatibility priorities
 
+The approved no-VM continuation is tracked in CORE-QUALIFICATION.md. It adds a
+Windows-only read-only acquisition tool, an offline manifest comparator,
+reference-based lossless inspector commands and separate structure fuzz targets.
+The collector's Win32 calls have not executed on Windows; its fixed-width
+transport and synthetic oracle checks are locally qualified. Preserve partial
+acquisition and failed feature checks instead of converting them to passes.
+
+`ntfs/security.h` now provides original bounded descriptor/ACE decoders and
+absent/NULL/empty ACL states. Its independent vectors and 61-second fuzz campaign
+pass. `$Secure` resolution, identity mapping and authorization are still needed;
+parser success does not grant access or interpret callback conditions.
+
+The current 22-suite sanitized checkpoint, freestanding check and post-cache
+FSKit component tests pass. `ntfs-workload` and `scripts/benchmark.py` add repeated
+POSIX/memory profiles with original-byte and image-integrity checks. Live-node
+metadata reuse removes repeated presence-validation allocations and has a measured
+benefit for the attribute-list open workload; data-read measurements are mixed.
+See PERFORMANCE.md for evidence and cache/concurrency limits. The previous signed
+app artifact predates these changes and remains unsuitable as current-source
+native acceptance.
+
 1. Build a Windows-authored corpus and retain the independently generated oracle.
    Current handcrafted images target individual contracts; mkntfs tests provide
    independent ordinary formatting, data and indexes. Neither closes Windows

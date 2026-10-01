@@ -59,3 +59,73 @@ Use repetitions and disclose hardware, OS, toolchain, workload and cache policy.
 Compare our native path with Windows and an independent NTFS implementation where
 environments permit. Optimization follows correctness and cannot weaken sequence,
 fixup, allocation, VDL or unsupported-feature checks.
+
+## Repeated portable workload measurements
+
+`ntfs-workload` extends the original single microbenchmark with sequential/random
+reads, repeated stream open, lookup/stat, persistent directory continuation and
+complete directory scans. It reports wall/process CPU, p50/p95/p99 request latency,
+bytes, entries, allocations, exact core I/O/cache counters, peak core allocation
+and process RSS. Request latency includes waiting for external serialization.
+Each reader owns its own stream/cursor and buffer; it does not call one volume
+concurrently. The join barrier precedes child and owner teardown.
+
+The POSIX callback includes host syscall and page-cache costs. The memory callback
+preloads the same immutable image before measurement to profile core/copying cost.
+Both count logical core device calls. Setup runs before timing; explicit warmup
+continues existing stream/cursor state. Setting record-cache entries to zero
+disables that cache, not the host cache or compression-unit cache. Hashing source
+media warms the host page cache, so these are never claimed as cold-device runs.
+The output names the clock and its resolution; Darwin uses monotonic raw timing
+to avoid rounding sub-microsecond operations to zero. Percentiles remain per-run;
+the runner summarizes their medians/ranges without calling them pooled percentiles.
+
+```sh
+python3 scripts/build.py .build-release --release
+python3 scripts/benchmark.py artifacts/interoperability-next/ntfs-s512-c4096.img /large.bin --expected-data artifacts/interoperability-next/large.bin --dataset-kind ntfs3g --build .build-release --output artifacts/measure-next --requests 4096 65536 --readers 1 4 --warmup-operations 0 2000 --operations 2000 --repetitions 5
+```
+
+The runner refuses an existing output directory, non-release/sanitized build,
+changed input bytes or a content mismatch against the independently supplied
+original stream payload. It preserves failed qualification reports. Five-run
+matrices cover 64 configurations on a 64-MiB NTFS-3G image and 16 configurations
+on the independently authored 8-MiB attribute-list fixture. Baseline evidence is
+in `artifacts/plan-measure-oracle-2/` and `artifacts/plan-measure-metadata/`;
+initial cache reports are in `artifacts/plan-cache-measure-oracle/` and
+`artifacts/plan-cache-measure-metadata/`. After reparse-presence review, another
+400 measurements passed under `artifacts/plan-guard-measure-oracle/` and
+`artifacts/plan-guard-measure-metadata/`, with full byte oracles and unchanged
+images. The images contain 2,097,408-byte and 8,192-byte tested streams
+respectively; image size is not the independent content-oracle size. Earlier
+failed preflights remain retained.
+
+## Validated live-node metadata reuse
+
+Standard information and the reparse-presence result are cached only after the
+whole validation succeeds, using 112 additional bytes in each live node and no
+separate allocation. Stream mappings/size/content still use their own validation.
+The immutable-media contract makes the snapshot valid until node close. Repeated
+checks do no I/O or allocation; allocation/read failures before publication remain
+retryable. The core regression and FSKit permanent-revocation tests pass.
+
+For 10,000 repeated opens of the attribute-list fixture, the current POSIX
+five-run median is 1.40 million operations/s with the record cache disabled and
+2.67 million with 64 entries, versus original medians of 1.22 and 2.13 million.
+Allocations fell from about 90,000 to 60,000 per run. Initial cache publication
+adds three allocations to the latter total. The earlier cache-only checkpoint
+was faster; its timings cannot be attributed to the final reviewed guard.
+Lookup/stat now measures 370,000 versus 348,000 operations/s with the cache
+disabled; 485,000 versus 483,000 with 64 entries has overlapping run ranges and
+does not establish a useful timing gain. Its allocations remain unchanged.
+
+Each held node still adds 112 bytes. Closing the temporary attribute-list stream
+before opening the requested data stream reduces overlapping lifetimes: measured
+open peak is now 56 bytes below the original baseline, while parent/child lookup
+peak remains 224 bytes higher. These peak measurements describe this fixture,
+not all filesystem layouts.
+
+Data-read changes were mixed across the independent five-run matrices, so no
+consistent read-throughput improvement is established. Four-reader latency still
+exposes contention in the serialized volume. These measurements justify this
+specific metadata reuse; they do not establish FSKit performance, a broad driver
+advantage or completion of the remaining optimization program.

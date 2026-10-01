@@ -80,19 +80,131 @@ find_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name
 	return found ? NTFS_OK : NTFS_CORRUPT;
 }
 
+enum ntfs_result
+ntfs_attribute_list_read(struct ntfs_node *node, uint8_t **out, size_t *out_size)
+{
+	struct ntfs_volume *v = node->volume;
+	struct ntfs_stream *list = NULL;
+	uint8_t *bytes = NULL;
+	size_t size = 0;
+	enum ntfs_result result;
+
+	*out = NULL;
+	*out_size = 0;
+	result = ntfs_attribute_open(node, NTFS_ATTR_LIST, NULL, 0, &list);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (list->flags != 0 || list->initialized != list->size) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	if (list->size == 0 || list->size > v->limits.max_attribute_list) {
+		result = NTFS_RANGE;
+		goto finish;
+	}
+	size = (size_t)list->size;
+	bytes = ntfs_alloc(v, size);
+	if (bytes == NULL) {
+		result = NTFS_NO_MEMORY;
+		goto finish;
+	}
+	result = ntfs_stream_exact(list, 0, bytes, size);
+finish:
+	ntfs_stream_close(list);
+	if (result != NTFS_OK) {
+		ntfs_free(v, bytes, size);
+		return result;
+	}
+	*out = bytes;
+	*out_size = size;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_list_entry_at(
+    const uint8_t *bytes, size_t size, size_t *offset, const struct ntfs_disk_attr_list **out)
+{
+	const struct ntfs_disk_attr_list *entry;
+	size_t length;
+
+	*out = NULL;
+	if (*offset == size) {
+		return NTFS_END;
+	}
+	if (!ntfs_bounds(*offset, sizeof(*entry), size)) {
+		return NTFS_CORRUPT;
+	}
+	entry = (const void *)(bytes + *offset);
+	length = ntfs_u16(entry->length);
+	if (length < sizeof(*entry) || length % NTFS_WIRE_ALIGNMENT != 0 ||
+	    !ntfs_bounds(*offset, length, size) ||
+	    (entry->name_length != 0 &&
+		(entry->name_offset < sizeof(*entry) ||
+		    entry->name_offset % NTFS_UTF16_UNIT_BYTES != 0 ||
+		    !ntfs_bounds(entry->name_offset,
+			(size_t)entry->name_length * NTFS_UTF16_UNIT_BYTES, length))) ||
+	    ntfs_u32(entry->type) == NTFS_ATTR_LIST) {
+		return NTFS_CORRUPT;
+	}
+	*offset += length;
+	*out = entry;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_attribute_type_present(struct ntfs_node *node, uint32_t type, bool *out)
+{
+	struct ntfs_volume *v = node->volume;
+	const struct ntfs_disk_record *header = (const void *)node->record;
+	const struct ntfs_disk_attr_list *entry;
+	struct ntfs_attr_view attr;
+	uint8_t *bytes = NULL;
+	uint32_t position = ntfs_u16(header->attrs_offset);
+	size_t size = 0, offset = 0;
+	enum ntfs_result result;
+
+	*out = false;
+	while ((result = ntfs_attr_at(node->record, ntfs_u32(header->used), &position, &attr)) ==
+	    NTFS_OK) {
+		if (attr.type == type) {
+			*out = true;
+			return NTFS_OK;
+		}
+	}
+	if (result != NTFS_END) {
+		return result;
+	}
+	result = ntfs_attribute_list_read(node, &bytes, &size);
+	if (result == NTFS_NOT_FOUND) {
+		return NTFS_OK;
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	while ((result = ntfs_list_entry_at(bytes, size, &offset, &entry)) == NTFS_OK) {
+		if (ntfs_u32(entry->type) == type) {
+			*out = true;
+			break;
+		}
+	}
+	ntfs_free(v, bytes, size);
+	return result == NTFS_END ? NTFS_OK : result;
+}
+
 static enum ntfs_result
 attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size_t name_length,
     bool bootstrap, struct ntfs_stream **out)
 {
 	struct ntfs_volume *v = node->volume;
 	struct ntfs_attr_view a, list_attr;
-	struct ntfs_stream *list = NULL, *stream = NULL;
+	struct ntfs_stream *stream = NULL;
 	const struct ntfs_disk_attr_list *entry;
 	const struct ntfs_disk_record *record_header;
 	const struct ntfs_disk_nonresident *nonresident;
 	uint8_t *bytes = NULL, *record = NULL;
 	uint64_t reference, lowest;
-	size_t list_size = 0, offset = 0, length, i;
+	size_t list_size = 0, offset = 0, i;
 	bool match;
 	enum ntfs_result result;
 
@@ -116,51 +228,11 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_stream_from_attr(v, &list_attr, &list);
+	result = ntfs_attribute_list_read(node, &bytes, &list_size);
 	if (result != NTFS_OK) {
 		goto finish;
 	}
-	if (list->flags != 0 || list->initialized != list->size) {
-		result = NTFS_CORRUPT;
-		goto finish;
-	}
-	if (list->size == 0 || list->size > v->limits.max_attribute_list) {
-		result = NTFS_RANGE;
-		goto finish;
-	}
-	result = validate_stream(list);
-	if (result != NTFS_OK) {
-		goto finish;
-	}
-	list_size = (size_t)list->size;
-	bytes = ntfs_alloc(v, list_size);
-	if (bytes == NULL) {
-		result = NTFS_NO_MEMORY;
-		goto finish;
-	}
-	result = ntfs_stream_exact(list, 0, bytes, list_size);
-	if (result != NTFS_OK) {
-		goto finish;
-	}
-	while (offset < list_size) {
-		if (!ntfs_bounds(offset, sizeof(*entry), list_size)) {
-			result = NTFS_CORRUPT;
-			goto finish;
-		}
-		entry = (const void *)(bytes + offset);
-		length = ntfs_u16(entry->length);
-		if (length < sizeof(*entry) || length % NTFS_WIRE_ALIGNMENT != 0 ||
-		    !ntfs_bounds(offset, length, list_size) ||
-		    (entry->name_length != 0 &&
-			(entry->name_offset < sizeof(*entry) ||
-			    entry->name_offset % NTFS_UTF16_UNIT_BYTES != 0 ||
-			    !ntfs_bounds(entry->name_offset,
-				(size_t)entry->name_length * NTFS_UTF16_UNIT_BYTES, length))) ||
-		    ntfs_u32(entry->type) == NTFS_ATTR_LIST) {
-			result = NTFS_CORRUPT;
-			goto finish;
-		}
-		offset += length;
+	while ((result = ntfs_list_entry_at(bytes, list_size, &offset, &entry)) == NTFS_OK) {
 		if (ntfs_u32(entry->type) != type || entry->name_length != name_length) {
 			continue;
 		}
@@ -251,13 +323,14 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 			goto finish;
 		}
 	}
-	result = stream == NULL ? NTFS_NOT_FOUND : validate_stream(stream);
+	if (result == NTFS_END) {
+		result = stream == NULL ? NTFS_NOT_FOUND : validate_stream(stream);
+	}
 finish:
 	if (record != node->record) {
 		ntfs_free(v, record, v->info.record_size);
 	}
 	ntfs_free(v, bytes, list_size);
-	ntfs_stream_close(list);
 	if (result != NTFS_OK) {
 		ntfs_stream_close(stream);
 		return result;
@@ -277,7 +350,7 @@ enum ntfs_result
 ntfs_mft_open(struct ntfs_volume *v, uint8_t *record, struct ntfs_stream **out)
 {
 	const struct ntfs_disk_record *header = (const void *)record;
-	struct ntfs_node node;
+	struct ntfs_node node = {0};
 	enum ntfs_result result;
 
 	*out = NULL;

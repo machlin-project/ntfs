@@ -130,7 +130,7 @@ def align(n):
 
 
 def resident(kind, value, instance=0, name=''):
-    name_bytes = name.encode('utf-16le')
+    name_bytes = name.encode('utf-16le', errors='surrogatepass')
     value_offset = align(ATTR_HEADER.size + RESIDENT_HEADER.size + len(name_bytes))
     length = align(value_offset + len(value))
     out = bytearray(length)
@@ -160,7 +160,7 @@ def nonresident(kind, runs, size, instance=0, name='', lowest=0, initialized=Non
         if lcn is not None:
             last_lcn = lcn
     pairs += b'\0'
-    name_bytes = name.encode('utf-16le')
+    name_bytes = name.encode('utf-16le', errors='surrogatepass')
     extended_header = bool(flags & (SPARSE | COMPRESSED))
     header_size = ATTR_HEADER.size + NONRESIDENT_HEADER.size + (U64_BYTES if extended_header else 0)
     mapping_offset = align(header_size + len(name_bytes))
@@ -187,7 +187,7 @@ def protect(out, usa_offset):
         struct.pack_into('<H', out, tail, FIXUP_SEQUENCE)
 
 
-def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=False):
+def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=False, links=1):
     sequence = sequence if sequence is not None else (SYSTEM_SEQUENCE if number < SYSTEM_RECORD_LIMIT else FILE_SEQUENCE)
     header = FILE_HEADER_LEGACY if legacy else FILE_HEADER
     usa_offset = header.size
@@ -197,7 +197,7 @@ def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=Fa
     used = attrs_offset + len(content)
     assert used <= RECORD, (number, used)
     out = bytearray(RECORD)
-    fields = (b'FILE', usa_offset, usa_count, 0, sequence, 1, attrs_offset,
+    fields = (b'FILE', usa_offset, usa_count, 0, sequence, links, attrs_offset,
               FILE_IN_USE | (FILE_IS_DIRECTORY if directory else 0), used, RECORD, base, len(attrs))
     header.pack_into(out, 0, *fields, *(() if legacy else (0, number)))
     out[attrs_offset:used] = content
@@ -210,7 +210,7 @@ def standard(attributes=0):
 
 
 def key(name, size=0, namespace=NAMESPACE_WIN32):
-    raw = name.encode('utf-16le')
+    raw = name.encode('utf-16le', errors='surrogatepass')
     return FILENAME_HEADER.pack(ROOT_REF, EPOCH, EPOCH, EPOCH, EPOCH, align(size), size, 0, 0, len(raw) // U16_BYTES, namespace) + raw
 
 
@@ -254,9 +254,13 @@ def directory_record(entries, allocation_clusters=0, data_streams=(), legacy=Fal
     return file_record(ROOT_RECORD, attrs, directory=True, legacy=legacy)
 
 
-def list_entry(reference, instance, lowest, kind=DATA):
-    out = bytearray(align(ATTR_LIST_ENTRY.size))
-    ATTR_LIST_ENTRY.pack_into(out, 0, kind, len(out), 0, 0, lowest, reference, instance)
+def list_entry(reference, instance, lowest, kind=DATA, name=''):
+    encoded = name.encode('utf-16le', errors='surrogatepass')
+    name_offset = ATTR_LIST_ENTRY.size if encoded else 0
+    out = bytearray(align(ATTR_LIST_ENTRY.size + len(encoded)))
+    ATTR_LIST_ENTRY.pack_into(out, 0, kind, len(out), len(encoded) // U16_BYTES,
+                             name_offset, lowest, reference, instance)
+    out[ATTR_LIST_ENTRY.size:ATTR_LIST_ENTRY.size + len(encoded)] = encoded
     return bytes(out)
 
 
@@ -357,6 +361,25 @@ def reparse_fixtures(output, image):
     save('unflagged-extension', relative, file_attributes=0,
          attributes=[resident(ATTR_LIST, entries, REPARSE_LIST_INSTANCE)], extension=extension)
     save('unflagged', relative, file_attributes=0)
+    # Presence cannot be inferred only from the list or only from unnamed values.
+    ordinary_entries = list_entry(file_reference(number), 0, 0, SI)
+    ordinary_entries += list_entry(file_reference(number), 1, 0, DATA)
+    save('unlisted-base', relative, file_attributes=0,
+         attributes=[resident(ATTR_LIST, ordinary_entries, REPARSE_LIST_INSTANCE),
+                     resident(REPARSE_POINT, relative, REPARSE_INSTANCE)])
+    invalid_name = 'hidden-filter'
+    save('named-unflagged', relative, file_attributes=0,
+         attributes=[resident(REPARSE_POINT, relative, REPARSE_INSTANCE, invalid_name)])
+    named_entries = ordinary_entries + list_entry(
+        file_reference(ATTRIBUTE_EXTENSION_RECORD), REPARSE_INSTANCE, 0,
+        REPARSE_POINT, invalid_name)
+    named_extension = file_record(
+        ATTRIBUTE_EXTENSION_RECORD,
+        [resident(REPARSE_POINT, relative, REPARSE_INSTANCE, invalid_name)],
+        base=file_reference(number))
+    save('named-listed-unflagged', relative, file_attributes=0,
+         attributes=[resident(ATTR_LIST, named_entries, REPARSE_LIST_INSTANCE)],
+         extension=named_extension)
     save('missing', None, attributes=[])
     save('duplicate', relative,
          attributes=[resident(REPARSE_POINT, relative, REPARSE_INSTANCE),
@@ -691,6 +714,13 @@ def main():
     for nonresident_list in (False, True):
         name = 'mft-nonresident-list.img' if nonresident_list else 'mft-resident-list.img'
         (output / name).write_bytes(fragmented_mft(image, nonresident_list))
+    metadata = bytearray(image)
+    metadata_list = list_entry(ROOT_REF, 0, 0, kind=SI)
+    metadata_list += list_entry(ROOT_REF, DIR_ROOT_INSTANCE, 0, kind=INDEX_ROOT, name='$I30')
+    put_data(metadata, MFT_LIST_LCN, metadata_list)
+    put_record(metadata, ROOT_RECORD, directory_record(entry(), data_streams=[
+        nonresident(ATTR_LIST, [(1, MFT_LIST_LCN)], len(metadata_list), DIR_BITMAP_INSTANCE + 1)]))
+    (output / 'metadata-presence-list.img').write_bytes(metadata)
     for damage in ('stale', 'wrong-base', 'unreachable', 'gap', 'duplicate', 'missing-prefix', 'incomplete'):
         name = f'mft-{damage}.img'
         (output / name).write_bytes(fragmented_mft(image, damage=damage))

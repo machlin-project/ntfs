@@ -86,13 +86,17 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 	const struct ntfs_disk_standard *si;
 	const struct ntfs_disk_standard_extension *extended;
 	struct ntfs_attr_view a;
-	struct ntfs_stream *reparse = NULL;
 	const uint8_t *value;
 	size_t length;
+	bool reparse_present;
 	enum ntfs_result result;
 
 	if (node == NULL || st == NULL) {
 		return NTFS_INVALID;
+	}
+	if (node->metadata_verified) {
+		*st = node->metadata;
+		return NTFS_OK;
 	}
 	ntfs_zero(st, sizeof(*st));
 	r = (const void *)node->record;
@@ -123,12 +127,17 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 	if (!st->reparse) {
 		/* A cleared standard-information flag cannot turn filter-owned data
 		 * into an ordinary file. This also searches attribute-list extensions. */
-		result = ntfs_attribute_open(node, NTFS_ATTRIBUTE_REPARSE_POINT, NULL, 0, &reparse);
-		ntfs_stream_close(reparse);
-		if (result != NTFS_NOT_FOUND) {
-			return result == NTFS_OK ? NTFS_CORRUPT : result;
+		result = ntfs_attribute_type_present(
+		    node, NTFS_ATTRIBUTE_REPARSE_POINT, &reparse_present);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (reparse_present) {
+			return NTFS_CORRUPT;
 		}
 	}
+	node->metadata = *st;
+	node->metadata_verified = true;
 	return NTFS_OK;
 }
 

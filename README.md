@@ -30,3 +30,10 @@ run with `make test` and `python3 scripts/test_fskit.py`; build the app with
 
 Read [architecture](docs/ARCHITECTURE.md), [development](docs/DEVELOPMENT.md),
 [acceptance](docs/ACCEPTANCE.md) and [handoff](docs/HANDOFF-SOL.md).
+
+The no-VM continuation adds reference-based lossless inspection, Windows corpus
+acquisition/verification tools, standalone parser fuzz targets, an MS-DTYP security
+descriptor decoder and repeated portable workload measurements. Verified metadata
+reuse has a measured benefit for attribute-list opens. `$Secure` resolution,
+authorization, WOF, native name/stream/link projection and recovery remain open;
+see [the complete continuation scope](docs/CORE-QUALIFICATION.md).

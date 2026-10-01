@@ -21,6 +21,15 @@ Primary references:
 - [Mount-point buffers](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/ca069dad-ed16-42aa-b057-b6b207f447cc)
 - [Reparse size restrictions](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points)
 - [Third-party GUID buffers](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_reparse_guid_data_buffer)
+- [Self-relative security descriptors](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7d4dac05-9cef-4563-a058-f108abecce1d)
+- [SID packet representation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f992ad60-0fe4-4b87-9fed-beb478836861)
+- [ACL packet representation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/20233ed8-a6c6-4097-aafa-dd545ed24428)
+- [ACE packet framing and trailing bytes](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/628ebb1d-c509-4ea0-a10f-77ef97ca4586)
+- [Object ACE fields](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-access_allowed_object_ace)
+- [Volume read-only flag](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationa)
+- [NTFS native volume geometry](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-ntfs_volume_data_buffer)
+- [Native file information and hard-link identity](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information)
+- [Native stream enumeration](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-win32_find_stream_data)
 - [Apple FSKit](https://developer.apple.com/documentation/fskit)
 - [NTFS-3G release and source](https://github.com/tuxera/ntfs-3g/tree/2022.10.3)
 
@@ -45,6 +54,16 @@ third-party GUID envelope. NTFS-3G's `REPARSE_POINT` layout note confirms that t
 attribute may be resident or nonresident. No NTFS-3G reparse implementation was
 used or copied. The ownership, validation and copying code is original; synthetic
 buffers and storage layouts do not establish Windows-authored reparse acceptance.
+
+The security decoder uses MS-DTYP's self-relative offsets, little-endian fields,
+six-byte SID authority and bounded subauthority vector. It preserves ACE order,
+optional object GUID spans and opaque callback/unknown payloads. Extra non-callback
+ACE bytes are ignored as required by MS-DTYP, rather than rejected as an invented
+format restriction. The implementation and independent vector authors are
+original. It does not use a GPL security parser or establish Windows/native access
+decisions. The collector uses documented Win32 volume, identity and stream APIs;
+fixed-width ctypes layouts and serialization pass local tests, while actual
+Windows calls remain a separate required observation.
 
 No Linux ntfs3, ntfs-3g or proprietary driver source is copied into or linked with
 this implementation. Separately built ntfs-3g utilities may generate and inspect

@@ -1,9 +1,10 @@
 # Architecture
 
 The portable C11 core owns NTFS 3.0/3.1 boot geometry, FILE/INDX fixups, MFT
-references, attributes, mapping pairs, streams, directory indexes and Unicode
-collation. Byte-array wire structures have compile-time size checks. No native
-errno, allocator, filesystem runtime or page-cache object crosses this boundary.
+references, attributes, mapping pairs, streams, directory indexes, reparse metadata
+and Unicode collation. Byte-array wire structures have compile-time size checks.
+No native errno, allocator, filesystem runtime or page-cache object crosses this
+boundary.
 The FILE record uses the common header; the additional NTFS 3.1 fields are an
 optional wire extension, so older update-sequence arrays do not overlap a falsely
 required header tail. Both header layouts have complete synthetic image tests.
@@ -15,16 +16,43 @@ Format values live in `core/disk.h`; implementation budgets live in
 expected values do not simply mirror parser expressions.
 
 All calls on one volume and its children require external serialization. Objects
-hold a counted volume lifetime; unmount returns BUSY while nodes, public streams
-or iterators remain open. Streams own decoded metadata independently of source
-nodes. The FSKit adapter supplies serialized admission and closes every child
-before unloading its retained resource. Removal and failed reads return I/O errors.
+hold a counted volume lifetime; unmount returns BUSY while nodes, public streams,
+reparse snapshots or iterators remain open. Streams own decoded metadata
+independently of source nodes. The FSKit adapter supplies serialized admission
+and closes every child before unloading its retained resource. Removal and failed
+reads return I/O errors.
 The resource owner permanently latches FSKit revocation. Admission checks precede
 cached stream and metadata operations, and a completed read is checked again;
 cleanup remains permitted on a failed owner without further device reads.
 Opening a named stream reads file metadata independently of the default stream:
 an encrypted default stream does not prevent opening a separate unencrypted ADS.
 Stream names match exact UTF-16 units; filename lookup has a different contract.
+
+Reparse metadata uses the ordinary attribute reader, including resident values,
+fragmented nonresident mappings and sequence-checked attribute-list extensions.
+`ntfs_reparse_open` owns a snapshot bounded by Windows' 16-KiB complete-buffer
+limit; resident storage transfers from the temporary stream without another data
+copy. The snapshot survives node close and never reads the device again.
+`ntfs_reparse_decode` also validates standalone buffers without allocating.
+The Microsoft envelope requires an exact declared size. Symlink and mount-point
+name offsets are relative to their path buffer, aligned to UTF-16 units and checked
+against its span; embedded NULs and empty substitute names are refused. Strings
+may appear in either order, share storage and omit terminators. Reserved fields
+are ignored as specified; unknown symlink flags return UNSUPPORTED.
+
+The snapshot reports original tags, link flags and both stored names. Name copying
+returns host-endian UTF-16 losslessly, including unpaired surrogates, without adding
+a terminator. It checks capacity before any copying. This is structural decoding,
+not Windows path resolution or a complete pathname-policy validator. WOF, all cloud
+tag variants and unknown Microsoft tags are classified with opaque payloads;
+their content is not decoded. GUID framing remains UNSUPPORTED. Microsoft-tagged
+buffers whose size fits only the GUID envelope also report UNSUPPORTED; this is
+not validation of the GUID or its provider payload.
+Ordinary data reads and directory traversal reject reparse nodes. An attribute
+existing without its standard-information flag is corrupt, including when it is
+listed in an extension record. Checking for such an attribute can read an attribute
+list even for an ordinary file. FSKit continues to reject reparse items until its
+own target-translation, namespace and authorization contracts are defined.
 
 An MFT record cache contains only validated immutable records and has an explicit
 entry budget. Metadata copies prevent eviction from invalidating a node. Run

@@ -18,10 +18,13 @@ implementation is linked into the product.
 
 Implemented reading includes MFT/attribute lists, resident and fragmented data,
 sparse and uninitialized ranges, alternate data streams, LZNT1, indexed directory
-enumeration and $UpCase lookup. The FSKit app and extension build with personal
-development signing and pass strict signature verification; direct
-adapter tests and independent NTFS-3G image comparisons pass. Native installation
-and Windows-authored corpus acceptance are still required. Core and FSKit tests
+enumeration, $UpCase lookup and bounded reparse metadata decoding. Symlink and
+junction targets are available as lossless UTF-16; following links and decoding
+WOF/cloud data remain outside the implemented scope. The FSKit app and extension
+build unsigned from current source; a prior personally signed Release passed strict
+signature verification. Direct adapter tests and independent NTFS-3G image
+comparisons pass. Native installation and Windows-authored corpus acceptance
+are still required. Core and FSKit tests
 run with `make test` and `python3 scripts/test_fskit.py`; build the app with
 `make fskit`. See development prerequisites and exact evidence below.
 

@@ -29,7 +29,7 @@ corpus = output / f'corpus-{MAX_INPUT_BYTES}'
 corpus.mkdir(exist_ok=True)
 fixtures = output / f'seeds-{MAX_INPUT_BYTES}'
 subprocess.run([sys.executable, str(root / 'tests/fixtures.py'), str(fixtures), '--image-bytes', str(MAX_INPUT_BYTES)], cwd=root, env=env, check=True)
-for path in fixtures.glob('*.img'):
+for path in sorted([*fixtures.glob('*.img'), *fixtures.glob('*.reparse')]):
     shutil.copyfile(path, corpus / path.name)
 if sys.platform == 'darwin':
     compiler = args.compiler or subprocess.check_output(['xcrun', '--find', 'clang'], env=env, text=True).strip()

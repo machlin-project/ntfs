@@ -275,6 +275,7 @@ ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
 	struct ntfs_stream *root = NULL;
 	const struct ntfs_disk_index_root *header;
 	const struct ntfs_disk_record *record;
+	struct ntfs_stat stat;
 	enum ntfs_result result;
 
 	if (out == NULL) {
@@ -290,6 +291,15 @@ ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
 	record = (const void *)node->record;
 	if ((ntfs_u16(record->flags) & NTFS_RECORD_DIRECTORY) == 0) {
 		return NTFS_NOT_DIRECTORY;
+	}
+	result = ntfs_node_metadata(node, &stat);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	/* A filter-owned directory needs its tag's namespace contract. Even a tag
+	 * allowing local children is not automatically an ordinary directory. */
+	if (stat.reparse) {
+		return NTFS_UNSUPPORTED;
 	}
 	d = ntfs_alloc(node->volume, sizeof(*d));
 	if (d == NULL) {

@@ -63,6 +63,13 @@ enum {
 	NTFS_RUN_NEGATIVE_FLAG = 0x80
 };
 
+#define NTFS_REPARSE_MICROSOFT UINT32_C(0x80000000)
+#define NTFS_REPARSE_NAME_SURROGATE UINT32_C(0x20000000)
+#define NTFS_REPARSE_DIRECTORY UINT32_C(0x10000000)
+#define NTFS_REPARSE_RESERVED_BITS UINT32_C(0x0fff0000)
+#define NTFS_REPARSE_CLOUD_VARIANT_MASK UINT32_C(0x0000f000)
+#define NTFS_REPARSE_RESERVED_TAG_MAX UINT32_C(2)
+
 #define NTFS_ATTR_END UINT32_C(0xffffffff)
 #define NTFS_HOLE UINT64_MAX
 #define NTFS_TIME_EPOCH UINT64_C(116444736000000000)
@@ -155,10 +162,36 @@ struct ntfs_disk_index_entry {
 	uint8_t reference[8], length[2], key_length[2], flags[2], reserved[2];
 };
 
+struct ntfs_disk_reparse {
+	uint8_t tag[4], length[2], reserved[2];
+};
+
+struct ntfs_disk_guid {
+	uint8_t data1[4], data2[2], data3[2], data4[8];
+};
+
+struct ntfs_disk_reparse_guid {
+	struct ntfs_disk_reparse header;
+	struct ntfs_disk_guid guid;
+};
+
+struct ntfs_disk_reparse_names {
+	uint8_t substitute_offset[2], substitute_length[2], print_offset[2], print_length[2];
+};
+
+struct ntfs_disk_reparse_symlink {
+	struct ntfs_disk_reparse_names names;
+	uint8_t flags[4];
+};
+
 _Static_assert(sizeof(struct ntfs_disk_boot) == 512, "boot layout");
 _Static_assert(sizeof(struct ntfs_disk_record) == 42, "common record layout");
 _Static_assert(sizeof(struct ntfs_disk_record_extension) == 6, "NTFS 3.1 record extension");
 _Static_assert(sizeof(struct ntfs_disk_nonresident) == 48, "attribute layout");
 _Static_assert(sizeof(struct ntfs_disk_filename) == 66, "filename layout");
 _Static_assert(sizeof(struct ntfs_disk_attr_list) == 26, "attribute list layout");
+_Static_assert(sizeof(struct ntfs_disk_reparse) == 8, "reparse header layout");
+_Static_assert(sizeof(struct ntfs_disk_reparse_guid) == 24, "GUID reparse header layout");
+_Static_assert(sizeof(struct ntfs_disk_reparse_names) == 8, "mount point payload header");
+_Static_assert(sizeof(struct ntfs_disk_reparse_symlink) == 12, "symlink payload header");
 #endif

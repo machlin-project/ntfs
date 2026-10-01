@@ -30,6 +30,10 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
   ambiguous folded names across both leaf and separator/child boundaries.
 - $UpCase-based lookup, stored-name return, sparse/VDL zeroing, ADS and LZNT1
   handling, including fragmented and partial final compression units.
+- Bounded reparse snapshots with independent node lifetime, lossless UTF-16 link
+  names and opaque tag classification. Preserve rejection of ordinary data reads
+  and directory traversal, including attributes whose standard-information flag
+  was cleared. Classifying WOF/cloud tags does not decode their data.
 - Independent stream flags: an unencrypted ADS remains readable beside an
   encrypted default stream. Exact UTF-16 stream-name matching is documented.
 - Named format constants, wire structures and separate resource budgets. Keep
@@ -73,7 +77,7 @@ owns a VM at a time. Give workers absolute directories and bounded tasks.
 
 ## Core handoff checkpoint
 
-The core is ready for the next integration and compatibility work. Ten sanitized
+The core is ready for the next integration and compatibility work. Eleven sanitized
 suites cover the standard and NTFS 3.0 images, two fragmented MFT bootstrap
 layouts, a nested index, byte-level image contracts, stream boundaries, decoder
 vectors, bounded mutations and build-environment isolation. Allocation/read fault sweeps run on
@@ -82,16 +86,30 @@ checks mixed compression units, cache retry after failed reads, zero-I/O sparse
 reads across 4 GiB, initialized-data boundaries, EOF and source-node lifetime.
 Decoder vectors exercise every length/displacement split transition.
 
+The core continuation adds `ntfs_reparse_decode/open/get_info/name/close` and the
+inspector's `reparse` command. It reads Microsoft symlink and mount-point metadata
+through resident, fragmented and attribute-list storage, with original tags and
+lossless host-endian UTF-16 targets. Every output range is checked before copying.
+WOF/cloud and unknown Microsoft payloads remain opaque; GUID framing is rejected
+as UNSUPPORTED, including Microsoft-tagged candidates. The metadata snapshot has
+no path-following behavior. Ordinary reads/traversal remain fail-closed.
+Twenty-three image contracts plus decoder vectors and 45 allocation/six I/O
+failure positions passed. The direct FSKit component and four-geometry NTFS-3G
+oracle also passed after adding the core guards. See ACCEPTANCE.md for retained
+fuzz evidence and limits. No Windows-authored reparse corpus has been tested.
+
 See ACCEPTANCE.md for exact results and generated log locations. Do not repeat
 the completed MFT bootstrap work as a new feature, or interpret this checkpoint
 as Windows/native mount acceptance. No writable core contract is implemented.
 
-## First continuation: native read-only acceptance
+## Deferred continuation: native read-only acceptance
 
-Unsigned builds use
+The current source passed an unsigned Debug app/extension build, including the
+new core source and Swift bridge. Unsigned builds use
 `artifacts/fskit/DerivedData/Build/Products/Debug/Machlin NTFS.app`.
 A personally signed Release build passed strict deep signature verification;
-its isolated output is under `artifacts/native-signing/build2/`.
+its isolated output is under `artifacts/native-signing/build2/`. That build
+precedes the reparse-core continuation; rebuild current source before installation.
 Build with an explicit personal team using `scripts/build_fskit.py --team TEAM`
 only when preparing the dedicated test VM. The script supports an isolated
 `--derived-data`, matching app/extension `--build-number` and `--clean`. Explicit
@@ -142,9 +160,12 @@ this from a successful mount or from source compilation.
 5. Define lossless presentation for unpaired UTF-16 names and case-sensitive NTFS
    directories. Current product advertises case-insensitive lookup and has no
    complete WSL/POSIX namespace contract.
-6. Handle reparse tags explicitly: symlinks, junctions, WOF and cloud placeholders
-   have different semantics. Current adapter rejects reparse items. Do not expose
-   encoded data as ordinary file content or turn every tag into a symlink.
+6. Qualify the reparse metadata reader with Windows-authored links. Define target
+   translation and namespace ownership before enabling native symlink/junction
+   behavior. WOF, cloud placeholders, third-party GUID owners and WSL tags require
+   separate content/resolution contracts. The current adapter rejects reparse
+   items. Do not expose encoded data as ordinary file content or turn every tag
+   into a symlink.
 7. Implement $Secure/security-descriptor resolution and an owning authorization
    policy. Current mode/UID/GID are a single-user read-only presentation, not
    Windows ACL enforcement. EFS and native ACL/xattr translation remain absent.

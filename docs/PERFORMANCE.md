@@ -36,6 +36,12 @@ The core handoff release-build run is recorded in
 works after the metadata/lookup changes; native performance qualification and
 comparative repetitions remain open.
 
+That baseline predates the reparse presence guard. Proving that a cleared reparse
+flag denotes an ordinary object can decode its attribute list. Metadata costs
+for listed attributes need a separate profile before introducing a presence cache
+or claiming unchanged throughput. Snapshot name copying itself uses validated
+resident memory and performs no device I/O.
+
 Before optimizing the installed product, establish these profiles with hashes,
 device-call counts, peak memory, CPU and latency percentiles:
 

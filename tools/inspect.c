@@ -46,6 +46,59 @@ resolve(struct ntfs_volume *v, const char *path, struct ntfs_node **out)
 	return NTFS_OK;
 }
 
+static enum ntfs_result
+print_reparse(struct ntfs_reparse *reparse)
+{
+	const char *kind;
+	struct ntfs_reparse_info info;
+	uint16_t *name;
+	size_t capacity, length, i;
+	enum ntfs_reparse_name_type which;
+	enum ntfs_result result = NTFS_OK;
+
+	ntfs_reparse_get_info(reparse, &info);
+	switch (info.kind) {
+	case NTFS_REPARSE_SYMLINK:
+		kind = "symlink";
+		break;
+	case NTFS_REPARSE_MOUNT_POINT:
+		kind = "mount-point";
+		break;
+	case NTFS_REPARSE_WOF:
+		kind = "wof";
+		break;
+	case NTFS_REPARSE_CLOUD:
+		kind = "cloud";
+		break;
+	default:
+		kind = "unknown";
+		break;
+	}
+	printf("tag=0x%08" PRIx32 "\nkind=%s\nflags=0x%08" PRIx32 "\n", info.tag, kind, info.flags);
+	if (info.kind != NTFS_REPARSE_SYMLINK && info.kind != NTFS_REPARSE_MOUNT_POINT) {
+		return NTFS_OK;
+	}
+	capacity =
+	    info.substitute_length > info.print_length ? info.substitute_length : info.print_length;
+	name = malloc(capacity * sizeof(*name));
+	if (name == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	for (which = NTFS_REPARSE_SUBSTITUTE_NAME; which <= NTFS_REPARSE_PRINT_NAME; which++) {
+		result = ntfs_reparse_name(reparse, which, name, capacity, &length);
+		if (result != NTFS_OK) {
+			break;
+		}
+		printf("%s_utf16=", which == NTFS_REPARSE_SUBSTITUTE_NAME ? "substitute" : "print");
+		for (i = 0; i < length; i++) {
+			printf("%s%04x", i == 0 ? "" : " ", (unsigned)name[i]);
+		}
+		putchar('\n');
+	}
+	free(name);
+	return result;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -54,6 +107,7 @@ main(int argc, char **argv)
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_directory *directory = NULL;
+	struct ntfs_reparse *reparse = NULL;
 	struct ntfs_info info;
 	struct ntfs_stat st;
 	struct ntfs_dirent entry;
@@ -66,7 +120,8 @@ main(int argc, char **argv)
 	int error;
 
 	if (argc < 3) {
-		fprintf(stderr, "usage: ntfs-inspect IMAGE info|ls|stat|cat [PATH] [STREAM]\n");
+		fprintf(
+		    stderr, "usage: ntfs-inspect IMAGE info|ls|stat|cat|reparse [PATH] [STREAM]\n");
 		return 2;
 	}
 	error = ntfs_image_open(argv[1], &image);
@@ -101,6 +156,11 @@ main(int argc, char **argv)
 			printf("reference=%" PRIu64 "\nsize=%" PRIu64 "\nallocated=%" PRIu64
 			       "\nlinks=%u\ndirectory=%d\n",
 			    st.reference, st.size, st.allocated_size, st.links, st.directory);
+		}
+	} else if (strcmp(argv[2], "reparse") == 0) {
+		result = ntfs_reparse_open(node, &reparse);
+		if (result == NTFS_OK) {
+			result = print_reparse(reparse);
 		}
 	} else if (strcmp(argv[2], "ls") == 0) {
 		result = ntfs_directory_open(node, &directory);
@@ -157,6 +217,7 @@ finish:
 	free(buffer);
 	ntfs_directory_close(directory);
 	ntfs_stream_close(stream);
+	ntfs_reparse_close(reparse);
 	ntfs_node_close(node);
 	if (ntfs_unmount(v) != NTFS_OK) {
 		result = NTFS_BUSY;

@@ -86,6 +86,7 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 	const struct ntfs_disk_standard *si;
 	const struct ntfs_disk_standard_extension *extended;
 	struct ntfs_attr_view a;
+	struct ntfs_stream *reparse = NULL;
 	const uint8_t *value;
 	size_t length;
 	enum ntfs_result result;
@@ -118,6 +119,15 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 	if (length >= sizeof(*si) + sizeof(*extended)) {
 		extended = (const void *)(value + sizeof(*si));
 		st->security_id = ntfs_u32(extended->security_id);
+	}
+	if (!st->reparse) {
+		/* A cleared standard-information flag cannot turn filter-owned data
+		 * into an ordinary file. This also searches attribute-list extensions. */
+		result = ntfs_attribute_open(node, NTFS_ATTRIBUTE_REPARSE_POINT, NULL, 0, &reparse);
+		ntfs_stream_close(reparse);
+		if (result != NTFS_NOT_FOUND) {
+			return result == NTFS_OK ? NTFS_CORRUPT : result;
+		}
 	}
 	return NTFS_OK;
 }

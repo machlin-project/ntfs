@@ -30,6 +30,13 @@ The process RSS budget stays 1 GiB, independently of the harness's 8-MiB core
 allocation budget. A corpus-growth RSS failure is still a failed fuzz run and
 must be reported and diagnosed before retrying.
 
+Reparse fixture generation supplies both full images and small standalone
+`.reparse` buffers. The fuzzer seeds both forms, exercises the standalone decoder
+and opens/copies reparse metadata through the public node API. Inspect metadata
+without following Windows targets using
+`.build/ntfs-inspect .build/fixtures/reparse-relative.img reparse /hello.txt`.
+The inspector prints UTF-16 code units so unpaired surrogates remain visible.
+
 Some Xcode distributions omit the libFuzzer runtime. In that case, pass an
 explicit full LLVM compiler, for example `--compiler /opt/homebrew/opt/llvm/bin/clang`.
 The harness reports a missing runtime before linking. Core and FSKit acceptance

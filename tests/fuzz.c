@@ -13,6 +13,7 @@ enum {
 	FUZZ_CACHE_ENTRIES = 4,
 	FUZZ_MAX_DIRECTORY_NODES = 128,
 	FUZZ_READ_BUFFER_BYTES = 1024,
+	FUZZ_REPARSE_NAME_UNITS = 128,
 	FUZZ_DIRECTORY_ENTRIES = 64,
 	FUZZ_MUTATIONS = 2000,
 	FUZZ_MUTATION_REGION = 512 * 1024,
@@ -87,16 +88,30 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	struct ntfs_node *root = NULL, *node = NULL;
 	struct ntfs_directory *directory = NULL;
 	struct ntfs_stream *stream = NULL;
+	struct ntfs_reparse *reparse = NULL;
+	struct ntfs_reparse_info reparse_info;
 	struct ntfs_dirent entry;
 	uint8_t buffer[FUZZ_READ_BUFFER_BYTES];
+	uint16_t reparse_name[FUZZ_REPARSE_NAME_UNITS];
 	size_t i, count;
 
+	(void)ntfs_reparse_decode(data, size, &reparse_info);
 	if (ntfs_mount(&env, &limits, &v) == NTFS_OK && ntfs_root(v, &root) == NTFS_OK &&
 	    ntfs_directory_open(root, &directory) == NTFS_OK) {
 		for (i = 0;
 		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;
 		    i++) {
 			if (ntfs_node_open(v, entry.reference, &node) == NTFS_OK) {
+				if (ntfs_reparse_open(node, &reparse) == NTFS_OK) {
+					ntfs_reparse_get_info(reparse, &reparse_info);
+					(void)ntfs_reparse_name(reparse,
+					    NTFS_REPARSE_SUBSTITUTE_NAME, reparse_name,
+					    FUZZ_REPARSE_NAME_UNITS, &count);
+					(void)ntfs_reparse_name(reparse, NTFS_REPARSE_PRINT_NAME,
+					    reparse_name, FUZZ_REPARSE_NAME_UNITS, &count);
+					ntfs_reparse_close(reparse);
+					reparse = NULL;
+				}
 				if (ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK) {
 					(void)ntfs_stream_read(
 					    stream, 0, buffer, sizeof(buffer), &count);

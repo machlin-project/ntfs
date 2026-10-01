@@ -1,7 +1,7 @@
 project('machlin-ntfs', 'c', version: '0.1.0', default_options: ['c_std=c11', 'warning_level=3', 'werror=true', 'buildtype=debugoptimized'])
 cc = meson.get_compiler('c')
 inc = include_directories('include', 'adapters/posix')
-core_sources = files('core/support.c', 'core/record.c', 'core/stream.c', 'core/lznt1.c', 'core/attribute.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c')
+core_sources = files('core/support.c', 'core/record.c', 'core/stream.c', 'core/lznt1.c', 'core/attribute.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
 posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directories: inc, c_args: ['-D_POSIX_C_SOURCE=200809L'], install: false)
@@ -15,6 +15,8 @@ streams = executable('ntfs-stream-tests', 'tests/streams.c', include_directories
 test('streams', streams, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 codec = executable('ntfs-codec-tests', 'tests/codec.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('codec', codec)
+reparse = executable('ntfs-reparse-tests', 'tests/reparse.c', include_directories: inc, link_with: [posix, core], c_args: ['-Wdeclaration-after-statement'])
+test('reparse', reparse, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 foreach layout : ['mft-resident-list', 'mft-nonresident-list', 'nested-index', 'ntfs30']
   test(layout, unit, args: [meson.current_build_dir() / 'fixtures' / (layout + '.img')], depends: fixture, timeout: 120)
 endforeach

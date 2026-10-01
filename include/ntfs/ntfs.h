@@ -20,6 +20,31 @@ extern "C" {
 #define NTFS_ATTRIBUTE_DATA 0x80u
 #define NTFS_ATTRIBUTE_REPARSE_POINT 0xc0u
 #define NTFS_FILE_ATTRIBUTE_DIRECTORY 0x10000000u
+#define NTFS_REPARSE_TAG_MOUNT_POINT UINT32_C(0xa0000003)
+#define NTFS_REPARSE_TAG_SYMLINK UINT32_C(0xa000000c)
+#define NTFS_REPARSE_TAG_WOF UINT32_C(0x80000017)
+#define NTFS_REPARSE_TAG_CLOUD UINT32_C(0x9000001a)
+#define NTFS_REPARSE_SYMLINK_RELATIVE UINT32_C(0x00000001)
+
+/* Windows' complete reparse-buffer limit, including the common header. */
+#define NTFS_REPARSE_MAX_BYTES 16384u
+
+enum ntfs_reparse_kind {
+	NTFS_REPARSE_UNKNOWN,
+	NTFS_REPARSE_SYMLINK,
+	NTFS_REPARSE_MOUNT_POINT,
+	NTFS_REPARSE_WOF,
+	NTFS_REPARSE_CLOUD
+};
+
+enum ntfs_reparse_name_type { NTFS_REPARSE_SUBSTITUTE_NAME, NTFS_REPARSE_PRINT_NAME };
+
+struct ntfs_reparse_info {
+	uint32_t tag;
+	enum ntfs_reparse_kind kind;
+	uint32_t flags;
+	size_t substitute_length, print_length; /* UTF-16 code units, excluding terminators. */
+};
 
 enum ntfs_name_namespace {
 	NTFS_NAMESPACE_POSIX = 0,
@@ -58,6 +83,7 @@ struct ntfs_volume;
 struct ntfs_node;
 struct ntfs_stream;
 struct ntfs_directory;
+struct ntfs_reparse;
 
 /* The caller serializes a volume and all its children. The resource must remain
  * immutable and exclusively owned for their lifetime. There is no write callback.
@@ -139,6 +165,22 @@ enum ntfs_result ntfs_root(struct ntfs_volume *, struct ntfs_node **);
 enum ntfs_result ntfs_node_open(struct ntfs_volume *, uint64_t reference, struct ntfs_node **);
 void ntfs_node_close(struct ntfs_node *);
 enum ntfs_result ntfs_node_stat(struct ntfs_node *, struct ntfs_stat *);
+/* Validate Microsoft reparse-buffer framing and link name spans. WOF, cloud and
+ * unknown Microsoft payloads remain opaque: recognizing a tag is not data support.
+ * GUID framing is UNSUPPORTED, including Microsoft-tagged candidates whose size
+ * fits only that envelope. Output is zeroed on every failure. */
+enum ntfs_result ntfs_reparse_decode(const void *, size_t, struct ntfs_reparse_info *);
+/* Reparse metadata owns an immutable snapshot and remains valid after node close.
+ * Opening an ordinary node returns NOT_FOUND; a flagged node missing its attribute
+ * is CORRUPT. These calls never follow links or interpret Windows target paths. */
+enum ntfs_result ntfs_reparse_open(struct ntfs_node *, struct ntfs_reparse **);
+void ntfs_reparse_close(struct ntfs_reparse *);
+void ntfs_reparse_get_info(const struct ntfs_reparse *, struct ntfs_reparse_info *);
+/* Copy host-endian UTF-16 units losslessly, including unpaired surrogates. No NUL
+ * terminator is added. RANGE reports required units without changing the buffer;
+ * NULL/zero capacity queries the size. Non-link payloads return UNSUPPORTED. */
+enum ntfs_result ntfs_reparse_name(
+    const struct ntfs_reparse *, enum ntfs_reparse_name_type, uint16_t *, size_t, size_t *);
 /* Lookup folds names through $UpCase. Distinct names with the same folded key
  * return UNSUPPORTED instead of selecting an arbitrary case-sensitive entry. */
 enum ntfs_result ntfs_lookup(struct ntfs_node *, const uint16_t *, size_t, struct ntfs_node **);

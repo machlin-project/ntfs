@@ -65,6 +65,27 @@ MIXED_RAW_LCN, MIXED_PREFIX_SECOND_LCN, MIXED_FINAL_LCN = 112, 142, 152
 SI, ATTR_LIST, VOL_NAME, VOL_INFO = 0x10, 0x20, 0x60, 0x70
 FILENAME = 0x30
 DATA, INDEX_ROOT, INDEX_ALLOC, BITMAP = 0x80, 0x90, 0xA0, 0xB0
+REPARSE_POINT = 0xC0
+REPARSE_TAG_SYMLINK = 0xA000000C
+REPARSE_TAG_MOUNT_POINT = 0xA0000003
+REPARSE_TAG_WOF = 0x80000017
+REPARSE_TAG_CLOUD = 0x9000001A
+REPARSE_TAG_UNKNOWN = 0x80001234
+REPARSE_TAG_THIRD_PARTY = 0x00001234
+REPARSE_SYMLINK_RELATIVE = 1
+REPARSE_RESERVED_FIELD = 0xABCD
+REPARSE_INSTANCE = 3
+REPARSE_LIST_INSTANCE = 2
+REPARSE_LCNS = (150, 158)
+REPARSE_LONG_NAME_UNITS = 3000
+REPARSE_MAX_BYTES = 16 * 1024
+REPARSE_HEADER = struct.Struct('<IHH')
+REPARSE_NAMES = struct.Struct('<HHHH')
+REPARSE_FLAGS = struct.Struct('<I')
+GUID_HEADER = struct.Struct('<IHHQ')
+REPARSE_RELATIVE_TARGET = '..\\Ω-target.txt'
+REPARSE_ABSOLUTE_TARGET = '\\??\\C:\\folder\\target.txt'
+REPARSE_PRINT_TARGET = 'C:\\folder\\target.txt'
 ATTR_END = 0xFFFFFFFF
 SPARSE, COMPRESSED = 0x8000, 1
 ENCRYPTED = 0x4000
@@ -233,9 +254,9 @@ def directory_record(entries, allocation_clusters=0, data_streams=(), legacy=Fal
     return file_record(ROOT_RECORD, attrs, directory=True, legacy=legacy)
 
 
-def list_entry(reference, instance, lowest):
+def list_entry(reference, instance, lowest, kind=DATA):
     out = bytearray(align(ATTR_LIST_ENTRY.size))
-    ATTR_LIST_ENTRY.pack_into(out, 0, DATA, len(out), 0, 0, lowest, reference, instance)
+    ATTR_LIST_ENTRY.pack_into(out, 0, kind, len(out), 0, 0, lowest, reference, instance)
     return bytes(out)
 
 
@@ -243,6 +264,127 @@ def file_reference(number, sequence=None):
     if sequence is None:
         sequence = SYSTEM_SEQUENCE if number < SYSTEM_RECORD_LIMIT else FILE_SEQUENCE
     return (sequence << REFERENCE_SEQUENCE_SHIFT) | number
+
+
+def reparse_value(tag, substitute='', display='', relative=False, print_first=False):
+    """Independently authored MS-FSCC link buffers, retaining raw UTF-16 units."""
+    substitute_bytes = substitute.encode('utf-16le', errors='surrogatepass')
+    print_bytes = display.encode('utf-16le', errors='surrogatepass')
+    terminator = bytes(U16_BYTES)
+    if print_first:
+        path = print_bytes + terminator + substitute_bytes + terminator
+        print_offset, substitute_offset = 0, len(print_bytes) + len(terminator)
+    else:
+        path = substitute_bytes + terminator + print_bytes + terminator
+        substitute_offset, print_offset = 0, len(substitute_bytes) + len(terminator)
+    payload = REPARSE_NAMES.pack(substitute_offset, len(substitute_bytes),
+                                 print_offset, len(print_bytes))
+    if tag == REPARSE_TAG_SYMLINK:
+        payload += REPARSE_FLAGS.pack(REPARSE_SYMLINK_RELATIVE if relative else 0)
+    payload += path
+    return REPARSE_HEADER.pack(tag, len(payload), REPARSE_RESERVED_FIELD) + payload
+
+
+def reparse_fixtures(output, image):
+    """Separate images exercise ownership and attribute storage, without mounts."""
+    number = FILE_RECORDS['hello.txt']
+    relative = reparse_value(REPARSE_TAG_SYMLINK, REPARSE_RELATIVE_TARGET,
+                             REPARSE_RELATIVE_TARGET, relative=True, print_first=True)
+    absolute = reparse_value(REPARSE_TAG_SYMLINK, REPARSE_ABSOLUTE_TARGET,
+                             REPARSE_PRINT_TARGET)
+    junction = reparse_value(REPARSE_TAG_MOUNT_POINT, REPARSE_ABSOLUTE_TARGET,
+                             REPARSE_PRINT_TARGET, print_first=True)
+    unpaired = reparse_value(REPARSE_TAG_SYMLINK, '\ud800x', relative=True)
+    long_value = reparse_value(REPARSE_TAG_SYMLINK, 'R' * REPARSE_LONG_NAME_UNITS,
+                               relative=True)
+    opaque_payload = b'filter-owned payload'
+    opaque = {
+        'wof': REPARSE_TAG_WOF,
+        'cloud': REPARSE_TAG_CLOUD,
+        'unknown': REPARSE_TAG_UNKNOWN,
+        'third-party': REPARSE_TAG_THIRD_PARTY,
+    }
+    guid_payload = b'opaque GUID payload'
+    guid_value = REPARSE_HEADER.pack(REPARSE_TAG_SYMLINK, len(guid_payload), 0)
+    guid_value += GUID_HEADER.pack(1, 0, 0, 0) + guid_payload
+    (output / 'microsoft-guid.reparse').write_bytes(guid_value)
+
+    def save(label, value, directory=False, attributes=None, extension=None, data=None,
+             file_attributes=FILE_ATTRIBUTE_REPARSE):
+        changed = bytearray(image)
+        attrs = [standard(file_attributes), resident(DATA, b'not user data', 1)]
+        attrs += attributes if attributes is not None else [resident(REPARSE_POINT, value, REPARSE_INSTANCE)]
+        put_record(changed, number, file_record(number, attrs, directory=directory))
+        if extension is not None:
+            put_record(changed, ATTRIBUTE_EXTENSION_RECORD, extension)
+        for lcn, payload in data or ():
+            put_data(changed, lcn, payload)
+        (output / ('reparse-' + label + '.img')).write_bytes(changed)
+        if value is not None:
+            (output / ('reparse-' + label + '.reparse')).write_bytes(value)
+
+    save('relative', relative)
+    save('absolute', absolute)
+    save('junction', junction, directory=True)
+    save('unpaired', unpaired)
+    for label, tag in opaque.items():
+        value = REPARSE_HEADER.pack(tag, len(opaque_payload), 0) + opaque_payload
+        save(label, value)
+    first_lcn, last_lcn = REPARSE_LCNS
+    runs = [(1, first_lcn), (1, last_lcn)]
+    assert CLUSTER < len(long_value) <= len(runs) * CLUSTER
+    save('nonresident', long_value,
+         attributes=[nonresident(REPARSE_POINT, runs, len(long_value), REPARSE_INSTANCE)],
+         data=[(first_lcn, long_value[:CLUSTER]), (last_lcn, long_value[CLUSTER:])])
+    entries = list_entry(file_reference(number), REPARSE_INSTANCE, 0, REPARSE_POINT)
+    entries += list_entry(file_reference(ATTRIBUTE_EXTENSION_RECORD), 0, 1, REPARSE_POINT)
+    extension = file_record(ATTRIBUTE_EXTENSION_RECORD,
+                            [nonresident(REPARSE_POINT, [(1, last_lcn)], 0, lowest=1)],
+                            base=file_reference(number))
+    save('listed', long_value,
+         attributes=[resident(ATTR_LIST, entries, REPARSE_LIST_INSTANCE),
+                     nonresident(REPARSE_POINT, [(1, first_lcn)], len(long_value),
+                                 REPARSE_INSTANCE, allocated=len(runs) * CLUSTER)],
+         extension=extension,
+         data=[(first_lcn, long_value[:CLUSTER]), (last_lcn, long_value[CLUSTER:])])
+    entries = list_entry(file_reference(ATTRIBUTE_EXTENSION_RECORD), REPARSE_INSTANCE, 0,
+                         REPARSE_POINT)
+    extension = file_record(ATTRIBUTE_EXTENSION_RECORD,
+                            [resident(REPARSE_POINT, relative, REPARSE_INSTANCE)],
+                            base=file_reference(number))
+    save('resident-extension', relative,
+         attributes=[resident(ATTR_LIST, entries, REPARSE_LIST_INSTANCE)], extension=extension)
+    save('unflagged-extension', relative, file_attributes=0,
+         attributes=[resident(ATTR_LIST, entries, REPARSE_LIST_INSTANCE)], extension=extension)
+    save('unflagged', relative, file_attributes=0)
+    save('missing', None, attributes=[])
+    save('duplicate', relative,
+         attributes=[resident(REPARSE_POINT, relative, REPARSE_INSTANCE),
+                     resident(REPARSE_POINT, absolute, REPARSE_INSTANCE + 1)])
+    save('short', relative[:REPARSE_HEADER.size - 1])
+    save('length', relative + bytes(U16_BYTES))
+    save('junction-file', junction)
+    save('uninitialized', long_value,
+         attributes=[nonresident(REPARSE_POINT, runs, len(long_value), REPARSE_INSTANCE,
+                                 initialized=len(long_value) - 1)])
+    save('sparse', long_value,
+         attributes=[nonresident(REPARSE_POINT, [(len(runs), None)], len(long_value),
+                                 REPARSE_INSTANCE, flags=SPARSE)])
+    oversized = bytes(REPARSE_MAX_BYTES + U16_BYTES)
+    clusters = (len(oversized) + CLUSTER - 1) // CLUSTER
+    save('oversized', oversized,
+         attributes=[nonresident(REPARSE_POINT, [(clusters, first_lcn)], len(oversized),
+                                 REPARSE_INSTANCE)], data=[(first_lcn, oversized)])
+    # A reparse directory carrying a plausible local index must still fail closed.
+    ordinary_index = INDEX_ROOT_HEADER.pack(FILENAME, COLLATION_FILENAME, CLUSTER, 1)
+    empty_entries = entry()
+    ordinary_index += INDEX_HEADER.pack(INDEX_HEADER.size,
+                                       INDEX_HEADER.size + len(empty_entries),
+                                       INDEX_HEADER.size + len(empty_entries), 0)
+    ordinary_index += empty_entries
+    save('directory', junction, directory=True,
+         attributes=[resident(INDEX_ROOT, ordinary_index, REPARSE_INSTANCE + 1, '$I30'),
+                     resident(REPARSE_POINT, junction, REPARSE_INSTANCE)])
 
 
 def fragmented_mft(image, nonresident_list=False, damage=None):
@@ -425,6 +567,7 @@ def main():
     output = args.output
     output.mkdir(parents=True, exist_ok=True)
     image, contents, boot = make_image()
+    reparse_fixtures(output, image)
     (output / 'standard.img').write_bytes(image)
     legacy_image, _, _ = make_image(legacy=True)
     (output / 'ntfs30.img').write_bytes(legacy_image)

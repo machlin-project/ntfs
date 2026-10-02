@@ -68,6 +68,10 @@ parser preserves checked spans and values; it does not make access decisions or
 validate application-specific callback conditions. The separate DACL evaluator
 has synthetic decision and bounded context-fuzz evidence; that does not close
 full Windows/native authorization. ACCESS.md retains its unsupported policies.
+ACCESS-ORACLE.md defines the independent Windows collector and bounded offline
+comparison path. Its 337 synthetic transport, SDK span, acquisition and reporting
+contracts pass; original native token fields and descriptor bytes are retained,
+with missing/unsupported/error cases visible. Windows acquisition remains unrun.
 
 Every continuation must retain its full scope. Focused commits are checkpoints;
 the rows above cannot be closed by shrinking them to already passing tests.

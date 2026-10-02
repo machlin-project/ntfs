@@ -187,7 +187,7 @@ supported contracts and explicit unsupported restricted ownership, advanced ACEs
 SACL/integrity/privileges, maximum access and remaining native identity/operation
 policy. An allowed discretionary result is not complete authorization.
 
-The current 26-suite sanitized checkpoint, freestanding check, expanded
+The current 27-suite sanitized checkpoint, freestanding check, expanded
 FSKit component tests and unsigned app build pass. Security storage adds
 74 contracts and 262 allocation/191 I/O failure positions with retry/exact release.
 Four external geometries provide 24 original descriptor-byte/ID comparisons and
@@ -199,6 +199,16 @@ independent per-right token oracles; its separate descriptor/context fuzz campai
 passed 14,450,666 executions in 61 seconds with peak RSS 489 MiB and no finding.
 The earlier wrong owner-read test expectation remains in the failed focused log;
 the corrected case verifies owner control rights separately from the allow trustee.
+The independent AccessCheck collector/offline comparison tools add 337 local
+transport, SDK span/count, token construction, cleanup and report contracts.
+They retain queried native fields and original descriptor bytes, distinguish API
+errors from denials, and keep unsupported/partial/out-of-plane work visible.
+The SDK-shaped fake provider cannot qualify Windows behavior. Standalone SID
+packets now have an exact public decoder and security fuzz seeds; the expanded
+campaign passed 8,949,047 executions in 61 seconds with peak RSS 526 MiB and no
+finding. See ACCESS-ORACLE.md for acquisition/comparison commands. Windows
+acquisition and native DACL comparisons remain unrun; obtain those observations
+before enabling restricted-owner semantics or claiming Windows authorization.
 `ntfs-workload` and `scripts/benchmark.py` add repeated
 POSIX/memory profiles with original-byte and image-integrity checks. Live-node
 metadata reuse removes repeated presence-validation allocations and has a measured

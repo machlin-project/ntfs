@@ -80,6 +80,15 @@ self-relative descriptor bytes, without opening file content.
 `security-id HEX_SECURITY_ID` resolves an indexed ID directly. These are
 read-only diagnostic APIs, not access decisions. See SECURITY.md.
 
+The `access-oracle-contract` suite tests the independent Windows access collector,
+SDK buffer framing, diagnostic transport and truthful offline reports with a
+synthetic provider. The `ntfs-dacl-evaluate` executable accepts bounded original
+descriptor/SID packets and emits the core's discretionary result; it does not
+authenticate identity. Acquire decisions using `scripts/collect_windows_access.py`
+on Windows, then compare with `tests/windows_access.py` on POSIX. Use new capture
+and report directories. See ACCESS-ORACLE.md for commands and explicit native
+qualification limits; no Windows acquisition has run at this checkpoint.
+
 Compare against external NTFS-3G exports using an existing interoperability image
 directory and a new evidence directory:
 

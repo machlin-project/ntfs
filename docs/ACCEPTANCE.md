@@ -26,6 +26,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Write/recovery | Native log, allocation, namespace transactions, crash matrix | Not implemented |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
+| Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
 | Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; reparse target resolution, EFS and WOF/cloud content | Not implemented |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
@@ -132,6 +133,34 @@ finding under `artifacts/fuzz-access-context/`. No Windows AccessCheck or instal
 native authorization was exercised. ACCESS.md defines exact masks, feature
 rejection, shared comparison budgets and the remaining restricted-owner,
 advanced-ACE, SACL/integrity/privilege, identity and native operation contracts.
+
+The independent AccessCheck pipeline subsequently passed all 27 ASan/UBSan
+suites, both freestanding targets, selected-toolchain style, FSKit components and
+the unsigned current-source app build under `artifacts/plan-access-oracle-observed-*.log`.
+The new suite passed 337 contracts covering original SID/descriptor transport,
+SDK pointer/count bounds, token-copy rights and requested transformations,
+cleanup after acquisition failures, partial manifests, original-byte checks,
+missing/tampered vectors, API failure versus denial, output budgets and deadlines.
+The intentionally coarse fake provider produces both matching and mismatching
+decisions and cannot claim Windows provenance or native qualification.
+
+Standalone SID decoding is allocation-free, preserves the full six-byte
+authority/15-subauthority range, rejects trailing storage and zeroes errors.
+Native SDK-shaped buffers and SID packets are authored independently. The
+expanded security fuzz corpus includes standalone SID packets and completed
+8,949,047 executions in 61 seconds with coverage 172, peak RSS 526 MiB and no
+reported finding under `artifacts/fuzz-access-oracle-sid/`. This bounded run is
+local robustness evidence. No Windows AccessCheck acquisition, filesystem access,
+installed mount or complete authorization was exercised. ACCESS-ORACLE.md defines
+the capture/comparison commands, scope, bounds and unresolved probes.
+
+A retained synthetic review is available in
+`artifacts/access-oracle-synthetic-capture/manifest.json` and
+`artifacts/access-oracle-synthetic-review/report.json`. Its six contexts/144 cases
+produce 65 matches, 52 deliberate mismatches, 21 unsupported cases and six
+out-of-plane observations. The report remains `gaps`, the input is unchanged,
+and both native DACL/full-authorization qualification flags remain false. This
+example demonstrates reporting behavior, not Windows access results.
 
 Before/after release matrices each retain 400 measurements, independent full
 stream-byte oracles and unchanged input hashes. Metadata reuse removes repeated

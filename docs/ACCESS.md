@@ -13,6 +13,11 @@ remain owning-adapter work. Do not substitute the mount owner or UID zero for a
 Windows identity. The current FSKit development presentation has not adopted
 this evaluator and still does not enforce Windows ACLs.
 
+The independent [AccessCheck observation pipeline](ACCESS-ORACLE.md) captures
+Windows token fields and original descriptors, then compares decisions offline.
+Local tooling contracts pass; native acquisition has not run. Unsupported probes
+and mandatory/privilege boundaries remain explicit gaps, not passed comparisons.
+
 ## Implemented decision contract
 
 The evaluator validates the complete descriptor before evaluating access. Owner

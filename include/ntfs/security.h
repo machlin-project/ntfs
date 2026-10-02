@@ -98,6 +98,9 @@ struct ntfs_security_info {
  * storage and shared SID spans. Its offsets need not follow a particular order. */
 enum ntfs_result ntfs_security_decode(const void *, size_t, struct ntfs_security_info *);
 enum ntfs_result ntfs_security_ace_decode(const void *, size_t, struct ntfs_ace_info *);
+/* One complete MS-DTYP SID packet, without trailing storage. No allocation/I/O;
+ * failure zeroes the output. Input and output storage must not overlap. */
+enum ntfs_result ntfs_security_sid_decode(const void *, size_t, struct ntfs_sid *);
 
 struct ntfs_security;
 

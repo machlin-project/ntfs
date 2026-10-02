@@ -24,6 +24,8 @@ SECURITY_OBJECT_ACL_REVISION = 4
 SECURITY_GUID_BYTES = 16
 SECURITY_APPLICATION_DATA = bytes.fromhex('61727478')
 SECURITY_AUTHORITY_BYTES = 6
+SECURITY_SID_SUBAUTHORITIES_MAX = 15
+SECURITY_DWORD_MAX = (1 << 32) - 1
 SECURITY_NT_AUTHORITY = 5
 SECURITY_BUILTIN_DOMAIN = 32
 SECURITY_BUILTIN_ADMINISTRATORS = 544
@@ -47,7 +49,13 @@ def security_seeds():
     object_body += sid + SECURITY_APPLICATION_DATA
     object_ace = SECURITY_ACE.pack(SECURITY_OBJECT_CALLBACK, 0,
                                   SECURITY_ACE.size + len(object_body), SECURITY_FILE_READ_DATA) + object_body
-    output = {'allow-ace': ace, 'object-ace': object_ace}
+    maximum_parts = (SECURITY_DWORD_MAX,) * SECURITY_SID_SUBAUTHORITIES_MAX
+    maximum_sid = struct.pack('BB', SECURITY_REVISION, len(maximum_parts))
+    maximum_sid += bytes([0xff]) * SECURITY_AUTHORITY_BYTES
+    maximum_sid += struct.pack(f'<{len(maximum_parts)}I', *maximum_parts)
+    output = {'allow-ace': ace, 'object-ace': object_ace, 'sid-builtin': sid,
+              'sid-maximum': maximum_sid,
+              'sid-empty': struct.pack('BB', SECURITY_REVISION, 0) + bytes(SECURITY_AUTHORITY_BYTES)}
     for name, body, count, revision, present in (
             ('absent', b'', 0, SECURITY_ACL_REVISION, False),
             ('null', b'', 0, SECURITY_ACL_REVISION, True),
@@ -104,7 +112,7 @@ def generate(output):
         'access': {},
     }
     for name, descriptor in security_seeds().items():
-        if name.endswith('-ace'):
+        if name.endswith('-ace') or name.startswith('sid-'):
             continue
         for context, flags, attributes, user in (
                 ('owner', 0, ACCESS_ENABLED, SECURITY_BUILTIN_ADMINISTRATORS),

@@ -298,6 +298,7 @@ exercise(const uint8_t *data, size_t size, size_t fail_allocation, size_t fail_r
 	case NTFS_FUZZ_SECURITY:
 		(void)ntfs_security_decode(data, size, &security);
 		(void)ntfs_security_ace_decode(data, size, &ace);
+		(void)ntfs_security_sid_decode(data, size, &security.owner);
 		break;
 	}
 	assert(device.memory == 0 && volume.children == 0);

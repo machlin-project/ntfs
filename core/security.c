@@ -41,6 +41,28 @@ decode_sid(const uint8_t *bytes, size_t available, struct ntfs_sid *sid, uint32_
 	return NTFS_OK;
 }
 
+enum ntfs_result
+ntfs_security_sid_decode(const void *buffer, size_t size, struct ntfs_sid *out)
+{
+	struct ntfs_sid sid = {0};
+	uint32_t length;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (buffer == NULL) {
+		return NTFS_INVALID;
+	}
+	result = decode_sid(buffer, size, &sid, &length);
+	if (result != NTFS_OK || length != size) {
+		return NTFS_CORRUPT;
+	}
+	*out = sid;
+	return NTFS_OK;
+}
+
 static bool
 object_ace(uint8_t type)
 {

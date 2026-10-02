@@ -31,6 +31,9 @@ Primary references:
 - [File access rights and generic mappings](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights)
 - [Token group attributes](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_groups)
 - [Restricted token creation and two-check semantics](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-createrestrictedtoken)
+- [Impersonation token copies and explicit handle rights](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-duplicatetokenex)
+- [Native token information and returned buffer lengths](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-gettokeninformation)
+- [Restricting-list detection](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-istokenrestricted)
 - [OWNER RIGHTS and well-known identities](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers)
 - [Volume read-only flag](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationa)
 - [NTFS native volume geometry](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-ntfs_volume_data_buffer)
@@ -92,6 +95,10 @@ data-read grants. Restricted-owner combinations remain explicitly unsupported
 pending native observations; ambiguous pseudocode is not used to invent grants.
 SACL/integrity/privilege/advanced ACE policy and native enforcement remain open.
 No native AccessCheck comparisons have executed at this checkpoint.
+The observation collector, SDK layouts, diagnostic transport and report tests are
+also original. Their interface facts come from Microsoft's token and AccessCheck
+documentation. A synthetic provider tests acquisition/failure/report contracts;
+it is not treated as an independent Windows decision oracle. See ACCESS-ORACLE.md.
 
 No Linux ntfs3, ntfs-3g or proprietary driver source is copied into or linked with
 this implementation. Separately built ntfs-3g utilities may generate and inspect

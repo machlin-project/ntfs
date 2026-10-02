@@ -49,3 +49,7 @@ The allocation-free [DACL evaluator](docs/ACCESS.md) now implements ordered plai
 ACEs, exact file-right mappings, ordinary ownership and restricted/deny-only token
 contexts. It remains a separate discretionary plane; native identity, integrity,
 privilege and owning-operation authorization are still incomplete.
+An independent [Windows AccessCheck observation pipeline](docs/ACCESS-ORACLE.md)
+now captures queried tokens and original descriptors for bounded offline comparison.
+Its transport/acquisition/reporting contracts pass locally; native Windows
+decisions have not yet been acquired.

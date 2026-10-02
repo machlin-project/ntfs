@@ -83,6 +83,49 @@ make_sid(void *buffer, uint8_t count)
 	return size;
 }
 
+static void
+sid_tests(void)
+{
+	uint8_t buffer[sizeof(struct test_sid) + sizeof(uint32_t)];
+	struct test_sid *header = (void *)buffer;
+	struct ntfs_sid sid, zero = {0};
+	size_t count, length, prefix, i;
+
+	for (count = 0; count <= NTFS_SID_MAX_SUBAUTHORITIES; count++) {
+		length = make_sid(buffer, (uint8_t)count);
+		assert(ntfs_security_sid_decode(buffer, length, &sid) == NTFS_OK);
+		assert(sid.authority == TEST_AUTHORITY && sid.count == count);
+		for (i = 0; i < count; i++) {
+			assert(sid.subauthorities[i] == TEST_SUBAUTHORITY + i);
+		}
+		for (i = count; i < NTFS_SID_MAX_SUBAUTHORITIES; i++) {
+			assert(sid.subauthorities[i] == 0);
+		}
+		for (prefix = 0; prefix < length; prefix++) {
+			memset(&sid, TEST_INITIAL_FILL, sizeof(sid));
+			assert(ntfs_security_sid_decode(buffer, prefix, &sid) == NTFS_CORRUPT);
+			assert(memcmp(&sid, &zero, sizeof(sid)) == 0);
+		}
+		memset(&sid, TEST_INITIAL_FILL, sizeof(sid));
+		assert(ntfs_security_sid_decode(buffer, length + 1, &sid) == NTFS_CORRUPT);
+		assert(memcmp(&sid, &zero, sizeof(sid)) == 0);
+	}
+	length = make_sid(buffer, NTFS_SID_MAX_SUBAUTHORITIES);
+	memset(header->authority, UINT8_MAX, sizeof(header->authority));
+	assert(ntfs_security_sid_decode(buffer, length, &sid) == NTFS_OK);
+	assert(sid.authority == ((UINT64_C(1) << (TEST_AUTHORITY_BYTES * TEST_BITS_PER_BYTE)) - 1));
+	header->revision++;
+	assert(ntfs_security_sid_decode(buffer, length, &sid) == NTFS_CORRUPT);
+	assert(memcmp(&sid, &zero, sizeof(sid)) == 0);
+	header->revision = TEST_SID_REVISION;
+	header->count = NTFS_SID_MAX_SUBAUTHORITIES + 1;
+	assert(ntfs_security_sid_decode(buffer, length, &sid) == NTFS_CORRUPT);
+	assert(memcmp(&sid, &zero, sizeof(sid)) == 0);
+	assert(ntfs_security_sid_decode(NULL, length, &sid) == NTFS_INVALID);
+	assert(memcmp(&sid, &zero, sizeof(sid)) == 0);
+	assert(ntfs_security_sid_decode(buffer, length, NULL) == NTFS_INVALID);
+}
+
 static size_t
 make_ace(void *buffer, uint8_t type, bool object, uint32_t object_flags, bool application)
 {
@@ -348,6 +391,7 @@ descriptor_tests(void)
 int
 main(void)
 {
+	sid_tests();
 	ace_tests();
 	descriptor_tests();
 	puts(

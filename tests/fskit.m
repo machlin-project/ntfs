@@ -105,7 +105,8 @@
 	       nextCookie:(FSDirectoryCookie)cookie
 	       attributes:(FSItemAttributes *)attributes
 {
-	assert(type == FSItemTypeFile && itemID != FSItemIDInvalid);
+	assert(
+	    (type == FSItemTypeFile || type == FSItemTypeDirectory) && itemID != FSItemIDInvalid);
 	assert(attributes != nil && attributes.type == type && attributes.fileID == itemID);
 	if (self.names.count == self.capacity) {
 		return NO;
@@ -590,7 +591,7 @@ check_names_manifest(
 }
 
 static void
-test_namespace(NSData *image, NSArray<NSDictionary *> *names)
+test_namespace(NSData *image, NSArray<NSDictionary *> *names, BOOL caseSensitive)
 {
 	TestReader *reader = [[TestReader alloc] init];
 	FaultResource *resource;
@@ -688,8 +689,25 @@ test_namespace(NSData *image, NSArray<NSDictionary *> *names)
 	}
 	assert(ordinary != NSNotFound && projected != NSNotFound);
 	alias = [FSFileName nameWithString:[expected[projected] uppercaseString]];
-	assert([volume lookup:alias inDirectory:root storedName:&stored error:&error] == identity &&
-	    [stored.string isEqualToString:expected[projected]]);
+	if (caseSensitive) {
+		assert([volume lookup:alias inDirectory:root storedName:&stored
+				 error:&error] == nil &&
+		    stored == nil && error.code == ENOENT);
+	} else {
+		assert([volume lookup:alias inDirectory:root storedName:&stored
+				 error:&error] == identity &&
+		    error == nil && [stored.string isEqualToString:expected[projected]]);
+	}
+	alias = [FSFileName nameWithString:@"HELLO.TXT"];
+	if (caseSensitive) {
+		assert([volume lookup:alias inDirectory:root storedName:&stored
+				 error:&error] == nil &&
+		    stored == nil && error.code == ENOENT);
+	} else {
+		assert([volume lookup:alias inDirectory:root storedName:&stored
+				 error:&error] == identity &&
+		    error == nil && [stored.string isEqualToString:@"hello.txt"]);
+	}
 	alias =
 	    [FSFileName nameWithString:[NSString stringWithFormat:@"~ntfs-0007000000000018-%08x",
 					   (uint32_t)ordinary]];
@@ -782,6 +800,143 @@ test_namespace(NSData *image, NSArray<NSDictionary *> *names)
 	    error.code == EIO && reader.reads == reads);
 	[volume invalidate];
 	assert(reader.reads == reads);
+}
+
+static void
+case_reply(NTFSVolume *volume, FSItem *parent, NSString *name, FSItem *expectedItem,
+    NSString *expectedSpelling, int expectedError, BOOL modern)
+{
+	FSFileName *request = [FSFileName nameWithString:name];
+	__block NSUInteger replies = 0;
+
+	if (modern) {
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+		if (@available(macOS 27.0, *)) {
+			NSObject *opaqueContext = [[NSObject alloc] init];
+
+			/* This bridge currently ignores context. Test reply framing with an
+			 * opaque nonnull double; this is not native identity/authorization
+			 * evidence. */
+			[(NTFSModernVolume *)volume
+			    lookupItemNamed:request
+				inDirectory:parent
+				    context:(FSContext *)opaqueContext
+			       replyHandler:^(FSLookupItemResult *result, NSError *error) {
+				 assert(error.code == expectedError);
+				 assert((result != nil) == (expectedItem != nil));
+				 replies++;
+			       }];
+		}
+#endif
+	} else {
+		[(NTFSLegacyVolume *)volume
+		    lookupItemNamed:request
+			inDirectory:parent
+		       replyHandler:^(FSItem *item, FSFileName *stored, NSError *error) {
+			 assert(error.code == expectedError && item == expectedItem);
+			 assert(expectedSpelling != nil
+				 ? [stored.string isEqualToString:expectedSpelling]
+				 : stored == nil);
+			 replies++;
+		       }];
+	}
+	assert(replies == 1);
+}
+
+static void
+test_case_policy(NSData *image, BOOL rootSensitive, BOOL modern)
+{
+	TestReader *reader = [[TestReader alloc] init];
+	FaultResource *resource;
+	NTFSVolume *volume = nil;
+	struct ntfs_environment env;
+	struct ntfs_volume *core = NULL;
+	FSItem *root, *sensitive, *insensitive, *upper, *lower;
+	FSFileName *stored;
+	NSError *error = nil;
+	TestPacker *packer;
+	uint8_t bytes[TEST_READ_WINDOW_BYTES];
+	size_t completed;
+	const char payload[] = "case-file/foo.txt";
+
+	assert(image != nil);
+	reader.image = image;
+	resource = [[FaultResource alloc] initWithReader:reader];
+	env = [resource environment];
+	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
+	if (modern) {
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+		if (@available(macOS 27.0, *)) {
+			volume = [[NTFSModernVolume alloc] initWithCore:core resource:resource];
+		}
+#endif
+		if (volume == nil) {
+			assert(ntfs_unmount(core) == NTFS_OK && resource.liveAllocations == 0);
+			puts("SKIP: modern case-policy replies require the macOS 27 runtime");
+			return;
+		}
+	} else {
+		volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	}
+	root = [volume activate:&error];
+	assert(root != nil && error == nil);
+	assert(volume.supportedVolumeCapabilities.caseFormat == FSVolumeCaseFormatSensitive);
+	sensitive = [volume lookup:[FSFileName nameWithString:@"Sensitive"]
+		       inDirectory:root
+			storedName:&stored
+			     error:&error];
+	assert(sensitive != nil && error == nil && [stored.string isEqualToString:@"Sensitive"]);
+	insensitive = [volume lookup:[FSFileName nameWithString:@"Insensitive"]
+			 inDirectory:root
+			  storedName:&stored
+			       error:&error];
+	assert(insensitive != nil && insensitive != sensitive && error == nil);
+	case_reply(volume, root, @"SENSITIVE", rootSensitive ? nil : sensitive,
+	    rootSensitive ? nil : @"Sensitive", rootSensitive ? ENOENT : 0, modern);
+	upper = [volume lookup:[FSFileName nameWithString:@"Foo.txt"]
+		   inDirectory:sensitive
+		    storedName:&stored
+			 error:&error];
+	assert(upper != nil && error == nil && [stored.string isEqualToString:@"Foo.txt"]);
+	lower = [volume lookup:[FSFileName nameWithString:@"foo.txt"]
+		   inDirectory:sensitive
+		    storedName:&stored
+			 error:&error];
+	assert(lower != nil && lower != upper && error == nil &&
+	    [stored.string isEqualToString:@"foo.txt"]);
+	assert([volume readItem:lower
+			 offset:0
+			  bytes:bytes
+			 length:sizeof(bytes)
+		      completed:&completed] == NTFS_OK &&
+	    completed == sizeof(payload) - 1 && memcmp(bytes, payload, completed) == 0);
+	case_reply(volume, sensitive, @"Foo.txt", upper, @"Foo.txt", 0, modern);
+	case_reply(volume, sensitive, @"foo.txt", lower, @"foo.txt", 0, modern);
+	case_reply(volume, sensitive, @"FOO.txt", nil, nil, ENOENT, modern);
+	case_reply(volume, insensitive, @"foo.txt", upper, @"Foo.txt", 0, modern);
+	case_reply(volume, insensitive, @"FOO.txt", upper, @"Foo.txt", 0, modern);
+	packer = [[TestPacker alloc] init];
+	packer.capacity = TEST_DIRECTORY_BATCH_CAPACITY;
+	packer.names = [NSMutableArray array];
+	assert([volume enumerate:sensitive
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer] == nil);
+	assert(([packer.names isEqualToArray:@[ @"Foo.txt", @"foo.txt" ]]));
+	packer = [[TestPacker alloc] init];
+	packer.capacity = TEST_DIRECTORY_BATCH_CAPACITY;
+	packer.names = [NSMutableArray array];
+	assert([volume enumerate:root
+			  cookie:0
+			verifier:0
+		      attributes:YES
+			  packer:(FSDirectoryEntryPacker *)packer] == nil);
+	assert(([packer.names isEqualToArray:@[ @"Insensitive", @"Sensitive" ]]));
+	reader.revoked = YES;
+	case_reply(volume, sensitive, @"Foo.txt", nil, nil, EIO, modern);
+	[volume invalidate];
+	assert(resource.liveAllocations == 0);
 }
 
 static void
@@ -1124,11 +1279,31 @@ main(int argc, char **argv)
 							  error:nil];
 		test_namespace([NSData dataWithContentsOfFile:
 				       [fixtures stringByAppendingPathComponent:@"namespace.img"]],
-		    names);
+		    names, NO);
 		test_namespace(
 		    [NSData dataWithContentsOfFile:
 			    [fixtures stringByAppendingPathComponent:@"namespace-hidden.img"]],
-		    names);
+		    names, NO);
+		test_namespace(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"namespace-sensitive.img"]],
+		    names, YES);
+		test_case_policy(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"case-mixed.img"]],
+		    NO, NO);
+		test_case_policy(
+		    [NSData dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:
+							   @"case-mixed-sensitive-root.img"]],
+		    YES, NO);
+		test_case_policy(
+		    [NSData dataWithContentsOfFile:
+			    [fixtures stringByAppendingPathComponent:@"case-mixed.img"]],
+		    NO, YES);
+		test_case_policy(
+		    [NSData dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:
+							   @"case-mixed-sensitive-root.img"]],
+		    YES, YES);
 		test_namespace_faults(
 		    [NSData dataWithContentsOfFile:
 			    [fixtures stringByAppendingPathComponent:@"namespace.img"]],

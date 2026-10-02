@@ -115,7 +115,7 @@ references; raw UTF-16 directory/per-link xattrs supply the reverse mapping.
 Five authored namespace images, hidden/DOS accounting, scan/response exhaustion,
 allocation/read failure sweeps and exactly-once replies pass current component
 checks. Aliases do not move enumeration continuations and remain deterministic
-only for immutable media. Installed names, per-directory case policy and native
+only for immutable media. Installed names, Windows/native case-policy and native
 normalization are still required; alias lookup currently scans from the root.
 
 See ACCEPTANCE.md for exact results and generated log locations. Do not repeat
@@ -187,7 +187,7 @@ supported contracts and explicit unsupported restricted ownership, advanced ACEs
 SACL/integrity/privileges, maximum access and remaining native identity/operation
 policy. An allowed discretionary result is not complete authorization.
 
-The current 27-suite sanitized checkpoint, freestanding check, expanded
+The preceding 27-suite sanitized checkpoint, freestanding check, expanded
 FSKit component tests and unsigned app build pass. Security storage adds
 74 contracts and 262 allocation/191 I/O failure positions with retry/exact release.
 Four external geometries provide 24 original descriptor-byte/ID comparisons and
@@ -217,6 +217,20 @@ See PERFORMANCE.md for evidence and cache/concurrency limits. The previous signe
 app artifact predates these changes and remains unsuitable as current-source
 native acceptance.
 
+The subsequent case-policy checkpoint passes 28 sanitized suites, both
+freestanding targets, style, legacy components and the unsigned app build.
+Stored directory flags select exact/folded lookup without replacing NTFS index
+collation. Seventeen policy images, 47 allocation/eight I/O failures, mixed
+parents, original-file identities and sensitive aliases pass. Corpus verification
+now compares the collector's queried case flags with core stat and explicitly
+retains missing observations. Image fuzz passed 43,409 executions in 61 seconds,
+peak RSS 906 MiB, with no finding. Logs are `artifacts/plan-case-policy-*.log`;
+the successful component run uses the `fskit-final` suffix and retains two
+macOS-27 runtime SKIPs. CASE-POLICY.md explains the on-disk observations and
+volume-wide Sensitive capability strategy. Windows flags and installed cache
+behavior remain unrun. Do not treat compiled modern replies or a context double
+as runtime/authorization evidence.
+
 1. Build a Windows-authored corpus and retain the independently generated oracle.
    Current handcrafted images target individual contracts; mkntfs tests provide
    independent ordinary formatting, data and indexes. Neither closes Windows
@@ -233,9 +247,11 @@ native acceptance.
 4. Check compression and sparse behavior with Windows-generated files, including
    allocation-size conventions, mixed/partial units and fragmented attributes.
    Current decoder boundary vectors and large logical-offset tests are synthetic.
-5. Qualify the implemented lossless filename projection in an installed mount.
-   Implement and qualify per-directory case policy. Current product advertises
-   case-insensitive lookup and has no complete WSL/POSIX namespace contract.
+5. Qualify the implemented lossless filename projection and per-directory case
+   policy with Windows-created images and installed mounts. The adapter reports
+   Sensitive for distinct native cache keys while core lookup respects each
+   directory's stored flag; qualify positive/negative caching in mixed trees.
+   The complete WSL/POSIX namespace and normalization contracts remain open.
 6. Qualify the reparse metadata reader with Windows-authored links. Define target
    translation and namespace ownership before enabling native symlink/junction
    behavior. WOF, cloud placeholders, third-party GUID owners and WSL tags require

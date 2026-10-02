@@ -36,7 +36,7 @@ acquisition/verification tools, standalone parser fuzz targets, an MS-DTYP secur
 descriptor decoder/resolver and repeated portable workload measurements. Verified metadata
 reuse has a measured benefit for attribute-list opens. `$Secure` and per-file
 descriptors have bounded read-only snapshots; full authorization, WOF, native symlink
-projection, case policy and recovery remain open;
+projection, Windows/native case-policy qualification and recovery remain open;
 see [the complete continuation scope](docs/CORE-QUALIFICATION.md).
 Stored stream names now have a bounded immutable catalog and read-only FSKit
 xattr projection with a lossless UTF-16 reverse manifest. Bounded native filename
@@ -53,3 +53,7 @@ An independent [Windows AccessCheck observation pipeline](docs/ACCESS-ORACLE.md)
 now captures queried tokens and original descriptors for bounded offline comparison.
 Its transport/acquisition/reporting contracts pass locally; native Windows
 decisions have not yet been acquired.
+Stored per-directory case policy now selects exact UTF-16 or folded lookup while
+preserving NTFS B-tree ordering. Mixed-directory/alias and fault checks pass
+locally; installed cache behavior and Windows-authored flags remain unqualified.
+See [directory case policy](docs/CASE-POLICY.md).

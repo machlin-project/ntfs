@@ -58,7 +58,7 @@ def standard_manifest(directory):
     image, payloads, _ = fixtures.make_image()
     entries = [{'reference': f'{fixtures.ROOT_REF:016x}', 'parent_reference': None,
                 'path_utf16': [], 'name_utf16': [], 'stat': native_stat(0, True),
-                'children_complete': True}]
+                'children_complete': True, 'case_sensitive': False, 'case_flags': 0}]
     for name, payload in payloads.items():
         entry = {'reference': f'{fixtures.file_reference(fixtures.FILE_RECORDS[name]):016x}',
                  'parent_reference': f'{fixtures.ROOT_REF:016x}',
@@ -124,18 +124,94 @@ def helper_contracts():
             raise AssertionError('Malformed native reparse observation was accepted')
 
 
+def sensitive_manifest(directory):
+    image, _, _ = fixtures.make_image()
+    numbers = (fixtures.FILE_RECORDS['hello.txt'], fixtures.FILE_RECORDS['middle.dat'])
+    names = ('Foo.txt', 'foo.txt')
+    payloads = (b'exact upper-case file', b'exact lower-case file')
+    entries = [{'reference': f'{fixtures.ROOT_REF:016x}', 'parent_reference': None,
+                'path_utf16': [], 'name_utf16': [], 'stat': native_stat(0, True),
+                'children_complete': True, 'case_sensitive': True,
+                'case_flags': collector.FILE_CS_FLAG_CASE_SENSITIVE_DIR}]
+    index = b''
+    for number, name, payload in zip(numbers, names, payloads):
+        fixtures.put_record(image, number, fixtures.file_record(number,
+                            [fixtures.standard(), fixtures.resident(fixtures.DATA, payload, 1)]))
+        index += fixtures.entry(name, number, len(payload))
+        entries.append({'reference': f'{fixtures.file_reference(number):016x}',
+                        'parent_reference': f'{fixtures.ROOT_REF:016x}',
+                        'path_utf16': [collector.utf16_units(name)],
+                        'name_utf16': collector.utf16_units(name), 'stat': native_stat(len(payload)),
+                        'streams': [{'name_utf16': [], 'expected': payload}]})
+    fixtures.put_record(image, fixtures.ROOT_RECORD, fixtures.directory_record(index + fixtures.entry(),
+                        version=collector.FILE_CS_FLAG_CASE_SENSITIVE_DIR))
+    return save_manifest(directory, image, entries)
+
+
+def case_contracts(directory, reader, path, manifest):
+    damaged = deepcopy(manifest)
+    damaged['entries'][0]['case_sensitive'] = False
+    damaged['entries'][0]['case_flags'] = 0
+    path.write_text(json.dumps(damaged) + '\n')
+    report = corpus.verify(path, reader, directory / 'wrong-case.json')
+    assert report['status'] == 'fail' and any(
+        check['operation'] == 'directory-case-policy' and check['status'] == 'fail'
+        for check in report['checks']), report
+    damaged['entries'][0]['case_flags'] = collector.FILE_CS_FLAG_CASE_SENSITIVE_DIR << 1
+    path.write_text(json.dumps(damaged) + '\n')
+    report = corpus.verify(path, reader, directory / 'unknown-case.json')
+    assert report['status'] == 'fail', report
+    for change in ({'case_sensitive': 'true'}, {'case_flags': -1}, {'case_flags': True},
+                   {'case_flags': 1 << (ctypes.sizeof(ctypes.c_uint32) * fixtures.BYTE_BITS)},
+                   {'case_sensitive': False}, {'case_sensitive': None}):
+        damaged = deepcopy(manifest)
+        damaged['entries'][0].update(change)
+        path.write_text(json.dumps(damaged) + '\n')
+        try:
+            corpus.validate_manifest(path)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Malformed case-policy observation was accepted')
+    for entry_index in (0, 1):
+        damaged = deepcopy(manifest)
+        entry = damaged['entries'][entry_index]
+        if entry_index == 0:
+            del entry['case_flags']
+        else:
+            entry.update(case_sensitive=False, case_flags=0)
+        path.write_text(json.dumps(damaged) + '\n')
+        try:
+            corpus.validate_manifest(path)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Partial or non-directory case policy was accepted')
+    damaged = deepcopy(manifest)
+    del damaged['entries'][0]['case_sensitive']
+    del damaged['entries'][0]['case_flags']
+    path.write_text(json.dumps(damaged) + '\n')
+    report = corpus.verify(path, reader, directory / 'missing-case.json')
+    assert report['status'] == 'pass' and report['missing_case_observations'] == [manifest['entries'][0]['reference']], report
+    assert 'unobserved directory case policies' in report['remaining_contracts'], report
+
+
 def main():
     reader = Path(sys.argv[1]).resolve()
     helper_contracts()
     with tempfile.TemporaryDirectory(prefix='ntfs-corpus-') as temporary:
         base = Path(temporary)
-        for name, create in (('standard', standard_manifest), ('hard-links', hard_link_manifest)):
+        for name, create in (('standard', standard_manifest), ('hard-links', hard_link_manifest),
+                             ('case-sensitive', sensitive_manifest)):
             directory = base / name
             directory.mkdir()
             path, manifest = create(directory)
             report = corpus.verify(path, reader, directory / 'report.json')
             assert report['status'] == 'pass', report
             assert report['corpus_provenance'].startswith('independent synthetic'), report
+            if name == 'case-sensitive':
+                assert not report['missing_case_observations'], report
+                case_contracts(directory, reader, path, manifest)
             for entry in manifest['entries']:
                 observed = [json.loads(line)['name_utf16'] for line in corpus.tool(
                     reader, directory / 'volume.img', 'streams-ref',

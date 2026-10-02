@@ -30,6 +30,8 @@ enum {
 	NTFS_RECORD_IN_USE = 1,
 	NTFS_RECORD_DIRECTORY = 2,
 	NTFS_RECORD_VIEW_INDEX = 8,
+	NTFS_STANDARD_DIRECTORY_CASE_INSENSITIVE = 0,
+	NTFS_STANDARD_DIRECTORY_CASE_SENSITIVE = 1,
 	NTFS_ATTR_COMPRESSED = 1,
 	NTFS_ATTR_COMPRESSION_MASK = 0xff,
 	NTFS_ATTR_ENCRYPTED = 0x4000,
@@ -144,6 +146,14 @@ struct ntfs_disk_standard {
 	uint8_t created[8], modified[8], changed[8], accessed[8], attributes[4];
 	uint8_t max_versions[4], version[4], class_id[4];
 };
+
+/* Overlay of version when modern directory version numbering is disabled. */
+struct ntfs_disk_standard_policy {
+	uint8_t directory_flags;
+	uint8_t storage_hint[sizeof(uint32_t) - sizeof(uint8_t)];
+};
+
+_Static_assert(sizeof(struct ntfs_disk_standard_policy) == sizeof(uint32_t), "directory policy");
 
 struct ntfs_disk_standard_extension {
 	uint8_t owner_id[4], security_id[4], quota[8], usn[8];

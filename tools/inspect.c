@@ -107,14 +107,16 @@ json_stat(const struct ntfs_stat *st)
 {
 	printf("{\"reference\":\"%016" PRIx64 "\",\"size\":\"%" PRIu64
 	       "\",\"allocated_size\":\"%" PRIu64 "\",\"links\":%u,\"directory\":%s,"
-	       "\"reparse\":%s,\"file_attributes\":%" PRIu32 ",\"security_id\":%" PRIu32
-	       ",\"created\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32
-	       "},\"modified\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32
-	       "},\"changed\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32
-	       "},\"accessed\":{\"seconds\":\"%" PRId64 "\",\"nanoseconds\":%" PRIu32 "}}\n",
+	       "\"reparse\":%s,\"case_sensitive\":%s,\"file_attributes\":%" PRIu32
+	       ",\"security_id\":%" PRIu32 ",\"created\":{\"seconds\":\"%" PRId64
+	       "\",\"nanoseconds\":%" PRIu32 "},\"modified\":{\"seconds\":\"%" PRId64
+	       "\",\"nanoseconds\":%" PRIu32 "},\"changed\":{\"seconds\":\"%" PRId64
+	       "\",\"nanoseconds\":%" PRIu32 "},\"accessed\":{\"seconds\":\"%" PRId64
+	       "\",\"nanoseconds\":%" PRIu32 "}}\n",
 	    st->reference, st->size, st->allocated_size, st->links,
-	    st->directory ? "true" : "false", st->reparse ? "true" : "false", st->file_attributes,
-	    st->security_id, st->created.seconds, st->created.nanoseconds, st->modified.seconds,
+	    st->directory ? "true" : "false", st->reparse ? "true" : "false",
+	    st->case_sensitive ? "true" : "false", st->file_attributes, st->security_id,
+	    st->created.seconds, st->created.nanoseconds, st->modified.seconds,
 	    st->modified.nanoseconds, st->changed.seconds, st->changed.nanoseconds,
 	    st->accessed.seconds, st->accessed.nanoseconds);
 }

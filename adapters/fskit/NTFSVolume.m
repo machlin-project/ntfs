@@ -328,7 +328,10 @@ item_id(uint64_t reference)
 				if (result == NTFS_OK) {
 					result = ntfs_native_entry_name(
 					    &entry, ordinal, stored, &projected);
-					if (result == NTFS_OK && !projected) {
+					if (result == NTFS_OK &&
+					    (!projected ||
+						(parent->stat.case_sensitive &&
+						    ![name.data isEqualToData:(*stored).data]))) {
 						result = NTFS_NOT_FOUND;
 					}
 				}
@@ -860,7 +863,10 @@ item_id(uint64_t reference)
 	caps.supportsFastStatFS = YES;
 	caps.supports2TBFiles = YES;
 	caps.doesNotSupportSettingFilePermissions = YES;
-	caps.caseFormat = FSVolumeCaseFormatInsensitiveCasePreserving;
+	/* The SDK exposes only a volume-wide format. Preserve distinct native
+	 * cache keys for sensitive directories; insensitive lookup still returns
+	 * the canonical stored spelling through the directory's core policy. */
+	caps.caseFormat = FSVolumeCaseFormatSensitive;
 	return caps;
 }
 

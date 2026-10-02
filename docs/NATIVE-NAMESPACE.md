@@ -4,8 +4,9 @@ The core preserves original UTF-16 code units and distinguishes names of directo
 links from the referenced inode. Native projection belongs to the adapter.
 Ordinary filenames retain their original UTF-8 bytes without normalization. The
 adapter supplies bounded reversible aliases for names that cannot be passed
-through. Per-directory case-sensitive lookup remains required; the current
-core lookup folds through the volume's $UpCase and rejects ambiguous collisions.
+through. Stored per-directory policy now selects exact UTF-16 or $UpCase-folded
+lookup; ambiguous collisions in an insensitive directory remain rejected. See
+CASE-POLICY.md for format evidence and required Windows/native qualification.
 
 ## Filename projection
 
@@ -16,8 +17,10 @@ The reference includes its MFT sequence; the ordinal counts visible directory
 links, excluding DOS aliases and hidden system records. The owning directory
 provides the remaining identity. Every leading-tilde literal is projected too,
 so a stored filename resembling an alias cannot shadow another projected link.
-Alias parsing accepts ASCII case variants and returns the canonical lowercase
-spelling. Malformed aliases never fall back to a stored literal name.
+Alias syntax parsing accepts ASCII case variants. The owning volume requires
+canonical lowercase spelling in sensitive directories and returns canonical
+spelling in insensitive directories. Malformed aliases never fall back to a
+stored literal name.
 
 Resolution opens an independent bounded directory cursor, selects that link,
 checks the full reference and confirms that its name requires projection before

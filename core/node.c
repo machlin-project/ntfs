@@ -84,6 +84,7 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 {
 	const struct ntfs_disk_record *r;
 	const struct ntfs_disk_standard *si;
+	const struct ntfs_disk_standard_policy *policy;
 	const struct ntfs_disk_standard_extension *extended;
 	struct ntfs_attr_view a;
 	const uint8_t *value;
@@ -114,6 +115,18 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 		return NTFS_CORRUPT;
 	}
 	si = (const void *)value;
+	/* Modern Windows uses the low version byte as the directory case flag
+	 * when version numbering is disabled. The remaining bytes are storage
+	 * hints, not case flags. Legacy version numbers do not select this policy. */
+	if (st->directory && ntfs_u32(si->max_versions) == 0) {
+		policy = (const void *)si->version;
+		if (policy->directory_flags != NTFS_STANDARD_DIRECTORY_CASE_INSENSITIVE &&
+		    policy->directory_flags != NTFS_STANDARD_DIRECTORY_CASE_SENSITIVE) {
+			return NTFS_UNSUPPORTED;
+		}
+		st->case_sensitive =
+		    policy->directory_flags == NTFS_STANDARD_DIRECTORY_CASE_SENSITIVE;
+	}
 	st->file_attributes = ntfs_u32(si->attributes);
 	st->reparse = (st->file_attributes & NTFS_FILE_REPARSE) != 0;
 	ntfs_decode_time(ntfs_u64(si->created), &st->created);

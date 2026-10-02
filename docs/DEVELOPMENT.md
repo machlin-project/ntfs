@@ -89,6 +89,13 @@ on Windows, then compare with `tests/windows_access.py` on POSIX. Use new captur
 and report directories. See ACCESS-ORACLE.md for commands and explicit native
 qualification limits; no Windows acquisition has run at this checkpoint.
 
+The `case-policy` suite covers stored directory flags and exact/folded lookup,
+including collisions split across tree separators, mixed parent policies and
+required allocation/read faults. `tests/case_fixtures.py` authors these images
+without importing parser code. FSKit components cover sensitive aliases and
+mixed directory identities; modern reply tests explicitly SKIP without macOS 27.
+See CASE-POLICY.md and ACCEPTANCE.md for evidence and native acceptance limits.
+
 Compare against external NTFS-3G exports using an existing interoperability image
 directory and a new evidence directory:
 

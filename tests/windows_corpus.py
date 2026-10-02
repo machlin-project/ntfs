@@ -42,6 +42,7 @@ SI_PRESENTATION_ATTRIBUTES = (FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN |
                               FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_ARCHIVE |
                               FILE_ATTRIBUTE_NOT_CONTENT_INDEXED)
 NAMESPACE_DOS = 2
+FILE_CS_FLAG_CASE_SENSITIVE_DIR = 0x00000001
 REFERENCE = re.compile(r'[0-9a-f]{16}')
 DECIMAL = re.compile(r'0|[1-9][0-9]*')
 SHA256 = re.compile(r'[0-9a-f]{64}')
@@ -117,6 +118,13 @@ def validate_manifest(path):
         stat = entry['stat']
         if any(type(stat[field]) is not bool for field in ('directory', 'reparse')):
             raise ValueError('Invalid object-kind observation')
+        if 'case_sensitive' in entry or 'case_flags' in entry:
+            if (not stat['directory'] or stat['reparse'] or
+                    type(entry.get('case_sensitive')) is not bool or
+                    type(entry.get('case_flags')) is not int or
+                    not 0 <= entry['case_flags'] <= 0xffffffff or
+                    entry['case_sensitive'] != bool(entry['case_flags'] & FILE_CS_FLAG_CASE_SENSITIVE_DIR)):
+                raise ValueError('Invalid native directory case-policy observation')
         size_value(stat['size'])
         if type(stat['links']) is not int or not 0 <= stat['links'] <= U64_MAX:
             raise ValueError('Invalid link count')
@@ -193,10 +201,14 @@ def verify(manifest_path, reader, report_path):
     report = {'status': 'running', 'corpus_provenance': manifest['provenance'],
               'acquisition_status': manifest['acquisition_status'], 'checks': [],
               'scope': ['volume geometry', 'file references and stat', 'directory names and lookups',
-                        'stream bytes', 'reparse metadata', 'read-only image identity'],
+                        'directory case policy', 'stream bytes', 'reparse metadata', 'read-only image identity'],
               'remaining_contracts': ['security descriptors and ACL enforcement',
-                                      'case-sensitive policy query', 'native FSKit mount']}
+                                      'native FSKit mount'],
+              'missing_case_observations': [entry['reference'] for entry in manifest['entries']
+                  if entry['stat']['directory'] and not entry['stat']['reparse'] and 'case_sensitive' not in entry]}
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    if report['missing_case_observations']:
+        report['remaining_contracts'].append('unobserved directory case policies')
 
     def check(operation, subject, action):
         try:
@@ -242,6 +254,14 @@ def verify(manifest_path, reader, report_path):
                                               'nanoseconds': remainder * NANOSECONDS_PER_FILETIME_TICK})
 
             check('stat', ref, stat_check)
+            if 'case_sensitive' in entry:
+                def case_check():
+                    if entry['case_flags'] & ~FILE_CS_FLAG_CASE_SENSITIVE_DIR:
+                        raise ValueError('Unsupported native case-policy flags')
+                    actual = decoded_json(tool(reader, image, 'stat-ref', ref))
+                    equal(actual['case_sensitive'], entry['case_sensitive'])
+
+                check('directory-case-policy', ref, case_check)
             if entry['parent_reference'] is not None:
                 name_hex = ''.join(f'{unit:04x}' for unit in entry['name_utf16'])
 

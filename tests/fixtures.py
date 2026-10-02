@@ -125,6 +125,7 @@ INDEX_ENTRY = struct.Struct('<QHHH2x')
 FILENAME_HEADER = struct.Struct('<QQQQQQQIIBB')
 ATTR_LIST_ENTRY = struct.Struct('<IHBBQQH')
 STANDARD_INFO = struct.Struct('<QQQQIIIIIIQQ')
+STANDARD_INFO_COMMON = struct.Struct('<QQQQIIII')
 EPOCH = 116444736000000000
 
 
@@ -208,17 +209,18 @@ def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=Fa
     return bytes(out)
 
 
-def standard(attributes=0, security_id=SECURITY_ID):
-    return resident(SI, STANDARD_INFO.pack(EPOCH, EPOCH + TIMESTAMP_OFFSET_TICKS, EPOCH, EPOCH, attributes, 0, 0, 0, 0, security_id, 0, 0))
+def standard(attributes=0, security_id=SECURITY_ID, *, max_versions=0, version=0, common_only=False):
+    value = STANDARD_INFO.pack(EPOCH, EPOCH + TIMESTAMP_OFFSET_TICKS, EPOCH, EPOCH, attributes, max_versions, version, 0, 0, security_id, 0, 0)
+    return resident(SI, value[:STANDARD_INFO_COMMON.size] if common_only else value)
 
 
-def key(name, size=0, namespace=NAMESPACE_WIN32):
+def key(name, size=0, namespace=NAMESPACE_WIN32, parent=ROOT_REF, attributes=0):
     raw = name.encode('utf-16le', errors='surrogatepass')
-    return FILENAME_HEADER.pack(ROOT_REF, EPOCH, EPOCH, EPOCH, EPOCH, align(size), size, 0, 0, len(raw) // U16_BYTES, namespace) + raw
+    return FILENAME_HEADER.pack(parent, EPOCH, EPOCH, EPOCH, EPOCH, align(size), size, attributes, 0, len(raw) // U16_BYTES, namespace) + raw
 
 
-def entry(name=None, number=0, size=0, child=None, namespace=NAMESPACE_WIN32):
-    value = b'' if name is None else key(name, size, namespace)
+def entry(name=None, number=0, size=0, child=None, namespace=NAMESPACE_WIN32, parent=ROOT_REF, attributes=0):
+    value = b'' if name is None else key(name, size, namespace, parent, attributes)
     flags = (END if name is None else 0) | (CHILD if child is not None else 0)
     length = align(INDEX_ENTRY.size + len(value)) + (U64_BYTES if child is not None else 0)
     out = bytearray(length)
@@ -243,18 +245,20 @@ def index_block(vcn, entries, terminal_child=None):
     return out
 
 
-def directory_record(entries, allocation_clusters=0, data_streams=(), legacy=False):
+def directory_record(entries, allocation_clusters=0, data_streams=(), legacy=False,
+                     *, number=ROOT_RECORD, version=0, max_versions=0, common_only=False):
     root = INDEX_ROOT_HEADER.pack(FILENAME, COLLATION_FILENAME, CLUSTER, 1)
     root += INDEX_HEADER.pack(INDEX_HEADER.size, INDEX_HEADER.size + len(entries),
                               INDEX_HEADER.size + len(entries), INDEX_LARGE if allocation_clusters else 0)
     root += entries
-    attrs = [standard(FILE_ATTRIBUTE_DIRECTORY), *data_streams, resident(INDEX_ROOT, root, DIR_ROOT_INSTANCE, '$I30')]
+    attrs = [standard(FILE_ATTRIBUTE_DIRECTORY, version=version, max_versions=max_versions,
+                      common_only=common_only), *data_streams, resident(INDEX_ROOT, root, DIR_ROOT_INSTANCE, '$I30')]
     if allocation_clusters:
         bitmap = ((1 << allocation_clusters) - 1).to_bytes((allocation_clusters + BYTE_BITS - 1) // BYTE_BITS, 'little')
         attrs += [nonresident(INDEX_ALLOC, [(allocation_clusters, INDEX_LCN)],
                               allocation_clusters * CLUSTER, DIR_ALLOCATION_INSTANCE, '$I30'),
                   resident(BITMAP, bitmap, DIR_BITMAP_INSTANCE, '$I30')]
-    return file_record(ROOT_RECORD, attrs, directory=True, legacy=legacy)
+    return file_record(number, attrs, directory=True, legacy=legacy)
 
 
 def list_entry(reference, instance, lowest, kind=DATA, name=''):
@@ -485,7 +489,7 @@ def namespace_fixtures(output, image, contents):
                        for u in original)
         return folded, original
 
-    def build(names, hidden=False):
+    def build(names, hidden=False, case_sensitive=False):
         blocks = []
         links = len(names)
         metadata_name, dos_name = '!metadata', 'AAA~1'
@@ -518,7 +522,7 @@ def namespace_fixtures(output, image, contents):
         for vcn, block in enumerate(blocks):
             put_data(changed, INDEX_LCN + vcn, block)
         put_record(changed, ROOT_RECORD,
-                   directory_record(entry(child=root_child), len(blocks)))
+                   directory_record(entry(child=root_child), len(blocks), version=int(case_sensitive)))
         put_record(changed, number, file_record(number,
                    [standard(), resident(DATA, payload, 1)], links=links))
         bitmap = bytearray(IMAGE_SIZE // CLUSTER // BYTE_BITS)
@@ -533,6 +537,7 @@ def namespace_fixtures(output, image, contents):
                     '~literal', '~ntfs-0007000000000018-00000000',
                     'é.txt', 'e\u0301.txt', '.', '..'], key=order)
     (output / 'namespace.img').write_bytes(build(names))
+    (output / 'namespace-sensitive.img').write_bytes(build(names, case_sensitive=True))
     (output / 'namespace-hidden.img').write_bytes(build(names, hidden=True))
     expected = []
     for ordinal, name in enumerate(names):
@@ -741,6 +746,8 @@ def main():
     reparse_fixtures(output, image)
     catalog_fixtures(output, image, contents)
     namespace_fixtures(output, image, contents)
+    from case_fixtures import author as case_fixtures
+    case_fixtures(output, image)
     from secure_fixtures import author as secure_fixtures
     secure_fixtures(output, image, contents)
     (output / 'standard.img').write_bytes(image)

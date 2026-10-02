@@ -40,6 +40,9 @@ Primary references:
 - [Native file information and hard-link identity](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information)
 - [Native stream enumeration](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-win32_find_stream_data)
 - [Apple FSKit](https://developer.apple.com/documentation/fskit)
+- [Microsoft per-directory case semantics](https://learn.microsoft.com/en-us/windows/wsl/case-sensitivity)
+- [Original Keramics NTFS format research](https://keramics.github.io/ntfs.html)
+- [Original MFT Browser standard-information field template](https://github.com/kacos2000/MFT_Browser/blob/master/NTFS%20-%20MFT%20FILE%20Record.tpl)
 - [NTFS-3G release and source](https://github.com/tuxera/ntfs-3g/tree/2022.10.3)
 - [NTFS-3G layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/layout.h)
 - [Original Linux-NTFS Secure format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/secure.html)
@@ -112,3 +115,10 @@ entitlements, payment integration and diagnostics outside filesystem algorithms.
 Before a future open-source release, the owner selects the license and reviews
 all contributor and third-party rights; proprietary status changes only through
 that explicit release decision.
+
+Directory case policy uses published standard-information field observations:
+disabled version numbering, a low-byte case indicator and separate upper storage
+bytes. CASE-POLICY.md separates those facts from the original core/adapter
+implementation and the remaining Windows/native validation. Microsoft's WSL
+extended-attribute interface is not presumed to be literal NTFS EA storage.
+Synthetic policy images and component tests qualify local interpretation only.

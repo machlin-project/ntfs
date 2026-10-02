@@ -15,6 +15,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
 | Native filenames and hard links | Bounded reversible aliases and per-link UTF-16 manifests; inode identity separated from link spelling; native length, Unicode, hidden/DOS ordinals, response/scan exhaustion, faults and revocation | Five authored namespace images and component sweeps passed; installed case/normalization and Windows-authored namespace untested |
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
+| Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
 | Reparse metadata | Microsoft framing, relative/absolute symlinks and junction targets, lossless UTF-16, fragmented/listed attributes, snapshot lifetime, opaque WOF/cloud classification and fail-closed traversal/data access | Synthetic tests passed; Windows-authored links and native translation untested |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
@@ -170,6 +171,35 @@ remaining optimization requirements. CORE-QUALIFICATION.md retains every agreed
 functional and optimization deliverable without treating this checkpoint as
 completion of the full continuation.
 
+The subsequent directory-case checkpoint passed all 28 ASan/UBSan suites,
+both 2-KiB-frame freestanding targets, selected Xcode formatting, legacy FSKit
+components and the unsigned app/extension build. Seventeen authored images cover
+exact ASCII/Unicode case collisions across tree boundaries, resident/external/
+nested/listed indexes, cache controls, mixed parents, standard-information sizes,
+legacy/storage/unknown policy fields and corrupt/stale records. Forty-seven
+required-allocation and eight I/O failure positions verify release accounting
+and retry. The sensitive namespace component preserves hard-link manifests and
+rejects noncanonical aliases; mixed parents preserve distinct file identities,
+folded canonical names, directory enumeration and cached-operation revocation.
+Corpus contracts compare native policy observations with core stat and preserve
+unknown/missing observations as failures/gaps. Their observations remain synthetic.
+
+The modern case-reply test compiles but emits two explicit SKIPs on this macOS
+26 runtime; no macOS 27 callback behavior was executed. Its guarded opaque context
+double tests reply framing only, never native authorization. The initial component
+compile failure is retained in `artifacts/plan-case-policy-fskit.log`; the corrected
+successful run is `artifacts/plan-case-policy-fskit-final.log`. Other evidence is
+`artifacts/plan-case-policy-{build,tests,freestanding,style,app-build,fuzz}.log`.
+Final test review named expected-name indices and checked mixed-directory
+references; the focused suite and style passed again under
+`artifacts/plan-case-policy-test-review{,-build}.log` and
+`artifacts/plan-case-policy-style-final.log`, without changing core/adapter code.
+Image fuzz completed 43,409 executions in 61 seconds with peak RSS 906 MiB and no
+reported finding under `artifacts/fuzz-case-policy/`. This bounded campaign does
+not establish exhaustive hostile-input coverage. CASE-POLICY.md retains the
+format provenance, volume-wide Sensitive capability strategy and required
+Windows/installed cache acceptance. Neither native acquisition nor a mount ran.
+
 | Fault sweep layout | Allocation failure positions | I/O failure positions |
 | --- | ---: | ---: |
 | Standard | 249 | 41 |
@@ -288,9 +318,10 @@ Unpaired, oversized and reserved filenames now have bounded native aliases and
 UTF-16 reverse manifests, qualified by component tests; installed projection and
 native normalization remain untested. Dirty or otherwise flagged volumes are
 refused without recovery. The mirror check covers MFT bootstrap record zero;
-mount is not a full filesystem consistency check. Distinct case-sensitive names
-with identical $UpCase keys produce UNSUPPORTED during lookup; full WSL/POSIX
-namespace semantics remain open. Stream names use exact UTF-16 matching. The
+mount is not a full filesystem consistency check. Case-sensitive directories use
+exact UTF-16 lookup; collisions in an insensitive directory remain UNSUPPORTED.
+Windows/native case-policy and full WSL/POSIX namespace qualification remain open.
+Stream names use exact UTF-16 matching. The
 adapter uses a single-user read-only mode/UID/GID presentation and rejects reparse
 items; it does not enforce Windows ACLs.
 Directory enumeration requesting attributes can fail on unsupported files.

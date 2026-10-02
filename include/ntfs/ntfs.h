@@ -136,6 +136,9 @@ struct ntfs_stat {
 	uint16_t links;
 	bool directory;
 	bool reparse;
+	/* Stored policy of this directory, independent of its parent's policy.
+	 * False on files and legacy version-numbered directories. */
+	bool case_sensitive;
 	struct ntfs_time created, modified, changed, accessed;
 };
 
@@ -189,8 +192,10 @@ void ntfs_reparse_get_info(const struct ntfs_reparse *, struct ntfs_reparse_info
  * NULL/zero capacity queries the size. Non-link payloads return UNSUPPORTED. */
 enum ntfs_result ntfs_reparse_name(
     const struct ntfs_reparse *, enum ntfs_reparse_name_type, uint16_t *, size_t, size_t *);
-/* Lookup folds names through $UpCase. Distinct names with the same folded key
- * return UNSUPPORTED instead of selecting an arbitrary case-sensitive entry. */
+/* Lookup uses the parent's stored case policy: exact UTF-16 in sensitive
+ * directories, $UpCase folding otherwise. The B-tree retains filename collation
+ * in both modes. Folded collisions in an insensitive directory are UNSUPPORTED;
+ * lookup never chooses an arbitrary entry. Each searched directory owns its flag. */
 enum ntfs_result ntfs_lookup(struct ntfs_node *, const uint16_t *, size_t, struct ntfs_node **);
 /* Also returns the stored name, preserving case and hard-link provenance. */
 enum ntfs_result ntfs_lookup_entry(

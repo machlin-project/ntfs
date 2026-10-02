@@ -16,6 +16,7 @@ struct ntfs_directory {
 	uint32_t depth, visited_count, visited_capacity;
 	uint64_t *visited;
 	enum ntfs_result failure;
+	bool case_sensitive;
 };
 
 static const uint16_t index_name[] = {'$', 'I', '3', '0'};
@@ -307,6 +308,7 @@ ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
 	}
 	d->volume = node->volume;
 	d->reference = node->reference;
+	d->case_sensitive = stat.case_sensitive;
 	d->volume->children++;
 	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ROOT, index_name,
 	    sizeof(index_name) / sizeof(index_name[0]), &root);
@@ -458,6 +460,30 @@ ntfs_directory_next(struct ntfs_directory *d, struct ntfs_dirent *out)
 	return result;
 }
 
+static int
+lookup_compare(struct ntfs_directory *d, const uint16_t *name, size_t length,
+    const struct ntfs_disk_filename *key)
+{
+	const uint8_t *stored = (const uint8_t *)key + sizeof(*key);
+	size_t i;
+	uint16_t unit;
+	int folded;
+
+	/* Even a sensitive directory is sorted by folded filename collation,
+	 * with original UTF-16 breaking ties. Raw order alone cannot seek its tree. */
+	folded = ntfs_name_compare(d->volume, name, length, stored, key->length);
+	if (folded != 0 || !d->case_sensitive) {
+		return folded;
+	}
+	for (i = 0; i < length; i++) {
+		unit = ntfs_u16(stored + i * NTFS_UTF16_UNIT_BYTES);
+		if (name[i] != unit) {
+			return name[i] < unit ? -1 : 1;
+		}
+	}
+	return 0;
+}
+
 static enum ntfs_result
 seek_name(struct ntfs_directory *d, const uint16_t *name, size_t length)
 {
@@ -477,8 +503,7 @@ seek_name(struct ntfs_directory *d, const uint16_t *name, size_t length)
 		key = NULL;
 		if ((ntfs_u16(entry->flags) & NTFS_INDEX_END) == 0) {
 			key = (const void *)((const uint8_t *)entry + sizeof(*entry));
-			comparison = ntfs_name_compare(d->volume, name, length,
-			    (const uint8_t *)key + sizeof(*key), key->length);
+			comparison = lookup_compare(d, name, length, key);
 		}
 		if (comparison > 0) {
 			f->previous = key;
@@ -533,8 +558,7 @@ ntfs_lookup_entry(struct ntfs_node *parent, const uint16_t *name, size_t length,
 			result = NTFS_NOT_FOUND;
 		} else if (result == NTFS_OK) {
 			key = (const void *)((const uint8_t *)entry + sizeof(*entry));
-			if (ntfs_name_compare(parent->volume, name, length,
-				(const uint8_t *)key + sizeof(*key), key->length) != 0) {
+			if (lookup_compare(d, name, length, key) != 0) {
 				result = NTFS_NOT_FOUND;
 			} else {
 				reference = ntfs_u64(entry->reference);
@@ -544,8 +568,8 @@ ntfs_lookup_entry(struct ntfs_node *parent, const uint16_t *name, size_t length,
 			}
 		}
 	}
-	if (result == NTFS_OK) {
-		/* Case-insensitive lookup cannot choose between distinct POSIX
+	if (result == NTFS_OK && !d->case_sensitive) {
+		/* Case-insensitive lookup cannot choose between distinct stored
 		 * names that fold alike. The lower-bound cursor also catches a
 		 * collision split across a separator and its neighboring child. */
 		result = next_entry(d, &entry);

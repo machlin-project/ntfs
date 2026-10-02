@@ -110,9 +110,13 @@ bounded hash set of visited child VCNs and a persistent in-order cursor. Lookup
 descends the filename B-tree. Every child checks its allocation bitmap, VCN,
 fixups, entry spans, parent references, local ordering and inherited ancestor key
 bounds. Unicode collation uses the volume's validated $UpCase, with original
-UTF-16 units breaking case ties. Lookup seeks the folded lower bound and checks
-its successor; distinct names with the same folded key return UNSUPPORTED even
-when separated by a tree boundary. UTF conversion rejects invalid sequences.
+UTF-16 units breaking case ties. The stored standard-information directory flag
+selects exact or folded lookup without changing that ordering. Sensitive lookup
+seeks the full key; insensitive lookup seeks the folded lower bound and checks
+its successor for ambiguous collisions, including across a tree boundary. Each
+directory owns its policy independently of its parent. UTF conversion rejects
+invalid sequences. CASE-POLICY.md records format sources, unsupported flags and
+the volume-wide FSKit capability strategy requiring native qualification.
 
 Mount verifies primary and mirrored MFT bootstrap records, volume version and
 flags, $UpCase, and the root index. It does not claim a full filesystem check.

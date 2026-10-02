@@ -235,3 +235,21 @@ callback destinations. See PERFORMANCE.md for exact commands and measured limits
 512/4096/65536, covering direct and window reads, mixed tails, EOF, short/partial/
 full errors, over-reported lengths, retry and permanent revocation. Lifecycle
 buffers own raw aligned memory; a mutable Foundation data wrapper may rehome it.
+
+Compare reproducible portable Release products with:
+
+```sh
+python3 scripts/check_reproducible.py --output artifacts/reproducibility-next
+```
+
+The new output contains two ordinary Meson build directories, bounded combined
+setup/compile logs and a JSON report. Compiled product sources must be committed;
+ordinary Git checks them before and after the run and requires an unchanged
+revision. Each build explicitly selects Release/O3, no sanitizers and the same
+compiler/SDK and selected options. Eight archives/CLI products undergo full byte
+comparison and SHA-256 checks. This qualifies distinct build directories in the
+same checkout; relocated sources, FSKit app/signing and other toolchains remain
+separate. The prepared CI matrix runs the same check, but remote execution has
+not occurred. Build failures, deadlines and log-budget exhaustion fail the check
+and retain bounded diagnostics; timeout cleanup targets only that build's process
+group.

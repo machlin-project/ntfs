@@ -40,6 +40,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
 | Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded single-edge native links and WOF file-provider content are tracked separately |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
+| Portable Release reproducibility | Two isolated ordinary Meson build directories, clean compiled-source Git state/unchanged revision, identical selected release options, bounded failure logs and full archive/CLI byte comparisons | Eight products match on local arm64 macOS; relocated checkout, other toolchains, Linux remote and native app/signing qualification remain open |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource comparison | Specific allocation/metadata and aligned memory-reader improvement measured; native performance unmeasured |
@@ -67,6 +68,16 @@ requests and 54% for 1-MiB-plus-sector requests over the memory reader.
 PERFORMANCE.md records scope, per-run percentiles, timing variance and exact
 reports under `artifacts/fskit-resource-{baseline,direct,offset-repeat}/`.
 Installed buffer lifetime and native throughput remain unqualified.
+
+`scripts/check_reproducible.py` passes two Release/O3 builds and full byte equality
+for `libntfs.a`, `libntfs-posix.a` and six CLI products. Selected compiler/SDK,
+source revision and artifact hashes stay in
+`artifacts/reproducibility-accepted/report.json`; setup/compile logs are retained
+beside it, with launcher/style evidence in `artifacts/plan-reproducibility*.log`.
+The earlier ordinary build probe also matches all eight products under
+`artifacts/reproducibility-probe/`. No source remapping, timestamp rewriting or
+binary normalization was needed. CI is prepared to repeat the comparison on
+macOS/Linux and upload bounded reports/logs; it has not run remotely.
 
 The active-client continuation passes all 53 sanitized core suites, style,
 17 component PASS/seven runtime SKIPs and the unsigned arm64/x86_64 app under

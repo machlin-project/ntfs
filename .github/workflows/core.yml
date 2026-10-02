@@ -23,12 +23,18 @@ jobs:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
       - run: make test
+      - name: Compare isolated release products
+        run: python3 scripts/check_reproducible.py --output artifacts/reproducibility
       - name: Record results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: core-${{ matrix.os }}
-          path: .build/meson-logs/testlog.json
+          path: |
+            .build/meson-logs/testlog.json
+            artifacts/reproducibility/report.json
+            artifacts/reproducibility/*-setup.log
+            artifacts/reproducibility/*-compile.log
   interoperability:
     runs-on: ubuntu-latest
     steps:

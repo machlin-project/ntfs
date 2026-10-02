@@ -174,6 +174,25 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## Portable Release reproducibility checkpoint
+
+`scripts/check_reproducible.py --output artifacts/reproducibility-next` creates
+two ordinary isolated Meson Release/O3 builds with the same selected toolchain.
+It requires committed compiled sources and an unchanged Git revision, verifies
+selected options, compares all bytes of two core/backend archives and six CLI
+products, and retains per-artifact hashes plus bounded combined diagnostics.
+Build errors, timeout and log exhaustion fail; cleanup kills only the process
+group owned by that build. It does not rewrite timestamps or normalize products.
+
+The local arm64 check passes all eight products under
+`artifacts/reproducibility-accepted/`; launcher/style logs are
+`artifacts/plan-reproducibility*.log`. An earlier ordinary-build probe independently
+matches them under `artifacts/reproducibility-probe/`. Prepared CI calls the checker
+on its macOS/Linux matrix and retains reports/logs. It has not run remotely.
+This establishes repeat builds in distinct directories of one checkout, not
+relocated-source, cross-toolchain or FSKit app/signing reproducibility. Core source
+and behavior are unchanged since the earlier acceptance checkpoints.
+
 ## FSKit resource I/O handoff checkpoint
 
 `NTFSResource` now transfers a fragment directly into caller storage only when

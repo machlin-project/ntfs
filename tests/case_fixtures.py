@@ -111,6 +111,22 @@ def author(output, source):
     write('mixed', mixed(CASE_INSENSITIVE))
     write('mixed-sensitive-root', mixed(CASE_SENSITIVE))
     write('unknown-child', mixed(CASE_INSENSITIVE, UNKNOWN_DIRECTORY_POLICY))
+    # Each index remains structurally valid; native directory ownership must
+    # reject self-links and a second parent for an already adopted directory.
+    self_parent = mixed(CASE_INSENSITIVE)
+    own_ref = f.file_reference(SENSITIVE_DIRECTORY)
+    entries = f.entry('Self', SENSITIVE_DIRECTORY, parent=own_ref,
+                      attributes=f.FILE_ATTRIBUTE_DIRECTORY) + f.entry()
+    f.put_record(self_parent, SENSITIVE_DIRECTORY,
+                 f.directory_record(entries, number=SENSITIVE_DIRECTORY))
+    write('directory-self', self_parent)
+    two_parents = mixed(CASE_INSENSITIVE)
+    other_ref = f.file_reference(INSENSITIVE_DIRECTORY)
+    entries = f.entry('OtherSensitive', SENSITIVE_DIRECTORY, parent=other_ref,
+                      attributes=f.FILE_ATTRIBUTE_DIRECTORY) + f.entry()
+    f.put_record(two_parents, INSENSITIVE_DIRECTORY,
+                 f.directory_record(entries, number=INSENSITIVE_DIRECTORY))
+    write('directory-two-parents', two_parents)
     wrong_parent = bytearray(tree)
     left[0] = link(NAMES[0][0], parent=f.file_reference(SENSITIVE_DIRECTORY))
     f.put_data(wrong_parent, f.INDEX_LCN + LEFT_VCN, f.index_block(LEFT_VCN, left))

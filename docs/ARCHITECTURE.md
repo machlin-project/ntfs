@@ -54,6 +54,12 @@ reference and visible-link ordinal in their owning directory. Bounded independen
 cursors resolve aliases and expose original UTF-16 manifests without moving a
 native enumeration continuation. Exhaustion is an error, never successful
 truncation. Native case/normalization and installed behavior remain unqualified.
+Names-only directory enumeration has a virtual current/parent prefix and a
+separate cookie view tag; disk-visible ordinals still identify projected names.
+Directories keep the checked owning edge's numeric parent reference without
+retaining a parent FSItem. Wrong-view/stale/out-of-range cookies use the native
+directory-cookie error. See LIFECYCLE.md for local parent/replay/fault evidence
+and the remaining unsupported-object and installed contracts.
 
 Reparse metadata uses the ordinary attribute reader, including resident values,
 fragmented nonresident mappings and sequence-checked attribute-list extensions.

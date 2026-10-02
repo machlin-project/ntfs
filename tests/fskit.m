@@ -9,16 +9,9 @@
 #include <limits.h>
 #include "fixture.h"
 #import "fskit_lifecycle.h"
+#import "fskit_enumeration.h"
+#import "fskit_resource.h"
 
-@interface TestReader : NSObject <NTFSBlockReader>
-@property NSData *image;
-@property BOOL shortRead;
-@property BOOL failed;
-@property(getter=isRevoked) BOOL revoked;
-@property BOOL revokeDuringRead;
-@property NSUInteger reads;
-@property NSUInteger failReadAt;
-@end
 @implementation TestReader
 
 - (uint64_t)blockSize
@@ -59,12 +52,6 @@
 
 @end
 
-@interface FaultResource : NTFSResource
-@property BOOL failAllocation;
-@property NSUInteger allocations;
-@property NSUInteger failAllocationAt;
-@property NSUInteger liveAllocations;
-@end
 @implementation FaultResource
 
 - (void *)allocateSize:(size_t)size
@@ -226,7 +213,7 @@ test_volume(NSData *image)
 			verifier:volume.directoryVerifier ^ 1
 		      attributes:YES
 			  packer:(FSDirectoryEntryPacker *)packer]
-		   .code == EINVAL);
+		   .code == FSErrorInvalidDirectoryCookie);
 	[volume reclaimItem:file
 	       replyHandler:^(NSError *e) {
 		 assert(e == nil);
@@ -1254,6 +1241,8 @@ main(int argc, char **argv)
 		test_ads(image, @"streamed.txt", notes, sizeof(notes) / sizeof(notes[0]), 1,
 		    [@"alternate payload" dataUsingEncoding:NSUTF8StringEncoding], NO);
 		fixtures = [@(argv[1]) stringByDeletingLastPathComponent];
+		ntfs_test_fskit_enumeration(image, fixtures, NO);
+		ntfs_test_fskit_enumeration(image, fixtures, YES);
 		longName[0] = TEST_UNPAIRED_HIGH_SURROGATE;
 		for (i = 1; i < NTFS_NAME_MAX; i++) {
 			longName[i] = 'x';

@@ -30,6 +30,12 @@ Five additional modeled eligibility/ownership/publication cases cover conditiona
 reclaim, weak canonical identity, final-item lifetime and lookup replies racing
 reclaim/unmount/deactivation. The eligibility model does not execute the real
 macOS 27 kernel/framework count mechanism.
+The separate enumeration component checks names-only virtual current/parent
+entries, parent release/remount and corrupt-edge rejection, separate native cookie
+views, alias stability, interleaved buffers, scan budgets, packer revocation and
+all 12 allocation/four I/O fault positions in its nested-index operation. The
+current component has four explicit macOS-27 runtime SKIPs: lifecycle, enumeration
+and two case-policy checks. These in-process results do not mount the filesystem.
 Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security` or `access`. The time budget applies per target. Each campaign retains its own

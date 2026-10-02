@@ -103,14 +103,24 @@ native reclaim-count qualification or installed lifetime/scheduling from this
 component checkpoint. A callback that never returns still prevents draining;
 buffers must remain owned until it does. The portable core is unchanged.
 
-Continue the explicit enumeration gaps: unsupported objects can stop an
-attribute-requested page; names-only calls omit virtual dot/parent entries; bad
-cookies/verifiers use EINVAL rather than the native directory-cookie error.
-The packer's nullable argument is not evidence that requested attributes may be
-omitted. Define truthful unsupported-object metadata and parent/cookie ownership
-for both protocols, then test continuation, faults and admission. LIFECYCLE.md
-links the primary API contracts. These gaps are not closed by passing the current
-ordinary-file pagination tests.
+The directory-view continuation now adds names-only virtual current/parent
+entries, checked numeric parent ownership without retaining parent FSItems,
+separate cookie views and native invalid-cookie errors. Stored alias ordinals
+remain unchanged. Parent release/remount, corrupt edges, root/nested/empty pages,
+interleaved buffers, scan bounds, exactly-once replies and post-packer revocation
+passed, including all 12 allocation/four read failure positions in the nested
+operation. All 31 sanitized core suites, component, style and the unsigned app
+passed under `artifacts/plan-enumeration-{core-tests,component-accepted,style,app-build}.log`.
+Four modern-runtime checks explicitly SKIP. LIFECYCLE.md records the exact
+contract and evidence boundaries; neither protocol has installed acceptance.
+
+Continue unsupported-object attribute pages: reparse and unsupported default
+streams can still stop a page or prevent item adoption. The packer's nullable
+argument is not evidence that requested attributes may be omitted. Define
+truthful metadata and stable continuation, then test links, ADS and rejection
+without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
+parent resolution remain separate from virtual enumeration. Bounded checkpoints,
+native scheduling and buffer lifetime also remain open.
 
 ## Core handoff checkpoint
 

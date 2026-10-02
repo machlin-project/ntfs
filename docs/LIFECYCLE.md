@@ -142,16 +142,52 @@ read scenarios and the five eligibility/ownership/publication cases passed;
 the same three genuine macOS-27 runtime SKIPs remain. No portable-core source
 changed and the preceding core qualification was not rerun.
 
-## Enumeration contracts still open
+## Directory views and continuation
 
-Attribute-requested enumeration currently fails on reparse items and unsupported
-default streams. Names-only enumeration omits the virtual current/parent entries,
-and invalid cookies/verifiers return EINVAL. Apple's
+Names-only enumeration now prefixes the stored visible entries with virtual `.`
+and `..` directory entries. The root uses its own item ID for both. Other
+directories retain the full sequence-bearing parent reference from their checked
+owning index edge, without retaining the parent's FSItem. Self-parenting and a
+different parent for an already live canonical directory are refused as corrupt.
+Files retain their independent hard-link names and do not acquire a single-parent
+contract. This local adoption check does not validate the entire on-disk graph;
+the separate consistency diagnostic owns that bounded pass.
+
+The attribute-requested view omits virtual entries. Noninitial names-only cookies
+carry a separate high-bit view tag; stored visible ordinals remain unchanged for
+filename aliases and manifests. Wrong-view cookies, bad verifiers, out-of-range
+positions and continuation beyond EOF use `FSErrorInvalidDirectoryCookie` in
+`NSPOSIXErrorDomain`. An initial cookie starts either view. Rewinds replay the
+bounded core cursor, and a full packer leaves the pending entry unconsumed.
+Virtual entries do not consume the stored-entry scan budget; hidden/DOS entries
+still do. Exhaustion remains an error rather than successful truncation.
+Admission is checked before and after packing, including a packer returning NO,
+so a newly revoked resource cannot turn a full-buffer return into success.
+
+Apple's
 [enumeration contract](https://developer.apple.com/documentation/fskit/fsvolume/operations/enumeratedirectory(_:startingat:verifier:attributes:packer:replyhandler:))
-requires dot entries for names-only calls and its dedicated invalid-cookie code.
-The [packer contract](https://developer.apple.com/documentation/fskit/fsdirectoryentrypacker/packentry(name:itemtype:itemid:nextcookie:attributes:))
+defines the virtual entries and dedicated invalid-cookie code. The macOS 27
+handler has the same directory-view requirements. Both protocol implementations
+compile. The legacy component checks root/nested/empty directories, parent FSItem
+release followed by child enumeration and remount, two corrupt parent edges,
+stable projected aliases, interleaved one/two/zero-entry buffers, EOF and invalid
+cookies, scan exhaustion, exactly-once replies and permanent packer revocation.
+The nested-index sweep covers every required allocation/read position: 12 and
+four, with rewind retry, unchanged image bytes and exact release accounting.
+All 31 sanitized core suites, style and the current unsigned app/extension build
+passed. Evidence is `artifacts/plan-enumeration-core-tests.log`,
+`artifacts/plan-enumeration-component-accepted.log`,
+`artifacts/plan-enumeration-style.log` and
+`artifacts/plan-enumeration-app-build.log`. Four modern-runtime checks explicitly
+SKIP: lifecycle, enumeration and two case-policy checks. No installed mount ran.
+
+Attribute-requested enumeration still fails on reparse items and unsupported
+default streams. The
+[packer contract](https://developer.apple.com/documentation/fskit/fsdirectoryentrypacker/packentry(name:itemtype:itemid:nextcookie:attributes:))
 documents nil attributes for calls that did not request attributes; nullable
-storage alone does not qualify omission of requested attributes. Implement
-unsupported-object behavior with truthful metadata and stable continuation,
-and parent-reference/cookie handling for both protocol paths before closing
-this acceptance gap.
+storage alone does not qualify omission of requested attributes. Truthful
+unsupported-object metadata and stable continuation remain implementation work.
+The component does not qualify native buffer lifetime, framework reclaim counts,
+or installed interpretation of cookies and virtual entries. Backend dot-name
+lookup and parent resolution are also not covered by the virtual-entry change.
+Bounded enumeration checkpoints and measured large-directory replay remain open.

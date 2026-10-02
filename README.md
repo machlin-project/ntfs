@@ -71,5 +71,8 @@ remain separate acceptance requirements.
 Conditional native reclaim now serializes against item-result publication;
 older runtimes retain item ownership until the last FSItem reference. Five
 modeled eligibility/ownership/publication cases and the current component/app
-checks pass. Native reclaim counts and unsupported-object/dot-entry enumeration
-contracts still require acceptance; see the lifecycle document.
+checks pass. Names-only enumeration now includes virtual current/parent entries
+with stable stored-name aliases, checked parent identity and native cookie errors.
+Local replay/fault/budget checks pass; attribute-requested unsupported objects,
+native reclaim counts and installed enumeration still require acceptance. See
+the lifecycle document.

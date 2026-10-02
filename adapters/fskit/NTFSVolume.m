@@ -17,6 +17,8 @@ enum {
 	NTFS_HEX_NIBBLE_BITS = 4,
 	NTFS_HEX_DECIMAL_DIGITS = 10,
 	NTFS_STREAM_ALIAS_DIGITS = sizeof(uint32_t) * NTFS_HEX_DIGITS_PER_BYTE,
+	NTFS_DIRECTORY_CURRENT_ENTRY = 0,
+	NTFS_DIRECTORY_VIRTUAL_ENTRIES = 2,
 	NTFS_READ_ONLY_FILE_MODE = S_IRUSR,
 	NTFS_READ_ONLY_DIRECTORY_MODE = S_IRUSR | S_IXUSR
 };
@@ -25,6 +27,25 @@ static NSString *const streamManifestName = @"org.machlin.ntfs.streams";
 static NSString *const streamAliasPrefix = @"org.machlin.ntfs.stream.";
 static NSString *const namesManifestName = @"org.machlin.ntfs.names";
 static NSString *const nameEntryPrefix = @"org.machlin.ntfs.name.";
+
+/* Keep native view positions separate from stored visible-link ordinals. */
+static const FSDirectoryCookie namesOnlyCookieTag = UINT64_C(1)
+    << (sizeof(FSDirectoryCookie) * CHAR_BIT - 1);
+
+static NSError *
+invalid_directory_cookie(void)
+{
+	return [NSError errorWithDomain:NSPOSIXErrorDomain
+				   code:FSErrorInvalidDirectoryCookie
+			       userInfo:nil];
+}
+
+static FSDirectoryCookie
+directory_cookie(uint64_t position, BOOL attributes)
+{
+	return attributes ? position
+			  : namesOnlyCookieTag | (position + NTFS_DIRECTORY_VIRTUAL_ENTRIES);
+}
 
 /* Native xattrs have a bounded name; the immutable catalog supplies the reverse
  * mapping. These byte-array records preserve original UTF-16 without NSString. */
@@ -93,6 +114,9 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 	struct ntfs_dirent pendingEntry;
 	BOOL pending;
 	uint64_t position;
+	/* Owning native namespace edge, obtained from a checked index lookup.
+	 * Files may have many parents; only directories use this reference. */
+	uint64_t parentReference;
 	uint32_t inspectedEntries;
 	enum ntfs_result cursorFailure;
 	struct ntfs_stat stat;
@@ -309,7 +333,9 @@ item_id(uint64_t reference)
 	return _resource.isAvailable ? NTFS_OK : NTFS_IO;
 }
 
-- (NTFSItem *)adoptNode:(struct ntfs_node *)node error:(NSError **)error
+- (NTFSItem *)adoptNode:(struct ntfs_node *)node
+	parentReference:(uint64_t)parentReference
+		  error:(NSError **)error
 {
 	struct ntfs_stat stat;
 	enum ntfs_result result;
@@ -334,9 +360,28 @@ item_id(uint64_t reference)
 		*error = ntfs_error(NTFS_UNSUPPORTED);
 		return nil;
 	}
+	if (stat.directory) {
+		if (item_id(stat.reference) == FSItemIDRootDirectory) {
+			if (parentReference != 0 && parentReference != stat.reference) {
+				ntfs_node_close(node);
+				*error = ntfs_error(NTFS_CORRUPT);
+				return nil;
+			}
+			parentReference = stat.reference;
+		} else if (parentReference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0 ||
+		    parentReference == stat.reference) {
+			ntfs_node_close(node);
+			*error = ntfs_error(NTFS_CORRUPT);
+			return nil;
+		}
+	}
 	item = [_items objectForKey:@(stat.reference)];
 	if (item != nil) {
 		ntfs_node_close(node);
+		if (stat.directory && item->parentReference != parentReference) {
+			*error = ntfs_error(NTFS_CORRUPT);
+			return nil;
+		}
 		return item;
 	}
 	if (_items.count >= NTFS_FSKIT_ITEM_LIMIT) {
@@ -347,6 +392,7 @@ item_id(uint64_t reference)
 	item = [[NTFSItem alloc] init];
 	item->node = node;
 	item->stat = stat;
+	item->parentReference = stat.directory ? parentReference : 0;
 	item.owner = self;
 	[_items setObject:item forKey:@(stat.reference)];
 	return item;
@@ -375,7 +421,7 @@ item_id(uint64_t reference)
 			*error = ntfs_error(result);
 			return nil;
 		}
-		item = [self adoptNode:root error:error];
+		item = [self adoptNode:root parentReference:0 error:error];
 		if (item != nil) {
 			[_lifecycleLock lock];
 			if (_lifecycle == NTFSVolumeLoaded || _lifecycle == NTFSVolumeActive) {
@@ -474,7 +520,7 @@ item_id(uint64_t reference)
 			*error = ntfs_error(result);
 			return nil;
 		}
-		parent = [self adoptNode:node error:error];
+		parent = [self adoptNode:node parentReference:entry.parent_reference error:error];
 		if (parent == nil) {
 			*stored = nil;
 		}
@@ -813,7 +859,8 @@ item_id(uint64_t reference)
 	struct ntfs_stat stat;
 	FSFileName *name;
 	FSItemAttributes *attrs;
-	BOOL projected;
+	BOOL projected, packed;
+	uint64_t requestedPosition, reference, maximumPosition;
 	enum ntfs_result result;
 
 	@synchronized(self) {
@@ -825,11 +872,51 @@ item_id(uint64_t reference)
 		if (item == nil) {
 			return ntfs_error(NTFS_STALE);
 		}
-		if (cookie > _maximumDirectoryEntries ||
-		    (cookie != 0 && verifier != _directoryVerifier)) {
-			return ntfs_error(NTFS_INVALID);
+		if (!item->stat.directory) {
+			return ntfs_error(NTFS_NOT_DIRECTORY);
 		}
-		if (cookie == 0 || item->cursor == NULL || item->position != cookie) {
+		requestedPosition = cookie & ~namesOnlyCookieTag;
+		maximumPosition = (uint64_t)_maximumDirectoryEntries +
+		    (attributes ? 0 : NTFS_DIRECTORY_VIRTUAL_ENTRIES);
+		if ((cookie != FSDirectoryCookieInitial && verifier != _directoryVerifier) ||
+		    (attributes && (cookie & namesOnlyCookieTag) != 0) ||
+		    (!attributes && cookie != FSDirectoryCookieInitial &&
+			(cookie & namesOnlyCookieTag) == 0) ||
+		    cookie == namesOnlyCookieTag || requestedPosition > maximumPosition) {
+			return invalid_directory_cookie();
+		}
+		if (!attributes) {
+			while (requestedPosition < NTFS_DIRECTORY_VIRTUAL_ENTRIES) {
+				result = [self admissionResult];
+				if (result != NTFS_OK) {
+					return ntfs_error(result);
+				}
+				name = [FSFileName
+				    nameWithString:requestedPosition == NTFS_DIRECTORY_CURRENT_ENTRY
+					? @"."
+					: @".."];
+				reference = requestedPosition == NTFS_DIRECTORY_CURRENT_ENTRY
+				    ? item->stat.reference
+				    : item->parentReference;
+				packed = [packer
+				    packEntryWithName:name
+					     itemType:FSItemTypeDirectory
+					       itemID:item_id(reference)
+					   nextCookie:namesOnlyCookieTag | (requestedPosition + 1)
+					   attributes:nil];
+				result = [self admissionResult];
+				if (result != NTFS_OK) {
+					return ntfs_error(result);
+				}
+				if (!packed) {
+					return nil;
+				}
+				requestedPosition++;
+			}
+			requestedPosition -= NTFS_DIRECTORY_VIRTUAL_ENTRIES;
+		}
+		if (cookie == FSDirectoryCookieInitial || item->cursor == NULL ||
+		    item->position != requestedPosition) {
 			ntfs_directory_close(item->cursor);
 			item->cursor = NULL;
 			item->position = 0;
@@ -852,8 +939,9 @@ item_id(uint64_t reference)
 					if (result != NTFS_OK) {
 						return ntfs_error(result);
 					}
-					return item->position < cookie ? ntfs_error(NTFS_INVALID)
-								       : nil;
+					return item->position < requestedPosition
+					    ? invalid_directory_cookie()
+					    : nil;
 				}
 				if (result != NTFS_OK) {
 					return ntfs_error(result);
@@ -867,7 +955,7 @@ item_id(uint64_t reference)
 				}
 				item->pending = YES;
 			}
-			if (item->position < cookie) {
+			if (item->position < requestedPosition) {
 				item->pending = NO;
 				item->position++;
 				continue;
@@ -898,14 +986,20 @@ item_id(uint64_t reference)
 			if (result != NTFS_OK) {
 				return ntfs_error(result);
 			}
-			if (![packer packEntryWithName:name
-					      itemType:(item->pendingEntry.file_attributes &
-							   NTFS_FILE_ATTRIBUTE_DIRECTORY)
-				    ? FSItemTypeDirectory
-				    : FSItemTypeFile
-						itemID:item_id(item->pendingEntry.reference)
-					    nextCookie:item->position + 1
-					    attributes:attrs]) {
+			packed = [packer
+			    packEntryWithName:name
+				     itemType:(item->pendingEntry.file_attributes &
+						  NTFS_FILE_ATTRIBUTE_DIRECTORY)
+				? FSItemTypeDirectory
+				: FSItemTypeFile
+				       itemID:item_id(item->pendingEntry.reference)
+				   nextCookie:directory_cookie(item->position + 1, attributes)
+				   attributes:attrs];
+			result = [self admissionResult];
+			if (result != NTFS_OK) {
+				return ntfs_error(result);
+			}
+			if (!packed) {
 				return nil;
 			}
 			item->position++;

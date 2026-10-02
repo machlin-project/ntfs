@@ -10,8 +10,9 @@ decoded restart page or its clean hint does not authorize mounting dirty media.
 
 The separate logical-source owner now reads bounded restart candidates and selects
 compatible redundant copies with conflict reports. These are foundations for
-journal inspection. They do not yet route legacy tail/modern fast-page copies,
-assemble a wrapped multi-page record, validate the active circular history or interpret NTFS
+journal inspection. A physical circular-record observer now assembles exact
+bytes across adjacent protected pages and one wrap. It does not route legacy
+tail/modern fast-page copies, validate the active circular history or interpret NTFS
 checkpoint tables. Client identity/sequence resolution, transaction analysis,
 redo/undo execution and Windows recovery acceptance remain separate work.
 LFS version numbers do not establish the NTFS client's payload version.
@@ -79,6 +80,37 @@ the restored page to the caller only on success. Every error leaves caller bytes
 unchanged and its view zero; failed fills are retryable. This operation does not
 route copy-union targets, establish a page's active history or assemble records.
 
+## Physical circular-record observation
+
+`ntfs_logfile_read_circular_record` locates a complete first header through the
+selected restart geometry and the caller's LSN. A different stored header LSN
+returns STALE. The declared header/client length controls assembly: subsequent
+physical pages contribute bytes beginning at `page_data_offset`, without another
+record header. USA restoration precedes every copy, including a header or payload
+intersecting a protected sector tail. Extended header bytes remain exact and
+opaque. Final alignment padding is excluded from the returned record bytes.
+
+Assembly can move from the last usable page to the first circular page once;
+it never revisits a physical page. The unique payload capacity, caller capacity
+and named 1-MiB record cap are checked before allocation. A single ephemeral
+allocation stages the exact record while one shared read budget covers every
+page; it is released on every path. Defaults remain 32 calls/256 KiB per
+operation. Some complete records need explicitly larger byte credits: the
+direct core test accepts an exact 1-MiB record with adequate custom credits,
+while default credits refuse that same source. Errors leave caller bytes
+unchanged and the record view zero, including partial reads and a failed later
+page. Successful views retain first/last physical offsets, wrap state, page and
+logical read counts, and decoded common record metadata. Nonzero previous/undo
+LSNs must also fit the selected circular geometry.
+
+This API observes physical framing. It does not use `copy_value`,
+`next_record_offset` or `last_end_lsn` to establish written/current history,
+select tail/fast copies or prove that continuation pages belong to a post-crash
+record. Transfer counts/positions are separate from record segmentation, and
+the known record flags remain metadata. Active client identity, checkpoint
+tables and transaction interpretation remain separate. Do not use this
+observation as an authoritative recovery input.
+
 ## Byte and resource contract
 
 The immutable input, output structure and caller-owned scratch must be disjoint.
@@ -115,8 +147,8 @@ decision from them. Page transfer positions are distinct from record segmentatio
 
 Logical LFS decoding requires the exact assembled header/client length, excluding
 trailing alignment padding. It retains transaction/client identifiers, previous
-and undo-next LSNs, known record flags and opaque client bytes. Caller assembly
-must first establish which pages belong to that record. The NTFS update decoder
+and undo-next LSNs, known record flags and opaque client bytes. A qualified
+history reader must first establish which pages belong to that record. The NTFS update decoder
 checks the complete LCN vector and aligned, bounded redo/undo spans; the spans may
 share bytes. Target identifiers, operation codes and LCN values are metadata,
 never physical write addresses.
@@ -149,6 +181,10 @@ then the core volume, then the image; it does not perform a native mount. A
 mount/binding failure still produces a bounded report with no selected metadata.
 Ordinary dirty-media rejection remains in force, and every mode retains
 `recovery_qualified: false`.
+`circular-record` takes an exported logical source and a decimal LSN. Its JSON
+retains exact assembled bytes as `bytes_hex`, common record metadata and physical
+assembly/read accounting; record, assembly and bytes are NULL on error. It uses
+default credits and reports only the physical observation described above.
 
 ```sh
 .build/ntfs-logfile restart EXPORTED_RESTART_PAGE LOGICAL_LOGFILE_BYTES
@@ -157,6 +193,7 @@ Ordinary dirty-media rejection remains in force, and every mode retains
 .build/ntfs-logfile update NTFS_CLIENT_PACKET
 .build/ntfs-logfile journal EXPORTED_LOGICAL_LOGFILE
 .build/ntfs-logfile volume-journal NTFS_IMAGE_FILE
+.build/ntfs-logfile circular-record EXPORTED_LOGICAL_LOGFILE DECIMAL_LSN
 python3 scripts/fuzz.py --target logfile --seconds 60 --compiler /opt/homebrew/opt/llvm/bin/clang --output artifacts/fuzz-logfile-next
 ```
 
@@ -182,6 +219,27 @@ includes every source fixture, including ordinary 4-KiB system/log pages and
 1-MiB files with maximum restart/mixed record-page sizes. Fuzz input/RSS is
 independent of the owner's bounded three-page allocation and I/O credits.
 
+`tests/logfile_record_fixtures.py` independently authors protected physical
+fragments, exact unpadded record bytes and report metadata. Its 30 source
+verdicts cover empty clients, extended headers/page prefixes, header-at-end,
+two/three/four-page and wrapped records, mixed/ordinary/64-KiB pages, stale
+headers, linked-LSN geometry, unknown framing, missing/torn continuations,
+tail-only storage, ring revisit and record/credit boundaries. The direct suite
+checks 14 allocation/40 partial-read failure positions, unchanged caller/source
+bytes, retry, shared credits and exact-cap custom-policy success. Bound-volume
+tests also compare independent record bytes and fail/retry the backing-stream
+read and staging allocation. CLI reports compare both exact metadata and bytes.
+
+Circular-record fuzz mode retains its requested LSN in the independent envelope
+and separate read/allocation/budget controls. Resealed mutations target a record
+header and nearby continuations as well as either restart copy; generic mutations
+also reach damaged protection and arbitrary storage. All authored logfile seeds
+execute in bounded fixed-file batches before exploration. Twenty-eight record
+sources and six fault/control seeds fit the unchanged 2-MiB envelope. Two complete
+4-MiB sources (maximum pages and exact-cap record) are explicitly excluded in
+`logfile-record-selection.json` and the campaign report; both remain in direct
+C/CLI tests. No seed is silently truncated.
+
 Independent volume layouts place the original logical journal bytes in
 contiguous/fragmented runs and resident/nonresident attribute lists. They cover
 mixed/maximum restart pages, ordinary 4-KiB log pages, fast storage, torn copies,
@@ -202,7 +260,7 @@ treat a geometry skip as a passed layout. Separate logical-source fuzz retains
 all of its original 1-MiB journals under the 2-MiB envelope.
 
 Next work must integrate native journal admission/drain ownership, route tail/fast-page
-copies, validate circular currentness and assemble wrapped records, then resolve
+copies and validate written/current circular history and continuation provenance, then resolve
 client sequences and interpret NTFS checkpoint/tables. Compare original
 Windows 1.1/2.0 packets, including LCN-less records and interrupted writes. Add
 transaction/crash/durability simulation under WRITES.md before any writable

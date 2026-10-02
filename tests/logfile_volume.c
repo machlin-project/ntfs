@@ -146,6 +146,44 @@ check_page(struct ntfs_logfile *source, struct fuzz_device *device,
 }
 
 static void
+check_record(struct ntfs_logfile *source, struct fuzz_device *device,
+    const struct ntfs_logfile_restart *restart, const char *directory, const char *name)
+{
+	struct ntfs_logfile_record_view view, zero = {0};
+	char filename[TEST_PATH_BYTES];
+	uint8_t *guarded, *expected;
+	size_t size, memory = device->memory;
+
+	assert(snprintf(filename, sizeof(filename), "%s.record", name) > 0);
+	expected = read_file(directory, filename, &size);
+	guarded = malloc(size + TEST_GUARD_BYTES * 2);
+	assert(guarded != NULL);
+	memset(guarded, TEST_SENTINEL, size + TEST_GUARD_BYTES * 2);
+	device->fail_read = device->reads + 1;
+	assert(ntfs_logfile_read_circular_record(source, restart->current_lsn,
+		   guarded + TEST_GUARD_BYTES, size, &view) == NTFS_IO);
+	assert(memcmp(&view, &zero, sizeof(view)) == 0 && device->memory == memory);
+	filled(guarded, size + TEST_GUARD_BYTES * 2, TEST_SENTINEL);
+	device->fail_read = 0;
+	device->fail_allocation = device->allocations + 1;
+	assert(ntfs_logfile_read_circular_record(source, restart->current_lsn,
+		   guarded + TEST_GUARD_BYTES, size, &view) == NTFS_NO_MEMORY);
+	assert(memcmp(&view, &zero, sizeof(view)) == 0 && device->memory == memory);
+	filled(guarded, size + TEST_GUARD_BYTES * 2, TEST_SENTINEL);
+	device->fail_allocation = 0;
+	assert(ntfs_logfile_read_circular_record(source, restart->current_lsn,
+		   guarded + TEST_GUARD_BYTES, size, &view) == NTFS_OK);
+	assert(view.bytes == size && view.pages_read == 1 && view.read_calls == 1 &&
+	    view.read_bytes == restart->log_page_bytes && view.record.lsn == restart->current_lsn &&
+	    device->memory == memory);
+	assert(memcmp(guarded + TEST_GUARD_BYTES, expected, size) == 0);
+	filled(guarded, TEST_GUARD_BYTES, TEST_SENTINEL);
+	filled(guarded + TEST_GUARD_BYTES + size, TEST_GUARD_BYTES, TEST_SENTINEL);
+	free(guarded);
+	free(expected);
+}
+
+static void
 check_faults(const uint8_t *bytes, size_t size, const char *name, size_t *allocation_faults,
     size_t *read_faults)
 {
@@ -301,6 +339,7 @@ main(int argc, char **argv)
 			device.fail_allocation = 0;
 			check_page(source, &device, &restart, argv[2], source_name, false);
 			check_page(source, &device, &restart, argv[2], source_name, true);
+			check_record(source, &device, &restart, argv[2], source_name);
 			ntfs_logfile_close(source);
 			if (strcmp(name, "contiguous.img") == 0) {
 				check_limits(volume, &device, &expected);
@@ -327,9 +366,9 @@ main(int argc, char **argv)
 		count++;
 	}
 	assert(feof(cases) && fclose(cases) == 0 && count > 0);
-	printf(
-	    "PASS: %zu independent volume journal verdicts, %zu allocation/%zu physical read "
-	    "faults, exact fragmented pages and counted unmount lifetime; no recovery acceptance\n",
+	printf("PASS: %zu independent volume journal verdicts, %zu allocation/%zu physical read "
+	       "binding faults, exact fragmented pages/records and counted unmount lifetime; "
+	       "no recovery acceptance\n",
 	    count, allocation_faults, read_faults);
 	return 0;
 }

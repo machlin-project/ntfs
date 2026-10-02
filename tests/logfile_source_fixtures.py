@@ -45,7 +45,8 @@ def record_page(fields, tail=False):
     offset_bits = wire.LSN_BITS - fields['sequence_bits']
     start = ((fields['current_lsn'] & ((1 << offset_bits) - 1)) << wire.OFFSET_SHIFT) % fields['log_page_bytes']
     data[start:start + len(record)] = record
-    return wire.protect(data, wire.PAGE)
+    raw, restored = wire.protect(data, wire.PAGE)
+    return raw, restored, record
 
 
 def author(output):
@@ -76,13 +77,15 @@ def author(output):
         if selected is not None:
             selected_fields = next(fields for offset, _, fields, _, _ in packets if offset == selected)
             for tail in (False, True):
-                raw, restored = record_page(selected_fields, tail)
+                raw, restored, record = record_page(selected_fields, tail)
                 if corrupt_page and not tail:
                     raw = bytearray(raw)
                     struct.pack_into('<H', raw, len(raw) - wire.WORD_BYTES, wire.USA_SEQUENCE + 1)
                 position = wire.RESTART_PAGES * selected_fields['system_page_bytes'] if tail else selected_fields['circular_offset']
                 source[position:position + len(raw)] = raw
                 (output / (filename + ('.tail' if tail else '.page'))).write_bytes(restored)
+                if not tail:
+                    (output / (filename + '.record')).write_bytes(record)
         (output / filename).write_bytes(source)
         prefix_reads = sum(offset + wire.RESTART_HEADER.size <= size for offset in PROBE_OFFSETS)
         case = dict(path=filename, code=verdict, selection=selection, selected_offset=selected,

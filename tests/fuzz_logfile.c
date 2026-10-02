@@ -14,6 +14,7 @@ enum {
 	FUZZ_UPDATE,
 	FUZZ_CLIENT,
 	FUZZ_SOURCE,
+	FUZZ_CIRCULAR_RECORD,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -22,11 +23,19 @@ enum {
 	FUZZ_MUTATIONS = 1024,
 	FUZZ_GENERIC_PERIOD = 4,
 	FUZZ_SOURCE_ALLOCATIONS = 4,
-	FUZZ_SOURCE_OWNER_BYTES = 4096
+	FUZZ_SOURCE_OWNER_BYTES = 4096,
+	FUZZ_SOURCE_PAGE_BUFFERS = 3,
+	FUZZ_RECORD_MUTATION_PAGES = 4,
+	FUZZ_FAULT_ALLOCATION = 1u << NTFS_BITS_PER_BYTE,
+	FUZZ_BUDGET_SHIFT = 2 * NTFS_BITS_PER_BYTE,
+	FUZZ_PARTIAL_READ_BYTE = 0x71,
+	FUZZ_PARTIAL_READ_DENOMINATOR = 2
 };
 
 /* Independent test envelope, not a stored LFS structure. Configuration is a
- * raw restart page only in page mode; the tested packet follows it. */
+ * raw restart page only in page mode; the tested packet follows it. Circular
+ * record mode uses argument as the LSN and configuration_bytes as fault/budget
+ * controls, without a configuration payload. */
 struct fuzz_logfile_header {
 	uint8_t kind, argument[sizeof(uint64_t)], configuration_bytes[sizeof(uint32_t)];
 };
@@ -41,6 +50,7 @@ union fuzz_output {
 
 static uint8_t scratch[2][NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES];
 static uint8_t configuration_scratch[NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES];
+static uint8_t record_scratch[2][NTFS_LOGFILE_MAX_RECORD_BYTES + 2 * FUZZ_GUARD_BYTES];
 static uint8_t original[FUZZ_INPUT_BYTES];
 
 static void
@@ -89,8 +99,8 @@ fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
 		if (results[i] == NTFS_OK) {
 			assert(source != NULL && reports[i].scan_complete &&
 			    reports[i].selected_probe < reports[i].probe_count &&
-			    device.memory <=
-				FUZZ_SOURCE_OWNER_BYTES + 3u * NTFS_LOGFILE_MAX_PAGE_BYTES);
+			    device.memory <= FUZZ_SOURCE_OWNER_BYTES +
+				    FUZZ_SOURCE_PAGE_BUFFERS * NTFS_LOGFILE_MAX_PAGE_BYTES);
 			assert(ntfs_logfile_get_restart(source, &restarts[i]) == NTFS_OK);
 			if (restarts[i].client_count != 0) {
 				assert(ntfs_logfile_get_client(source,
@@ -122,6 +132,83 @@ fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
 	assert(memcmp(scratch[0], scratch[1], sizeof(scratch[0])) == 0);
 }
 
+static enum ntfs_result
+partial_read(void *context, uint64_t offset, void *bytes, size_t size)
+{
+	enum ntfs_result result = fuzz_read(context, offset, bytes, size);
+
+	if (result == NTFS_IO) {
+		memset(bytes, FUZZ_PARTIAL_READ_BYTE, size / FUZZ_PARTIAL_READ_DENOMINATOR);
+	}
+	return result;
+}
+
+static void
+fuzz_circular_record(const uint8_t *bytes, size_t size, uint64_t requested_lsn, uint32_t controls)
+{
+	struct ntfs_logfile_record_view views[2] = {0}, zero_view = {0};
+	struct ntfs_logfile_report reports[2];
+	struct ntfs_logfile_limits limits;
+	struct ntfs_logfile *source;
+	struct fuzz_device device;
+	struct ntfs_environment environment;
+
+	enum ntfs_result results[2], record_results[2] = {NTFS_INVALID, NTFS_INVALID};
+
+	size_t i, memory, reads, fail_read, capacity, guarded_bytes, used[2] = {0};
+	uint32_t budget = controls >> FUZZ_BUDGET_SHIFT;
+
+	ntfs_logfile_default_limits(&limits);
+	capacity = size < NTFS_LOGFILE_MAX_RECORD_BYTES ? size : NTFS_LOGFILE_MAX_RECORD_BYTES;
+	guarded_bytes = capacity + 2 * FUZZ_GUARD_BYTES;
+	if (budget != 0) {
+		limits.max_read_calls = 1u + budget % NTFS_LOGFILE_DEFAULT_READ_CALLS;
+		limits.max_read_bytes = 1u + budget * NTFS_MST_STRIDE;
+	}
+	for (i = 0; i < sizeof(results) / sizeof(results[0]); i++) {
+		device = (struct fuzz_device){.data = bytes, .size = size};
+		environment = fuzz_environment(&device);
+		environment.read = partial_read;
+		memset(record_scratch[i], FUZZ_GUARD_VALUE, guarded_bytes);
+		results[i] = ntfs_logfile_open(&environment, &limits, &reports[i], &source);
+		assert(reports[i].read_calls <= limits.max_read_calls &&
+		    reports[i].read_bytes <= limits.max_read_bytes);
+		if (results[i] == NTFS_OK) {
+			memory = device.memory;
+			reads = device.reads;
+			assert(memory <= FUZZ_SOURCE_OWNER_BYTES +
+				FUZZ_SOURCE_PAGE_BUFFERS * limits.max_page_bytes);
+			fail_read = (controls & UINT8_MAX) % (NTFS_LOGFILE_DEFAULT_READ_CALLS + 1u);
+			device.fail_read = fail_read == 0 ? 0 : reads + fail_read;
+			device.fail_allocation =
+			    (controls & FUZZ_FAULT_ALLOCATION) != 0 ? device.allocations + 1 : 0;
+			record_results[i] = ntfs_logfile_read_circular_record(source, requested_lsn,
+			    record_scratch[i] + FUZZ_GUARD_BYTES, capacity, &views[i]);
+			assert(device.memory == memory &&
+			    device.reads - reads <= limits.max_read_calls);
+			if (record_results[i] == NTFS_OK) {
+				used[i] = views[i].bytes;
+				assert(used[i] <= capacity &&
+				    views[i].record.lsn == requested_lsn &&
+				    views[i].read_calls == device.reads - reads &&
+				    views[i].read_calls == views[i].pages_read &&
+				    views[i].read_bytes <= limits.max_read_bytes);
+			} else {
+				assert(memcmp(&views[i], &zero_view, sizeof(zero_view)) == 0);
+			}
+			ntfs_logfile_close(source);
+		} else {
+			assert(source == NULL);
+		}
+		assert(device.memory == 0);
+		guard(record_scratch[i], used[i], guarded_bytes);
+	}
+	assert(results[0] == results[1] && record_results[0] == record_results[1]);
+	assert(memcmp(&reports[0], &reports[1], sizeof(reports[0])) == 0);
+	assert(memcmp(&views[0], &views[1], sizeof(views[0])) == 0);
+	assert(memcmp(record_scratch[0], record_scratch[1], guarded_bytes) == 0);
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -150,6 +237,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	packet_size = size - sizeof(*header) - configuration_size;
 	if (kind == FUZZ_SOURCE) {
 		fuzz_source(packet, packet_size, argument);
+		assert(memcmp(data, original, size) == 0);
+		return 0;
+	}
+	if (kind == FUZZ_CIRCULAR_RECORD) {
+		fuzz_circular_record(
+		    packet, packet_size, argument, ntfs_u32(header->configuration_bytes));
 		assert(memcmp(data, original, size) == 0);
 		return 0;
 	}
@@ -266,6 +359,44 @@ protect(uint8_t *page, size_t size)
 	}
 }
 
+static bool
+record_mutation_page(uint8_t **bytes, size_t *size, uint64_t lsn, unsigned seed, size_t *minimum)
+{
+	const struct ntfs_disk_log_restart_page *header = (const void *)*bytes;
+	struct ntfs_logfile_restart restart;
+	struct ntfs_logfile_lsn location;
+	uint64_t offset, ring_bytes;
+	size_t system_bytes;
+	unsigned position;
+
+	if (*size < sizeof(*header)) {
+		return false;
+	}
+	system_bytes = ntfs_u32(header->system_page_bytes);
+	if (system_bytes > *size || system_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES ||
+	    ntfs_logfile_restart_decode(*bytes, system_bytes, *size,
+		configuration_scratch + FUZZ_GUARD_BYTES, NTFS_LOGFILE_MAX_PAGE_BYTES,
+		&restart) != NTFS_OK ||
+	    ntfs_logfile_lsn_decode(&restart, lsn, &location) != NTFS_OK) {
+		return false;
+	}
+	/* Focus resealed mutations on the header and nearby continuations. Generic
+	 * mutation still reaches arbitrary storage and damaged protection words. */
+	position = (seed / FUZZ_GENERIC_PERIOD) % FUZZ_RECORD_MUTATION_PAGES;
+	ring_bytes = restart.usable_bytes - restart.circular_offset;
+	offset = restart.circular_offset +
+	    (location.page_offset - restart.circular_offset +
+		(uint64_t)position * restart.log_page_bytes) %
+		ring_bytes;
+	if (!ntfs_bounds(offset, restart.log_page_bytes, *size)) {
+		return false;
+	}
+	*bytes += (size_t)offset;
+	*size = restart.log_page_bytes;
+	*minimum = position == 0 ? location.record_offset : restart.page_data_offset;
+	return true;
+}
+
 static size_t
 structured_mutate(uint8_t *data, size_t size, unsigned seed)
 {
@@ -278,7 +409,7 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	size_t mutation_end, area_bytes;
 	const struct ntfs_disk_log_restart_area *area;
 	unsigned kind;
-	bool restored_page = false;
+	bool restored_page = false, record_page = false, source_kind;
 
 	if (size < sizeof(*envelope)) {
 		return size;
@@ -290,7 +421,15 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	}
 	page = data + sizeof(*envelope) + configuration_size;
 	page_bytes = size - sizeof(*envelope) - configuration_size;
-	if (kind == FUZZ_SOURCE && page_bytes >= sizeof(*restart)) {
+	source_kind = kind == FUZZ_SOURCE || kind == FUZZ_CIRCULAR_RECORD;
+	minimum = 0;
+	if (kind == FUZZ_CIRCULAR_RECORD &&
+	    (seed / (FUZZ_GENERIC_PERIOD * FUZZ_RECORD_MUTATION_PAGES)) % FUZZ_GENERIC_PERIOD !=
+		0) {
+		record_page = record_mutation_page(
+		    &page, &page_bytes, ntfs_u64(envelope->argument), seed, &minimum);
+	}
+	if (source_kind && !record_page && page_bytes >= sizeof(*restart)) {
 		restart = (const void *)page;
 		candidate_offset = (seed / FUZZ_GENERIC_PERIOD) % NTFS_LFS_RESTART_PAGES == 0
 		    ? 0
@@ -307,8 +446,9 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 			}
 		}
 	}
-	minimum = 0;
-	if (kind == FUZZ_RESTART || kind == FUZZ_SOURCE) {
+	if (record_page) {
+		restored_page = unprotect(page, page_bytes, sizeof(struct ntfs_disk_log_page));
+	} else if (kind == FUZZ_RESTART || source_kind) {
 		minimum = sizeof(*restart);
 		restored_page = unprotect(page, page_bytes, minimum);
 		if (restored_page) {
@@ -320,7 +460,7 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		restored_page = unprotect(page, page_bytes, minimum);
 	}
 	mutation_end = page_bytes;
-	if ((kind == FUZZ_RESTART || kind == FUZZ_SOURCE) && restored_page &&
+	if (!record_page && (kind == FUZZ_RESTART || source_kind) && restored_page &&
 	    ntfs_bounds(minimum, sizeof(*area), page_bytes)) {
 		area = (const void *)(page + minimum);
 		area_bytes = ntfs_u16(area->length);

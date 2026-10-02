@@ -93,7 +93,8 @@ enum ntfs_logfile_storage {
 };
 
 struct ntfs_logfile_limits {
-	/* Per operation. Discovery has at most 18 exact reads; page read has one. */
+	/* Per operation. Discovery has at most 18 exact reads; a physical page read
+	 * has one; circular-record assembly shares credits across all its pages. */
 	uint32_t max_page_bytes, max_read_calls;
 	uint64_t max_read_bytes;
 };
@@ -119,6 +120,13 @@ struct ntfs_logfile_page_view {
 	uint64_t offset;
 	enum ntfs_logfile_storage storage;
 	struct ntfs_logfile_page page;
+};
+
+struct ntfs_logfile_record_view {
+	struct ntfs_logfile_record record;
+	uint64_t first_page_offset, last_page_offset, read_bytes;
+	uint32_t bytes, pages_read, read_calls;
+	bool wrapped;
 };
 
 /* Independent ownership of a logical, immutable $LogFile byte source, not a
@@ -160,6 +168,19 @@ enum ntfs_result ntfs_logfile_get_client(
  * zero, including partial backend reads. No source page is changed or cached. */
 enum ntfs_result ntfs_logfile_read_page(struct ntfs_logfile *, uint64_t offset, void *,
     size_t capacity, struct ntfs_logfile_page_view *);
+/* Assemble an exact record from physical circular storage by its LSN. Only the
+ * first segment has a record header; continuations begin at page_data_offset.
+ * USA and common page/record framing are checked, including linked-LSN geometry.
+ * A record may wrap once; no physical page is revisited. Transfer page_count/
+ * position and opaque copy values do not select segments or current history.
+ * This does not route tail/fast copies, resolve active clients or qualify a
+ * post-crash record. It is a physical diagnostic observation, not recovery.
+ * The operation shares one read budget across every page, stages at most one
+ * MAX_RECORD_BYTES allocation and copies exact header/client bytes without
+ * alignment padding only on success. Bytes/out/source must be disjoint. Errors
+ * leave caller bytes unchanged and view zero; a different header LSN is STALE. */
+enum ntfs_result ntfs_logfile_read_circular_record(struct ntfs_logfile *, uint64_t lsn, void *,
+    size_t capacity, struct ntfs_logfile_record_view *);
 
 /* Independent immutable-byte primitives; no allocation, device I/O or writes.
  * Output structures are zero on error. Inputs, outputs and scratch must not

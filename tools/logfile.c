@@ -124,6 +124,18 @@ client_fields(const struct ntfs_logfile_client *client, bool comma)
 }
 
 static void
+record_fields(const struct ntfs_logfile_record *record, bool comma)
+{
+	printf("%s\"lsn\":%" PRIu64 ",\"previous_lsn\":%" PRIu64 ",\"undo_next_lsn\":%" PRIu64
+	       ",\"type\":%" PRIu32 ",\"transaction\":%" PRIu32 ",\"client_sequence\":%u,"
+	       "\"client_index\":%u,\"flags\":%u",
+	    comma ? "," : "", record->lsn, record->previous_lsn, record->undo_next_lsn,
+	    record->type, record->transaction, record->client_sequence, record->client_index,
+	    record->flags);
+	span("data", record->data);
+}
+
+static void
 restart(const struct ntfs_logfile_restart *r, const uint8_t *scratch)
 {
 	struct ntfs_logfile_client client;
@@ -216,6 +228,54 @@ journal(const char *path, bool volume_source)
 	return result == NTFS_OK ? 0 : 1;
 }
 
+static int
+circular_record(const char *path, uint64_t lsn)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_record_view view;
+	uint8_t *bytes = NULL;
+	size_t i;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
+	if (result == NTFS_OK) {
+		bytes = malloc(NTFS_LOGFILE_MAX_RECORD_BYTES);
+		result = bytes == NULL ? NTFS_NO_MEMORY
+				       : ntfs_logfile_read_circular_record(source, lsn, bytes,
+					     NTFS_LOGFILE_MAX_RECORD_BYTES, &view);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"circular-record\",\"code\":%d,"
+	       "\"result\":\"%s\",\"recovery_qualified\":false,\"requested_lsn\":%" PRIu64
+	       ",\"record\":",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), lsn);
+	if (result == NTFS_OK) {
+		printf("{");
+		record_fields(&view.record, false);
+		printf("},\"assembly\":{\"first_page_offset\":%" PRIu64
+		       ",\"last_page_offset\":%" PRIu64 ",\"bytes\":%" PRIu32
+		       ",\"pages_read\":%" PRIu32 ",\"read_calls\":%" PRIu32
+		       ",\"read_bytes\":%" PRIu64 ",\"wrapped\":%s},\"bytes_hex\":\"",
+		    view.first_page_offset, view.last_page_offset, view.bytes, view.pages_read,
+		    view.read_calls, view.read_bytes, view.wrapped ? "true" : "false");
+		for (i = 0; i < view.bytes; i++) {
+			printf("%02x", (unsigned)bytes[i]);
+		}
+		printf("\"");
+	} else {
+		printf("null,\"assembly\":null,\"bytes_hex\":null");
+	}
+	printf("}\n");
+	free(bytes);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK ? 0 : 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -236,6 +296,12 @@ main(int argc, char **argv)
 	if (argc == 3 &&
 	    (strcmp(argv[1], "journal") == 0 || strcmp(argv[1], "volume-journal") == 0)) {
 		return journal(argv[2], strcmp(argv[1], "volume-journal") == 0);
+	}
+	if (strcmp(argv[1], "circular-record") == 0) {
+		if (argc != 4 || !number(argv[3], UINT64_MAX, &argument)) {
+			goto usage;
+		}
+		return circular_record(argv[2], argument);
 	}
 	is_restart = strcmp(argv[1], "restart") == 0;
 	is_page = strcmp(argv[1], "page") == 0;
@@ -300,13 +366,7 @@ main(int argc, char **argv)
 		    p.copy_value, p.last_end_lsn, p.flags, p.page_count, p.page_position,
 		    p.next_record_offset);
 	} else if (is_record) {
-		printf(",\"lsn\":%" PRIu64 ",\"previous_lsn\":%" PRIu64
-		       ",\"undo_next_lsn\":%" PRIu64 ",\"type\":%" PRIu32
-		       ",\"transaction\":%" PRIu32 ",\"client_sequence\":%u,"
-		       "\"client_index\":%u,\"flags\":%u",
-		    record.lsn, record.previous_lsn, record.undo_next_lsn, record.type,
-		    record.transaction, record.client_sequence, record.client_index, record.flags);
-		span("data", record.data);
+		record_fields(&record, true);
 	} else {
 		printf(",\"redo_operation\":%u,\"undo_operation\":%u,\"target_attribute\":%u,"
 		       "\"lcn_count\":%u,\"record_offset\":%u,\"attribute_offset\":%u,"
@@ -328,7 +388,8 @@ usage:
 	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
 	    "       ntfs-logfile update CLIENT_PACKET\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
-	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n");
+	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
+	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n");
 done:
 	free(restart_scratch);
 	free(restart_bytes);

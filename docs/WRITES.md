@@ -17,9 +17,11 @@ success never satisfy writable ownership or permit a dirty mount. The separate
 logical-source owner selects only compatible supported restart copies, retaining
 bounded conflicts and backend error evidence; physical page reading does not
 establish a post-crash journal history. Counted read-only stream binding is now
-implemented without admitting dirty mounts. Native journal admission/drain and complete
-tail/fast-page routing, wrapped records, native client checkpoints, transaction
-analysis and the crash/durability simulator remain required.
+implemented without admitting dirty mounts. Physical wrapped-record assembly now
+has bounded exact-byte/read/fault checks, but does not establish written/current
+history or qualify continuation provenance. Native journal admission/drain,
+tail/fast-page routing, active circular history, native client checkpoints,
+transaction analysis and the crash/durability simulator remain required.
 
 The future transaction module owns private snapshots, MFT/$Bitmap reservations,
 attribute-list growth, directory B-tree changes, $Secure references and rollback.

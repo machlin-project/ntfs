@@ -388,12 +388,42 @@ ntfs_logfile_get_client(
 	    sizeof(struct ntfs_disk_log_client), out);
 }
 
+static enum ntfs_result
+load_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
+    struct ntfs_logfile_page_view *out)
+{
+	struct ntfs_logfile_page_view view = {0};
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	enum ntfs_result result;
+
+	if (offset % restart->log_page_bytes != 0 ||
+	    offset < (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes ||
+	    !ntfs_bounds(offset, restart->log_page_bytes, restart->usable_bytes)) {
+		return NTFS_INVALID;
+	}
+	result = source_read(source, offset, source->raw, restart->log_page_bytes, work);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_logfile_page_decode(source->raw, restart->log_page_bytes, restart,
+	    source->scratch, source->limits.max_page_bytes, &view.page);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	view.offset = offset;
+	view.storage = offset >= restart->circular_offset ? NTFS_LOGFILE_CIRCULAR
+	    : restart->major == NTFS_LFS_MAJOR_FAST	  ? NTFS_LOGFILE_FAST_STORAGE
+							  : NTFS_LOGFILE_LEGACY_TAIL;
+	*out = view;
+	return NTFS_OK;
+}
+
 enum ntfs_result
 ntfs_logfile_read_page(struct ntfs_logfile *source, uint64_t offset, void *bytes, size_t capacity,
     struct ntfs_logfile_page_view *out)
 {
 	struct ntfs_logfile_report work = {0};
-	struct ntfs_logfile_page_view view = {0};
+	struct ntfs_logfile_page_view view;
 	const struct ntfs_logfile_restart *restart;
 	enum ntfs_result result;
 
@@ -413,20 +443,112 @@ ntfs_logfile_read_page(struct ntfs_logfile *source, uint64_t offset, void *bytes
 	if (capacity < restart->log_page_bytes) {
 		return NTFS_RANGE;
 	}
-	result = source_read(source, offset, source->raw, restart->log_page_bytes, &work);
+	result = load_page(source, offset, &work, &view);
+	if (result == NTFS_OK) {
+		ntfs_copy(bytes, source->scratch, restart->log_page_bytes);
+		*out = view;
+	}
+	return result;
+}
+
+enum ntfs_result
+ntfs_logfile_read_circular_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
+    size_t capacity, struct ntfs_logfile_record_view *out)
+{
+	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_record_view view = {0};
+	struct ntfs_logfile_page_view page;
+	struct ntfs_logfile_lsn location, linked;
+	const struct ntfs_logfile_restart *restart;
+	const struct ntfs_disk_log_record *header;
+	uint8_t *staged;
+	uint64_t total, unique_capacity, offset;
+	size_t copied, amount, record_offset;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL || bytes == NULL) {
+		return NTFS_INVALID;
+	}
+	restart = &source->restart;
+	result = ntfs_logfile_lsn_decode(restart, requested_lsn, &location);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_logfile_page_decode(source->raw, restart->log_page_bytes, restart,
-	    source->scratch, source->limits.max_page_bytes, &view.page);
+	if (capacity < restart->record_header_bytes) {
+		return NTFS_RANGE;
+	}
+	result = load_page(source, location.page_offset, &work, &page);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	view.offset = offset;
-	view.storage = offset >= restart->circular_offset ? NTFS_LOGFILE_CIRCULAR
-	    : restart->major == NTFS_LFS_MAJOR_FAST	  ? NTFS_LOGFILE_FAST_STORAGE
-							  : NTFS_LOGFILE_LEGACY_TAIL;
-	ntfs_copy(bytes, source->scratch, restart->log_page_bytes);
-	*out = view;
-	return NTFS_OK;
+	header = (const void *)(source->scratch + location.record_offset);
+	if (ntfs_u64(header->lsn) != requested_lsn) {
+		return NTFS_STALE;
+	}
+	total = (uint64_t)restart->record_header_bytes + ntfs_u32(header->data_bytes);
+	unique_capacity = (restart->usable_bytes - restart->circular_offset) /
+		restart->log_page_bytes * (restart->log_page_bytes - restart->page_data_offset) -
+	    (location.record_offset - restart->page_data_offset);
+	if (total > NTFS_LOGFILE_MAX_RECORD_BYTES || total > capacity || total > unique_capacity) {
+		return NTFS_RANGE;
+	}
+	staged = source->environment.allocate(source->environment.context, (size_t)total);
+	if (staged == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	offset = location.page_offset;
+	record_offset = location.record_offset;
+	copied = 0;
+	view.first_page_offset = offset;
+	for (;;) {
+		amount = restart->log_page_bytes - record_offset;
+		if (amount > total - copied) {
+			amount = (size_t)total - copied;
+		}
+		ntfs_copy(staged + copied, source->scratch + record_offset, amount);
+		copied += amount;
+		view.pages_read++;
+		view.last_page_offset = offset;
+		if (copied == total) {
+			break;
+		}
+		offset += restart->log_page_bytes;
+		if (offset == restart->usable_bytes) {
+			offset = restart->circular_offset;
+			view.wrapped = true;
+		}
+		if (offset == location.page_offset) {
+			result = NTFS_RANGE;
+			goto done;
+		}
+		result = load_page(source, offset, &work, &page);
+		if (result != NTFS_OK) {
+			goto done;
+		}
+		record_offset = restart->page_data_offset;
+	}
+	result = ntfs_logfile_record_decode(
+	    staged, (size_t)total, restart->record_header_bytes, &view.record);
+	if (result == NTFS_OK &&
+	    ((view.record.previous_lsn != 0 &&
+		 ntfs_logfile_lsn_decode(restart, view.record.previous_lsn, &linked) != NTFS_OK) ||
+		(view.record.undo_next_lsn != 0 &&
+		    ntfs_logfile_lsn_decode(restart, view.record.undo_next_lsn, &linked) !=
+			NTFS_OK))) {
+		result = NTFS_CORRUPT;
+	}
+	if (result == NTFS_OK) {
+		view.bytes = (uint32_t)total;
+		view.read_calls = work.read_calls;
+		view.read_bytes = work.read_bytes;
+		ntfs_copy(bytes, staged, (size_t)total);
+		*out = view;
+	}
+done:
+	source->environment.release(source->environment.context, staged, (size_t)total);
+	return result;
 }

@@ -207,6 +207,13 @@ independently authored journal bytes in named NTFS mappings; no foreign stream
 or recovery algorithm was imported. Process-isolated fuzzing follows LLVM's
 public corpus/process interface as test infrastructure; it is not product code
 or a change in the allocator/disk format.
+The physical circular-record assembly loop is original repository code. Published
+LFS research supplies the first-segment-only header, continuation data-offset and
+circular-wrap facts; declarative layout headers supply field meanings. Independent
+fixtures pattern original client bytes and author protected fragments, extended
+headers and unpadded exact-byte oracles. No foreign assembly/recovery algorithm
+was imported. Physical byte framing does not qualify native page/current-history
+selection or recovery.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

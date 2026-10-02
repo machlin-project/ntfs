@@ -108,5 +108,8 @@ bounded conflict/partial-I/O reports, retains lossless clients and stages physic
 page reads. Counted ordinary `$LogFile` stream binding holds the core volume
 through owner close and validates fragmented/listed storage. The `journal`
 diagnostic reads exported regular files; `volume-journal` reads NTFS image files
-through an ordinary portable core mount. Complete circular history, copy routing,
-record assembly and native journal lifecycle remain open.
+through an ordinary portable core mount. Physical circular records now assemble
+by LSN across adjacent protected pages and one wrap, with shared I/O credits,
+bounded private staging and exact byte oracles. The `circular-record` diagnostic
+retains exact bytes without alignment padding. Current circular history, copy
+routing, native client/transaction interpretation and journal lifecycle remain open.

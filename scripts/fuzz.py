@@ -100,13 +100,16 @@ try:
                 'processes': IMAGE_FUZZ_PROCESSES if process_flags else 0,
                 'rss_limit_mib': RSS_LIMIT_MIB, 'timeout_seconds': INPUT_TIMEOUT_SECONDS,
                 'log': str(campaign / 'run.log')}
+        if target == 'logfile':
+            item['authored_seeds'] = len(paths)
+            item['circular_record_seeds'] = json.loads((seeds / 'logfile-record-selection.json').read_text())
         report['targets'].append(item)
         report_path.write_text(json.dumps(report, indent=2) + '\n')
         subprocess.run(command, cwd=root, env=env, check=True)
         item['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         item['status'] = 'running'
         report_path.write_text(json.dumps(report, indent=2) + '\n')
-        if process_flags:
+        if process_flags or target == 'logfile':
             # Child subsets are coverage-guided exploration, not proof that
             # every authored seed ran. Fixed-file batches check all seeds once
             # without retaining a growing corpus or weakening sanitizer checks.

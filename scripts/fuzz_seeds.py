@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Author independent small inputs for each parser fuzz target."""
 from pathlib import Path
+import json
 import struct
 import sys
 
@@ -13,11 +14,16 @@ from lzx_fixtures import author as generate_lzx
 from logfile_fixtures import author as generate_logfile
 from logfile_source_fixtures import author as generate_logfile_sources
 from logfile_volume_fixtures import author as generate_logfile_volumes
+from logfile_record_fixtures import author as generate_logfile_records
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
 LOGFILE_SOURCE_KIND = 5
+LOGFILE_CIRCULAR_RECORD_KIND = 6
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
+LOGFILE_ALLOCATION_FAULT = 1 << 8
+LOGFILE_BUDGET_SHIFT = 16
+LOGFILE_READ_CALL_BUDGET = 32
 
 MAX_STRUCTURE_BYTES = 32768
 LZNT1_RAW_PAYLOAD = b'Independent raw chunk\n'
@@ -179,6 +185,34 @@ def generate(output):
         envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_SOURCE_KIND, 0, 0)
         if len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES:
             (log_seeds / ('source-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + payload)
+    log_records = output / 'logfile-records'
+    selection = dict(input_bytes=LOGFILE_FUZZ_INPUT_BYTES, envelope_bytes=LOGFILE_FUZZ_HEADER.size,
+                     included=[], skipped=[], fault_seeds=[])
+    for case in generate_logfile_records(log_records):
+        payload = (log_records / case['path']).read_bytes()
+        if len(payload) + LOGFILE_FUZZ_HEADER.size > LOGFILE_FUZZ_INPUT_BYTES:
+            selection['skipped'].append(dict(path=case['path'], source_bytes=len(payload),
+                reason='Complete source and envelope exceed input cap; retained in direct C/CLI suites'))
+            continue
+        selection['included'].append(case['path'])
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CIRCULAR_RECORD_KIND, case['lsn'], 0)
+        (log_seeds / ('circular-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + payload)
+        controls = {}
+        if case['path'] == 'three-pages.journal':
+            controls = {'first-read': 1, 'continuation-read': 2, 'allocation': LOGFILE_ALLOCATION_FAULT}
+        elif case['path'] == 'credits.journal':
+            # Call/byte policy derives from the same control word in the test
+            # envelope. Add a full call-budget period where extra bytes are needed.
+            exact_calls = case['pages'] - 1
+            controls = {'exact-calls': (exact_calls + LOGFILE_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT,
+                        'short-calls': (exact_calls - 1 + LOGFILE_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT,
+                        'short-bytes': exact_calls << LOGFILE_BUDGET_SHIFT}
+        for name, control in controls.items():
+            filename = 'circular-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CIRCULAR_RECORD_KIND, case['lsn'], control)
+            (log_seeds / filename).write_bytes(envelope + payload)
+            selection['fault_seeds'].append(filename)
+    (output / 'logfile-record-selection.json').write_text(json.dumps(selection, indent=2) + '\n')
     return seeds
 
 

@@ -71,6 +71,15 @@ oracles, zero errors, scratch/input guards and lossless names. `ntfs-logfile`
 inspects bounded exported packets/logical journals and read-only NTFS image files. The `logfile-source`,
 `logfile-source-cli` and `fuzz-logfile-source` suites cover bounded copy selection,
 conflicts, cached clients, staged physical pages, backend errors and read credits.
+The `logfile-records`/`logfile-records-cli` suites add exact physical circular
+assembly, one wrap, extended/USA-intersecting bytes, shared credits and the
+1-MiB record-cap boundary. `circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN`
+retains exact bytes and physical accounting with no current-history claim.
+The two record fuzz suites check resealed record/continuation mutations and
+explicit fault/budget controls. The logfile campaign first replays every authored
+seed in fixed batches; its report lists 28 included record sources, six fault
+seeds and the two complete 4-MiB sources excluded by its unchanged 2-MiB cap.
+Direct C/CLI tests retain both larger sources without truncation.
 The `logfile-volume`, `logfile-volume-cli` and `fuzz-logfile-volume` suites add
 counted ordinary-stream binding, fragmented/listed storage, source-node-independent
 ownership, mount/binding rejection, physical partial-read faults/retries and

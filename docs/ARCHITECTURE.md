@@ -218,9 +218,14 @@ limits. Unsupported encoded/sparse/partial-VDL or reparse/directory/view forms
 refuse automatic binding explicitly.
 Three bounded private buffers retain selected metadata and stage physical page
 reads, publishing caller bytes only after complete integrity checks. Native
-journal admission/drain integration, tail/fast routing, circular currentness, wrapped assembly,
-transaction analysis and recovery remain separate work. The mount policy still
-refuses dirty media.
+journal admission/drain integration remains separate. Physical circular-record
+assembly locates the first header by LSN and joins adjacent protected payload
+pages through at most one wrap. One shared operation budget, a no-page-revisit
+bound and at most one 1-MiB ephemeral allocation limit traversal and memory;
+caller bytes publish only after all framing/link-geometry checks succeed. The
+observation does not establish written/current history or route tail/fast copies.
+Those contracts, native client/transaction interpretation and recovery remain
+separate work. The mount policy still refuses dirty media.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not

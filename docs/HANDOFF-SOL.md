@@ -174,6 +174,48 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## Physical circular-record handoff checkpoint
+
+`ntfs_logfile_read_circular_record` now joins exact physical record bytes by LSN
+through adjacent protected pages and at most one wrap. Preserve the disjoint
+caller/source/output contract, shared operation read credits, no-page-revisit
+bound, one exact-size ephemeral staging allocation and unchanged caller bytes/
+zero view on error. Nonzero previous/undo LSNs undergo selected geometry checks.
+Only the first fragment has a record header; continuation bytes begin at the
+restart data offset. Extended header bytes and restored sector tails remain
+exact; final alignment padding is excluded.
+
+This is a physical diagnostic observation. It does not establish written/current
+history from page copy/last-end/next-offset metadata, route tail/fast copies,
+resolve active client identity or qualify recovery. Do not silently promote it
+to an authoritative transaction input. The `circular-record` CLI reads an
+exported logical regular file and emits exact hex bytes plus record/physical-read
+metadata under the same boundary. Bound-volume tests also exercise this API
+through counted streams, partial resource reads and staging-allocation retry.
+
+Independent fixtures retain 30 source verdicts and unpadded byte oracles,
+including mixed/ordinary/maximum pages and the exact 1-MiB record cap with
+explicitly adequate custom credits. Default credits intentionally refuse that
+large record. The logfile fuzz envelope retains 28 record sources and six
+fault/control seeds; two complete 4-MiB sources exceed its 2-MiB cap and remain
+in direct C/CLI checks. The selection manifest and campaign report list those
+exclusions without truncating either source. Fixed-file batches execute every
+authored logfile seed before exploration. Actual results belong in ACCEPTANCE.md.
+
+All 50 sanitized core suites, both frame-limited freestanding targets, style,
+17 component PASS/seven runtime SKIPs and the unsigned app pass under
+`artifacts/plan-logrecords-*-final.log`. Record tests pass 30 verdicts/exact CLI
+reports and 14 allocation/40 partial-read faults. The campaign replays all 165
+seeds and passes 103,760 executions/61 seconds at peak RSS 537 MiB under
+`artifacts/fuzz-logrecords-final/report.json`. Both app architectures compile
+the changed source owner. No native mount or Windows journal ran.
+
+Continue copy routing and written/current circular-history validation, followed
+by native client checkpoints/tables and transaction/crash/durability contracts.
+The complete agreed no-VM and separate measured optimization scope remains in
+CORE-QUALIFICATION.md. Native ownership, Windows packets and installed recovery
+remain separate acceptance.
+
 ## NTFS-backed journal handoff checkpoint
 
 `ntfs_logfile_open_volume` now binds MFT record 2's unnamed ordinary initialized
@@ -205,8 +247,8 @@ All-source in-process fuzz passes 116,814 executions/61 seconds at peak RSS
 474 MiB. ACCEPTANCE.md retains exact logs/reports and the corrected author
 expectation for foreign extension ownership; do not erase either failed run.
 
-Next implement routed tail/fast copies, current circular history and wrapped
-record assembly, then client sequence/checkpoint/table interpretation and the
+Next qualify routed tail/fast copies and current circular history, then client
+sequence/checkpoint/table interpretation and the
 transaction/crash/durability model. Native journal admission/drain integration,
 Windows lifecycle/version-transition packets and installed recovery/roundtrips
 remain separate acceptance. FSKit maintenance remains unimplemented; fresh ext4

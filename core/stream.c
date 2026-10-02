@@ -337,7 +337,7 @@ ntfs_stream_raw(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t len
 	uint32_t cluster = s->volume->info.cluster_size;
 	enum ntfs_result result;
 
-	if (s->metadata_only) {
+	if (s->metadata_only || s->wof != NULL) {
 		return NTFS_UNSUPPORTED;
 	}
 	while (length != 0) {
@@ -468,6 +468,9 @@ ntfs_stream_read(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t le
 	if (length > s->size - offset) {
 		length = (size_t)(s->size - offset);
 	}
+	if (s->wof != NULL) {
+		return ntfs_wof_read(s, offset, buffer, length, done);
+	}
 	while (length != 0) {
 		take = length < NTFS_MAX_IO ? length : NTFS_MAX_IO;
 		if (offset >= s->initialized) {
@@ -537,6 +540,7 @@ ntfs_stream_close(struct ntfs_stream *s)
 	if (s->external) {
 		v->children--;
 	}
+	ntfs_wof_close(s->wof);
 	ntfs_free(v, s->value, s->value_allocation);
 	ntfs_free(v, s->runs, (size_t)s->run_capacity * sizeof(*s->runs));
 	ntfs_free(v, s->compression_buffer,

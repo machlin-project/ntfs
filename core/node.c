@@ -163,7 +163,11 @@ ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if (st->directory || st->reparse) {
+	if (st->reparse) {
+		result = ntfs_wof_sizes(node, &st->size, &st->allocated_size);
+		return result == NTFS_NOT_FOUND ? NTFS_OK : result;
+	}
+	if (st->directory) {
 		return NTFS_OK;
 	}
 	/* NTFS sizes describe the unnamed stream independently of our ability

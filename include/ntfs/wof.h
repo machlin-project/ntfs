@@ -42,11 +42,17 @@ struct ntfs_wof_span {
 	bool uncompressed;
 };
 
-/* Standalone primitives, not stream support. Decode the complete Microsoft
- * reparse envelope and the observed 16-byte file-provider payload. WIM, future
- * versions/lengths and unknown algorithms are unsupported. Errors zero outputs.
+/* Standalone metadata primitive; public streams own file-provider reading.
+ * Decode the complete Microsoft reparse envelope and the observed 16-byte
+ * file-provider payload. WIM, future versions/lengths and unknown algorithms are
+ * unsupported. Errors zero outputs.
  * Inputs and output structures must not overlap. */
 enum ntfs_result ntfs_wof_decode(const void *, size_t, struct ntfs_wof_info *);
+/* Decode an existing immutable reparse snapshot without another copy or I/O. */
+enum ntfs_result ntfs_reparse_wof_info(const struct ntfs_reparse *, struct ntfs_wof_info *);
+/* Exact stored UTF-16 name of the provider backing stream. It remains visible
+ * in the lossless catalog, but public reads of that encoding are unsupported. */
+bool ntfs_wof_is_backing_stream(const uint16_t *, size_t);
 enum ntfs_result ntfs_wof_layout_init(uint32_t algorithm, uint64_t logical_size,
     uint64_t stored_size, uint32_t maximum_chunks, struct ntfs_wof_layout *);
 /* start/end are cumulative offsets relative to the end of the chunk table.

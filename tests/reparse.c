@@ -393,7 +393,7 @@ exercise(struct tracked_device *device, const struct image_case *test, size_t fa
 	struct ntfs_directory *directory = NULL;
 	uint16_t *name;
 	size_t length, i;
-	enum ntfs_result result;
+	enum ntfs_result result, stream_result;
 	uint64_t reference =
 	    TEST_HELLO_RECORD | (uint64_t)TEST_FILE_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT;
 
@@ -439,8 +439,8 @@ exercise(struct tracked_device *device, const struct image_case *test, size_t fa
 		assert(reparse == NULL);
 	}
 	if (test->result != NTFS_NOT_FOUND) {
-		assert(ntfs_stream_open(node, NULL, 0, &stream) ==
-		    (test->unflagged ? NTFS_CORRUPT : NTFS_UNSUPPORTED));
+		stream_result = test->result == NTFS_OK ? NTFS_UNSUPPORTED : test->result;
+		assert(ntfs_stream_open(node, NULL, 0, &stream) == stream_result);
 		assert(stream == NULL);
 	}
 	if (test->directory) {

@@ -24,6 +24,7 @@ enum {
 	NTFS_VECTOR_GROWTH = 2,
 	NTFS_VISITED_LOAD_DENOMINATOR = 2,
 	NTFS_COMPRESSION_BUFFERS = 2,
+	NTFS_WOF_TABLE_PAGE_BYTES = 4096,
 	NTFS_VCN_HASH_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE
 };
 
@@ -34,6 +35,8 @@ enum {
 struct ntfs_run {
 	uint64_t vcn, length, lcn;
 };
+
+struct ntfs_wof_stream;
 
 struct ntfs_stream {
 	struct ntfs_volume *volume;
@@ -48,6 +51,7 @@ struct ntfs_stream {
 	uint32_t run_count, run_capacity;
 	uint8_t *compression_buffer;
 	uint64_t cached_unit;
+	struct ntfs_wof_stream *wof;
 };
 
 struct ntfs_record_cache {
@@ -121,6 +125,12 @@ enum ntfs_result ntfs_listed_attribute(const uint8_t *, uint32_t, const uint16_t
 enum ntfs_result ntfs_mft_open(struct ntfs_volume *, uint8_t *, struct ntfs_stream **);
 enum ntfs_result ntfs_stream_raw(struct ntfs_stream *, uint64_t, void *, size_t);
 enum ntfs_result ntfs_attribute_sizes(struct ntfs_node *, uint64_t *, uint64_t *);
+enum ntfs_result ntfs_attribute_metadata_open(
+    struct ntfs_node *, uint32_t, const uint16_t *, size_t, struct ntfs_stream **);
+enum ntfs_result ntfs_wof_sizes(struct ntfs_node *, uint64_t *, uint64_t *);
+enum ntfs_result ntfs_wof_open(struct ntfs_node *, const uint16_t *, size_t, struct ntfs_stream **);
+enum ntfs_result ntfs_wof_read(struct ntfs_stream *, uint64_t, void *, size_t, size_t *);
+void ntfs_wof_close(struct ntfs_wof_stream *);
 enum ntfs_result ntfs_stream_exact(struct ntfs_stream *, uint64_t, void *, size_t);
 const struct ntfs_run *ntfs_run_find(const struct ntfs_stream *, uint64_t);
 int ntfs_name_compare(struct ntfs_volume *, const uint16_t *, size_t, const uint8_t *, size_t);

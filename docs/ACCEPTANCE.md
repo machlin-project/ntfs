@@ -20,7 +20,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
 | Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded single-edge symlink/junction projection, checked ancestry, explicit Windows root bindings and target aliases; opaque provider classification and raw-data rejection | Core checks and 47 legacy path/storage verdicts passed; 79 allocation/17 read fault positions across native lookup/reopened metadata passed; intermediate/multiply linked/cross-volume resolution, Windows links and installed path walking remain open |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
-| WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman decoding; exact output and hostile-input guards | 87 content/11 invalid vectors and bounded provider/table fuzz passed; public streams still reject WOF; LZX, provider content/lifetime integration and Windows/native qualification remain open |
+| WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman decoding; exact output and hostile-input guards | 87 content/11 invalid vectors and bounded provider/table fuzz passed; LZX and Windows codec observations remain open |
+| WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K content, counted independent lifetime, lazy private unit, metadata-only unsupported codecs and native ADS/projection | 28 core verdicts, 216 allocation/68 read faults and 14 legacy provider scenarios passed; bounded image fuzz passed; LZX, provider-specific native fault/interleaving expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
 | FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; six modern lifecycle/enumeration/content/link/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
@@ -36,8 +37,51 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The WOF primitive continuation passes all 34 sanitized C suites, both freestanding
-targets with the 2-KiB frame limit, selected Xcode style, legacy FSKit component
+The WOF file-provider continuation passes all 35 sanitized C suites, both
+freestanding targets with the 2-KiB frame limit, selected Xcode style, the legacy
+component and current unsigned app/extension build. Twenty-eight independently
+authored storage/format verdicts check exact bytes, raw/XPRESS4K/8K/16K chunks,
+partial/exact/empty files, fragmented/resident/listed backing, placeholder VDL,
+multi-page tables, unsupported codecs, malformed metadata and stale ownership.
+All 216 required allocation and 68 read failures in the selected stat/open/cold
+content operations pass with retry, guards, unchanged images and exact cleanup.
+Source-node-independent streams keep unmount BUSY until released. Failure in a
+later unit may retain a correctly completed core prefix; failed private unit
+contents and cache tags are never published.
+
+Fourteen legacy FSKit provider cases check ordinary-file classification,
+requested sizes and content, metadata-only LZX/encryption, independent ADS,
+original-wire reparse/full reverse-manifest oracles, hidden backing aliases,
+table/codec errors, remount, permanent revocation and exactly-once replies.
+Six macOS-27 checks explicitly SKIP. Core and app/component compilation do not
+establish installed provider operations, native authorization or Windows codec
+compatibility. Evidence uses `artifacts/plan-wof-files-core-final.log`,
+`plan-wof-files-freestanding-reviewed.log`, `plan-wof-files-style-final.log`,
+`plan-wof-files-component-accepted.log` and `plan-wof-files-app-accepted.log`.
+Initial logs retain the independent page-allocation expectation error and older
+opaque reparse rejection assertions; the component's first new test also assumed
+a byte-count getter absent from the SDK. Original corruption/retry checks remain
+enforced after those test corrections.
+
+The image campaign now reads first/middle/tail default-stream positions. It
+completed 47,555 executions in 61 seconds, coverage 3,536, feature count 13,962
+and peak RSS 958 MiB, exit zero without a reported sanitizer/crash finding.
+Evidence uses `artifacts/fuzz-wof-files-image/` and
+`artifacts/plan-wof-files-fuzz-image.log`. That near-cap process RSS includes
+corpus/sanitizer overhead and is distinct from bounded core allocations. This is
+synthetic core coverage, not Foundation/installed/Windows provider qualification.
+[WOF.md](WOF.md) preserves LZX, native fault/interleaving expansion, Windows samples,
+authorization and measured provider-performance requirements.
+
+The subsequent naming/comment review preserved all 112 WOF image/data/reparse/
+manifest files in each 8-MiB and 1-MiB geometry; the 28 compact images also match
+the campaign corpus. Evidence uses `artifacts/plan-wof-files-fixture-final.log`
+and `artifacts/wof-files-fixture-review/report.json`. The initial comparison log
+is retained separately: that checker first looked for sidecars in the image-only
+corpus before comparing them with the complete per-run seed directory.
+
+The preceding WOF primitive continuation passed all 34 sanitized C suites,
+both freestanding targets with the 2-KiB frame limit, selected Xcode style, legacy FSKit component
 and current unsigned app/extension build. Its standalone decoder has 87 exact-byte
 vectors and 11 explicit invalid vectors covering short/maximal codes, lookahead
 boundaries, raw length extensions, distance-bit classes, overlapping copies,
@@ -52,10 +96,8 @@ coverage 360, feature count 1,129 and reported peak RSS 479 MiB. It exited zero
 without a reported crash or sanitizer finding, under `artifacts/fuzz-wof-primitives/`
 with launcher log `artifacts/plan-wof-fuzz-final.log`. Provider/table envelopes and
 independent codec blocks are exercised without media I/O. This bounded synthetic
-campaign does not establish Windows format/codec compatibility or integrated
-provider reads. [WOF.md](WOF.md) retains LZX, complete stream/storage/table/cache
-ownership, fault/retry, FSKit projection and native qualification requirements.
-The public reparse read guard remains closed.
+campaign did not establish Windows format/codec compatibility or integrated
+provider reads. The public reparse read guard was still closed at that checkpoint.
 
 The preceding native-link continuation passes all 32 sanitized core suites, both
 freestanding targets, selected Xcode style, the expanded FSKit component and the
@@ -505,12 +547,12 @@ mount is not a full filesystem consistency check. Case-sensitive directories use
 exact UTF-16 lookup; collisions in an insensitive directory remain UNSUPPORTED.
 Windows/native case-policy and full WSL/POSIX namespace qualification remain open.
 Stream names use exact UTF-16 matching. The
-adapter uses a single-user read-only mode/UID/GID presentation and rejects reparse
-items; it does not enforce Windows ACLs.
+adapter uses a single-user read-only mode/UID/GID presentation; it projects the
+supported link and WOF subsets but does not enforce Windows ACLs.
 Regular encoded files with supported metadata framing now retain requested
 attributes and independent ADS; their default content remains unsupported.
-Directory enumeration requesting attributes still fails explicitly on reparse
-items, unknown flag families and malformed metadata, without consuming the failed
+Directory enumeration requesting attributes still fails explicitly on unsupported
+provider/link objects, unknown flag families and malformed metadata, without consuming the failed
 entry or reporting invented sizes.
 Names-only virtual dot/parent entries and native invalid-cookie errors now pass
 component checks, with view-specific cookies and stable stored alias ordinals.

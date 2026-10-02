@@ -111,6 +111,14 @@ an alias resolves the catalog entry directly; it does not parse the manifest or
 convert the original name through NSString. The inspector's `streams-ref` command
 returns the same inventory as JSON code-unit arrays for offline comparisons.
 
+Known WOF file-provider items retain that complete manifest, including the
+`WofCompressedData` entry and its stable catalog ordinal. The backing encoding is
+omitted from listxattr aliases and explicit gets of its alias return ENOATTR.
+Independent named ADS keep their original ordinals and read contracts. WOF items
+also expose original bytes through `org.machlin.ntfs.reparse`. Fourteen legacy
+provider cases compare complete byte/manifest oracles and remount/revocation
+behavior; installed projection and provider hard-link qualification remain open.
+
 An xattr response is capped at 1,048,575 bytes. Larger streams remain visible but
 get returns E2BIG; unknown, malformed and default-stream aliases return ENOATTR.
 The adapter opens and validates the selected stream before reading exact bytes,

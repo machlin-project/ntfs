@@ -58,7 +58,13 @@ The `wof` target independently mutates provider metadata, bounded chunk tables
 and exact-size XPRESS blocks with a 128-KiB input ceiling. It checks deterministic
 verdicts/counts and scratch/output guards; no filesystem provider reads or Windows
 codec execute. `tests/wof_fixtures.py` authors its seeds and separate content/error
-vectors. See WOF.md for parser/decoder contracts and open integration.
+vectors. The separate `wof-files` suite authors 28 complete storage/format cases,
+byte oracles and 216 allocation/68 read faults in selected stat/open/cold-content
+operations. The ordinary image target reads first/middle/tail default positions
+and therefore also exercises provider storage/table/content lifetimes. Fourteen
+legacy component cases cover WOF attributes/content, backing inventory, ADS/raw
+metadata and remount/revocation; modern content checks retain their runtime SKIP.
+See WOF.md for contracts and remaining LZX/Windows/native qualification.
 Image mutation can preserve FILE/INDX fixups and alter validated inner spans.
 The fuzzer authors 1-MiB physical images instead of retaining unused 8-MiB tails
 for every corpus entry. All fixture payload locations and large logical sparse

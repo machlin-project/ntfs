@@ -16,6 +16,7 @@ enum {
 	FUZZ_REPARSE_NAME_UNITS = 128,
 	FUZZ_DIRECTORY_ENTRIES = 64,
 	FUZZ_STREAM_NAMES = 32,
+	FUZZ_CONTENT_POSITIONS = 3,
 	FUZZ_MUTATIONS = 2000,
 	FUZZ_MUTATION_REGION = 512 * 1024,
 	FUZZ_BITS_PER_BYTE = 8,
@@ -48,6 +49,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	uint8_t buffer[FUZZ_READ_BUFFER_BYTES];
 	uint16_t reparse_name[FUZZ_REPARSE_NAME_UNITS];
 	size_t i, j, count, required;
+	uint64_t stream_size, offset;
 	enum ntfs_result result;
 
 	(void)ntfs_reparse_decode(data, size, &reparse_info);
@@ -110,8 +112,17 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 					reparse = NULL;
 				}
 				if (ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK) {
-					(void)ntfs_stream_read(
-					    stream, 0, buffer, sizeof(buffer), &count);
+					stream_size = ntfs_stream_size(stream);
+					for (j = 0; j < FUZZ_CONTENT_POSITIONS; j++) {
+						offset = j == 0 ? 0 : stream_size / 2;
+						if (j == FUZZ_CONTENT_POSITIONS - 1) {
+							offset = stream_size > sizeof(buffer)
+							    ? stream_size - sizeof(buffer)
+							    : 0;
+						}
+						(void)ntfs_stream_read(
+						    stream, offset, buffer, sizeof(buffer), &count);
+					}
 					ntfs_stream_close(stream);
 					stream = NULL;
 				}

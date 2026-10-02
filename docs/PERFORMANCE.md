@@ -7,6 +7,14 @@ lookup and one decoded LZNT1 unit per stream. Sparse and uninitialized ranges
 produce zeros without backing I/O. Compressed physical prefixes are read in
 contiguous ranges, including prefixes fragmented across multiple runs.
 
+WOF XPRESS streams now retain one decoded unit, private input/workspace and one
+4-KiB offset page. The largest supported unit uses 34,432 bytes for data/scratch;
+backing extents and any underlying storage codec have their separate allocations.
+Every fresh open validates the complete table within the default chunk-work cap.
+That linear startup cost, duplicated provider metadata inspection, unit/page
+misses and aggregate owner memory need cold/warm measurement before optimizing
+reuse. Correct content/fault checks do not establish a throughput improvement.
+
 The FSKit resource owns one aligned 1 MiB bounce buffer and caps aggregate core
 allocations at 64 MiB. A volume caps live FSItem identities at 16,384. Enumeration
 with attributes uses temporary node snapshots, not a permanent item per returned
@@ -52,6 +60,7 @@ device-call counts, peak memory, CPU and latency percentiles:
 | Large directories | Lookup near each tree boundary, full scans, concurrent pagination |
 | Fragmented and sparse streams | Extent count independently varied from file length |
 | LZNT1 | Compressible, incompressible, sparse and partial final units |
+| WOF XPRESS | Independently encoded raw/packed units, partial final units, listed/fragmented backing and tables spanning multiple pages; separate table-open and warm-unit costs |
 | FSKit concurrency | Throughput and tail latency as readers increase; teardown progress |
 | Memory pressure | Budget exhaustion returns errors without leaks or corrupting cursors |
 

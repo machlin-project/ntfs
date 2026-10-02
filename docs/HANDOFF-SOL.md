@@ -31,9 +31,10 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
 - $UpCase-based lookup, stored-name return, sparse/VDL zeroing, ADS and LZNT1
   handling, including fragmented and partial final compression units.
 - Bounded reparse snapshots with independent node lifetime, lossless UTF-16 link
-  names and opaque tag classification. Preserve rejection of ordinary data reads
-  and directory traversal, including attributes whose standard-information flag
-  was cleared. Classifying WOF/cloud tags does not decode their data.
+  names and opaque tag classification. Preserve rejection of unsupported provider
+  data and all reparse-directory traversal, including attributes whose
+  standard-information flag was cleared. Tag classification alone does not decode
+  content; known file-provider XPRESS uses the separately validated owning stream.
 - Independent stream flags: an unencrypted ADS remains readable beside an
   encrypted default stream. Exact UTF-16 stream-name matching is documented.
 - Complete regular-file size metadata is independent of content decoding. Private
@@ -175,31 +176,35 @@ native scheduling and buffer lifetime also remain open.
 
 ## Core handoff checkpoint
 
-The WOF continuation adds independent provider/layout/table and XPRESS-Huffman
-primitives; read WOF.md before integrating them. There is no WOF file reading:
-public streams still reject reparse objects, and LZX is not implemented. The
-observed stored payload is distinct from API parameter flags. Chunk tables use
-explicit ceiling/omitted-start geometry, width changes at 4 GiB and separate work
-caps. A complete table pass must precede content; a checked local span does not
-attest global ordering. XPRESS uses queried caller scratch without allocation/I/O;
-errors keep written zero but may change an output prefix, so cache publication
-must wait for success.
+WOF file-provider XPRESS4K/8K/16K now uses the public stream API; read WOF.md for
+format provenance and the provider contract. Complete sparse unnamed/backing
+extents and the entire paged chunk table are checked before a readable stream is
+published. Streams survive source nodes and own one counted volume child. One
+private decoded unit, input/scratch allocation and 4-KiB table page remain bounded;
+failed fills invalidate cache tags before I/O and retry without publishing failed
+unit bytes. Placeholder VDL does not zero provider content. Provider stat validates
+storage independently of the table/codec, retaining truthful LZX/encrypted metadata
+and readable plaintext ADS. FSKit classifies known providers as ordinary files,
+keeps original-wire metadata/full stream manifests and hides the backing alias.
 
-All 34 sanitized suites, both freestanding targets, style, legacy component and
-current unsigned app passed. The WOF suite checks 87 exact-byte content vectors,
-11 malformed vectors and provider/table/error/budget boundaries. Six modern
-runtime checks explicitly SKIP. The bounded WOF/XPRESS campaign completed
-3,079,633 executions in 61 seconds without a reported crash/sanitizer finding;
-ACCEPTANCE.md records scope and metrics. Logs use
-`artifacts/plan-wof-{core,freestanding,style,component,app,fuzz}-final.log` and
-`artifacts/fuzz-wof-primitives/`. No Windows/installed provider operation ran.
+All 35 sanitized suites, both freestanding targets, style, legacy component and
+current unsigned app passed. The file suite checks 28 verdicts and 216 allocation/
+68 read fault positions across selected stat/open/cold-read operations. Fourteen
+legacy provider scenarios check content/attributes/ADS/raw metadata, page changes,
+remount/revocation and exactly-once replies. The existing standalone suite retains
+87 content and 11 invalid vectors. Six modern checks explicitly SKIP. The image
+campaign completed 47,555 executions in 61 seconds without a reported finding;
+peak RSS was 958 MiB including corpus/sanitizer overhead. ACCEPTANCE.md records
+exact scope, retained failures and `artifacts/plan-wof-files-*.log` evidence.
+The prior standalone campaign remains under `artifacts/fuzz-wof-primitives/`;
+the integrated one uses `artifacts/fuzz-wof-files-image/`. No Windows/installed
+provider operation ran.
 
-Continue the whole provider contract: sparse unnamed and exact named backing
-storage, complete extent/table validation, node-independent counted streams,
-bounded lazy buffers, allocation/I/O retry, truthful native attributes/ADS and
-revocation/unmount. Then add LZX and Windows codec/format observations. Preserve
-the original full continuation scope rather than treating primitive decoding as
-provider acceptance. The older checkpoints below remain historical evidence.
+Continue LZX, provider-specific native fault/interleaving expansion, Windows
+codec/format observations, installed owning authorization and measured provider
+profiles. Preserve the full no-VM scope in CORE-QUALIFICATION.md; this checkpoint
+does not close security, recovery, optimizations or Windows/native acceptance.
+The older checkpoints below remain historical evidence.
 
 The core is ready for the next integration and compatibility work. Eleven sanitized
 suites cover the standard and NTFS 3.0 images, two fragmented MFT bootstrap

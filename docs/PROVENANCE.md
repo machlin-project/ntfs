@@ -91,7 +91,7 @@ attribute may be resident or nonresident. No NTFS-3G reparse implementation was
 used or copied. The ownership, validation and copying code is original; synthetic
 buffers and storage layouts do not establish Windows-authored reparse acceptance.
 
-WOF.md records the standalone provider/table and XPRESS contract. The observed
+WOF.md records the provider storage/table/lifetime and XPRESS contract. The observed
 stored payload and stream arrangement use original libfsntfs format research;
 the original NTFS-3G system-compression layout comment supplies independent chunk
 and offset-width facts. The woftool author's README was also consulted for format
@@ -101,8 +101,11 @@ to Windows qualification rather than an uncritical floor-division formula.
 XPRESS uses the Microsoft specification with an original compact canonical tree,
 bit reader and caller-scratch contract; no external codec source was imported.
 Declarative test alphabets, independently patterned expected bytes and one short
-hand-authored packet qualify local encoding/decoding only. LZX and end-to-end WOF
-reading remain open.
+hand-authored packet qualify local encoding/decoding only. Independently authored
+file images now combine those packets with sparse placeholders, fragmented/listed
+backing and original-byte/manifest expectations. The owning stream and native
+projection are original implementation code. These checks do not qualify Windows
+WOF writers/codecs; LZX and installed provider acceptance remain open.
 
 Native target translation uses Microsoft's substitute-name/relative-flag and
 namespace/root descriptions. Explicit current-owner bindings, numeric ancestry,

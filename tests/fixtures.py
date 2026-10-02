@@ -755,6 +755,8 @@ def main():
     stat_fixtures(output, image)
     from native_link_fixtures import author as native_link_fixtures
     native_link_fixtures(output, image)
+    from wof_file_fixtures import author as wof_file_fixtures
+    wof_file_fixtures(output, image)
     from validation_fixtures import author as validation_fixtures
     validation_fixtures(output, image)
     from secure_fixtures import author as secure_fixtures
@@ -818,7 +820,7 @@ def main():
     payload = b'independent stream payload'
     variant('independent-ads.img', {hello: file_record(hello, [standard(FILE_ATTRIBUTE_ENCRYPTED), encrypted_default, resident(DATA, payload, 2, 'notes')])}, ['cat', '/hello.txt', 'notes'], expected=payload)
     variant('directory-ads.img', {ROOT_RECORD: directory_record(entry(), data_streams=[resident(DATA, payload, DIR_BITMAP_INSTANCE + 1, 'notes')])}, ['cat', '/', 'notes'], expected=payload)
-    variant('reparse.img', {hello: file_record(hello, [standard(FILE_ATTRIBUTE_REPARSE), resident(DATA, contents['hello.txt'], 1)])}, ['cat', '/hello.txt'], 'unsupported')
+    variant('reparse.img', {hello: file_record(hello, [standard(FILE_ATTRIBUTE_REPARSE), resident(DATA, contents['hello.txt'], 1)])}, ['cat', '/hello.txt'], 'corrupt')
     variant('empty-stream.img', {hello: file_record(hello, [standard(), resident(DATA, b'', 1)])}, ['cat', '/hello.txt'], expected=b'')
     variant('empty-nonresident.img', {hello: file_record(hello, [standard(), nonresident(DATA, [], 0, 1)])}, ['cat', '/hello.txt'], expected=b'')
     large_sparse = bytearray(image)

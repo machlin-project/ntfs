@@ -179,7 +179,9 @@ void ntfs_node_close(struct ntfs_node *);
  * Size fields remain zero; successful metadata does not qualify content. */
 enum ntfs_result ntfs_node_metadata(struct ntfs_node *, struct ntfs_stat *);
 /* Ordinary-file sizes validate the complete unnamed-stream mapping without
- * reading content. Directory/reparse nodes retain base metadata only.
+ * reading content. WOF file-provider sizes validate placeholder/backing mappings
+ * and geometry independently of table entries/codec support. Other reparse
+ * nodes retain base metadata; malformed known packets fail.
  * Successful stat does not imply support for decryption or decompression. */
 enum ntfs_result ntfs_node_stat(struct ntfs_node *, struct ntfs_stat *);
 /* Validate Microsoft reparse-buffer framing and link name spans. WOF, cloud and

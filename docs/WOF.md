@@ -1,10 +1,11 @@
 # WOF format and decoder contracts
 
-This checkpoint supplies standalone file-provider metadata, chunk-table and
-XPRESS-Huffman primitives in `ntfs/wof.h`. It does not open or read WOF files.
-Public stream opening still rejects reparse objects; FSKit provider adoption
-remains unsupported. LZX content, WIM backing and Windows-authored qualification
-remain required parts of the continuation.
+The core reads observed WOF file-provider XPRESS4K/8K/16K streams through the
+ordinary public stream API. Standalone metadata/table/codec primitives remain in
+`ntfs/wof.h`; storage and lifetime belong to `core/wof_stream.c`. FSKit projects known
+file-provider metadata as ordinary files with truthful sizes, independent ADS and
+original reparse bytes. LZX content, WIM backing and Windows/installed qualification
+remain open.
 
 ## Stored metadata
 
@@ -26,10 +27,10 @@ Only format facts were used; no external filesystem implementation was imported.
 
 | Algorithm | Logical chunk size | Content primitive |
 | --- | --- | --- |
-| XPRESS4K | 4 KiB | Standalone XPRESS-Huffman |
+| XPRESS4K | 4 KiB | Integrated XPRESS-Huffman reading |
 | LZX | 32 KiB | Not implemented |
-| XPRESS8K | 8 KiB | Standalone XPRESS-Huffman |
-| XPRESS16K | 16 KiB | Standalone XPRESS-Huffman |
+| XPRESS8K | 8 KiB | Integrated XPRESS-Huffman reading |
+| XPRESS16K | 16 KiB | Integrated XPRESS-Huffman reading |
 
 ## Chunk geometry
 
@@ -52,10 +53,39 @@ empty backing storage. Only a complete table pass establishes global ordering.
 
 Zero work budget selects 1,048,576 chunks; the hard ceiling is 16,777,216.
 Worst-case flat tables occupy 8 MiB and 128 MiB respectively. These are policy
-limits, not format restrictions. The primitives allocate nothing. Future stream
-integration must charge the adapter's aggregate memory/I/O budgets; a hard-cap
-flat table cannot fit its 64-MiB allocation budget. Use a bounded paged whole-table
-pass before exposing random content reads.
+limits, not format restrictions. The primitives allocate nothing. Public stream
+opening uses the default work cap and validates the entire table through one
+4-KiB page, charged to the existing owner allocator. It never allocates a flat
+table. Each subsequent random read checks its local span using that same page.
+
+## Storage, lifetime and native projection
+
+Known file-provider metadata requires a fully validated sparse unnamed stream
+with no physical runs (or an empty resident placeholder), plus the exact UTF-16
+`WofCompressedData` attribute. Backing VDL must cover its complete stored size.
+Resident, fragmented and attribute-list backing storage use the ordinary bounded
+attribute reader. Node stat reports placeholder logical size and backing physical
+allocation independently of table contents and codec support. The placeholder's
+VDL does not describe decoded content. Malformed storage fails explicitly; known
+LZX or encrypted backing retains inspectable sizes while default reads return
+UNSUPPORTED. Independent plaintext ADS do not require opening the default content.
+
+The public stream owns its complete provider state after source-node close and
+holds one counted volume child. A single lazy allocation contains private output,
+input and aligned queried XPRESS scratch; the largest supported unit currently
+uses 34,432 bytes. One decoded unit and one table page are cached. Failed fills
+invalidate their tags before I/O, retain buffers for retry and publish no failed
+unit bytes. Core reads may return an already completed prefix if a later unit
+fails, following the existing stream contract. Teardown releases private backing,
+page and buffers without additional reads.
+
+FSKit uses explicit provider classification rather than treating every reparse
+object as a symlink. Known provider objects have ordinary-file type/attributes,
+including metadata-only LZX/encrypted cases. The raw reparse xattr and lossless
+stream manifest remain available. The backing name retains its catalog ordinal
+but has no public encoded-content alias; ordinary ADS retain theirs. Admission
+also gates cached reads and xattrs after revocation. Unmount closes transient
+provider descriptions and a remount reopens them under the retained item owner.
 
 ## XPRESS-Huffman
 
@@ -70,7 +100,7 @@ rejected. Multi-block continuation is outside this API.
 The caller supplies queried scratch size/alignment. Canonical buckets and an
 eight-bit prefix table currently use 1,664 bytes without allocation or I/O.
 Errors leave `written` zero but may alter an output prefix and scratch. Regions
-must not overlap. A future cache must decode privately and publish only after
+must not overlap. An owning cache must decode privately and publish only after
 success. EOF is optional when final words are consumed; otherwise one EOF must
 exhaust input. Unused prefetched bits need not be zero. No arbitrary unread suffix
 is accepted. This preserves the specification's optional EOF without inventing a
@@ -78,7 +108,37 @@ zero-padding restriction.
 
 ## Evidence and continuation
 
-All 34 sanitized C suites, both freestanding targets with the 2-KiB frame budget,
+All 35 sanitized C suites, both freestanding targets with the 2-KiB frame budget,
+selected Xcode style, legacy component and current unsigned app build pass. The
+new file suite checks 28 storage/format verdicts, exact original-byte oracles,
+complete stream lifetime, independent ADS, mixed raw/packed chunks, empty/exact/
+partial files, VDL independence, fragmented/listed data and multi-page tables.
+Sweeps inject all 216 required allocation and 68 read failure positions in the
+selected stat/open/cold-content operations, including a table-page crossing;
+retry, guards, unchanged images and exact cleanup pass. These counts do not claim
+every possible read position in a large file.
+
+Fourteen legacy FSKit provider cases check file classification/requested sizes,
+byte output, raw reparse/full reverse-manifest oracles, hidden backing aliases,
+independent ADS, malformed-table/codec errors, metadata-only LZX/encryption and
+remount/revocation/exactly-once replies. Six modern runtime checks explicitly
+SKIP without macOS 27. The modern result object has no public byte-count getter;
+its test checks result/error and buffer bytes, while legacy checks its count too.
+No installed mount or Windows codec ran. Evidence uses
+`artifacts/plan-wof-files-core-final.log`, `plan-wof-files-freestanding-reviewed.log`,
+`plan-wof-files-style-final.log`, `plan-wof-files-component-accepted.log` and
+`plan-wof-files-app-accepted.log`.
+
+The image campaign now reads first/middle/tail default-stream positions, reaching
+raw/final WOF chunks and table-page changes. It completed 47,555 executions in
+61 seconds, coverage 3,536, feature count 13,962 and peak RSS 958 MiB, exit zero
+without a reported sanitizer/crash finding. Evidence uses
+`artifacts/fuzz-wof-files-image/` and `artifacts/plan-wof-files-fuzz-image.log`.
+That near-cap process RSS includes corpus/sanitizer overhead; it does not measure
+native provider memory or qualify Windows-authored formats.
+
+The preceding standalone checkpoint passed all 34 sanitized C suites, both
+freestanding targets with the 2-KiB frame budget,
 selected Xcode style, the legacy FSKit component and current unsigned app passed.
 Six modern FSKit runtime checks explicitly SKIP without macOS 27.
 The WOF suite has 87 exact-byte XPRESS vectors and 11 malformed vectors covering
@@ -98,10 +158,6 @@ feature count 1,129 and reported peak RSS 479 MiB, exit zero without a crash or
 sanitizer finding. Reports use `artifacts/fuzz-wof-primitives/` and launcher log
 `artifacts/plan-wof-fuzz-final.log`. This is standalone synthetic evidence.
 
-Next, validate sparse unnamed storage, the exact named backing attribute, full
-extent ownership and the entire chunk table. Preserve counted node-independent
-stream lifetime, lazy bounded buffers, allocation/read retry, truthful metadata,
-ADS policy and native admission/revocation/unmount. Keep the public reparse guard
-until end-to-end content and fault checks pass. Implement LZX separately and
+Next, implement LZX, expand provider-specific native fault/interleaving cases and
 acquire Windows-generated raw, packed, fragmented and partial-final samples for
 every algorithm. Installed authorization and performance remain distinct gates.

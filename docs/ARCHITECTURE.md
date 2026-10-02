@@ -52,7 +52,7 @@ metadata-only description, including EOF and zero-length reads; public stream
 opening keeps its strict decoder checks. FSKit can therefore adopt such ordinary
 files, supply requested sizes and enumerate their independent ADS without
 presenting encoded bytes as file data. Reparse objects retain their separate
-fail-closed projection contract.
+provider/link projection contract.
 
 The stream-name catalog is an independent immutable snapshot, sorted by exact
 UTF-16 units. It validates first-extent references without requiring content
@@ -90,18 +90,27 @@ returns host-endian UTF-16 losslessly, including unpaired surrogates, without ad
 a terminator. It checks capacity before any copying. This is structural decoding,
 not Windows path resolution or a complete pathname-policy validator. WOF, all cloud
 tag variants and unknown Microsoft tags are classified with opaque payloads;
-their content is not decoded. GUID framing remains UNSUPPORTED. Microsoft-tagged
+classification alone does not decode their content. GUID framing remains
+UNSUPPORTED. Microsoft-tagged
 buffers whose size fits only the GUID envelope also report UNSUPPORTED; this is
 not validation of the GUID or its provider payload.
 The independent `ntfs/wof.h` primitives validate the observed file-provider
 payload, bounded cumulative chunk tables and one exact-size XPRESS-Huffman block.
 The decoder uses caller-owned aligned scratch and no allocation/I/O. Failed
-decoding leaves its byte count zero but may replace an output prefix; future
-cache publication must occur only after complete success. These APIs do not
-bypass the public stream reparse guard or provide LZX/file-provider reads. See
-WOF.md for format provenance, budgets and the remaining integration contract.
-Ordinary data reads and directory traversal reject reparse nodes. An attribute
-existing without its standard-information flag is corrupt. Presence checks scan
+decoding leaves its byte count zero but may replace an output prefix. The WOF
+stream owns sparse unnamed and exact named backing descriptions, validates all
+extents and the complete chunk table through one 4-KiB page before publication,
+then lazily retains one private input/output unit and codec workspace. Cache tags
+are invalidated before replacement and published only after successful I/O/decode.
+The public stream owns the counted volume lifetime independently of its source node;
+private backing descriptions do not double-count it. Known provider metadata can
+report logical/backing-physical sizes without requiring a supported codec or
+reading the table. Placeholder VDL does not zero provider content. Independent ADS
+stay readable while the backing encoding itself remains catalogued but inaccessible
+through public streams/xattrs. WOF.md defines unsupported LZX and Windows/native gaps.
+Default data reads reject other reparse nodes; directory traversal rejects all
+reparse nodes. An attribute existing without its standard-information flag is
+corrupt. Presence checks scan
 both the base record and the complete attribute-list envelope, regardless of name;
 an omitted base attribute or invalid named reparse attribute cannot evade the guard.
 Checking absence can read an attribute list even for an ordinary file. FSKit

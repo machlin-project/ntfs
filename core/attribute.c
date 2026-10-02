@@ -367,6 +367,13 @@ ntfs_attribute_sizes(struct ntfs_node *node, uint64_t *size, uint64_t *allocated
 }
 
 enum ntfs_result
+ntfs_attribute_metadata_open(struct ntfs_node *node, uint32_t type, const uint16_t *name,
+    size_t name_length, struct ntfs_stream **out)
+{
+	return attribute_open(node, type, name, name_length, false, true, out);
+}
+
+enum ntfs_result
 ntfs_mft_open(struct ntfs_volume *v, uint8_t *record, struct ntfs_stream **out)
 {
 	const struct ntfs_disk_record *header = (const void *)record;
@@ -415,12 +422,12 @@ ntfs_stream_open(
 		return result;
 	}
 	if (st.reparse) {
-		return NTFS_UNSUPPORTED;
-	}
-	if (st.directory && length == 0) {
+		result = ntfs_wof_open(node, name, length, out);
+	} else if (st.directory && length == 0) {
 		return NTFS_IS_DIRECTORY;
+	} else {
+		result = ntfs_attribute_open(node, NTFS_ATTRIBUTE_DATA, name, length, out);
 	}
-	result = ntfs_attribute_open(node, NTFS_ATTRIBUTE_DATA, name, length, out);
 	if (result == NTFS_OK) {
 		(*out)->external = true;
 		node->volume->children++;

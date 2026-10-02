@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
+#include <ntfs/wof.h>
 
 struct reparse_values {
 	struct ntfs_reparse_info info;
@@ -233,6 +234,19 @@ void
 ntfs_reparse_get_info(const struct ntfs_reparse *reparse, struct ntfs_reparse_info *info)
 {
 	*info = reparse->values.info;
+}
+
+enum ntfs_result
+ntfs_reparse_wof_info(const struct ntfs_reparse *reparse, struct ntfs_wof_info *info)
+{
+	if (info == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(info, sizeof(*info));
+	if (reparse == NULL) {
+		return NTFS_INVALID;
+	}
+	return ntfs_wof_decode(reparse->bytes, reparse->size, info);
 }
 
 uint64_t

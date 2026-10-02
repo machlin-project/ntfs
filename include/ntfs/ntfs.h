@@ -105,7 +105,7 @@ struct ntfs_limits {
 	uint32_t max_runs;	       /* Per stream. */
 	uint32_t max_attribute_list;   /* Bytes. */
 	uint32_t record_cache_entries; /* Zero disables the cache. */
-	uint32_t max_directory_nodes;  /* Per iterator. */
+	uint32_t max_directory_nodes;  /* Per directory iterator or security index seek. */
 };
 
 struct ntfs_info {

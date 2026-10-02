@@ -21,6 +21,7 @@ enum {
 	NTFS_ATTR_STANDARD = 0x10,
 	NTFS_ATTR_LIST = 0x20,
 	NTFS_ATTR_FILENAME = 0x30,
+	NTFS_ATTR_SECURITY_DESCRIPTOR = 0x50,
 	NTFS_ATTR_VOLUME_NAME = 0x60,
 	NTFS_ATTR_VOLUME_INFO = 0x70,
 	NTFS_ATTR_INDEX_ROOT = 0x90,
@@ -28,6 +29,7 @@ enum {
 	NTFS_ATTR_BITMAP = 0xb0,
 	NTFS_RECORD_IN_USE = 1,
 	NTFS_RECORD_DIRECTORY = 2,
+	NTFS_RECORD_VIEW_INDEX = 8,
 	NTFS_ATTR_COMPRESSED = 1,
 	NTFS_ATTR_COMPRESSION_MASK = 0xff,
 	NTFS_ATTR_ENCRYPTED = 0x4000,
@@ -38,10 +40,14 @@ enum {
 	NTFS_INDEX_END = 2,
 	NTFS_INDEX_LARGE = 1,
 	NTFS_COLLATION_FILENAME = 1,
+	NTFS_COLLATION_ULONG = 16,
+	NTFS_COLLATION_SECURITY_HASH = 18,
+	NTFS_INDEX_VIEW_TYPE = 0,
 	NTFS_VOLUME_DIRTY = 1,
 	NTFS_MFT_RECORD = 0,
 	NTFS_VOLUME_RECORD = 3,
 	NTFS_BITMAP_RECORD = 6,
+	NTFS_SECURE_RECORD = 9,
 	NTFS_UPCASE_RECORD = 10,
 	NTFS_UPCASE_BYTES = NTFS_UTF16_CODE_UNITS * NTFS_UTF16_UNIT_BYTES,
 	NTFS_COMPRESSION_UNIT_SHIFT = 4,
@@ -61,6 +67,14 @@ enum {
 	NTFS_RUN_OFFSET_WIDTH_SHIFT = 4,
 	NTFS_RUN_INTEGER_BYTES = sizeof(uint64_t),
 	NTFS_RUN_NEGATIVE_FLAG = 0x80
+};
+
+enum {
+	NTFS_SDS_ALIGNMENT = 16,
+	NTFS_SDS_BLOCK_BYTES = 256 * 1024,
+	NTFS_SDS_PAIR_BYTES = 2 * NTFS_SDS_BLOCK_BYTES,
+	NTFS_SECURITY_HASH_ROTATION = 3,
+	NTFS_SECURITY_HASH_BITS = sizeof(uint32_t) * NTFS_BITS_PER_BYTE
 };
 
 #define NTFS_REPARSE_MICROSOFT UINT32_C(0x80000000)
@@ -162,6 +176,25 @@ struct ntfs_disk_index_entry {
 	uint8_t reference[8], length[2], key_length[2], flags[2], reserved[2];
 };
 
+struct ntfs_disk_view_entry {
+	uint8_t data_offset[2], data_length[2], reserved1[4];
+	uint8_t length[2], key_length[2], flags[2], reserved2[2];
+};
+
+struct ntfs_disk_security_locator {
+	uint8_t hash[4], security_id[4], offset[8], length[4];
+};
+
+struct ntfs_disk_security_hash_key {
+	uint8_t hash[4], security_id[4];
+};
+
+struct ntfs_disk_security_descriptor {
+	uint8_t revision, resource_manager, control[sizeof(uint16_t)];
+	uint8_t owner[sizeof(uint32_t)], group[sizeof(uint32_t)];
+	uint8_t sacl[sizeof(uint32_t)], dacl[sizeof(uint32_t)];
+};
+
 struct ntfs_disk_reparse {
 	uint8_t tag[4], length[2], reserved[2];
 };
@@ -190,6 +223,11 @@ _Static_assert(sizeof(struct ntfs_disk_record_extension) == 6, "NTFS 3.1 record 
 _Static_assert(sizeof(struct ntfs_disk_nonresident) == 48, "attribute layout");
 _Static_assert(sizeof(struct ntfs_disk_filename) == 66, "filename layout");
 _Static_assert(sizeof(struct ntfs_disk_attr_list) == 26, "attribute list layout");
+_Static_assert(sizeof(struct ntfs_disk_view_entry) == 16, "view index entry layout");
+_Static_assert(sizeof(struct ntfs_disk_security_locator) == 20, "SDS locator layout");
+_Static_assert(sizeof(struct ntfs_disk_security_hash_key) == 8, "SDH key layout");
+_Static_assert(
+    sizeof(struct ntfs_disk_security_descriptor) == 20, "self-relative descriptor header");
 _Static_assert(sizeof(struct ntfs_disk_reparse) == 8, "reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_reparse_guid) == 24, "GUID reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_reparse_names) == 8, "mount point payload header");

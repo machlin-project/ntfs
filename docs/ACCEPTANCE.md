@@ -24,8 +24,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
 | Write/recovery | Native log, allocation, namespace transactions, crash matrix | Not implemented |
-| Security descriptors | MS-DTYP SID/ACL/ACE/self-relative framing, component spans and absent/NULL/empty ACL states | Standalone parser and fuzz vectors passed; `$Secure` and authorization remain incomplete |
-| Security and special data | $Secure/ACL policy, reparse target resolution, EFS and WOF/cloud content decoding | Not implemented |
+| Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
+| Authorization and special data | Token/ACL decisions and identity mapping, reparse target resolution, EFS and WOF/cloud content decoding | Not implemented |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
@@ -80,6 +80,35 @@ manifest allocations/I/O passed 13/five failure positions; alias lookup passed
 17/six, with exactly-once failure replies, retry and zero tracked allocation
 leaks. Initial cache-insertion fault-test diagnosis is retained and explained in
 NATIVE-NAMESPACE.md. This is component acceptance, not installed namespace proof.
+
+Security storage subsequently passed all 24 sanitized suites, both freestanding
+targets, style, the existing FSKit component and unsigned app under
+`artifacts/plan-secure-observed-*.log`. Final review improved the collision fixture
+to use distinct descriptor bytes and owner SIDs with one checksum, then repeated
+all 24 suites and style under `artifacts/plan-secure-collision-*.log`. The current
+suite covers 74 contracts and 262 allocation/191 I/O failure positions, retry,
+unchanged failure outputs and exact release. It includes resident/external view indexes, hash collisions,
+ancestor bounds, cycles/depth, bitmap/MST/USA, maximum descriptors, later SDS
+pairs and resident/nonresident/listed per-file attributes. No default file data
+is opened to inspect its security metadata.
+
+The independent comparison checks 24 original descriptor-byte/ID observations
+in four existing image geometries, with unchanged images, under
+`artifacts/interoperability-secure3/` and `artifacts/plan-secure-oracle3.log`.
+Earlier failed comparisons remain under `interoperability-secure/` and
+`interoperability-secure2/`: real per-file and nonresident descriptor storage
+exposed incorrect assumptions in the old format notes. They are failures, not
+successful runs. The initial build rename error and authored allocation-size
+fixture error are also retained in the earlier `plan-secure-*` logs.
+The first updated image fuzz campaign completed 43,226 executions in 61 seconds,
+reported coverage 3,005 and peak RSS 918 MiB under
+`artifacts/fuzz-secure-resolver/`. After improving the collision fixture, a new
+campaign completed 47,915 executions in 61 seconds with coverage 2,987 and peak
+RSS 901 MiB under `artifacts/fuzz-secure-collision/`. Neither reported a finding;
+coverage values from separate bounded campaigns are not monotonic. Process RSS includes libFuzzer's retained
+image corpus; the separate core allocation budget remains 8 MiB. This is bounded
+local evidence, not Windows or installed authorization acceptance. SECURITY.md
+defines source selection, supported bounds and remaining security contracts.
 
 Before/after release matrices each retain 400 measurements, independent full
 stream-byte oracles and unchanged input hashes. Metadata reuse removes repeated

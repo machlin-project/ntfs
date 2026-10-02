@@ -70,6 +70,26 @@ lossless name reversal, response/scan exhaustion and complete required-allocatio
 and read-failure sweeps. Their formats and limits appear in NATIVE-NAMESPACE.md.
 See CORE-QUALIFICATION.md for Windows-only acquisition and offline verification.
 
+The `secure` suite checks descriptor storage as well as standalone MS-DTYP
+framing. `ntfs-inspect IMAGE security-ref HEX_REFERENCE` emits the original
+self-relative descriptor bytes, without opening file content.
+`security-id HEX_SECURITY_ID` resolves an indexed ID directly. These are
+read-only diagnostic APIs, not access decisions. See SECURITY.md.
+
+Compare against external NTFS-3G exports using an existing interoperability image
+directory and a new evidence directory:
+
+```sh
+python3 tests/secure_oracle.py --images artifacts/interoperability-stream-catalog --output artifacts/interoperability-secure-next
+```
+
+The oracle applies deadlines/output budgets, verifies image hashes and retains
+failed run status. It covers indexed and per-file descriptor storage; it does
+not mount media or execute Win32/native authorization. The compact image fuzz
+campaign includes security-storage inputs and the public snapshot API; larger
+maximum-descriptor/second-pair/depth fixtures remain in the ordinary test suite
+when their physical placement exceeds the compact image bound.
+
 For repeated optimized measurements use `scripts/benchmark.py`, an independently
 supplied original stream payload and a new artifact directory; see PERFORMANCE.md.
 The runner checks Meson's selected release/sanitizer options and never displays

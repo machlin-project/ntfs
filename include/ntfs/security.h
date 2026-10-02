@@ -99,6 +99,30 @@ struct ntfs_security_info {
 enum ntfs_result ntfs_security_decode(const void *, size_t, struct ntfs_security_info *);
 enum ntfs_result ntfs_security_ace_decode(const void *, size_t, struct ntfs_ace_info *);
 
+struct ntfs_security;
+
+/* Immutable original self-relative bytes from a per-file attribute or $Secure:$SII;
+ * indexed storage is cross-checked against $SDH, the hash and both SDS copies. Only the
+ * searched index paths are validated, not every descriptor/index on the volume.
+ * The snapshot survives node close and prevents unmount until closed. These
+ * operations do not open file content, follow reparse points or grant access.
+ * A node with no security ID uses its resident/nonresident $SECURITY_DESCRIPTOR
+ * attribute, bounded by NTFS_SECURITY_MAX_BYTES. A missing descriptor or referenced
+ * missing ID is CORRUPT. A nonzero ID never falls back to per-file storage.
+ * Direct resolution returns NOT_FOUND for an absent ID and INVALID for ID zero.
+ * Outputs are NULL on failure; volume and children require serialization. */
+enum ntfs_result ntfs_security_open(struct ntfs_node *, struct ntfs_security **);
+enum ntfs_result ntfs_security_resolve(struct ntfs_volume *, uint32_t, struct ntfs_security **);
+void ntfs_security_close(struct ntfs_security *);
+/* Zero identifies a per-file attribute, or a NULL snapshot. */
+uint32_t ntfs_security_id(const struct ntfs_security *);
+size_t ntfs_security_size(const struct ntfs_security *);
+void ntfs_security_get_info(const struct ntfs_security *, struct ntfs_security_info *);
+/* Whole-descriptor copy, without the SDS header or padding. NULL/zero queries
+ * the required byte count; RANGE leaves the destination unchanged. Accessors
+ * perform no I/O/allocation. A NULL snapshot is INVALID. */
+enum ntfs_result ntfs_security_copy(const struct ntfs_security *, void *, size_t, size_t *);
+
 #ifdef __cplusplus
 }
 #endif

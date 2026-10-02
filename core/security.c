@@ -11,12 +11,6 @@ enum {
 	SECURITY_AUTHORITY_BYTES = 6
 };
 
-struct disk_security_descriptor {
-	uint8_t revision, resource_manager, control[sizeof(uint16_t)];
-	uint8_t owner[sizeof(uint32_t)], group[sizeof(uint32_t)];
-	uint8_t sacl[sizeof(uint32_t)], dacl[sizeof(uint32_t)];
-};
-
 struct disk_sid {
 	uint8_t revision, count, authority[SECURITY_AUTHORITY_BYTES];
 };
@@ -30,7 +24,6 @@ struct disk_ace {
 	uint8_t type, flags, length[sizeof(uint16_t)];
 };
 
-_Static_assert(sizeof(struct disk_security_descriptor) == 20, "self-relative descriptor header");
 _Static_assert(sizeof(struct disk_sid) == 8, "SID header");
 _Static_assert(sizeof(struct disk_acl) == 8, "ACL header");
 _Static_assert(sizeof(struct disk_ace) == 4, "ACE header");
@@ -188,7 +181,7 @@ decode_acl(
 	if (offset == 0) {
 		return NTFS_OK;
 	}
-	if (offset < sizeof(struct disk_security_descriptor) ||
+	if (offset < sizeof(struct ntfs_disk_security_descriptor) ||
 	    !ntfs_bounds(offset, sizeof(*header), size)) {
 		return NTFS_CORRUPT;
 	}
@@ -233,7 +226,7 @@ enum ntfs_result
 ntfs_security_decode(const void *buffer, size_t size, struct ntfs_security_info *out)
 {
 	const uint8_t *bytes = buffer;
-	const struct disk_security_descriptor *header = buffer;
+	const struct ntfs_disk_security_descriptor *header = buffer;
 	struct ntfs_security_info info = {0};
 	enum ntfs_result result;
 

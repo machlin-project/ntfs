@@ -93,8 +93,12 @@ It returns original control bits, lossless SID values, checked component spans,
 and distinct absent/NULL/empty ACL states. It validates known ACE layouts, optional
 object GUIDs and callback/application spans without sorting or interpreting
 conditions. Unknown ACE bodies remain explicitly opaque. No input pointer becomes
-a native identity or access grant. Resolving `$Secure` and enforcing authorization
-are separate owning contracts and remain incomplete.
+a native identity or access grant. The resolver now owns bounded immutable
+snapshots from `$Secure` or per-file descriptor attributes, independently of file
+content. It checks both indexes and SDS copies, reuses one block buffer and
+retains original bytes. Source selection, budgets and evidence are defined in
+SECURITY.md. Token evaluation, identity mapping and owning native authorization
+remain separate incomplete contracts.
 
 Directory enumeration owns an explicit stack of at most 32 index frames, a
 bounded hash set of visited child VCNs and a persistent in-order cursor. Lookup

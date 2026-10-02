@@ -121,7 +121,7 @@ ntfs_record_validate(void *buffer, size_t size)
 	flags = ntfs_u16(r->flags);
 	if (ntfs_u32(r->allocated) != size || used > size || position < sizeof(*r) ||
 	    position % NTFS_WIRE_ALIGNMENT != 0 || (flags & NTFS_RECORD_IN_USE) == 0 ||
-	    (flags & ~(NTFS_RECORD_IN_USE | NTFS_RECORD_DIRECTORY)) != 0 ||
+	    (flags & ~(NTFS_RECORD_IN_USE | NTFS_RECORD_DIRECTORY | NTFS_RECORD_VIEW_INDEX)) != 0 ||
 	    ntfs_u16(r->sequence) == 0 || ntfs_u16(r->mst.usa_offset) < sizeof(*r) ||
 	    ntfs_u16(r->mst.usa_offset) + (size_t)ntfs_u16(r->mst.usa_count) * NTFS_MST_WORD_BYTES >
 		position) {

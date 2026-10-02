@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/ntfs.h>
+#include <ntfs/security.h>
 #include "image.h"
 #include "path.h"
 #include <stdio.h>
@@ -155,6 +156,8 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_reparse *reparse = NULL;
 	struct ntfs_stream_catalog *catalog = NULL;
+	struct ntfs_security *security = NULL;
+	uint8_t *descriptor = NULL;
 	struct ntfs_stream_name stream_name;
 	struct ntfs_reparse_info info;
 	struct ntfs_dirent entry;
@@ -169,7 +172,11 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 		return NTFS_INVALID;
 	}
 	result = parse_hex(argv[3], &reference);
-	if (result == NTFS_OK) {
+	if (result == NTFS_OK && strcmp(argv[2], "security-id") == 0) {
+		if (reference > UINT32_MAX) {
+			result = NTFS_INVALID;
+		}
+	} else if (result == NTFS_OK) {
 		result = ntfs_node_open(v, reference, &node);
 	}
 	if (result != NTFS_OK) {
@@ -205,6 +212,23 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 			printf("{\"name_utf16\":");
 			json_name(stream_name.units, stream_name.length);
 			puts("}");
+		}
+	} else if ((strcmp(argv[2], "security-ref") == 0 || strcmp(argv[2], "security-id") == 0) &&
+	    argc == 4) {
+		result = node != NULL ? ntfs_security_open(node, &security)
+				      : ntfs_security_resolve(v, (uint32_t)reference, &security);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		capacity = ntfs_security_size(security);
+		descriptor = malloc(capacity);
+		if (descriptor == NULL) {
+			result = NTFS_NO_MEMORY;
+			goto finish;
+		}
+		result = ntfs_security_copy(security, descriptor, capacity, &length);
+		if (result == NTFS_OK && fwrite(descriptor, 1, length, stdout) != length) {
+			result = NTFS_IO;
 		}
 	} else if (strcmp(argv[2], "lookup-ref") == 0 && argc == 5) {
 		result = parse_name(argv[4], name, &length);
@@ -261,6 +285,8 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 	}
 finish:
 	free(target);
+	free(descriptor);
+	ntfs_security_close(security);
 	ntfs_stream_catalog_close(catalog);
 	ntfs_reparse_close(reparse);
 	ntfs_directory_close(directory);
@@ -346,7 +372,9 @@ main(int argc, char **argv)
 		fprintf(stderr,
 		    "usage: ntfs-inspect IMAGE info|ls|stat|cat|reparse [PATH] [STREAM]\n"
 		    "       ntfs-inspect IMAGE info-json\n"
-		    "       ntfs-inspect IMAGE stat-ref|ls-ref|reparse-ref|streams-ref "
+		    "       ntfs-inspect IMAGE security-id HEX_SECURITY_ID\n"
+		    "       ntfs-inspect IMAGE "
+		    "stat-ref|ls-ref|reparse-ref|streams-ref|security-ref "
 		    "HEX_REFERENCE\n"
 		    "       ntfs-inspect IMAGE cat-ref|lookup-ref HEX_REFERENCE [UTF16_HEX]\n");
 		return 2;
@@ -378,7 +406,7 @@ main(int argc, char **argv)
 		}
 		goto finish;
 	}
-	if (strstr(argv[2], "-ref") != NULL) {
+	if (strstr(argv[2], "-ref") != NULL || strcmp(argv[2], "security-id") == 0) {
 		result = inspect_reference(v, argc, argv);
 		goto finish;
 	}

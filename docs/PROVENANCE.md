@@ -32,6 +32,9 @@ Primary references:
 - [Native stream enumeration](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-win32_find_stream_data)
 - [Apple FSKit](https://developer.apple.com/documentation/fskit)
 - [NTFS-3G release and source](https://github.com/tuxera/ntfs-3g/tree/2022.10.3)
+- [NTFS-3G layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/layout.h)
+- [Original Linux-NTFS Secure format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/secure.html)
+- [Original Linux-NTFS descriptor format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/security_descriptor.html)
 
 Cross-checked format details include the 512-byte fixup stride, compression-unit
 byte width, physical versus logical allocation, partial final compression units,
@@ -64,6 +67,16 @@ original. It does not use a GPL security parser or establish Windows/native acce
 decisions. The collector uses documented Win32 volume, identity and stream APIs;
 fixed-width ctypes layouts and serialization pass local tests, while actual
 Windows calls remain a separate required observation.
+
+The resolver uses reverse-engineered view-index/SDS format facts, not imported
+filesystem algorithms. Raw external exports confirm ID ordering, hash/ID
+ordering, locator fields, duplicates and the mathematical rotate-three/add-DWORD
+checksum. The old Secure page mislabels SII sorting and its descriptor-body
+offset; an old descriptor note incorrectly says per-file storage is always
+resident. Observed NTFS-3G images establish both indexed storage and nonresident
+per-file descriptors. Original search, ownership, bounds and fixtures remain
+repository-owned; the failed oracle runs are retained rather than converted to
+passes. Actual Windows storage and authorization qualification remain required.
 
 No Linux ntfs3, ntfs-3g or proprietary driver source is copied into or linked with
 this implementation. Separately built ntfs-3g utilities may generate and inspect

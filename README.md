@@ -33,12 +33,15 @@ Read [architecture](docs/ARCHITECTURE.md), [development](docs/DEVELOPMENT.md),
 
 The no-VM continuation adds reference-based lossless inspection, Windows corpus
 acquisition/verification tools, standalone parser fuzz targets, an MS-DTYP security
-descriptor decoder and repeated portable workload measurements. Verified metadata
-reuse has a measured benefit for attribute-list opens. `$Secure` resolution,
-authorization, WOF, native symlink projection, case policy and recovery remain open;
+descriptor decoder/resolver and repeated portable workload measurements. Verified metadata
+reuse has a measured benefit for attribute-list opens. `$Secure` and per-file
+descriptors have bounded read-only snapshots; authorization, WOF, native symlink
+projection, case policy and recovery remain open;
 see [the complete continuation scope](docs/CORE-QUALIFICATION.md).
 Stored stream names now have a bounded immutable catalog and read-only FSKit
 xattr projection with a lossless UTF-16 reverse manifest. Bounded native filename
 aliases preserve unpaired/oversized/reserved names and individual hard links;
 both projections pass component tests, with installed behavior still unqualified. See
 [native namespace contracts](docs/NATIVE-NAMESPACE.md) for tested scope and limits.
+See [security metadata](docs/SECURITY.md) for source selection, validation and the
+remaining Windows/native authorization contracts.

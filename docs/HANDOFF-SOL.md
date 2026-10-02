@@ -168,13 +168,24 @@ The collector's Win32 calls have not executed on Windows; its fixed-width
 transport and synthetic oracle checks are locally qualified. Preserve partial
 acquisition and failed feature checks instead of converting them to passes.
 
-`ntfs/security.h` now provides original bounded descriptor/ACE decoders and
-absent/NULL/empty ACL states. Its independent vectors and 61-second fuzz campaign
-pass. `$Secure` resolution, identity mapping and authorization are still needed;
-parser success does not grant access or interpret callback conditions.
+`ntfs/security.h` provides original descriptor/ACE decoders and bounded immutable
+snapshots from `$Secure` or per-file descriptor attributes. It checks both
+indexes, locator/header/hash/copy agreement, inherited bounds, bitmap/MST/USA
+and storage limits. Real external images require nonresident per-file storage
+despite an old format note claiming it is always resident. Preserve explicit
+source selection and never fall back from a damaged nonzero security ID.
+SECURITY.md defines the API, budgets and remaining contracts. Identity mapping,
+token decisions and native authorization are still needed; parser/resolver
+success grants no access and does not interpret callback conditions.
 
-The current 23-suite sanitized checkpoint, freestanding check and expanded
-FSKit component tests pass. `ntfs-workload` and `scripts/benchmark.py` add repeated
+The current 24-suite sanitized checkpoint, freestanding check, expanded
+FSKit component tests and unsigned app build pass. Security storage adds
+74 contracts and 262 allocation/191 I/O failure positions with retry/exact release.
+Four external geometries provide 24 original descriptor-byte/ID comparisons and
+unchanged images. The latest image fuzz campaign completed 47,915 executions in
+61 seconds with reported peak RSS 901 MiB and no finding. Earlier failed format
+assumptions remain recorded in acceptance. Windows and installed authorization
+remain unqualified. `ntfs-workload` and `scripts/benchmark.py` add repeated
 POSIX/memory profiles with original-byte and image-integrity checks. Live-node
 metadata reuse removes repeated presence-validation allocations and has a measured
 benefit for the attribute-list open workload; data-read measurements are mixed.
@@ -207,8 +218,9 @@ native acceptance.
    separate content/resolution contracts. The current adapter rejects reparse
    items. Do not expose encoded data as ordinary file content or turn every tag
    into a symlink.
-7. Implement $Secure/security-descriptor resolution and an owning authorization
-   policy. Current mode/UID/GID are a single-user read-only presentation, not
+7. Extend security storage to whole-store consistency and Windows qualification;
+   implement token/identity contracts and an owning authorization policy.
+   Current mode/UID/GID are a single-user read-only presentation, not
    Windows ACL enforcement. EFS and native Windows ACL translation remain absent;
    the read-only ADS xattr projection is separately defined in NATIVE-NAMESPACE.md.
 

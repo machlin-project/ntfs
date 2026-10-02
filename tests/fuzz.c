@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/ntfs.h>
+#include <ntfs/security.h>
 #include "fuzz_device.h"
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_reparse *reparse = NULL;
 	struct ntfs_stream_catalog *catalog = NULL;
+	struct ntfs_security *security = NULL;
 	struct ntfs_stream_name stream_name;
 	struct ntfs_reparse_info reparse_info;
 	struct ntfs_dirent entry;
@@ -52,6 +54,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;
 		    i++) {
 			if (ntfs_node_open(v, entry.reference, &node) == NTFS_OK) {
+				if (ntfs_security_open(node, &security) == NTFS_OK) {
+					(void)ntfs_security_copy(
+					    security, buffer, sizeof(buffer), &count);
+					ntfs_security_close(security);
+					security = NULL;
+				}
 				if (ntfs_stream_catalog_open(node, FUZZ_STREAM_NAMES, &catalog) ==
 				    NTFS_OK) {
 					for (j = 0; j < ntfs_stream_catalog_count(catalog); j++) {

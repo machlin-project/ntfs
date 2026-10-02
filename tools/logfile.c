@@ -276,6 +276,37 @@ circular_record(const char *path, uint64_t lsn)
 	return result == NTFS_OK ? 0 : 1;
 }
 
+static int
+active_client(const char *path, uint16_t index, uint16_t sequence)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_client client;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
+	if (result == NTFS_OK) {
+		result = ntfs_logfile_get_active_client(source, index, sequence, &client);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"active-client\",\"code\":%d,"
+	       "\"result\":\"%s\",\"recovery_qualified\":false,\"index\":%u,"
+	       "\"sequence\":%u,\"client\":",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), index, sequence);
+	if (result == NTFS_OK) {
+		client_fields(&client, false);
+	} else {
+		printf("null");
+	}
+	printf("}\n");
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK ? 0 : 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -285,7 +316,7 @@ main(int argc, char **argv)
 	struct ntfs_logfile_update update = {0};
 	uint8_t *bytes = NULL, *scratch = NULL, *restart_bytes = NULL, *restart_scratch = NULL;
 	size_t size, restart_size, maximum;
-	uint64_t argument = 0;
+	uint64_t argument = 0, sequence;
 	enum ntfs_result result;
 	bool is_restart, is_page, is_record, is_update;
 	int status = LOGFILE_ARGUMENT_ERROR;
@@ -302,6 +333,13 @@ main(int argc, char **argv)
 			goto usage;
 		}
 		return circular_record(argv[2], argument);
+	}
+	if (strcmp(argv[1], "active-client") == 0) {
+		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
+		    !number(argv[4], UINT16_MAX, &sequence)) {
+			goto usage;
+		}
+		return active_client(argv[2], (uint16_t)argument, (uint16_t)sequence);
 	}
 	is_restart = strcmp(argv[1], "restart") == 0;
 	is_page = strcmp(argv[1], "page") == 0;
@@ -389,7 +427,8 @@ usage:
 	    "       ntfs-logfile update CLIENT_PACKET\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
-	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n");
+	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
+	    "       ntfs-logfile active-client LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n");
 done:
 	free(restart_scratch);
 	free(restart_bytes);

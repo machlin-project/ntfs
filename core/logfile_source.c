@@ -388,6 +388,44 @@ ntfs_logfile_get_client(
 	    sizeof(struct ntfs_disk_log_client), out);
 }
 
+enum ntfs_result
+ntfs_logfile_get_active_client(const struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
+    struct ntfs_logfile_client *out)
+{
+	const struct ntfs_disk_log_client *entry;
+	uint16_t cursor, visited;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	if (index >= source->restart.client_count) {
+		return NTFS_STALE;
+	}
+	entry = (const void *)(source->selected + source->restart.clients.offset +
+	    (size_t)index * sizeof(*entry));
+	if (ntfs_u16(entry->sequence) != sequence) {
+		return NTFS_STALE;
+	}
+	cursor = source->restart.in_use_head;
+	for (visited = 0;
+	    cursor != NTFS_LOGFILE_NO_CLIENT && visited < source->restart.client_count; visited++) {
+		if (cursor >= source->restart.client_count) {
+			return NTFS_CORRUPT;
+		}
+		if (cursor == index) {
+			return ntfs_logfile_get_client(source, index, out);
+		}
+		entry = (const void *)(source->selected + source->restart.clients.offset +
+		    (size_t)cursor * sizeof(*entry));
+		cursor = ntfs_u16(entry->next);
+	}
+	return cursor == NTFS_LOGFILE_NO_CLIENT ? NTFS_STALE : NTFS_CORRUPT;
+}
+
 static enum ntfs_result
 load_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
     struct ntfs_logfile_page_view *out)

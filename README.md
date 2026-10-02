@@ -113,3 +113,7 @@ by LSN across adjacent protected pages and one wrap, with shared I/O credits,
 bounded private staging and exact byte oracles. The `circular-record` diagnostic
 retains exact bytes without alignment padding. Current circular history, copy
 routing, native client/transaction interpretation and journal lifecycle remain open.
+Cached active-client index/sequence lookup now distinguishes raw/free metadata
+from selected active membership without I/O or allocation. Independent chain,
+sequence-boundary and full UTF-16-name checks pass locally; record liveness and
+native checkpoint interpretation remain separate work.

@@ -214,6 +214,12 @@ fixtures pattern original client bytes and author protected fragments, extended
 headers and unpadded exact-byte oracles. No foreign assembly/recovery algorithm
 was imported. Physical byte framing does not qualify native page/current-history
 selection or recovery.
+The active-client resolver is also original repository code: named stored index/
+sequence fields and the already validated in-use chain define its bounded
+snapshot lookup. Independent chain orders, full UTF-16 names, field-boundary
+sequences and free-entry LSNs author its expected results. No native replay or
+client-registration implementation was imported; sequence lifecycle and record
+liveness still require original Windows qualification.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

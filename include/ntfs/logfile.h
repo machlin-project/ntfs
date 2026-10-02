@@ -162,6 +162,13 @@ enum ntfs_result ntfs_logfile_get_restart(
     const struct ntfs_logfile *, struct ntfs_logfile_restart *);
 enum ntfs_result ntfs_logfile_get_client(
     const struct ntfs_logfile *, uint16_t index, struct ntfs_logfile_client *);
+/* Resolve an active client index/sequence pair in the selected immutable
+ * restart snapshot. Inactive, absent or mismatched entries return STALE with
+ * zero output; sequence zero and UINT16_MAX remain valid field values. This
+ * bounded cached lookup allocates/reads nothing. Matching the pair does not
+ * establish a record's written/current history or interpret client payloads. */
+enum ntfs_result ntfs_logfile_get_active_client(
+    const struct ntfs_logfile *, uint16_t index, uint16_t sequence, struct ntfs_logfile_client *);
 /* A physical protected page from tail/fast/circular storage; no copy routing or
  * record assembly is implied. Offset is aligned and after both restart pages.
  * Capacity needs log_page_bytes. Errors leave output bytes unchanged and view

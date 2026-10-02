@@ -80,6 +80,13 @@ explicit fault/budget controls. The logfile campaign first replays every authore
 seed in fixed batches; its report lists 28 included record sources, six fault
 seeds and the two complete 4-MiB sources excluded by its unchanged 2-MiB cap.
 Direct C/CLI tests retain both larger sources without truncation.
+The `logfile-clients`/`logfile-clients-cli` suites check 858 pair lookups and 42
+exact reports across seven active/free snapshots, including sequence boundaries,
+full-length unpaired names and the client-count limit. `active-client
+LOGICAL_JOURNAL_FILE INDEX SEQUENCE` reports selected active snapshot metadata.
+The `fuzz-logfile-clients` suite and dedicated campaign check the same cached
+lookup with mismatched sequences and no extra I/O/allocation. Snapshot membership
+does not qualify record liveness or current journal history.
 The `logfile-volume`, `logfile-volume-cli` and `fuzz-logfile-volume` suites add
 counted ordinary-stream binding, fragmented/listed storage, source-node-independent
 ownership, mount/binding rejection, physical partial-read faults/retries and

@@ -33,6 +33,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz passed; native journal ownership, tail/fast routing and circular currentness remain open |
 | NTFS journal stream binding | Fixed MFT slot/unnamed ordinary stream, complete fragmented/list/sequence/base ownership, node-independent counted lifetime, logical versus physical read accounting, staged partial-read isolation and refusal of unsupported system-file forms | 24 image verdicts/exact reports, 54 allocation/58 physical-read faults with retry, two simultaneous owners, BUSY unmount and unchanged images passed; ordinary dirty-media policy is unchanged; native journal admission/drain remains open |
 | Physical circular-record observation | LSN-addressed adjacent protected fragments and one wrap, no-page-revisit bound, exact unpadded bytes/extended headers, shared read credits and bounded ephemeral staging | 30 C verdicts/exact CLI reports, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary passed; eight bound-volume storage forms also check exact records and resource/staging faults; written/current history, copy routing, active clients and recovery remain unqualified |
+| Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
@@ -42,7 +43,26 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The physical-record continuation passes all 50 sanitized core suites, both
+The active-client continuation passes all 53 sanitized core suites, style,
+17 component PASS/seven runtime SKIPs and the unsigned arm64/x86_64 app under
+`artifacts/plan-logclients-*-final.log`. Initial build/nine focused suites and
+both freestanding 2-KiB-frame targets pass under
+`artifacts/plan-logclients-*-initial.log`. Both app architectures compile the
+changed source owner. Seven independent snapshots retain 858 raw/active pair
+expectations, covering non-numeric mixed chains, empty/all-free lists, LFS 2.0,
+407 active clients, full-length unpaired names, zero/max sequences and free old
+out-of-geometry LSNs. Armed allocation/read failures prove no cached callbacks;
+CLI samples 42 exact reports plus argument/discovery/transport errors.
+
+The logfile campaign fixed-replays all 172 authored seeds, with 172 execution
+lines and a passing replay report. All seven new client sources fit its unchanged
+input cap. Exploration passes 91,838 executions/61 seconds, coverage
+989/features 2,602, peak RSS 515 MiB and exit zero in
+`artifacts/fuzz-logclients-final/report.json`. Synthetic selected membership
+does not qualify native client registration, current record history or recovery.
+No installed mount or Windows journal ran.
+
+The preceding physical-record continuation passes all 50 sanitized core suites, both
 freestanding 2-KiB-frame targets, style, 17 component PASS/seven runtime SKIPs
 and the unsigned arm64/x86_64 app under `artifacts/plan-logrecords-*-final.log`.
 Both app architectures compile the changed source owner; no installed mount or

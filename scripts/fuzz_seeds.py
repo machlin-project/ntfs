@@ -15,6 +15,7 @@ from logfile_fixtures import author as generate_logfile
 from logfile_source_fixtures import author as generate_logfile_sources
 from logfile_volume_fixtures import author as generate_logfile_volumes
 from logfile_record_fixtures import author as generate_logfile_records
+from logfile_client_fixtures import author as generate_logfile_clients
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
@@ -213,6 +214,12 @@ def generate(output):
             (log_seeds / filename).write_bytes(envelope + payload)
             selection['fault_seeds'].append(filename)
     (output / 'logfile-record-selection.json').write_text(json.dumps(selection, indent=2) + '\n')
+    log_clients = output / 'logfile-clients'
+    for case in generate_logfile_clients(log_clients):
+        payload = (log_clients / case['path']).read_bytes()
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_SOURCE_KIND, 0, 0)
+        assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+        (log_seeds / ('client-source-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

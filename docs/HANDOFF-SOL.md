@@ -174,6 +174,37 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## Selected active-client handoff checkpoint
+
+`ntfs_logfile_get_active_client` resolves an index/sequence pair only in the
+selected immutable restart snapshot's active chain. Preserve STALE/zero output
+for absent, free or mismatched entries, full field-width sequence comparison,
+bounded traversal and no I/O/allocation. `ntfs_logfile_get_client` still retains
+raw/free metadata, including old LSNs. Matching an active pair does not qualify
+record liveness, written/current history or native client payloads. A future
+native journal adapter must apply admission/revocation before cached access.
+
+Seven independent snapshots check 858 raw/active pair queries and 42 exact CLI
+reports, including empty/all-free/non-numeric mixed chains, LFS 2.0, the 407-client
+bound and full-length unpaired names. Armed failures prove no cached I/O or
+allocation; counted volume snapshots retain the same checks. The `active-client`
+diagnostic reads exported regular files. All seven whole sources fit the existing
+fuzz envelope, which additionally checks active metadata and mismatched sequences.
+Actual full-suite/app/fuzz evidence belongs in ACCEPTANCE.md.
+
+All 53 sanitized core suites, style, 17 component PASS/seven runtime SKIPs and
+the unsigned app pass under `artifacts/plan-logclients-*-final.log`. The initial
+build/nine focused suites and both frame-limited freestanding targets pass under
+`artifacts/plan-logclients-*-initial.log`. The campaign replays all 172 seeds and
+passes 91,838 executions/61 seconds at peak RSS 515 MiB under
+`artifacts/fuzz-logclients-final/report.json`. Both app architectures compile the
+changed owner. No native mount or Windows journal ran.
+
+Continue tail/fast-copy routing, written/current record selection and native
+checkpoint/table/transaction contracts under the complete no-VM scope in
+CORE-QUALIFICATION.md. This lookup does not close those rows or measured
+optimization/native qualification.
+
 ## Physical circular-record handoff checkpoint
 
 `ntfs_logfile_read_circular_record` now joins exact physical record bytes by LSN

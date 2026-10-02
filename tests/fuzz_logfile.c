@@ -71,7 +71,7 @@ fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
 {
 	struct ntfs_logfile_report reports[2];
 	struct ntfs_logfile_restart restarts[2];
-	struct ntfs_logfile_client clients[2];
+	struct ntfs_logfile_client clients[2], active_clients[2], wrong_client, zero_client = {0};
 	struct ntfs_logfile_page_view views[2], zero_view = {0};
 	struct ntfs_logfile *source;
 	struct fuzz_device device;
@@ -79,10 +79,14 @@ fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
 
 	enum ntfs_result results[2], page_results[2] = {NTFS_INVALID, NTFS_INVALID};
 
-	size_t i, used[2] = {0, 0};
+	enum ntfs_result active_results[2] = {NTFS_INVALID, NTFS_INVALID};
+
+	size_t i, reads, allocations, used[2] = {0, 0};
+	uint16_t index;
 
 	memset(restarts, 0, sizeof(restarts));
 	memset(clients, 0, sizeof(clients));
+	memset(active_clients, 0, sizeof(active_clients));
 	memset(views, 0, sizeof(views));
 	for (i = 0; i < sizeof(results) / sizeof(results[0]); i++) {
 		device = (struct fuzz_device){.data = bytes,
@@ -103,9 +107,25 @@ fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
 				    FUZZ_SOURCE_PAGE_BUFFERS * NTFS_LOGFILE_MAX_PAGE_BYTES);
 			assert(ntfs_logfile_get_restart(source, &restarts[i]) == NTFS_OK);
 			if (restarts[i].client_count != 0) {
-				assert(ntfs_logfile_get_client(source,
-					   (uint16_t)(argument % restarts[i].client_count),
-					   &clients[i]) == NTFS_OK);
+				index = (uint16_t)(argument % restarts[i].client_count);
+				assert(
+				    ntfs_logfile_get_client(source, index, &clients[i]) == NTFS_OK);
+				reads = device.reads;
+				allocations = device.allocations;
+				active_results[i] = ntfs_logfile_get_active_client(
+				    source, index, clients[i].sequence, &active_clients[i]);
+				assert(active_results[i] == NTFS_OK ||
+				    active_results[i] == NTFS_STALE);
+				assert(
+				    memcmp(&active_clients[i],
+					active_results[i] == NTFS_OK ? &clients[i] : &zero_client,
+					sizeof(active_clients[i])) == 0);
+				assert(ntfs_logfile_get_active_client(source, index,
+					   (uint16_t)(clients[i].sequence + 1u),
+					   &wrong_client) == NTFS_STALE);
+				assert(memcmp(&wrong_client, &zero_client, sizeof(wrong_client)) ==
+					0 &&
+				    device.reads == reads && device.allocations == allocations);
 			}
 			page_results[i] = ntfs_logfile_read_page(source,
 			    restarts[i].circular_offset, scratch[i] + FUZZ_GUARD_BYTES,
@@ -128,6 +148,8 @@ fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
 	assert(memcmp(&reports[0], &reports[1], sizeof(reports[0])) == 0);
 	assert(memcmp(&restarts[0], &restarts[1], sizeof(restarts[0])) == 0);
 	assert(memcmp(&clients[0], &clients[1], sizeof(clients[0])) == 0);
+	assert(active_results[0] == active_results[1] &&
+	    memcmp(&active_clients[0], &active_clients[1], sizeof(active_clients[0])) == 0);
 	assert(memcmp(&views[0], &views[1], sizeof(views[0])) == 0);
 	assert(memcmp(scratch[0], scratch[1], sizeof(scratch[0])) == 0);
 }

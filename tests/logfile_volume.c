@@ -283,7 +283,7 @@ main(int argc, char **argv)
 	struct ntfs_logfile *source;
 	struct ntfs_logfile_report report, empty = {0};
 	struct ntfs_logfile_restart restart;
-	struct ntfs_logfile_client client, zero_client = {0};
+	struct ntfs_logfile_client client, active_client, zero_client = {0};
 	struct source_expectation expected;
 	FILE *cases;
 	char path[TEST_PATH_BYTES], name[TEST_PATH_BYTES], source_name[TEST_PATH_BYTES];
@@ -330,6 +330,14 @@ main(int argc, char **argv)
 			    restart.log_page_bytes == expected.log);
 			for (index = 0; index < restart.client_count; index++) {
 				assert(ntfs_logfile_get_client(source, index, &client) == NTFS_OK);
+				assert(ntfs_logfile_get_active_client(source, index,
+					   client.sequence, &active_client) == NTFS_OK &&
+				    memcmp(&active_client, &client, sizeof(client)) == 0);
+				assert(ntfs_logfile_get_active_client(source, index,
+					   (uint16_t)(client.sequence + 1u),
+					   &active_client) == NTFS_STALE &&
+				    memcmp(&active_client, &zero_client, sizeof(active_client)) ==
+					0);
 			}
 			assert(ntfs_logfile_get_client(source, restart.client_count, &client) ==
 			    NTFS_END);

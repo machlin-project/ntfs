@@ -13,7 +13,8 @@ compatible redundant copies with conflict reports. These are foundations for
 journal inspection. A physical circular-record observer now assembles exact
 bytes across adjacent protected pages and one wrap. It does not route legacy
 tail/modern fast-page copies, validate the active circular history or interpret NTFS
-checkpoint tables. Client identity/sequence resolution, transaction analysis,
+checkpoint tables. Active restart-snapshot identity now has a bounded pair
+lookup; record liveness, native client payload interpretation, transaction analysis,
 redo/undo execution and Windows recovery acceptance remain separate work.
 LFS version numbers do not establish the NTFS client's payload version.
 
@@ -79,6 +80,18 @@ storage. It stages the exact read and USA/geometry checks privately, then copies
 the restored page to the caller only on success. Every error leaves caller bytes
 unchanged and its view zero; failed fills are retryable. This operation does not
 route copy-union targets, establish a page's active history or assemble records.
+
+`ntfs_logfile_get_client` retains every stored client entry, including free
+entries with old opaque LSNs. `ntfs_logfile_get_active_client` additionally
+requires both the requested sequence and membership in the selected active
+chain. Absent, free or mismatched entries return STALE with zero output. Sequence
+zero and the full 16-bit maximum are compared as stored values. The validated
+immutable owner bounds traversal by client count (at most 407 with current page
+limits); no additional allocation, callback or read credit is consumed. Raw and
+active snapshots preserve complete UTF-16 names. The pair identifies an entry
+in that selected restart snapshot; it does not establish a record's lifetime,
+written/current page history or the NTFS client's payload version. Future native
+admission must still gate cached use after resource revocation.
 
 ## Physical circular-record observation
 
@@ -185,6 +198,9 @@ Ordinary dirty-media rejection remains in force, and every mode retains
 retains exact assembled bytes as `bytes_hex`, common record metadata and physical
 assembly/read accounting; record, assembly and bytes are NULL on error. It uses
 default credits and reports only the physical observation described above.
+`active-client` takes an exported logical source and decimal index/sequence
+values. It reports the selected active entry or NULL with its lookup error;
+it does not read record content or change any recovery qualification.
 
 ```sh
 .build/ntfs-logfile restart EXPORTED_RESTART_PAGE LOGICAL_LOGFILE_BYTES
@@ -194,6 +210,7 @@ default credits and reports only the physical observation described above.
 .build/ntfs-logfile journal EXPORTED_LOGICAL_LOGFILE
 .build/ntfs-logfile volume-journal NTFS_IMAGE_FILE
 .build/ntfs-logfile circular-record EXPORTED_LOGICAL_LOGFILE DECIMAL_LSN
+.build/ntfs-logfile active-client EXPORTED_LOGICAL_LOGFILE INDEX SEQUENCE
 python3 scripts/fuzz.py --target logfile --seconds 60 --compiler /opt/homebrew/opt/llvm/bin/clang --output artifacts/fuzz-logfile-next
 ```
 
@@ -239,6 +256,17 @@ sources and six fault/control seeds fit the unchanged 2-MiB envelope. Two comple
 4-MiB sources (maximum pages and exact-cap record) are explicitly excluded in
 `logfile-record-selection.json` and the campaign report; both remain in direct
 C/CLI tests. No seed is silently truncated.
+
+`tests/logfile_client_fixtures.py` independently authors seven selected snapshots
+and 858 raw/active pair expectations. Chains include empty/all-free, mixed
+non-numeric active/free order, LFS 2.0 and the 407-client page bound; free entries
+retain old out-of-geometry LSNs. Every client retains a full-length unpaired
+UTF-16 name. Direct checks arm backend/allocation failures, compare all metadata
+and prove zero cached I/O/allocation with exact source cleanup. The CLI samples
+42 exact reports and argument/discovery/transport errors. Source fuzz checks
+deterministic active lookup, mismatched sequences and zero errors, adding all
+seven complete sources inside the existing envelope. Bound-volume cached tests
+also compare active metadata and mismatched-sequence results without I/O.
 
 Independent volume layouts place the original logical journal bytes in
 contiguous/fragmented runs and resident/nonresident attribute lists. They cover

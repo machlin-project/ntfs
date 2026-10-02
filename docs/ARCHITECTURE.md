@@ -226,6 +226,11 @@ caller bytes publish only after all framing/link-geometry checks succeed. The
 observation does not establish written/current history or route tail/fast copies.
 Those contracts, native client/transaction interpretation and recovery remain
 separate work. The mount policy still refuses dirty media.
+Cached active-client lookup additionally matches a selected restart entry's
+index/sequence and bounded in-use membership with no allocation or callback.
+Inactive entries remain inspectable through the separate raw snapshot getter;
+their old LSNs do not authorize active lookup. Matching a pair is separate from
+record liveness, current history and native payload interpretation.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not

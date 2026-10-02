@@ -7,10 +7,9 @@
 - (void)activateVolumeWithOptions:(FSTaskOptions *)options
 		     replyHandler:(void (^)(FSActivateResult *, NSError *))reply
 {
-	(void)options;
 	[self performItemPublication:^{
 	  NSError *error = nil;
-	  FSItem *item = [self activate:&error];
+	  FSItem *item = [self activateWithOptions:options error:&error];
 
 	  reply(item != nil ? [[FSActivateResult alloc] initWithRootItem:item] : nil, error);
 	}];
@@ -218,9 +217,23 @@
 		 context:(FSContext *)context
 	    replyHandler:(void (^)(FSReadSymlinkResult *, NSError *))reply
 {
-	(void)item;
+	NSError *error = nil;
+	FSFileName *target = [self symbolicLink:item error:&error];
+	FSItemAttributes *attrs;
+	FSReadSymlinkResult *result = nil;
+
 	(void)context;
-	reply(nil, ntfs_error(NTFS_UNSUPPORTED));
+	if (target != nil) {
+		attrs = [self attributes:item error:&error];
+		if (attrs != nil) {
+			result = [[FSReadSymlinkResult alloc] initWithContents:target
+							     symlinkAttributes:attrs];
+			if (result == nil) {
+				error = ntfs_error(NTFS_IO);
+			}
+		}
+	}
+	reply(result, error);
 }
 
 - (void)getXattrNamed:(FSFileName *)name

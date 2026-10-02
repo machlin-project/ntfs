@@ -184,13 +184,14 @@ SKIP: lifecycle, enumeration and two case-policy checks. No installed mount ran.
 Attribute-requested enumeration now uses complete regular-file size metadata
 independently of content decoding. EFS-flagged and unsupported-compression files
 retain requested attributes and can expose an independent plaintext ADS, while
-default reads remain ENOTSUP with zero reported bytes. Reparse items,
+default reads remain ENOTSUP with zero reported bytes. Unprojectable reparse items,
 unknown flag families and malformed metadata still fail explicitly without
 consuming the failed entry. The
 [packer contract](https://developer.apple.com/documentation/fskit/fsdirectoryentrypacker/packentry(name:itemtype:itemid:nextcookie:attributes:))
 documents nil attributes for calls that did not request attributes; nullable
-storage alone does not qualify omission of requested attributes. Reparse/provider
-projection still needs its own truthful metadata and target/content policy.
+storage alone does not qualify omission of requested attributes. Native link
+projection uses LINK-POLICY.md's bounded single-edge target/metadata policy;
+complete reparse resolution and provider content remain separate work.
 The component does not qualify native buffer lifetime, framework reclaim counts,
 or installed interpretation of cookies and virtual entries. Backend dot-name
 lookup and parent resolution are also not covered by the virtual-entry change.
@@ -208,3 +209,20 @@ component, style and the current unsigned app/extension passed; logs use
 lifecycle, enumeration, content metadata and two case-policy checks. Both protocol
 implementations compile, but no macOS 27 runtime, installed scheduling/buffer
 ownership or Windows-authored encoded-file behavior ran.
+
+The subsequent native-link component checks 47 independent path/storage verdicts
+through real legacy activation, lookup, readlink and enumeration callbacks.
+Checked numeric ancestry retains parent paths without parent FSItems. Immutable
+native targets survive drained unmount; counted wire snapshots close and can
+reopen after mount/admission. Cached readlink, attributes and raw xattrs reject
+permanent revocation. Direct data reads and traversal through projected links
+remain rejected. Single-edge identity avoids context-dependent hard-link bytes.
+
+All 79 allocation/17 read fault positions across listed/reserved lookup and
+reopened metadata pass with retry, exact replies, unchanged images and zero leaked
+core allocations. Names-only type classification now reads checked node/reparse
+metadata without resolving targets; its existing nested sweep covers 33
+allocation/13 read positions. All 32 core suites, both freestanding targets,
+component, style and the unsigned current app pass under `artifacts/plan-links-*.log`.
+Six macOS-27 checks explicitly SKIP, adding link projection to the previous five.
+Neither installed path walking nor modern runtime/native-count acceptance ran.

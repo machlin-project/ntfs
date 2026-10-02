@@ -125,6 +125,5 @@ enum ntfs_result ntfs_stream_exact(struct ntfs_stream *, uint64_t, void *, size_
 const struct ntfs_run *ntfs_run_find(const struct ntfs_stream *, uint64_t);
 int ntfs_name_compare(struct ntfs_volume *, const uint16_t *, size_t, const uint8_t *, size_t);
 enum ntfs_result ntfs_node_by_number(struct ntfs_volume *, uint64_t, struct ntfs_node **);
-enum ntfs_result ntfs_node_metadata(struct ntfs_node *, struct ntfs_stat *);
 
 #endif

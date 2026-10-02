@@ -11,6 +11,7 @@ struct ntfs_reparse {
 	struct reparse_values values;
 	uint8_t *bytes;
 	size_t size;
+	uint64_t allocated;
 };
 
 static bool
@@ -204,6 +205,7 @@ ntfs_reparse_open(struct ntfs_node *node, struct ntfs_reparse **out)
 	reparse->values = values;
 	reparse->bytes = bytes;
 	reparse->size = size;
+	reparse->allocated = stream->physical_size;
 	bytes = NULL;
 	v->children++;
 	*out = reparse;
@@ -231,6 +233,30 @@ void
 ntfs_reparse_get_info(const struct ntfs_reparse *reparse, struct ntfs_reparse_info *info)
 {
 	*info = reparse->values.info;
+}
+
+uint64_t
+ntfs_reparse_allocated_size(const struct ntfs_reparse *reparse)
+{
+	return reparse->allocated;
+}
+
+enum ntfs_result
+ntfs_reparse_bytes(const struct ntfs_reparse *reparse, void *buffer, size_t capacity, size_t *size)
+{
+	if (size == NULL) {
+		return NTFS_INVALID;
+	}
+	*size = 0;
+	if (reparse == NULL || (capacity != 0 && buffer == NULL)) {
+		return NTFS_INVALID;
+	}
+	*size = reparse->size;
+	if (capacity < reparse->size) {
+		return NTFS_RANGE;
+	}
+	ntfs_copy(buffer, reparse->bytes, reparse->size);
+	return NTFS_OK;
 }
 
 enum ntfs_result

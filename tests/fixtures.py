@@ -753,6 +753,8 @@ def main():
     case_fixtures(output, image)
     from stat_fixtures import author as stat_fixtures
     stat_fixtures(output, image)
+    from native_link_fixtures import author as native_link_fixtures
+    native_link_fixtures(output, image)
     from validation_fixtures import author as validation_fixtures
     validation_fixtures(output, image)
     from secure_fixtures import author as secure_fixtures

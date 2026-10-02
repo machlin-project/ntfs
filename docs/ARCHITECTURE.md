@@ -98,8 +98,14 @@ existing without its standard-information flag is corrupt. Presence checks scan
 both the base record and the complete attribute-list envelope, regardless of name;
 an omitted base attribute or invalid named reparse attribute cannot evade the guard.
 Checking absence can read an attribute list even for an ordinary file. FSKit
-continues to reject reparse items until its
-own target-translation, namespace and authorization contracts are defined.
+projects supported single-edge symlink/junction objects under LINK-POLICY.md's
+explicit current-volume binding and filename policy. Numeric ancestry carries
+directory provenance without retaining parent FSItems. Cached immutable native
+targets are separate from counted wire snapshots, which unmount closes and raw
+xattr access reopens. Names-only pages classify checked metadata without resolving
+targets; requested attributes require truthful projected sizes. Intermediate
+reparse chains, context-dependent hard links, cross-volume ownership and full
+native authorization remain open.
 
 An MFT record cache contains only validated immutable records and has an explicit
 entry budget. Metadata copies prevent eviction from invalidating a node. Run
@@ -168,7 +174,7 @@ An extension may reveal the runs needed to read a later extension. No guessed
 physical placement is used, and the record cache is enabled after bootstrap.
 Ordinary attribute lists use the same instance, sequence, base-reference and
 contiguous-VCN checks. The attribute list's own mapping must fit its base record.
-EFS data, reparse translation and NTFS security enforcement remain explicit gaps;
+EFS data, complete reparse resolution and NTFS security enforcement remain explicit gaps;
 see acceptance.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning

@@ -47,9 +47,10 @@
 	NTFSVolume *loaded = nil;
 	struct ntfs_environment env;
 	struct ntfs_volume *core = NULL;
+	struct ntfs_info info;
+	NTFSLinkPolicy *policy;
 	enum ntfs_result result = NTFS_OK;
 
-	(void)options;
 	@synchronized(self) {
 		if (_volume != nil) {
 			result = NTFS_BUSY;
@@ -63,10 +64,18 @@
 				env = [owner environment];
 				result = ntfs_mount(&env, NULL, &core);
 				if (result == NTFS_OK) {
-					loaded = ntfs_volume_create(core, owner);
+					ntfs_get_info(core, &info);
+					result = ntfs_native_link_policy(
+					    info.serial, options.taskOptions, &policy);
+					if (result == NTFS_OK) {
+						loaded = ntfs_volume_create_with_policy(
+						    core, owner, policy);
+					}
 					if (loaded == nil) {
 						(void)ntfs_unmount(core);
-						result = NTFS_IO;
+						if (result == NTFS_OK) {
+							result = NTFS_IO;
+						}
 					} else {
 						_volume = loaded;
 						_resource = resource;

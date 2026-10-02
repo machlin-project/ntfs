@@ -139,8 +139,35 @@ campaigns pass under `artifacts/fuzz-stat-{mapping,list}/`; see ACCEPTANCE.md fo
 counts and the retained fixture-collision failure. No installed mount,
 Windows-authored EFS/compression or decryption acceptance is established.
 
-Continue reparse/provider projection and explicit unknown/malformed metadata
-behavior. The packer's nullable argument is not evidence that requested
+The native-link continuation now projects a bounded single-edge symlink/junction
+subset. Read LINK-POLICY.md before changing it. Explicit drive/GUID task options
+bind only to this mounted owner, and numeric ancestry avoids host mount-path
+assumptions or retained parent FSItems. Target translation uses the stored
+substitute name, per-directory case policy and existing filename aliases, with
+one shared raw-entry scan budget. Native type/size reflects emitted target bytes;
+original wire packets and physical reparse allocation remain available separately.
+Unmount closes counted snapshots while preserving immutable native targets;
+raw xattrs reopen after admission. Intermediate reparse chains, multiply linked
+reparse objects and cross-volume targets remain explicit unsupported contracts.
+
+All 32 sanitized suites, both freestanding targets, component, style and the
+current unsigned app passed. Forty-seven legacy path/storage verdicts and four
+fault sweeps (32/eight, eight/three, 36/six and three/zero allocation/read positions)
+pass with retry, exactly-once replies and cleanup. Names-only classification now
+uses checked metadata without resolving a target; the existing nested operation
+passes 33 allocation/13 read fault positions. Six modern checks explicitly SKIP:
+lifecycle, enumeration, content metadata, link projection and two case-policy
+checks. Evidence uses `artifacts/plan-links-{core-reviewed,component-reviewed,freestanding,style,app-build}.log`.
+Image/reparse campaigns also pass under `artifacts/fuzz-native-links-{image,reparse}/`;
+counts and the near-cap image-process RSS are recorded in ACCEPTANCE.md. The
+Foundation translator itself has component evidence, not this core fuzz coverage.
+No installed mount, Windows target acquisition or macOS 27 runtime ran.
+Final naming/comment checks use `artifacts/plan-links-{core,component,style,app}-final.log`;
+all 47 regenerated images and their expectation manifest remained byte-identical
+(`artifacts/plan-links-fixture-final.log`). Those edits preserve the fuzz inputs.
+
+Continue complete reparse resolution, provider content and explicit unknown/
+malformed metadata behavior. The packer's nullable argument is not evidence that requested
 attributes may be omitted. Preserve truthful metadata and stable continuation,
 without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
@@ -343,12 +370,12 @@ and diagnostic bad-cluster handling, not blanket orphan or overlap exclusions.
    Sensitive for distinct native cache keys while core lookup respects each
    directory's stored flag; qualify positive/negative caching in mixed trees.
    The complete WSL/POSIX namespace and normalization contracts remain open.
-6. Qualify the reparse metadata reader with Windows-authored links. Define target
-   translation and namespace ownership before enabling native symlink/junction
-   behavior. WOF, cloud placeholders, third-party GUID owners and WSL tags require
-   separate content/resolution contracts. The current adapter rejects reparse
-   items. Do not expose encoded data as ordinary file content or turn every tag
-   into a symlink.
+6. Qualify the core reparse reader and implemented LINK-POLICY.md projection with
+   Windows-authored links and installed mounts. Extend intermediate resolution,
+   hard-linked reparse identity and cross-volume ownership through explicit
+   contracts. WOF, cloud placeholders, third-party GUID owners and WSL tags still
+   require separate content/resolution contracts. Do not expose encoded data as
+   ordinary file content or turn every tag into a symlink.
 7. Extend security storage to whole-store consistency and Windows qualification;
    qualify the DACL plane against Windows AccessCheck and implement restricted
    ownership, advanced ACE/SACL/privilege policy, identity mapping and owning

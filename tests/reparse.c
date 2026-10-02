@@ -18,7 +18,9 @@ enum {
 	TEST_FILE_SEQUENCE = 7,
 	TEST_UNPAIRED_HIGH_SURROGATE = 0xd800,
 	TEST_RESERVED_FIELD = 0xabcd,
-	TEST_NAME_FILL = 0x5a5a
+	TEST_NAME_FILL = 0x5a5a,
+	TEST_REPARSE_CLUSTERS = 2,
+	TEST_REPARSE_CLUSTER_BYTES = 4096
 };
 
 #define TEST_UNKNOWN_TAG UINT32_C(0x80001234)
@@ -344,6 +346,39 @@ check_names(struct ntfs_reparse *reparse, const struct image_case *test)
 		   NULL) == NTFS_INVALID);
 }
 
+static void
+check_bytes(struct ntfs_reparse *snapshot, const struct image_case *test)
+{
+	struct ntfs_reparse_info original, decoded;
+	uint8_t *buffer;
+	size_t required, size, i;
+	uint64_t allocated = 0;
+
+	assert(ntfs_reparse_bytes(snapshot, NULL, 0, &required) == NTFS_RANGE && required != 0);
+	buffer = malloc(required + sizeof(*buffer));
+	assert(buffer != NULL);
+	memset(buffer, TEST_NAME_FILL & UINT8_MAX, required + sizeof(*buffer));
+	assert(ntfs_reparse_bytes(snapshot, buffer, required - 1, &size) == NTFS_RANGE &&
+	    size == required);
+	for (i = 0; i <= required; i++) {
+		assert(buffer[i] == (TEST_NAME_FILL & UINT8_MAX));
+	}
+	assert(ntfs_reparse_bytes(snapshot, NULL, required, &size) == NTFS_INVALID && size == 0);
+	assert(ntfs_reparse_bytes(snapshot, buffer, required, NULL) == NTFS_INVALID);
+	assert(ntfs_reparse_bytes(snapshot, buffer, required + sizeof(*buffer), &size) == NTFS_OK &&
+	    size == required);
+	assert(buffer[required] == (TEST_NAME_FILL & UINT8_MAX));
+	assert(ntfs_reparse_decode(buffer, size, &decoded) == NTFS_OK);
+	ntfs_reparse_get_info(snapshot, &original);
+	assert(memcmp(&original, &decoded, sizeof(original)) == 0);
+	if (strcmp(test->filename, "reparse-nonresident.img") == 0 ||
+	    strcmp(test->filename, "reparse-listed.img") == 0) {
+		allocated = (uint64_t)TEST_REPARSE_CLUSTERS * TEST_REPARSE_CLUSTER_BYTES;
+	}
+	assert(ntfs_reparse_allocated_size(snapshot) == allocated);
+	free(buffer);
+}
+
 static enum ntfs_result
 exercise(struct tracked_device *device, const struct image_case *test, size_t fail_allocation,
     size_t fail_read, size_t *allocations, size_t *reads)
@@ -377,6 +412,7 @@ exercise(struct tracked_device *device, const struct image_case *test, size_t fa
 	device->fail_read = 0;
 	if (result == NTFS_OK) {
 		assert(reparse != NULL);
+		check_bytes(reparse, test);
 		ntfs_reparse_get_info(reparse, &info);
 		assert(
 		    info.kind == test->kind && info.tag == test->tag && info.flags == test->flags);
@@ -414,6 +450,9 @@ exercise(struct tracked_device *device, const struct image_case *test, size_t fa
 	ntfs_node_close(node);
 	if (reparse != NULL) {
 		assert(ntfs_unmount(volume) == NTFS_BUSY);
+		i = device->reads;
+		check_bytes(reparse, test);
+		assert(device->reads == i);
 		if (test->kind == NTFS_REPARSE_SYMLINK || test->kind == NTFS_REPARSE_MOUNT_POINT) {
 			check_names(reparse, test);
 		}
@@ -493,6 +532,8 @@ main(int argc, char **argv)
 	assert(ntfs_reparse_open(NULL, NULL) == NTFS_INVALID);
 	ntfs_reparse_close(NULL);
 	assert(ntfs_reparse_name(NULL, NTFS_REPARSE_PRINT_NAME, NULL, 0, &length) == NTFS_INVALID);
+	assert(ntfs_reparse_bytes(NULL, NULL, 0, &length) == NTFS_INVALID && length == 0);
+	assert(ntfs_reparse_bytes(NULL, NULL, 0, NULL) == NTFS_INVALID);
 	for (i = 0; i < sizeof(tests) / sizeof(tests[0]); i++) {
 		length = strlen(argv[1]) + sizeof("/") + strlen(tests[i].filename);
 		path = malloc(length);
@@ -520,7 +561,8 @@ main(int argc, char **argv)
 		}
 		ntfs_image_close(&device.image);
 	}
-	printf("PASS: reparse decoder boundaries, %zu image contracts, independent lifetime, "
+	printf("PASS: reparse decoder/wire-copy boundaries and physical sizes, %zu image "
+	       "contracts, independent lifetime, "
 	       "fail-closed data/directory access; %zu allocation and %zu I/O failure positions\n",
 	    sizeof(tests) / sizeof(tests[0]), total_allocations, total_reads);
 	return 0;

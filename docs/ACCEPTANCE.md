@@ -18,11 +18,11 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Native filenames and hard links | Bounded reversible aliases and per-link UTF-16 manifests; inode identity separated from link spelling; native length, Unicode, hidden/DOS ordinals, response/scan exhaustion, faults and revocation | Five authored namespace images and component sweeps passed; installed case/normalization and Windows-authored namespace untested |
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
 | Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
-| Reparse metadata | Microsoft framing, relative/absolute symlinks and junction targets, lossless UTF-16, fragmented/listed attributes, snapshot lifetime, opaque WOF/cloud classification and fail-closed traversal/data access | Synthetic tests passed; Windows-authored links and native translation untested |
+| Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded single-edge symlink/junction projection, checked ancestry, explicit Windows root bindings and target aliases; opaque provider classification and raw-data rejection | Core checks and 47 legacy path/storage verdicts passed; 79 allocation/17 read fault positions across native lookup/reopened metadata passed; intermediate/multiply linked/cross-volume resolution, Windows links and installed path walking remain open |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain, eight blocked-read/overlapping-teardown scenarios, conditional reclaim bridge and five modeled eligibility/ownership/publication cases; virtual dot/parent entries, parent release/remount, stable aliases, separate cookie views/native errors and enumeration faults/budgets; encoded-stream attributes/ADS and explicit rejection pages under ASan/UBSan | Legacy in-process checks passed; five modern lifecycle/enumeration/content/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, reparse/provider projection and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; six modern lifecycle/enumeration/content/link/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
@@ -30,12 +30,53 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
-| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; reparse target resolution, EFS and WOF/cloud content | Not implemented |
+| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS and WOF/cloud content | Not implemented; bounded single-edge native link projection is tracked separately |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The latest metadata/content continuation passes all 32 sanitized core suites,
+The latest native-link continuation passes all 32 sanitized core suites, both
+freestanding targets, selected Xcode style, the expanded FSKit component and the
+current unsigned app/extension. Forty-seven independently authored path/storage
+verdicts cover explicit drive/GUID ownership, relative/rooted/dangling targets,
+case policy, aliases/DOS names, nested paths, junctions, path/component/shared-scan
+equality/exhaustion and explicit unsupported/corrupt cases. Real legacy callbacks
+check requested attributes and names-only inventory, original-wire xattrs,
+raw-data rejection, cached targets, remount/revocation and exactly-once replies.
+
+Four native sweeps cover listed lookup 32 allocation/eight read positions, listed
+metadata reopening eight/three, reserved-name lookup 36/six and resident metadata
+reopening three/zero: 79 allocation and 17 read positions in total, with retry,
+unchanged input and zero leaked core allocations. Names-only enumeration now
+classifies checked node/reparse metadata rather than stale index attributes; its
+existing nested operation covers 33 allocation/13 read positions. Six modern
+checks explicitly SKIP: lifecycle, enumeration, content metadata, link projection
+and two case-policy checks. Logs are
+`artifacts/plan-links-{core-reviewed,component-reviewed,freestanding,style,app-build}.log`.
+Earlier successful baseline/expanded logs are retained separately.
+After replacing fixture instance/VCN literals with named constants, final core,
+component, style and app checks passed under
+`artifacts/plan-links-{core,component,style,app}-final.log`. All 47 regenerated
+images and their expectation manifest remained byte-identical; Python syntax
+and hash evidence is in `artifacts/plan-links-fixture-final.log`.
+
+The bounded image campaign completed 49,163 executions in 61 seconds, coverage
+3,059, feature count 12,423 and peak RSS 940 MiB. The reparse campaign completed
+15,253,435 executions in 61 seconds, coverage 111, feature count 150 and peak RSS
+508 MiB. Both exited zero without a reported crash or sanitizer finding; reports
+are under `artifacts/fuzz-native-links-{image,reparse}/` and launcher logs under
+`artifacts/plan-links-{image,reparse}-fuzz.log`. Image process RSS approached the
+separate 1-GiB runner cap; this includes corpus/sanitizer overhead and is not a
+native driver-memory measurement. The image campaign exercises core snapshot
+copies, not the Foundation target translator.
+
+[LINK-POLICY.md](LINK-POLICY.md) defines the implemented subset. Intermediate
+reparse chains, multiply linked reparse objects and cross-volume mappings remain
+explicitly unsupported. Native path walking/loops/normalization, Windows-authored
+targets, macOS 27 runtime and authorization remain unqualified. No installation,
+mount or Windows acquisition ran.
+
+The preceding metadata/content continuation passes all 32 sanitized core suites,
 both freestanding compilation targets, the expanded FSKit component, selected
 Xcode style and the current unsigned app/extension build. Regular-file stat now
 validates the complete unnamed-stream mapping independently of content decoding,

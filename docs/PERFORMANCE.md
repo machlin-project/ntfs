@@ -129,3 +129,21 @@ consistent read-throughput improvement is established. Four-reader latency still
 exposes contention in the serialized volume. These measurements justify this
 specific metadata reuse; they do not establish FSKit performance, a broad driver
 advantage or completion of the remaining optimization program.
+
+## Native link and type metadata measurements
+
+The link continuation caches immutable emitted target bytes per live FSItem.
+Names-only enumeration now validates node/reparse metadata for accurate types,
+without resolving targets. That adds metadata work compared with trusting cached
+index flags. Alias translation uses independent cursors with one shared raw-entry
+budget. Component fault counts establish required work and retry behavior; they
+are not timing or native throughput measurements.
+
+Add cold/warm metadata profiles for plain and reparse-heavy directories, one-entry
+pages, interleaved continuation and alias-heavy nested targets. Record latency,
+CPU, I/O, allocation counts and peak native memory separately from C core and
+sanitizer/corpus overhead. Measure repeated page lookahead and repeated same-item
+lookup before introducing bounded checked-record/index/alias reuse. Preserve
+parent provenance, immutable target identity, scan limits, failure retry and
+revocation/unmount ordering. No performance gain or independent-driver comparison
+is established by the native-link component checkpoint.

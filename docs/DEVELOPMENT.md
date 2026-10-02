@@ -33,12 +33,18 @@ macOS 27 kernel/framework count mechanism.
 The separate enumeration component checks names-only virtual current/parent
 entries, parent release/remount and corrupt-edge rejection, separate native cookie
 views, alias stability, interleaved buffers, scan budgets, packer revocation and
-all 12 allocation/four I/O fault positions in its nested-index operation. The
+all 33 allocation/13 I/O fault positions in its current nested-index operation. The
 content component additionally exercises six encoded-stream metadata variants and
 ten explicit corruption/unsupported rejections, requested-size pages, independent
 ADS, zero-byte read errors, remount and revocation without default-content I/O.
-The current component has five explicit macOS-27 runtime SKIPs: lifecycle,
-enumeration, content metadata and two case-policy checks. These in-process
+The link component authors 47 native path/storage verdicts and checks root option
+binding, single-edge identity, requested metadata/names-only pages, aliases,
+original-wire xattrs, remount/revocation and all 79 allocation/17 read fault
+positions across listed/reserved lookup and reopened snapshots. Core reparse tests
+also check copy guards, physical allocation and node-independent lifetime. See
+LINK-POLICY.md for the supported subset and remaining resolution contracts.
+The current component has six explicit macOS-27 runtime SKIPs: lifecycle,
+enumeration, content metadata, link projection and two case-policy checks. These in-process
 results do not mount the filesystem.
 Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,

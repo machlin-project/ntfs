@@ -20,6 +20,9 @@ Primary references:
 - [Symbolic-link buffers](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/b41f1cbf-10df-4a47-98d4-1c52a833d913)
 - [Mount-point buffers](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/ca069dad-ed16-42aa-b057-b6b207f447cc)
 - [Reparse size restrictions](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points)
+- [Windows symbolic-link target paths](https://learn.microsoft.com/en-us/windows/win32/fileio/creating-symbolic-links)
+- [Windows namespaces and path spelling](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)
+- [Windows volume root and GUID naming](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-volume)
 - [Third-party GUID buffers](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_reparse_guid_data_buffer)
 - [Self-relative security descriptors](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7d4dac05-9cef-4563-a058-f108abecce1d)
 - [SID packet representation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/f992ad60-0fe4-4b87-9fed-beb478836861)
@@ -83,6 +86,14 @@ third-party GUID envelope. NTFS-3G's `REPARSE_POINT` layout note confirms that t
 attribute may be resident or nonresident. No NTFS-3G reparse implementation was
 used or copied. The ownership, validation and copying code is original; synthetic
 buffers and storage layouts do not establish Windows-authored reparse acceptance.
+
+Native target translation uses Microsoft's substitute-name/relative-flag and
+namespace/root descriptions. Explicit current-owner bindings, numeric ancestry,
+filename alias recovery and inode-context limits are repository-owned policy;
+LINK-POLICY.md records the distinction from full Windows path resolution. ext4
+was consulted for native FSKit type/callback conventions, without copying an
+external NTFS implementation. Forty-seven synthetic projection verdicts and
+fault sweeps remain separate from Windows/installed acceptance.
 
 The security decoder uses MS-DTYP's self-relative offsets, little-endian fields,
 six-byte SID authority and bounded subauthority vector. It preserves ACE order,

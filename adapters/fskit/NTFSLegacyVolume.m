@@ -6,10 +6,9 @@
 - (void)activateWithOptions:(FSTaskOptions *)options
 	       replyHandler:(void (^)(FSItem *, NSError *))reply
 {
-	(void)options;
 	[self performItemPublication:^{
 	  NSError *error = nil;
-	  FSItem *item = [self activate:&error];
+	  FSItem *item = [self activateWithOptions:options error:&error];
 
 	  reply(item, error);
 	}];
@@ -167,8 +166,10 @@
 
 - (void)readSymbolicLink:(FSItem *)item replyHandler:(void (^)(FSFileName *, NSError *))reply
 {
-	(void)item;
-	reply(nil, ntfs_error(NTFS_UNSUPPORTED));
+	NSError *error = nil;
+	FSFileName *target = [self symbolicLink:item error:&error];
+
+	reply(target, error);
 }
 
 - (void)getXattrNamed:(FSFileName *)name
@@ -208,6 +209,13 @@
 NTFSVolume *
 ntfs_volume_create(struct ntfs_volume *core, NTFSResource *resource)
 {
+	return ntfs_volume_create_with_policy(core, resource, nil);
+}
+
+NTFSVolume *
+ntfs_volume_create_with_policy(
+    struct ntfs_volume *core, NTFSResource *resource, NTFSLinkPolicy *policy)
+{
 	Class selected = NTFSLegacyVolume.class;
 
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
@@ -215,5 +223,8 @@ ntfs_volume_create(struct ntfs_volume *core, NTFSResource *resource)
 		selected = NTFSModernVolume.class;
 	}
 #endif
-	return [[selected alloc] initWithCore:core resource:resource];
+	return [[selected alloc] initWithCore:core
+				     resource:resource
+		      maximumDirectoryEntries:NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT
+				   linkPolicy:policy];
 }

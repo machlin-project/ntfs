@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSResource.h"
+#import "NTFSLinks.h"
 
 typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 	NTFSVolumeLoaded,
@@ -19,6 +20,12 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 - (instancetype)initWithCore:(struct ntfs_volume *)core
 		    resource:(NTFSResource *)resource
      maximumDirectoryEntries:(uint32_t)maximum;
+/* The immutable policy binds explicit Windows roots to this core's serial.
+ * Nil selects relative/current-volume paths without guessed drive aliases. */
+- (instancetype)initWithCore:(struct ntfs_volume *)core
+		    resource:(NTFSResource *)resource
+     maximumDirectoryEntries:(uint32_t)maximum
+		  linkPolicy:(NTFSLinkPolicy *)policy;
 - (void)invalidate;
 /* Admission state can be inspected without waiting for an outstanding read.
  * Unmount retains item identities for reclamation; invalidation is terminal. */
@@ -30,11 +37,13 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
  * Older runtimes keep a node alive until the last FSItem reference disappears. */
 - (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup;
 - (FSItem *)activate:(NSError **)error;
+- (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error;
 - (FSItem *)lookup:(FSFileName *)name
        inDirectory:(FSItem *)directory
 	storedName:(FSFileName **)stored
 	     error:(NSError **)error;
 - (FSItemAttributes *)attributes:(FSItem *)item error:(NSError **)error;
+- (FSFileName *)symbolicLink:(FSItem *)item error:(NSError **)error;
 - (NSError *)enumerate:(FSItem *)directory
 		cookie:(FSDirectoryCookie)cookie
 	      verifier:(FSDirectoryVerifier)verifier
@@ -68,3 +77,5 @@ API_AVAILABLE(macos(27.0))
 #endif
 
 NTFSVolume *ntfs_volume_create(struct ntfs_volume *core, NTFSResource *resource);
+NTFSVolume *ntfs_volume_create_with_policy(
+    struct ntfs_volume *core, NTFSResource *resource, NTFSLinkPolicy *policy);

@@ -19,8 +19,10 @@ implementation is linked into the product.
 Implemented reading includes MFT/attribute lists, resident and fragmented data,
 sparse and uninitialized ranges, alternate data streams, LZNT1, indexed directory
 enumeration, $UpCase lookup and bounded reparse metadata decoding. Symlink and
-junction targets are available as lossless UTF-16; following links and decoding
-WOF/cloud data remain outside the implemented scope. The FSKit app and extension
+junction targets are available as lossless UTF-16. FSKit now projects a bounded
+single-edge subset with explicit Windows root bindings and reversible target
+aliases; see [native link policy](docs/LINK-POLICY.md). Intermediate reparse chains,
+cross-volume targets and WOF/cloud content remain open. The FSKit app and extension
 build unsigned from current source; a prior personally signed Release passed strict
 signature verification. Direct adapter tests and independent NTFS-3G image
 comparisons pass. Native installation and Windows-authored corpus acceptance
@@ -35,8 +37,8 @@ The no-VM continuation adds reference-based lossless inspection, Windows corpus
 acquisition/verification tools, standalone parser fuzz targets, an MS-DTYP security
 descriptor decoder/resolver and repeated portable workload measurements. Verified metadata
 reuse has a measured benefit for attribute-list opens. `$Secure` and per-file
-descriptors have bounded read-only snapshots; full authorization, WOF, native symlink
-projection, Windows/native case-policy qualification and recovery remain open;
+descriptors have bounded read-only snapshots; full authorization, WOF, complete
+reparse resolution, Windows/native qualification and recovery remain open;
 see [the complete continuation scope](docs/CORE-QUALIFICATION.md).
 Stored stream names now have a bounded immutable catalog and read-only FSKit
 xattr projection with a lossless UTF-16 reverse manifest. Bounded native filename
@@ -79,5 +81,6 @@ Ordinary-file sizes now validate the complete unnamed-stream mapping separately
 from content decoding. EFS-flagged and unsupported-compression files can retain
 truthful FSKit attributes and independent readable ADS while default reads return
 ENOTSUP. Six synthetic storage variants, corruption/rejection pages and remount/
-revocation checks pass locally. Reparse projection and provider content remain
-open; these checks do not qualify Windows-authored EFS or installed behavior.
+revocation checks pass locally. Provider content remains open; these checks do not
+qualify Windows-authored EFS or installed behavior. Native links retain separate
+path, identity, configuration and installed-acceptance limits.

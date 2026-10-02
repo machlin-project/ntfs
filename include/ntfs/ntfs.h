@@ -175,6 +175,9 @@ enum ntfs_result ntfs_count_free_clusters(struct ntfs_volume *, uint64_t *);
 enum ntfs_result ntfs_root(struct ntfs_volume *, struct ntfs_node **);
 enum ntfs_result ntfs_node_open(struct ntfs_volume *, uint64_t reference, struct ntfs_node **);
 void ntfs_node_close(struct ntfs_node *);
+/* Base metadata and reparse presence, without opening ordinary-file data.
+ * Size fields remain zero; successful metadata does not qualify content. */
+enum ntfs_result ntfs_node_metadata(struct ntfs_node *, struct ntfs_stat *);
 /* Ordinary-file sizes validate the complete unnamed-stream mapping without
  * reading content. Directory/reparse nodes retain base metadata only.
  * Successful stat does not imply support for decryption or decompression. */
@@ -190,6 +193,13 @@ enum ntfs_result ntfs_reparse_decode(const void *, size_t, struct ntfs_reparse_i
 enum ntfs_result ntfs_reparse_open(struct ntfs_node *, struct ntfs_reparse **);
 void ntfs_reparse_close(struct ntfs_reparse *);
 void ntfs_reparse_get_info(const struct ntfs_reparse *, struct ntfs_reparse_info *);
+/* Physical allocation of the checked reparse attribute, excluding resident
+ * record storage. */
+uint64_t ntfs_reparse_allocated_size(const struct ntfs_reparse *);
+/* Copy the immutable original wire bytes, including tag, flags and both names.
+ * RANGE reports required bytes without changing the buffer. NULL/zero capacity
+ * queries the size; invalid arguments report zero when a size output exists. */
+enum ntfs_result ntfs_reparse_bytes(const struct ntfs_reparse *, void *, size_t, size_t *);
 /* Copy host-endian UTF-16 units losslessly, including unpaired surrogates. No NUL
  * terminator is added. RANGE reports required units without changing the buffer;
  * NULL/zero capacity queries the size. Non-link payloads return UNSUPPORTED. */

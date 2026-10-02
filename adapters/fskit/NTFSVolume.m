@@ -9,6 +9,8 @@
 
 enum {
 	NTFS_FSKIT_ITEM_LIMIT = 16384,
+	/* Ancestry tokens have their own bound and retain no filesystem items. */
+	NTFS_FSKIT_PATH_LIMIT = NTFS_FSKIT_ITEM_LIMIT,
 	NTFS_FSKIT_STREAM_LIMIT = 1024,
 	NTFS_FSKIT_XATTR_SIZE_BITS = 20,
 	NTFS_FSKIT_XATTR_BYTES = (1u << NTFS_FSKIT_XATTR_SIZE_BITS) - 1,
@@ -27,6 +29,7 @@ static NSString *const streamManifestName = @"org.machlin.ntfs.streams";
 static NSString *const streamAliasPrefix = @"org.machlin.ntfs.stream.";
 static NSString *const namesManifestName = @"org.machlin.ntfs.names";
 static NSString *const nameEntryPrefix = @"org.machlin.ntfs.name.";
+static NSString *const reparseAttributeName = @"org.machlin.ntfs.reparse";
 
 /* Keep native view positions separate from stored visible-link ordinals. */
 static const FSDirectoryCookie namesOnlyCookieTag = UINT64_C(1)
@@ -111,6 +114,9 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 	struct ntfs_stream *stream;
 	struct ntfs_directory *cursor;
 	struct ntfs_stream_catalog *catalog;
+	struct ntfs_reparse *reparse;
+	FSFileName *linkTarget;
+	NTFSDirectoryPath *directoryPath;
 	struct ntfs_dirent pendingEntry;
 	BOOL pending;
 	uint64_t position;
@@ -151,6 +157,8 @@ item_id(uint64_t reference)
 	struct ntfs_info _info;
 	NTFSResource *_resource;
 	NSMapTable<NSNumber *, NTFSItem *> *_items;
+	NSMapTable<NSNumber *, NTFSDirectoryPath *> *_paths;
+	NTFSLinkPolicy *_linkPolicy;
 	FSDirectoryVerifier _directoryVerifier;
 	uint64_t _freeClusters;
 	uint32_t _maximumDirectoryEntries;
@@ -172,6 +180,17 @@ item_id(uint64_t reference)
 		    resource:(NTFSResource *)resource
      maximumDirectoryEntries:(uint32_t)maximum
 {
+	return [self initWithCore:core
+			   resource:resource
+	    maximumDirectoryEntries:maximum
+			 linkPolicy:nil];
+}
+
+- (instancetype)initWithCore:(struct ntfs_volume *)core
+		    resource:(NTFSResource *)resource
+     maximumDirectoryEntries:(uint32_t)maximum
+		  linkPolicy:(NTFSLinkPolicy *)policy
+{
 	struct ntfs_info info;
 	uint64_t freeClusters;
 	NSString *label;
@@ -180,6 +199,12 @@ item_id(uint64_t reference)
 		return nil;
 	}
 	ntfs_get_info(core, &info);
+	if (policy == nil) {
+		policy = [[NTFSLinkPolicy alloc] initWithVolumeSerial:info.serial windowsRoots:nil];
+	}
+	if (policy == nil || policy.volumeSerial != info.serial) {
+		return nil;
+	}
 	if (ntfs_count_free_clusters(core, &freeClusters) != NTFS_OK) {
 		return nil;
 	}
@@ -197,6 +222,8 @@ item_id(uint64_t reference)
 		_freeClusters = freeClusters;
 		_maximumDirectoryEntries = maximum;
 		_items = [NSMapTable strongToWeakObjectsMapTable];
+		_paths = [NSMapTable strongToWeakObjectsMapTable];
+		_linkPolicy = policy;
 		_directoryVerifier =
 		    ((uint64_t)arc4random() << (sizeof(uint32_t) * CHAR_BIT)) | arc4random() | 1;
 	}
@@ -210,6 +237,8 @@ item_id(uint64_t reference)
 
 - (void)clearItemCaches:(NTFSItem *)item
 {
+	ntfs_reparse_close(item->reparse);
+	item->reparse = NULL;
 	ntfs_stream_catalog_close(item->catalog);
 	item->catalog = NULL;
 	ntfs_directory_close(item->cursor);
@@ -227,6 +256,8 @@ item_id(uint64_t reference)
 	[self clearItemCaches:item];
 	ntfs_node_close(item->node);
 	item->node = NULL;
+	item->linkTarget = nil;
+	item->directoryPath = nil;
 	item.owner = nil;
 }
 
@@ -284,6 +315,7 @@ item_id(uint64_t reference)
 				[self releaseItem:item];
 			}
 			[_items removeAllObjects];
+			[_paths removeAllObjects];
 			if (_core != NULL) {
 				result = ntfs_unmount(_core);
 				NSAssert(result == NTFS_OK, @"NTFS object leak");
@@ -335,11 +367,15 @@ item_id(uint64_t reference)
 
 - (NTFSItem *)adoptNode:(struct ntfs_node *)node
 	parentReference:(uint64_t)parentReference
+	 containingPath:(NTFSDirectoryPath *)containingPath
 		  error:(NSError **)error
 {
 	struct ntfs_stat stat;
+	struct ntfs_reparse *snapshot = NULL;
 	enum ntfs_result result;
 	NTFSItem *item;
+	NTFSDirectoryPath *path = nil;
+	FSFileName *target = nil;
 	NTFSVolumeLifecycle state;
 
 	result = ntfs_node_stat(node, &stat);
@@ -356,11 +392,18 @@ item_id(uint64_t reference)
 		return nil;
 	}
 	if (stat.reparse) {
-		ntfs_node_close(node);
-		*error = ntfs_error(NTFS_UNSUPPORTED);
-		return nil;
-	}
-	if (stat.directory) {
+		/* Native readlink is inode-scoped. Context-dependent projections of
+		 * multiply linked reparse objects need a separate owning contract. */
+		result = stat.links == 1 ? ntfs_reparse_open(node, &snapshot) : NTFS_UNSUPPORTED;
+		if (result == NTFS_OK) {
+			result = ntfs_native_link_target(_core, snapshot, containingPath,
+			    _linkPolicy, _maximumDirectoryEntries, &target);
+		}
+		if (result == NTFS_OK) {
+			stat.size = target.data.length;
+			stat.allocated_size = ntfs_reparse_allocated_size(snapshot);
+		}
+	} else if (stat.directory) {
 		if (item_id(stat.reference) == FSItemIDRootDirectory) {
 			if (parentReference != 0 && parentReference != stat.reference) {
 				ntfs_node_close(node);
@@ -369,22 +412,65 @@ item_id(uint64_t reference)
 			}
 			parentReference = stat.reference;
 		} else if (parentReference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0 ||
-		    parentReference == stat.reference) {
+		    parentReference == stat.reference || containingPath == nil ||
+		    containingPath.volume != _core || containingPath.reference != parentReference) {
 			ntfs_node_close(node);
 			*error = ntfs_error(NTFS_CORRUPT);
 			return nil;
 		}
+		path = [_paths objectForKey:@(stat.reference)];
+		if (path != nil &&
+		    (path.parent == nil ? parentReference != stat.reference
+					: path.parent.reference != parentReference)) {
+			result = NTFS_CORRUPT;
+		} else if (path == nil) {
+			if (_paths.count >= NTFS_FSKIT_PATH_LIMIT) {
+				result = NTFS_NO_MEMORY;
+			} else if (containingPath.depth >= NTFS_FSKIT_LINK_COMPONENT_LIMIT) {
+				result = NTFS_RANGE;
+			} else {
+				path = [[NTFSDirectoryPath alloc] initWithVolume:_core
+								       reference:stat.reference
+									  parent:containingPath];
+				result = path == nil ? NTFS_CORRUPT : NTFS_OK;
+				if (result == NTFS_OK) {
+					[_paths setObject:path forKey:@(stat.reference)];
+				}
+			}
+		}
+	}
+	if (result == NTFS_OK) {
+		state = self.lifecycle;
+		if (state != NTFSVolumeLoaded && state != NTFSVolumeActive) {
+			result = NTFS_STALE;
+		} else if (!_resource.isAvailable) {
+			result = NTFS_IO;
+		}
+	}
+	if (result != NTFS_OK) {
+		ntfs_reparse_close(snapshot);
+		ntfs_node_close(node);
+		*error = ntfs_error(result);
+		return nil;
 	}
 	item = [_items objectForKey:@(stat.reference)];
 	if (item != nil) {
+		ntfs_reparse_close(snapshot);
 		ntfs_node_close(node);
-		if (stat.directory && item->parentReference != parentReference) {
+		if (path != nil && item->parentReference != parentReference) {
 			*error = ntfs_error(NTFS_CORRUPT);
+			return nil;
+		}
+		if (stat.reparse && ![item->linkTarget.data isEqualToData:target.data]) {
+			/* One native inode cannot cache different projected readlink bytes
+			 * for distinct hard-link edges. Preserve explicit ambiguity. */
+			*error = ntfs_error(NTFS_UNSUPPORTED);
 			return nil;
 		}
 		return item;
 	}
 	if (_items.count >= NTFS_FSKIT_ITEM_LIMIT) {
+		ntfs_reparse_close(snapshot);
 		ntfs_node_close(node);
 		*error = ntfs_error(NTFS_NO_MEMORY);
 		return nil;
@@ -392,7 +478,10 @@ item_id(uint64_t reference)
 	item = [[NTFSItem alloc] init];
 	item->node = node;
 	item->stat = stat;
-	item->parentReference = stat.directory ? parentReference : 0;
+	item->parentReference = path != nil ? parentReference : 0;
+	item->directoryPath = path;
+	item->reparse = snapshot;
+	item->linkTarget = target;
 	item.owner = self;
 	[_items setObject:item forKey:@(stat.reference)];
 	return item;
@@ -400,9 +489,16 @@ item_id(uint64_t reference)
 
 - (FSItem *)activate:(NSError **)error
 {
+	return [self activateWithOptions:nil error:error];
+}
+
+- (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error
+{
 	struct ntfs_node *root = NULL;
+	struct ntfs_info info;
 	enum ntfs_result result;
 	NTFSItem *item;
+	NTFSLinkPolicy *policy;
 	NTFSVolumeLifecycle state;
 
 	*error = nil;
@@ -416,12 +512,27 @@ item_id(uint64_t reference)
 			*error = ntfs_error(NTFS_IO);
 			return nil;
 		}
+		ntfs_get_info(_core, &info);
+		result = ntfs_native_link_policy(info.serial, options.taskOptions, &policy);
+		if (result == NTFS_OK && policy.windowsRoots.count != 0) {
+			if (state == NTFSVolumeLoaded && _linkPolicy.windowsRoots.count == 0) {
+				_linkPolicy = policy;
+			} else if (![[NSSet setWithArray:policy.windowsRoots]
+				       isEqualToSet:[NSSet
+							setWithArray:_linkPolicy.windowsRoots]]) {
+				result = NTFS_INVALID;
+			}
+		}
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
 		result = ntfs_root(_core, &root);
 		if (result != NTFS_OK) {
 			*error = ntfs_error(result);
 			return nil;
 		}
-		item = [self adoptNode:root parentReference:0 error:error];
+		item = [self adoptNode:root parentReference:0 containingPath:nil error:error];
 		if (item != nil) {
 			[_lifecycleLock lock];
 			if (_lifecycle == NTFSVolumeLoaded || _lifecycle == NTFSVolumeActive) {
@@ -463,6 +574,10 @@ item_id(uint64_t reference)
 		parent = [self checkedItem:directory];
 		if (parent == nil) {
 			*error = ntfs_error(NTFS_STALE);
+			return nil;
+		}
+		if (parent->directoryPath == nil) {
+			*error = ntfs_error(NTFS_NOT_DIRECTORY);
 			return nil;
 		}
 		if (name.data.length > NTFS_FSKIT_NATIVE_NAME_BYTES) {
@@ -520,7 +635,10 @@ item_id(uint64_t reference)
 			*error = ntfs_error(result);
 			return nil;
 		}
-		parent = [self adoptNode:node parentReference:entry.parent_reference error:error];
+		parent = [self adoptNode:node
+			 parentReference:entry.parent_reference
+			  containingPath:parent->directoryPath
+				   error:error];
 		if (parent == nil) {
 			*stored = nil;
 		}
@@ -557,8 +675,10 @@ item_id(uint64_t reference)
 	 * translation is a separate, unaccepted contract. */
 	attrs.uid = geteuid();
 	attrs.gid = getegid();
-	attrs.mode = stat->directory ? NTFS_READ_ONLY_DIRECTORY_MODE : NTFS_READ_ONLY_FILE_MODE;
-	attrs.type = stat->directory ? FSItemTypeDirectory : FSItemTypeFile;
+	attrs.mode = stat->directory && !stat->reparse ? NTFS_READ_ONLY_DIRECTORY_MODE
+						       : NTFS_READ_ONLY_FILE_MODE;
+	attrs.type = stat->reparse ? FSItemTypeSymlink
+				   : (stat->directory ? FSItemTypeDirectory : FSItemTypeFile);
 	attrs.fileID = item_id(stat->reference);
 	attrs.linkCount = stat->links;
 	attrs.size = stat->size;
@@ -569,6 +689,31 @@ item_id(uint64_t reference)
 	attrs.changeTime = (struct timespec){stat->changed.seconds, stat->changed.nanoseconds};
 	attrs.accessTime = (struct timespec){stat->accessed.seconds, stat->accessed.nanoseconds};
 	return attrs;
+}
+
+- (FSFileName *)symbolicLink:(FSItem *)item error:(NSError **)error
+{
+	NTFSItem *value;
+	enum ntfs_result result;
+
+	*error = nil;
+	@synchronized(self) {
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		value = [self checkedItem:item];
+		if (value == nil) {
+			*error = ntfs_error(NTFS_STALE);
+			return nil;
+		}
+		if (value->linkTarget == nil) {
+			*error = ntfs_error(NTFS_INVALID);
+			return nil;
+		}
+		return value->linkTarget;
+	}
 }
 
 - (enum ntfs_result)readItem:(FSItem *)item
@@ -592,6 +737,9 @@ item_id(uint64_t reference)
 		}
 		if (offset < 0) {
 			return NTFS_INVALID;
+		}
+		if (value->linkTarget != nil) {
+			return NTFS_UNSUPPORTED;
 		}
 		if (value->stream == NULL) {
 			result = ntfs_stream_open(value->node, NULL, 0, &value->stream);
@@ -650,6 +798,9 @@ item_id(uint64_t reference)
 		if (value == nil) {
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
+		}
+		if (value->linkTarget != nil) {
+			return @[ [FSFileName nameWithString:reparseAttributeName] ];
 		}
 		catalog = [self catalogForItem:value error:error];
 		if (catalog == NULL) {
@@ -746,7 +897,7 @@ item_id(uint64_t reference)
 	NSData *manifest;
 	uint64_t size;
 	uint32_t index = 0;
-	size_t completed = 0;
+	size_t completed = 0, reparseSize = 0;
 	enum ntfs_result result;
 
 	*error = nil;
@@ -760,6 +911,36 @@ item_id(uint64_t reference)
 		if (value == nil) {
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
+		}
+		if (value->linkTarget != nil) {
+			if (![name.data
+				isEqualToData:[FSFileName nameWithString:reparseAttributeName]
+						  .data]) {
+				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+							     code:ENOATTR
+							 userInfo:nil];
+				return nil;
+			}
+			result = NTFS_OK;
+			if (value->reparse == NULL) {
+				result = ntfs_reparse_open(value->node, &value->reparse);
+			}
+			if (result == NTFS_OK) {
+				result = ntfs_reparse_bytes(value->reparse, NULL, 0, &reparseSize);
+				if (result == NTFS_RANGE) {
+					data = [NSMutableData dataWithLength:reparseSize];
+					result = ntfs_reparse_bytes(value->reparse,
+					    data.mutableBytes, data.length, &reparseSize);
+				}
+			}
+			if (result == NTFS_OK) {
+				result = [self admissionResult];
+			}
+			if (result != NTFS_OK) {
+				*error = ntfs_error(result);
+				return nil;
+			}
+			return data;
 		}
 		if ([name.data isEqualToData:[FSFileName nameWithString:namesManifestName].data] ||
 		    ordinal_xattr_index(name, nameEntryPrefix, &index)) {
@@ -856,9 +1037,13 @@ item_id(uint64_t reference)
 {
 	NTFSItem *item;
 	struct ntfs_node *node = NULL;
+	struct ntfs_reparse *snapshot = NULL;
 	struct ntfs_stat stat;
+	struct ntfs_reparse_info reparseInfo;
 	FSFileName *name;
 	FSItemAttributes *attrs;
+	FSItemType type;
+	FSFileName *target;
 	BOOL projected, packed;
 	uint64_t requestedPosition, reference, maximumPosition;
 	enum ntfs_result result;
@@ -872,7 +1057,7 @@ item_id(uint64_t reference)
 		if (item == nil) {
 			return ntfs_error(NTFS_STALE);
 		}
-		if (!item->stat.directory) {
+		if (item->directoryPath == nil) {
 			return ntfs_error(NTFS_NOT_DIRECTORY);
 		}
 		requestedPosition = cookie & ~namesOnlyCookieTag;
@@ -966,21 +1151,59 @@ item_id(uint64_t reference)
 				return ntfs_error(result);
 			}
 			attrs = nil;
-			if (attributes) {
+			/* The index's cached attributes cannot distinguish a native link
+			 * from opaque provider data. Classify checked base metadata in both
+			 * views; only the attribute-requested view requires complete sizes. */
+			{
 				result = ntfs_node_open(_core, item->pendingEntry.reference, &node);
 				if (result != NTFS_OK) {
 					return ntfs_error(result);
 				}
-				result = ntfs_node_stat(node, &stat);
+				result = attributes ? ntfs_node_stat(node, &stat)
+						    : ntfs_node_metadata(node, &stat);
+				type = FSItemTypeUnknown;
+				if (result == NTFS_OK && stat.reparse) {
+					result = ntfs_reparse_open(node, &snapshot);
+					if (result == NTFS_OK) {
+						ntfs_reparse_get_info(snapshot, &reparseInfo);
+						if (reparseInfo.kind == NTFS_REPARSE_SYMLINK ||
+						    reparseInfo.kind == NTFS_REPARSE_MOUNT_POINT) {
+							type = FSItemTypeSymlink;
+						}
+						if (attributes) {
+							result = stat.links != 1
+							    ? NTFS_UNSUPPORTED
+							    : ntfs_native_link_target(_core,
+								  snapshot, item->directoryPath,
+								  _linkPolicy,
+								  _maximumDirectoryEntries,
+								  &target);
+							if (result == NTFS_OK) {
+								stat.size = target.data.length;
+								stat.allocated_size =
+								    ntfs_reparse_allocated_size(
+									snapshot);
+							}
+						}
+					}
+					if (!attributes &&
+					    (result == NTFS_UNSUPPORTED || result == NTFS_RANGE)) {
+						result = NTFS_OK;
+					}
+				} else if (result == NTFS_OK) {
+					type =
+					    stat.directory ? FSItemTypeDirectory : FSItemTypeFile;
+				}
+				ntfs_reparse_close(snapshot);
+				snapshot = NULL;
 				ntfs_node_close(node);
 				node = NULL;
 				if (result != NTFS_OK) {
 					return ntfs_error(result);
 				}
-				if (stat.reparse) {
-					return ntfs_error(NTFS_UNSUPPORTED);
+				if (attributes) {
+					attrs = [self attributesForStat:&stat];
 				}
-				attrs = [self attributesForStat:&stat];
 			}
 			result = [self admissionResult];
 			if (result != NTFS_OK) {
@@ -988,10 +1211,7 @@ item_id(uint64_t reference)
 			}
 			packed = [packer
 			    packEntryWithName:name
-				     itemType:(item->pendingEntry.file_attributes &
-						  NTFS_FILE_ATTRIBUTE_DIRECTORY)
-				? FSItemTypeDirectory
-				: FSItemTypeFile
+				     itemType:type
 				       itemID:item_id(item->pendingEntry.reference)
 				   nextCookie:directory_cookie(item->position + 1, attributes)
 				   attributes:attrs];
@@ -1114,6 +1334,7 @@ item_id(uint64_t reference)
 	FSVolumeSupportedCapabilities *caps = [[FSVolumeSupportedCapabilities alloc] init];
 
 	caps.supportsPersistentObjectIDs = YES;
+	caps.supportsSymbolicLinks = YES;
 	caps.supports64BitObjectIDs = YES;
 	caps.supportsSparseFiles = YES;
 	caps.supportsZeroRuns = YES;

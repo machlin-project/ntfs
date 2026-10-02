@@ -58,7 +58,8 @@ static NSString *const streamManifest = @"org.machlin.ntfs.streams";
 	       nextCookie:(FSDirectoryCookie)cookie
 	       attributes:(FSItemAttributes *)attributes
 {
-	assert(type == FSItemTypeFile || type == FSItemTypeDirectory);
+	assert(type == FSItemTypeFile || type == FSItemTypeDirectory || type == FSItemTypeSymlink ||
+	    type == FSItemTypeUnknown);
 	assert(itemID != FSItemIDInvalid && cookie != FSDirectoryCookieInitial);
 	if (self.expectsAttributes) {
 		assert(attributes != nil && attributes.type == type && attributes.fileID == itemID);

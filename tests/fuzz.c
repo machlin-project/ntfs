@@ -18,7 +18,8 @@ enum {
 	FUZZ_STREAM_NAMES = 32,
 	FUZZ_MUTATIONS = 2000,
 	FUZZ_MUTATION_REGION = 512 * 1024,
-	FUZZ_BITS_PER_BYTE = 8
+	FUZZ_BITS_PER_BYTE = 8,
+	FUZZ_COPY_GUARD = 0xa6
 };
 
 /* Fixed Numerical Recipes LCG parameters make smoke mutations reproducible. */
@@ -42,10 +43,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	struct ntfs_security *security = NULL;
 	struct ntfs_stream_name stream_name;
 	struct ntfs_reparse_info reparse_info;
+	struct ntfs_reparse_info copied_reparse_info;
 	struct ntfs_dirent entry;
 	uint8_t buffer[FUZZ_READ_BUFFER_BYTES];
 	uint16_t reparse_name[FUZZ_REPARSE_NAME_UNITS];
-	size_t i, j, count;
+	size_t i, j, count, required;
+	enum ntfs_result result;
 
 	(void)ntfs_reparse_decode(data, size, &reparse_info);
 	if (ntfs_mount(&env, &limits, &v) == NTFS_OK && ntfs_root(v, &root) == NTFS_OK &&
@@ -79,6 +82,25 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 				}
 				if (ntfs_reparse_open(node, &reparse) == NTFS_OK) {
 					ntfs_reparse_get_info(reparse, &reparse_info);
+					assert(ntfs_reparse_bytes(reparse, NULL, 0, &required) ==
+						NTFS_RANGE &&
+					    required != 0);
+					memset(buffer, FUZZ_COPY_GUARD, sizeof(buffer));
+					result = ntfs_reparse_bytes(
+					    reparse, buffer, sizeof(buffer) - 1, &count);
+					assert(count == required);
+					if (result == NTFS_OK) {
+						assert(ntfs_reparse_decode(buffer, count,
+							   &copied_reparse_info) == NTFS_OK &&
+						    memcmp(&reparse_info, &copied_reparse_info,
+							sizeof(reparse_info)) == 0);
+					} else {
+						assert(result == NTFS_RANGE);
+					}
+					for (j = result == NTFS_OK ? count : 0; j < sizeof(buffer);
+					    j++) {
+						assert(buffer[j] == FUZZ_COPY_GUARD);
+					}
 					(void)ntfs_reparse_name(reparse,
 					    NTFS_REPARSE_SUBSTITUTE_NAME, reparse_name,
 					    FUZZ_REPARSE_NAME_UNITS, &count);

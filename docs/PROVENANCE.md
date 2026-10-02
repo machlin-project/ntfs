@@ -26,6 +26,12 @@ Primary references:
 - [ACL packet representation](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/20233ed8-a6c6-4097-aafa-dd545ed24428)
 - [ACE packet framing and trailing bytes](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/628ebb1d-c509-4ea0-a10f-77ef97ca4586)
 - [Object ACE fields](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-access_allowed_object_ace)
+- [Ordered discretionary access checks](https://learn.microsoft.com/en-us/windows/win32/secauthz/how-dacls-control-access-to-an-object)
+- [AccessCheck inputs and exact granted mask](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-accesscheck)
+- [File access rights and generic mappings](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights)
+- [Token group attributes](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_groups)
+- [Restricted token creation and two-check semantics](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-createrestrictedtoken)
+- [OWNER RIGHTS and well-known identities](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers)
 - [Volume read-only flag](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getvolumeinformationa)
 - [NTFS native volume geometry](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-ntfs_volume_data_buffer)
 - [Native file information and hard-link identity](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information)
@@ -77,6 +83,15 @@ resident. Observed NTFS-3G images establish both indexed storage and nonresident
 per-file descriptors. Original search, ownership, bounds and fixtures remain
 repository-owned; the failed oracle runs are retained rather than converted to
 passes. Actual Windows storage and authorization qualification remain required.
+
+The discretionary evaluator uses Microsoft's ordered DACL, exact file mapping,
+SID/group attribute and restricted-token descriptions. It is original code;
+its independent per-right test oracle is not a port of a filesystem/security
+implementation. Owner control grants and OWNER RIGHTS are a separate policy from
+data-read grants. Restricted-owner combinations remain explicitly unsupported
+pending native observations; ambiguous pseudocode is not used to invent grants.
+SACL/integrity/privilege/advanced ACE policy and native enforcement remain open.
+No native AccessCheck comparisons have executed at this checkpoint.
 
 No Linux ntfs3, ntfs-3g or proprietary driver source is copied into or linked with
 this implementation. Separately built ntfs-3g utilities may generate and inspect

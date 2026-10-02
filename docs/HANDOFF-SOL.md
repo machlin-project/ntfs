@@ -175,17 +175,31 @@ and storage limits. Real external images require nonresident per-file storage
 despite an old format note claiming it is always resident. Preserve explicit
 source selection and never fall back from a damaged nonzero security ID.
 SECURITY.md defines the API, budgets and remaining contracts. Identity mapping,
-token decisions and native authorization are still needed; parser/resolver
+full security decisions and native authorization are still needed; parser/resolver
 success grants no access and does not interpret callback conditions.
 
-The current 24-suite sanitized checkpoint, freestanding check, expanded
+`ntfs/access.h` now provides a separate allocation-free DACL plane with exact file
+generic mappings, plain original-order allow/deny ACEs, ordinary owner/OWNER RIGHTS
+and enabled/disabled/deny-only/restricting token contexts. Both checks share one
+SID-comparison budget and every error/denial has zero grant. Storage snapshots
+can be evaluated without copying or I/O after node close. ACCESS.md defines
+supported contracts and explicit unsupported restricted ownership, advanced ACEs,
+SACL/integrity/privileges, maximum access and remaining native identity/operation
+policy. An allowed discretionary result is not complete authorization.
+
+The current 26-suite sanitized checkpoint, freestanding check, expanded
 FSKit component tests and unsigned app build pass. Security storage adds
 74 contracts and 262 allocation/191 I/O failure positions with retry/exact release.
 Four external geometries provide 24 original descriptor-byte/ID comparisons and
 unchanged images. The latest image fuzz campaign completed 47,915 executions in
 61 seconds with reported peak RSS 901 MiB and no finding. Earlier failed format
 assumptions remain recorded in acceptance. Windows and installed authorization
-remain unqualified. `ntfs-workload` and `scripts/benchmark.py` add repeated
+remain unqualified. The DACL suite adds 196,809 decisions including 196,608
+independent per-right token oracles; its separate descriptor/context fuzz campaign
+passed 14,450,666 executions in 61 seconds with peak RSS 489 MiB and no finding.
+The earlier wrong owner-read test expectation remains in the failed focused log;
+the corrected case verifies owner control rights separately from the allow trustee.
+`ntfs-workload` and `scripts/benchmark.py` add repeated
 POSIX/memory profiles with original-byte and image-integrity checks. Live-node
 metadata reuse removes repeated presence-validation allocations and has a measured
 benefit for the attribute-list open workload; data-read measurements are mixed.
@@ -219,7 +233,9 @@ native acceptance.
    items. Do not expose encoded data as ordinary file content or turn every tag
    into a symlink.
 7. Extend security storage to whole-store consistency and Windows qualification;
-   implement token/identity contracts and an owning authorization policy.
+   qualify the DACL plane against Windows AccessCheck and implement restricted
+   ownership, advanced ACE/SACL/privilege policy, identity mapping and owning
+   authorization. Preserve explicit unsupported returns until those contracts pass.
    Current mode/UID/GID are a single-user read-only presentation, not
    Windows ACL enforcement. EFS and native Windows ACL translation remain absent;
    the read-only ADS xattr projection is separately defined in NATIVE-NAMESPACE.md.

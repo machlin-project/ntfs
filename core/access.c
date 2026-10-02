@@ -1,0 +1,325 @@
+/* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "internal.h"
+#include <ntfs/access.h>
+
+enum { OWNER_RIGHTS_AUTHORITY = 3, OWNER_RIGHTS_RID = 4 };
+
+#define SID_AUTHORITY_MAX UINT64_C(0xffffffffffff)
+#define OWNER_IMPLIED_ACCESS (NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC)
+#define GROUP_ATTRIBUTES                                                                           \
+	(NTFS_GROUP_MANDATORY | NTFS_GROUP_ENABLED_BY_DEFAULT | NTFS_GROUP_ENABLED |               \
+	    NTFS_GROUP_OWNER | NTFS_GROUP_DENY_ONLY | NTFS_GROUP_RESOURCE | NTFS_GROUP_LOGON_ID)
+#define APPLICABLE_ACE_FLAGS                                                                       \
+	(NTFS_ACE_OBJECT_INHERIT | NTFS_ACE_CONTAINER_INHERIT | NTFS_ACE_NO_PROPAGATE |            \
+	    NTFS_ACE_INHERITED)
+
+struct dacl_work {
+	const struct ntfs_access_token *token;
+	uint32_t comparisons, maximum;
+};
+
+uint32_t
+ntfs_file_map_rights(uint32_t mask)
+{
+	uint32_t result = mask &
+	    ~(NTFS_ACCESS_GENERIC_READ | NTFS_ACCESS_GENERIC_WRITE | NTFS_ACCESS_GENERIC_EXECUTE |
+		NTFS_ACCESS_GENERIC_ALL);
+
+	if ((mask & NTFS_ACCESS_GENERIC_READ) != 0) {
+		result |= NTFS_FILE_GENERIC_READ;
+	}
+	if ((mask & NTFS_ACCESS_GENERIC_WRITE) != 0) {
+		result |= NTFS_FILE_GENERIC_WRITE;
+	}
+	if ((mask & NTFS_ACCESS_GENERIC_EXECUTE) != 0) {
+		result |= NTFS_FILE_GENERIC_EXECUTE;
+	}
+	if ((mask & NTFS_ACCESS_GENERIC_ALL) != 0) {
+		result |= NTFS_FILE_ALL_ACCESS;
+	}
+	return result;
+}
+
+void
+ntfs_dacl_default_limits(struct ntfs_dacl_limits *limits)
+{
+	if (limits != NULL) {
+		*limits = (struct ntfs_dacl_limits){
+		    NTFS_ACCESS_MAX_SIDS, NTFS_ACCESS_DEFAULT_COMPARISONS};
+	}
+}
+
+static bool
+valid_sid(const struct ntfs_sid *sid)
+{
+	return sid->authority <= SID_AUTHORITY_MAX && sid->count <= NTFS_SID_MAX_SUBAUTHORITIES;
+}
+
+static bool
+owner_rights_sid(const struct ntfs_sid *sid)
+{
+	return sid->authority == OWNER_RIGHTS_AUTHORITY && sid->count == 1 &&
+	    sid->subauthorities[0] == OWNER_RIGHTS_RID;
+}
+
+static enum ntfs_result
+validate_token(const struct ntfs_access_token *token, const struct ntfs_dacl_limits *limits)
+{
+	size_t i;
+	uint32_t flags;
+
+	if (token == NULL || !valid_sid(&token->user) ||
+	    (token->group_count != 0 && token->groups == NULL) ||
+	    (token->restricting_count != 0 && token->restricting == NULL) ||
+	    (!token->restricted && token->restricting_count != 0)) {
+		return NTFS_INVALID;
+	}
+	if (token->group_count > limits->max_sids || token->restricting_count > limits->max_sids) {
+		return NTFS_RANGE;
+	}
+	for (i = 0; i < token->group_count; i++) {
+		flags = token->groups[i].attributes;
+		if (!valid_sid(&token->groups[i].sid) ||
+		    (flags & (NTFS_GROUP_ENABLED | NTFS_GROUP_DENY_ONLY)) ==
+			(NTFS_GROUP_ENABLED | NTFS_GROUP_DENY_ONLY)) {
+			return NTFS_INVALID;
+		}
+		if ((flags & ~GROUP_ATTRIBUTES) != 0) {
+			return NTFS_UNSUPPORTED;
+		}
+	}
+	for (i = 0; i < token->restricting_count; i++) {
+		if (!valid_sid(&token->restricting[i])) {
+			return NTFS_INVALID;
+		}
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+compare_sid(struct dacl_work *work, const struct ntfs_sid *a, const struct ntfs_sid *b, bool *same)
+{
+	size_t i;
+
+	*same = false;
+	if (work->comparisons == work->maximum) {
+		return NTFS_RANGE;
+	}
+	work->comparisons++;
+	if (a->authority != b->authority || a->count != b->count) {
+		return NTFS_OK;
+	}
+	for (i = 0; i < a->count; i++) {
+		if (a->subauthorities[i] != b->subauthorities[i]) {
+			return NTFS_OK;
+		}
+	}
+	*same = true;
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+token_match(struct dacl_work *work, const struct ntfs_sid *sid, bool deny, bool ownership,
+    bool restricting, bool *match)
+{
+	const struct ntfs_access_token *token = work->token;
+	uint32_t flags;
+	size_t i;
+	enum ntfs_result result;
+
+	*match = false;
+	if (restricting) {
+		for (i = 0; i < token->restricting_count; i++) {
+			result = compare_sid(work, sid, &token->restricting[i], match);
+			if (result != NTFS_OK || *match) {
+				return result;
+			}
+		}
+		return NTFS_OK;
+	}
+	if (deny || !token->user_deny_only) {
+		result = compare_sid(work, sid, &token->user, match);
+		if (result != NTFS_OK || *match) {
+			return result;
+		}
+	}
+	for (i = 0; i < token->group_count; i++) {
+		flags = token->groups[i].attributes;
+		if ((flags & NTFS_GROUP_ENABLED) == 0 &&
+		    (!deny || (flags & NTFS_GROUP_DENY_ONLY) == 0)) {
+			continue;
+		}
+		if (ownership &&
+		    (flags & (NTFS_GROUP_OWNER | NTFS_GROUP_ENABLED)) !=
+			(NTFS_GROUP_OWNER | NTFS_GROUP_ENABLED)) {
+			continue;
+		}
+		result = compare_sid(work, sid, &token->groups[i].sid, match);
+		if (result != NTFS_OK || *match) {
+			return result;
+		}
+	}
+	return NTFS_OK;
+}
+
+/* Called only after the complete descriptor decoder has checked every span. */
+static enum ntfs_result
+next_ace(const uint8_t *bytes, size_t *position, struct ntfs_ace_info *ace)
+{
+	const struct ntfs_disk_ace *header = (const void *)(bytes + *position);
+	enum ntfs_result result;
+
+	result = ntfs_security_ace_decode(header, ntfs_u16(header->length), ace);
+	if (result == NTFS_OK) {
+		*position += ace->length;
+	}
+	return result;
+}
+
+static enum ntfs_result
+validate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, bool *owner_rights)
+{
+	struct ntfs_ace_info ace;
+	size_t position = acl->span.offset + sizeof(struct ntfs_disk_acl), i;
+	enum ntfs_result result;
+
+	*owner_rights = false;
+	for (i = 0; i < acl->entries; i++) {
+		result = next_ace(bytes, &position, &ace);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if ((ace.flags & NTFS_ACE_INHERIT_ONLY) != 0) {
+			continue;
+		}
+		if ((ace.type != NTFS_ACE_ALLOW && ace.type != NTFS_ACE_DENY) ||
+		    (ace.flags & ~APPLICABLE_ACE_FLAGS) != 0 ||
+		    (ntfs_file_map_rights(ace.mask) & ~NTFS_FILE_ALL_ACCESS) != 0) {
+			return NTFS_UNSUPPORTED;
+		}
+		*owner_rights |= owner_rights_sid(&ace.trustee);
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, struct dacl_work *work,
+    uint32_t requested, bool owner, bool restricting, bool *allowed)
+{
+	struct ntfs_ace_info ace;
+	size_t position = acl->span.offset + sizeof(struct ntfs_disk_acl), i;
+	uint32_t remaining = requested, mask;
+	bool match;
+	enum ntfs_result result;
+
+	*allowed = false;
+	if (acl->state == NTFS_ACL_ABSENT || acl->state == NTFS_ACL_NULL) {
+		*allowed = true;
+		return NTFS_OK;
+	}
+	for (i = 0; i < acl->entries && remaining != 0; i++) {
+		result = next_ace(bytes, &position, &ace);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if ((ace.flags & NTFS_ACE_INHERIT_ONLY) != 0) {
+			continue;
+		}
+		mask = ntfs_file_map_rights(ace.mask);
+		if ((mask & remaining) == 0) {
+			continue;
+		}
+		if (owner_rights_sid(&ace.trustee)) {
+			match = owner;
+		} else {
+			result = token_match(work, &ace.trustee, ace.type == NTFS_ACE_DENY, false,
+			    restricting, &match);
+			if (result != NTFS_OK) {
+				return result;
+			}
+		}
+		if (!match) {
+			continue;
+		}
+		if (ace.type == NTFS_ACE_DENY) {
+			return NTFS_OK;
+		}
+		remaining &= ~mask;
+	}
+	*allowed = remaining == 0;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_dacl_evaluate(const void *buffer, size_t size, const struct ntfs_access_token *token,
+    uint32_t desired, const struct ntfs_dacl_limits *limits, struct ntfs_dacl_decision *out)
+{
+	struct ntfs_security_info info;
+	struct ntfs_dacl_limits defaults;
+	struct dacl_work work = {.token = token};
+	struct ntfs_dacl_decision decision = {0};
+	uint32_t remaining;
+	bool owner, owner_rights;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (limits == NULL) {
+		ntfs_dacl_default_limits(&defaults);
+		limits = &defaults;
+	}
+	if (limits->max_sids == 0 || limits->max_sids > NTFS_ACCESS_MAX_SIDS ||
+	    limits->max_sid_comparisons == 0 ||
+	    limits->max_sid_comparisons > NTFS_ACCESS_MAX_COMPARISONS) {
+		return NTFS_INVALID;
+	}
+	result = validate_token(token, limits);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	decision.requested = ntfs_file_map_rights(desired);
+	if ((decision.requested & ~NTFS_FILE_ALL_ACCESS) != 0) {
+		return NTFS_UNSUPPORTED;
+	}
+	result = ntfs_security_decode(buffer, size, &info);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (info.owner_span.length == 0 || info.group_span.length == 0) {
+		return NTFS_CORRUPT;
+	}
+	result = validate_dacl(buffer, &info.dacl, &owner_rights);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	work.maximum = limits->max_sid_comparisons;
+	result = token_match(&work, &info.owner, false, true, false, &owner);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	remaining = decision.requested;
+	/* The exact interaction between restricted ownership and OWNER RIGHTS
+	 * needs independent Windows observations before native authorization. */
+	if (owner && token->restricted &&
+	    (owner_rights || (remaining & OWNER_IMPLIED_ACCESS) != 0)) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (owner && !owner_rights) {
+		remaining &= ~OWNER_IMPLIED_ACCESS;
+	}
+	result =
+	    evaluate_dacl(buffer, &info.dacl, &work, remaining, owner, false, &decision.allowed);
+	if (result == NTFS_OK && decision.allowed && token->restricted) {
+		result = evaluate_dacl(
+		    buffer, &info.dacl, &work, remaining, false, true, &decision.allowed);
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	decision.granted = decision.allowed ? decision.requested : 0;
+	decision.sid_comparisons = work.comparisons;
+	*out = decision;
+	return NTFS_OK;
+}

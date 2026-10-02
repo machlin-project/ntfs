@@ -195,6 +195,19 @@ struct ntfs_disk_security_descriptor {
 	uint8_t sacl[sizeof(uint32_t)], dacl[sizeof(uint32_t)];
 };
 
+struct ntfs_disk_sid {
+	uint8_t revision, count, authority[6];
+};
+
+struct ntfs_disk_acl {
+	uint8_t revision, reserved1, length[sizeof(uint16_t)];
+	uint8_t count[sizeof(uint16_t)], reserved2[sizeof(uint16_t)];
+};
+
+struct ntfs_disk_ace {
+	uint8_t type, flags, length[sizeof(uint16_t)];
+};
+
 struct ntfs_disk_reparse {
 	uint8_t tag[4], length[2], reserved[2];
 };
@@ -228,6 +241,9 @@ _Static_assert(sizeof(struct ntfs_disk_security_locator) == 20, "SDS locator lay
 _Static_assert(sizeof(struct ntfs_disk_security_hash_key) == 8, "SDH key layout");
 _Static_assert(
     sizeof(struct ntfs_disk_security_descriptor) == 20, "self-relative descriptor header");
+_Static_assert(sizeof(struct ntfs_disk_sid) == 8, "SID header");
+_Static_assert(sizeof(struct ntfs_disk_acl) == 8, "ACL header");
+_Static_assert(sizeof(struct ntfs_disk_ace) == 4, "ACE header");
 _Static_assert(sizeof(struct ntfs_disk_reparse) == 8, "reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_reparse_guid) == 24, "GUID reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_reparse_names) == 8, "mount point payload header");

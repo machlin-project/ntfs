@@ -97,8 +97,13 @@ a native identity or access grant. The resolver now owns bounded immutable
 snapshots from `$Secure` or per-file descriptor attributes, independently of file
 content. It checks both indexes and SDS copies, reuses one block buffer and
 retains original bytes. Source selection, budgets and evidence are defined in
-SECURITY.md. Token evaluation, identity mapping and owning native authorization
-remain separate incomplete contracts.
+SECURITY.md. A separate allocation-free discretionary evaluator uses immutable
+caller-owned user/group/restricting contexts, preserves plain ACE order and exact
+file-right mappings, and returns no partial grant on denial/error. It checks all
+applicable DACL features before deciding and shares a bounded SID-comparison
+budget across ownership and both token contexts. ACCESS.md defines supported
+ownership and explicit unsupported cases. Full token/security policy, identity
+mapping and owning native authorization remain incomplete contracts.
 
 Directory enumeration owns an explicit stack of at most 32 index frames, a
 bounded hash set of visited child VCNs and a persistent in-order cursor. Lookup

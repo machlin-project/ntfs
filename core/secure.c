@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
-#include <ntfs/security.h>
+#include <ntfs/access.h>
 
 struct ntfs_security {
 	struct ntfs_volume *volume;
@@ -614,4 +614,18 @@ ntfs_security_copy(
 	}
 	ntfs_copy(buffer, snapshot->bytes, snapshot->size);
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_security_evaluate_dacl(const struct ntfs_security *snapshot,
+    const struct ntfs_access_token *token, uint32_t desired, const struct ntfs_dacl_limits *limits,
+    struct ntfs_dacl_decision *out)
+{
+	if (snapshot == NULL) {
+		if (out != NULL) {
+			ntfs_zero(out, sizeof(*out));
+		}
+		return NTFS_INVALID;
+	}
+	return ntfs_dacl_evaluate(snapshot->bytes, snapshot->size, token, desired, limits, out);
 }

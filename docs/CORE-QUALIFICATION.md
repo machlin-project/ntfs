@@ -7,11 +7,11 @@ boundaries when updating ACCEPTANCE.md and HANDOFF-SOL.md.
 
 | Required outcome | Current implementation and evidence | Work remaining |
 | --- | --- | --- |
-| Independent corpus and sustained fuzzing | Windows-only read-only collector; local manifest verifier and synthetic acquisition/UTF-16/hard-link regressions; separate image, mapping-pair, attribute-list, index-root/block, LZNT1, reparse and security fuzz targets; FILE/INDX fixup-preserving image mutations | Execute acquisition on a Windows machine; extend expected-operation observations; use Windows seeds and longer scheduled campaigns; reduce every found defect to a retained regression |
+| Independent corpus and sustained fuzzing | Windows-only read-only collector; local manifest verifier and synthetic acquisition/UTF-16/hard-link regressions; separate image, mapping-pair, attribute-list, index-root/block, LZNT1, reparse, security and DACL/token fuzz targets; FILE/INDX fixup-preserving image mutations | Execute acquisition on a Windows machine; extend expected-operation observations; use Windows seeds and longer scheduled campaigns; reduce every found defect to a retained regression |
 | Metadata consistency and corruption diagnosis | Existing fragmented-MFT/continuation/index/stream tests and allocation/read sweeps; cached metadata validates before publication and retries failures | Read-only validator for reference, allocation and namespace consistency; per-operation I/O/work budgets; real fragmented and large-directory corpus |
 | Names, hard links, streams | Reference-addressed inspector preserves UTF-16 code units; bounded ADS catalog/xattrs; reversible bounded FSKit filename aliases and raw per-link manifests; hard-link identity, Unicode, response/scan budgets and fault sweeps pass component tests | Installed filename/ADS and unsupported-object flows; per-directory case-sensitive lookup and qualification; native normalization behavior |
 | Links and special data | Reparse snapshots and symlink/junction names are lossless in core; filter-owned ordinary data/traversal remain rejected | FSKit symlink operations and explicit path/volume translation; WOF file-provider framing, chunk tables and XPRESS/LZX; provider-specific cloud/unknown/EFS policies |
-| Security | Original descriptor/SID/ACL/ACE parser and bounded immutable resolver for `$Secure` and per-file attributes; distinct absent/NULL/empty ACLs, checked index paths/hash/copies, corruption/fault vectors and four external image geometries | Whole-store consistency and Windows-authored qualification; token/access contracts and Windows-to-native identity policy; integrate owning authorization |
+| Security | Original descriptor/SID/ACL/ACE parser and bounded immutable resolver for `$Secure` and per-file attributes; distinct absent/NULL/empty ACLs, checked index paths/hash/copies and four external image geometries; bounded ordered DACL evaluator with exact generic mappings, ordinary ownership and deny-only/restricting contexts, 196,608 independent per-right oracles | Whole-store/Windows qualification; native AccessCheck comparisons, restricted ownership, advanced ACE/SACL/privilege/maximum-access policy and Windows-to-native identities; integrate owning authorization |
 | FSKit lifecycle and interoperability | Existing retained owner, permanent revocation, counted objects and externally serialized component tests; cache change passes cached-operation revocation tests | Cancellation/late-callback/exactly-once tests, revoke/unmount during a blocked read, interleaved enumeration and exhaustion; links/ADS/unsupported-object flows; legacy and modern runtime acceptance |
 | Recovery and release processes | No write callback; native recovery contract in WRITES.md; private CI workflow and provenance | Read-only `$LogFile` decoder, transaction/crash/durability simulator, reproducible-build checks and diagnostics; actual private CI execution and later native Windows recovery acceptance |
 
@@ -65,7 +65,9 @@ not the Win32 calls or Windows-authored on-disk features. NTFS-3G utilities are
 independent external image/oracle tools, not linked product code. Parser fuzzing
 checks bounded hostile inputs, not exhaustive semantic compatibility. The security
 parser preserves checked spans and values; it does not make access decisions or
-validate application-specific callback conditions.
+validate application-specific callback conditions. The separate DACL evaluator
+has synthetic decision and bounded context-fuzz evidence; that does not close
+full Windows/native authorization. ACCESS.md retains its unsupported policies.
 
 Every continuation must retain its full scope. Focused commits are checkpoints;
 the rows above cannot be closed by shrinking them to already passing tests.

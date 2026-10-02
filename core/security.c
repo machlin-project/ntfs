@@ -7,31 +7,13 @@ enum {
 	SECURITY_SID_REVISION = 1,
 	SECURITY_ACL_REVISION = 2,
 	SECURITY_ACL_OBJECT_REVISION = 4,
-	SECURITY_DWORD_ALIGNMENT = sizeof(uint32_t),
-	SECURITY_AUTHORITY_BYTES = 6
+	SECURITY_DWORD_ALIGNMENT = sizeof(uint32_t)
 };
-
-struct disk_sid {
-	uint8_t revision, count, authority[SECURITY_AUTHORITY_BYTES];
-};
-
-struct disk_acl {
-	uint8_t revision, reserved1, length[sizeof(uint16_t)];
-	uint8_t count[sizeof(uint16_t)], reserved2[sizeof(uint16_t)];
-};
-
-struct disk_ace {
-	uint8_t type, flags, length[sizeof(uint16_t)];
-};
-
-_Static_assert(sizeof(struct disk_sid) == 8, "SID header");
-_Static_assert(sizeof(struct disk_acl) == 8, "ACL header");
-_Static_assert(sizeof(struct disk_ace) == 4, "ACE header");
 
 static enum ntfs_result
 decode_sid(const uint8_t *bytes, size_t available, struct ntfs_sid *sid, uint32_t *length)
 {
-	const struct disk_sid *header;
+	const struct ntfs_disk_sid *header;
 	size_t size, i;
 
 	if (available < sizeof(*header)) {
@@ -88,7 +70,7 @@ enum ntfs_result
 ntfs_security_ace_decode(const void *buffer, size_t size, struct ntfs_ace_info *out)
 {
 	const uint8_t *bytes = buffer;
-	const struct disk_ace *header = buffer;
+	const struct ntfs_disk_ace *header = buffer;
 	struct ntfs_ace_info info = {0};
 	size_t position;
 	enum ntfs_result result;
@@ -168,8 +150,8 @@ static enum ntfs_result
 decode_acl(
     const uint8_t *bytes, size_t size, uint32_t offset, bool present, struct ntfs_acl_info *info)
 {
-	const struct disk_acl *header;
-	const struct disk_ace *entry;
+	const struct ntfs_disk_acl *header;
+	const struct ntfs_disk_ace *entry;
 	struct ntfs_ace_info ace;
 	size_t position, length, i;
 	enum ntfs_result result;

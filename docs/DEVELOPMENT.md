@@ -22,10 +22,14 @@ exercises the real adapter against a bounded fake resource in-process; it neithe
 mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds a
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
-Use `--target all` for the image and seven standalone parser targets, or select
-`mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`
-or `security`. The time budget applies per target. Each campaign retains its own
+Use `--target all` for the image and eight standalone parser/decision targets, or select
+`mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
+`security` or `access`. The time budget applies per target. Each campaign retains its own
 binary, log and report; persistent corpora remain under the selected `--output`.
+The `access` target independently mutates a descriptor/token envelope, including
+group attributes, user/restricting SIDs, requested rights and comparison limits.
+It asserts deterministic decisions, exact grants and zero error outputs. See
+ACCESS.md for the discretionary contract and remaining authorization policies.
 Image mutation can preserve FILE/INDX fixups and alter validated inner spans.
 The fuzzer authors 1-MiB physical images instead of retaining unused 8-MiB tails
 for every corpus entry. All fixture payload locations and large logical sparse

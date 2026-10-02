@@ -25,7 +25,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
 | Write/recovery | Native log, allocation, namespace transactions, crash matrix | Not implemented |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
-| Authorization and special data | Token/ACL decisions and identity mapping, reparse target resolution, EFS and WOF/cloud content decoding | Not implemented |
+| Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
+| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; reparse target resolution, EFS and WOF/cloud content | Not implemented |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
@@ -37,7 +38,7 @@ nine file hashes across all five layouts, ordering, case folding, ADS, four dama
 images and 31 additional format/continuation/rejection cases. Unsupported and corrupt
 inputs passing their rejection tests do not establish support for those layouts.
 
-The no-VM continuation now passes 23 sanitized suites, including six standalone
+An earlier no-VM checkpoint passed 23 sanitized suites, including six standalone
 parser mutation targets, corpus/workload contracts, metadata-cache fault/retry
 checks, security descriptor vectors and its standalone mutation target. Evidence
 is retained in `artifacts/plan-security-tests.log`. After reviewing reparse presence,
@@ -109,6 +110,28 @@ coverage values from separate bounded campaigns are not monotonic. Process RSS i
 image corpus; the separate core allocation budget remains 8 MiB. This is bounded
 local evidence, not Windows or installed authorization acceptance. SECURITY.md
 defines source selection, supported bounds and remaining security contracts.
+
+The discretionary evaluator subsequently passed all 26 sanitized suites,
+freestanding targets, style, FSKit components and unsigned source app build under
+`artifacts/plan-access-observed-*.log`. Its suite covers 196,809 decisions, including
+196,608 independent per-right ordered token oracles. Final review replaced its
+SACL vector with a real high-integrity SID and NO_READ_UP, then repeated the
+affected build/test/style under `artifacts/plan-access-review-*.log`. That vector
+proves the DACL-only boundary, not integrity enforcement. Final named-constant
+and seed cleanup passed all 26 suites and style again under
+`artifacts/plan-access-final-*.log`. Snapshot evaluation
+survives node close and performs no allocation/I/O under forced next-call faults.
+An earlier focused failure remains in `plan-access-focused.log`: the test
+incorrectly assumed ownership implied FILE_READ_DATA for the genuine collision
+descriptor. Corrected expectations distinguish implicit owner control rights
+from the original DACL trustee; no core grant policy was changed to pass it.
+
+The separate descriptor/token campaign completed 14,450,666 executions in
+61 seconds with coverage 436 and peak RSS 489 MiB, exit zero and no reported
+finding under `artifacts/fuzz-access-context/`. No Windows AccessCheck or installed
+native authorization was exercised. ACCESS.md defines exact masks, feature
+rejection, shared comparison budgets and the remaining restricted-owner,
+advanced-ACE, SACL/integrity/privilege, identity and native operation contracts.
 
 Before/after release matrices each retain 400 measurements, independent full
 stream-byte oracles and unchanged input hashes. Metadata reuse removes repeated

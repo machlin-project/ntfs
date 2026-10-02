@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include <ntfs/security.h>
+#include <ntfs/access.h>
 #include "fuzz_device.h"
 #include "fixture.h"
 #include <assert.h>
@@ -55,6 +55,8 @@ verify_snapshot(struct fuzz_device *device, struct ntfs_security *snapshot,
     const struct secure_case *test, const char *directory)
 {
 	struct ntfs_security_info info, decoded;
+	struct ntfs_access_token token = {0};
+	struct ntfs_dacl_decision decision, zero_decision = {0};
 	uint8_t *bytes, *expected;
 	char expected_name[sizeof("secure-expected/same-hash-4294967295.bin")];
 	size_t required, size, i, before_reads = device->reads,
@@ -108,6 +110,29 @@ verify_snapshot(struct fuzz_device *device, struct ntfs_security *snapshot,
 	assert(memcmp(&info, &decoded, sizeof(info)) == 0);
 	ntfs_security_get_info(snapshot, &decoded);
 	assert(memcmp(&info, &decoded, sizeof(info)) == 0);
+	token.user = info.owner;
+	if (info.owner_span.length != 0) {
+		assert(ntfs_security_evaluate_dacl(
+			   snapshot, &token, NTFS_FILE_READ_DATA, NULL, &decision) == NTFS_OK &&
+		    decision.allowed == !test->different_owner &&
+		    decision.granted == (test->different_owner ? 0 : NTFS_FILE_READ_DATA));
+		assert(ntfs_security_evaluate_dacl(snapshot, &token,
+			   NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC, NULL,
+			   &decision) == NTFS_OK &&
+		    decision.allowed);
+		token.user.subauthorities[0] = TEST_LOCAL_SYSTEM_RID;
+		assert(ntfs_security_evaluate_dacl(
+			   snapshot, &token, NTFS_FILE_READ_DATA, NULL, &decision) == NTFS_OK &&
+		    decision.allowed);
+	} else {
+		assert(ntfs_security_evaluate_dacl(
+			   snapshot, &token, NTFS_FILE_READ_DATA, NULL, &decision) == NTFS_CORRUPT);
+		assert(memcmp(&decision, &zero_decision, sizeof(decision)) == 0);
+	}
+	memset(&decision, TEST_CAPACITY_SENTINEL, sizeof(decision));
+	assert(ntfs_security_evaluate_dacl(NULL, &token, NTFS_FILE_READ_DATA, NULL, &decision) ==
+	    NTFS_INVALID);
+	assert(memcmp(&decision, &zero_decision, sizeof(decision)) == 0);
 	assert(ntfs_security_copy(snapshot, NULL, 1, &size) == NTFS_INVALID && size == 0);
 	assert(ntfs_security_copy(snapshot, bytes, required, NULL) == NTFS_INVALID);
 	assert(device->reads == before_reads && device->allocations == before_allocations);

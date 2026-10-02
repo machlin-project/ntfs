@@ -28,6 +28,13 @@ SECURITY_NT_AUTHORITY = 5
 SECURITY_BUILTIN_DOMAIN = 32
 SECURITY_BUILTIN_ADMINISTRATORS = 544
 SECURITY_FILE_READ_DATA = 0x00000001
+ACCESS_HEADER = struct.Struct('<IIBIIII')
+ACCESS_COMPARISON_BUDGET = 262144
+ACCESS_ENABLED = 0x00000004
+ACCESS_DENY_ONLY = 0x00000010
+ACCESS_RESTRICTED = 0x01
+ACCESS_USER_DENY_ONLY = 0x02
+ACCESS_UNRELATED_RID = 1001
 
 
 def security_seeds():
@@ -94,7 +101,21 @@ def generate(output):
         },
         'index-root': {},
         'security': security_seeds(),
+        'access': {},
     }
+    for name, descriptor in security_seeds().items():
+        if name.endswith('-ace'):
+            continue
+        for context, flags, attributes, user in (
+                ('owner', 0, ACCESS_ENABLED, SECURITY_BUILTIN_ADMINISTRATORS),
+                ('group', 0, ACCESS_ENABLED, ACCESS_UNRELATED_RID),
+                ('deny-only', ACCESS_USER_DENY_ONLY, ACCESS_DENY_ONLY, SECURITY_BUILTIN_ADMINISTRATORS),
+                ('restricted', ACCESS_RESTRICTED, ACCESS_ENABLED, ACCESS_UNRELATED_RID)):
+            # The harness interprets the comparison word as a zero-based budget.
+            header = ACCESS_HEADER.pack(SECURITY_FILE_READ_DATA, ACCESS_COMPARISON_BUDGET - 1, flags,
+                                        attributes, user, SECURITY_BUILTIN_ADMINISTRATORS,
+                                        SECURITY_BUILTIN_ADMINISTRATORS)
+            seeds['access'][f'{name}-{context}'] = header + descriptor
     for name, entries in (('empty', wire.entry()),
                           ('entries', wire.entry('hello.txt', wire.FILE_RECORDS['hello.txt']) + wire.entry()),
                           ('case-collision', wire.entry('HELLO.TXT', wire.FILE_RECORDS['fragmented.bin'], namespace=wire.NAMESPACE_POSIX) +

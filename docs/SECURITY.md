@@ -1,8 +1,9 @@
 # Read-only security metadata
 
 The core returns original self-relative security descriptors through
-`ntfs/security.h`. It validates storage and byte framing; it does not evaluate
-tokens, map Windows identities, grant access, or enforce native authorization.
+`ntfs/security.h`. Those APIs validate storage and byte framing; they do not map
+identities or grant access. The separate `ntfs/access.h` discretionary evaluator
+is defined in [ACCESS.md](ACCESS.md); it is not complete native authorization.
 FSKit still uses its documented single-user read-only development presentation.
 Do not expose that presentation as Windows ACL enforcement.
 
@@ -82,8 +83,10 @@ Native Windows acquisition is still required. The collector requests owner,
 group and DACL information; a Win32-returned descriptor can omit components or
 have a different self-relative placement from the stored original. Compare the
 requested semantic fields rather than treating that API response as an exact
-on-disk-byte oracle. Token evaluation must preserve ACE order and distinguish
-absent/NULL/empty ACLs, handle restricted and deny-only identities, inheritance,
-generic rights and unsupported conditional/object ACEs explicitly. Identity
-mapping, native owning authorization, audit/privilege policy and installed FSKit
-tests remain incomplete. Decoder or resolver success grants no access.
+on-disk-byte oracle. The separate discretionary evaluator preserves ACE order and
+ACL states, handles enabled/disabled/deny-only identities and ordinary restricted
+checks, maps exact generic file rights and rejects unsupported applicable ACEs
+explicitly. Restricted ownership, maximum access, conditional/object policies,
+SACL/privilege evaluation, identity mapping, native owning authorization and
+installed FSKit tests remain incomplete. Decoder or resolver success grants no
+access; a DACL result is only one input to a future complete authorization decision.

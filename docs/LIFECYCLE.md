@@ -54,6 +54,13 @@ are ordinal continuations and rewind/replay produces the same names. Interleaved
 callers currently share one cursor and replay when their cookies differ; bounded
 checkpoint reuse remains a separate optimization.
 
+Active volumes also own the independently synchronized observer in
+[READ-CACHE-POLICY.md](READ-CACHE-POLICY.md). Memory-pressure callbacks change
+retention without waiting for core I/O or visiting items. Access and completion
+boundaries release disposable streams/catalogs/raw snapshots under the operation
+monitor while preserving pending enumeration state and native identity. Drained
+unmount/invalidation stop observation; remount retains the last observed level.
+
 A delayed successful read is checked against both admission and resource
 availability before reporting success. Closing admission makes that read return
 ESTALE with zero reported bytes. Device revocation returns EIO and permanently

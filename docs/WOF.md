@@ -172,6 +172,11 @@ Six modern runtime checks explicitly SKIP. Source/component/build evidence is
 `artifacts/lzx-oracle-checked-2/`. ACCEPTANCE.md preserves earlier failures and
 the exact evidence boundaries. No Windows/installed WOF acceptance is established.
 
+The subsequent [pressure policy](READ-CACHE-POLICY.md) checks release/reopen of
+XPRESS/LZX caches with unchanged bytes, raw snapshots and native identity. It
+adds a separate seventh modern runtime SKIP to the component; native notification
+delivery and aggregate memory stress remain open.
+
 The WOF/XPRESS/LZX campaign completes 1,122,244 executions in 61 seconds (coverage
 691, features 2,392, peak RSS 466 MiB); the image campaign completes 45,986
 (coverage 3,749, features 14,573, peak RSS 982 MiB). Both exit zero without a

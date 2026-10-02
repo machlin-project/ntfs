@@ -38,6 +38,12 @@ installed scheduling qualification remain separate from the tested eligibility
 model.
 [LIFECYCLE.md](LIFECYCLE.md) defines remount, overlapping teardown and the remaining
 synchronous cancellation/deadline and installed-runtime limits.
+An independent Dispatch pressure observer changes read-cache retention without
+waiting for the operation monitor or traversing dormant items. Access/completion
+boundaries release default streams, catalogs and raw reparse snapshots while
+preserving checked nodes, native targets and directory continuation. See
+READ-CACHE-POLICY.md for source lifetime, measured component bytes and the remaining
+installed delivery/aggregate-stress limits.
 Opening a named stream reads file metadata independently of the default stream:
 an encrypted default stream does not prevent opening a separate unencrypted ADS.
 Stream names match exact UTF-16 units; filename lookup has a different contract.

@@ -37,6 +37,8 @@ targets:
       - NTFSNames.h
       - NTFSLinks.m
       - NTFSLinks.h
+      - NTFSReadCachePolicy.m
+      - NTFSReadCachePolicy.h
       - NTFSVolume.m
       - NTFSVolume.h
       - NTFSLegacyVolume.m

@@ -6,7 +6,9 @@ independently authored fixtures and Apple SDK interfaces. NTFS-3G layout comment
 are consulted for format facts; this is not a source-isolated clean-room process.
 The sibling ext4 repository informed component boundaries and development
 workflow. Its native FSKit fix history also informs the result/error and
-revoked-acquisition guards; FSKIT-EXT4-LESSONS.md maps inspected subjects and
+revoked-acquisition guards and adaptive read-cache retention. The independent
+NTFS observer/completion cleanup follows selected Dispatch SDK guidance;
+FSKIT-EXT4-LESSONS.md maps inspected subjects and
 remaining NTFS evidence. It is not an NTFS implementation dependency.
 
 Primary references:

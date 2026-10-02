@@ -24,7 +24,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 376 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; six modern lifecycle/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; seven modern lifecycle/pressure/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
@@ -37,7 +38,27 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The LZX continuation passes all 37 sanitized C suites, both freestanding targets
+The subsequent FSKit pressure continuation passes 17 sanitized component PASS
+groups, the current unsigned app/extension and selected-toolchain style. Seven
+modern runtime checks explicitly SKIP. The independent observer changes retention
+while resource I/O is blocked, without releasing outstanding buffers or visiting
+dormant objects. Access/completion cleanup releases streams/catalogs/raw snapshots
+while preserving identities, immutable native targets and pending enumeration
+state. Tracked core-byte release is 135,632/18,816/79,436 in the LZNT1/XPRESS4K/LZX32K
+scenarios. The cold LZX reopen covers every 11 allocation/two read failure position
+plus catalog allocation failure/retry with exact bytes, no leaks and zero native
+error counts. ADS, raw wire bytes, link identity, interleaved/full/empty packers,
+permanent revocation and elevated remount state pass. READ-CACHE-POLICY.md defines
+the measured scope and excluded memory. These are injected Dispatch component
+observations, not installed native delivery or aggregate/RSS stress evidence.
+Logs are `artifacts/plan-pressure-component-final.log`, `plan-pressure-style-final.log`
+and `plan-pressure-app-reviewed.log`; the first
+failed link fixture remains in `plan-pressure-component-initial.log`. That input
+escaped the explicit owning root; the corrected scenario uses independently
+authored supported native-link expectations. The existing escape-rejection cases
+still pass. Portable C sources remain unchanged from the preceding checkpoint.
+
+The preceding LZX continuation passes all 37 sanitized C suites, both freestanding targets
 with the 2-KiB frame budget, selected Xcode style, the legacy component and the
 current unsigned app/extension build. The original WOF/WIM-variant decoder has
 140 exact-byte content vectors and 31 malformed vectors for all three block
@@ -69,7 +90,7 @@ Inspected ext4 history exposed modern result-construction and revoked-acquisitio
 guards. The shared boundary component now checks preserved operation errors,
 EIO for a missing successful result, and rejecting an unavailable resource before
 geometry access. Both protocol sources compile; real modern result failures,
-installed reclamation/buffer lifetime and memory-pressure retention remain open.
+installed reclamation/buffer lifetime and pressure delivery/stress remain open.
 FSKIT-EXT4-LESSONS.md maps adopted contracts and remaining native requirements.
 
 Evidence uses `artifacts/plan-lzx-{core,freestanding,app,style}-final.log`,

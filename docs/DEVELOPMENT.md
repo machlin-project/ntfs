@@ -43,9 +43,14 @@ original-wire xattrs, remount/revocation and all 79 allocation/17 read fault
 positions across listed/reserved lookup and reopened snapshots. Core reparse tests
 also check copy guards, physical allocation and node-independent lifetime. See
 LINK-POLICY.md for the supported subset and remaining resolution contracts.
-The current component has six explicit macOS-27 runtime SKIPs: lifecycle,
-enumeration, content metadata, link projection and two case-policy checks. These in-process
+The current component has seven explicit macOS-27 runtime SKIPs: lifecycle,
+pressure, enumeration, content metadata, link projection and two case-policy checks. These in-process
 results do not mount the filesystem.
+The pressure component injects Dispatch data-source notifications without host
+pressure changes. It measures disposable core bytes for LZNT1/XPRESS/LZX, delivers
+an event during blocked I/O, sweeps cold LZX allocation/read faults and checks
+copied ADS/reparse data, identities, interleaved pending entries and remount.
+See READ-CACHE-POLICY.md for exact measurements and native delivery/stress gaps.
 Use `--target all` for the image, whole-volume diagnostic and nine standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security`, `access` or `wof`. The time budget applies per target. Each campaign retains its own

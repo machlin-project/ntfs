@@ -174,7 +174,35 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
-## Core handoff checkpoint
+## FSKit pressure handoff checkpoint
+
+READ-CACHE-POLICY.md defines the independent observer and lazy disposable-cache
+policy informed by ext4 history. WARN/CRITICAL outrank coalesced NORMAL. Failed
+observation disables retention; remount preserves the last observed level. Source
+callbacks never wait for core I/O or scan dormant items; distinct observation
+identities reject callbacks from canceled intervals. Access/completion cleanup
+releases stream/catalog/raw-reparse state after consumers finish, preserving node,
+canonical item, native target, ancestry, cursor, pending entry and scan budget.
+
+The sanitized component passes 17 PASS groups with seven explicit macOS-27 SKIPs.
+Current unsigned app/extension and style pass. Measured core-byte release is
+135,632/18,816/79,436 for the tested LZNT1/XPRESS4K/LZX32K scenarios with record
+caching disabled. Notification during a gated read, 11 allocation/two read cold
+LZX reopen faults, catalog allocation failure/retry, copied bytes/ADS, interleaved
+full/empty pages, link identity, permanent revocation and elevated remount pass.
+Evidence uses `artifacts/plan-pressure-component-final.log`, `plan-pressure-style-final.log`
+and `plan-pressure-app-reviewed.log`. The
+initial failed link fixture is retained separately; it escaped the explicit
+owning root and was replaced by the existing supported native-link manifest's
+independent target/wire expectations. Full escape rejection remains tested.
+
+No portable C source changed; its preceding 37-suite/frame/fuzz evidence remains.
+Native Dispatch receipt on both supported runtime families, aggregate allocation/
+RSS stress, kernel-held mappings and native reclaim remain required. Do not infer
+receipt from a pressure utility's exit status. The complete no-VM scope remains
+in CORE-QUALIFICATION.md; security, recovery and measured optimization stay open.
+
+## Core WOF handoff checkpoint
 
 WOF file-provider XPRESS4K/8K/16K and LZX32K use the public stream API; read WOF.md for
 format provenance and the provider contract. Complete sparse unnamed/backing
@@ -217,7 +245,7 @@ Read FSKIT-EXT4-LESSONS.md alongside the sibling's FSKIT.md and its Git fix hist
 Modern NTFS result handlers now reject absent successful results with EIO while
 preserving operation errors; initial revoked acquisition rejects before geometry.
 The shared boundary component passes locally. Runtime result-constructor failures,
-native reclamation, memory-pressure retention and distribution discovery still
+native reclamation, installed pressure delivery/stress and distribution discovery still
 need their explicit evidence; ext4's mounted passes do not qualify this driver.
 
 Continue provider-specific native fault/interleaving and hard-link expansion, Windows

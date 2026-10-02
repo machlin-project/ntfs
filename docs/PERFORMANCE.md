@@ -23,6 +23,15 @@ linear. Interleaved scans can replay a prefix, and that cost remains a target fo
 native profiling. Admission is serialized per volume. Parallel core readers and
 kernel-offloaded I/O are deliberately not claimed.
 
+FSKit now suspends optional read-cache retention on observed elevated pressure,
+without scanning dormant objects. Access/completion cleanup releases disposable
+stream/catalog/raw-snapshot allocations and preserves directory continuation and
+identity. The component measures 135,632/18,816/79,436 released core bytes in its
+LZNT1/XPRESS4K/LZX32K scenarios, with record caching disabled. Warm normal reads
+retain their no-additional-I/O behavior. READ-CACHE-POLICY.md defines excluded
+memory and remaining aggregate/installed/performance measurements; these byte
+counts do not establish a throughput or RSS improvement.
+
 To collect a local baseline:
 
 ```sh

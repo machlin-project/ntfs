@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSResource.h"
 #import "NTFSLinks.h"
+#import "NTFSReadCachePolicy.h"
 
 typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 	NTFSVolumeLoaded,
@@ -30,6 +31,10 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 /* Admission state can be inspected without waiting for an outstanding read.
  * Unmount retains item identities for reclamation; invalidation is terminal. */
 @property(readonly) NTFSVolumeLifecycle lifecycle;
+/* Observation is independent of the operation monitor; returned policy state
+ * does not authorize I/O. This observer is exclusively owned by the volume. */
+@property(readonly) NTFSReadCachePolicy *readCachePolicy;
+- (NTFSReadCachePolicy *)newReadCachePolicy;
 /* Serialize publication of native item results against reclaim and teardown.
  * Replies still run outside the core operation monitor. */
 - (void)performItemPublication:(void (^)(void))publication;

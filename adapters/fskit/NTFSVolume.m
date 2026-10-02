@@ -169,6 +169,7 @@ item_id(uint64_t reference)
 	NSRecursiveLock *_publicationLock;
 	NTFSVolumeLifecycle _lifecycle;
 	NSUInteger _pendingUnmounts;
+	NTFSReadCachePolicy *_readCachePolicy;
 }
 
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource
@@ -217,6 +218,7 @@ item_id(uint64_t reference)
 	if (self != nil) {
 		_lifecycleLock = [[NSLock alloc] init];
 		_publicationLock = [[NSRecursiveLock alloc] init];
+		_readCachePolicy = [self newReadCachePolicy];
 		_lifecycle = NTFSVolumeLoaded;
 		_core = core;
 		_info = info;
@@ -237,16 +239,40 @@ item_id(uint64_t reference)
 	[self invalidate];
 }
 
-- (void)clearItemCaches:(NTFSItem *)item
+- (NTFSReadCachePolicy *)newReadCachePolicy
+{
+	return [[NTFSReadCachePolicy alloc] init];
+}
+
+- (NTFSReadCachePolicy *)readCachePolicy
+{
+	return _readCachePolicy;
+}
+
+/* The caller holds the operation monitor. Cursor continuation, pending entry,
+ * checked node, native target and namespace identity have separate lifetimes. */
+- (void)releaseReadCaches:(NTFSItem *)item
 {
 	ntfs_reparse_close(item->reparse);
 	item->reparse = NULL;
 	ntfs_stream_catalog_close(item->catalog);
 	item->catalog = NULL;
-	ntfs_directory_close(item->cursor);
-	item->cursor = NULL;
 	ntfs_stream_close(item->stream);
 	item->stream = NULL;
+}
+
+- (void)finishReadCaches:(NTFSItem *)item
+{
+	if (!_readCachePolicy.retentionActive) {
+		[self releaseReadCaches:item];
+	}
+}
+
+- (void)clearItemCaches:(NTFSItem *)item
+{
+	[self releaseReadCaches:item];
+	ntfs_directory_close(item->cursor);
+	item->cursor = NULL;
 	item->pending = NO;
 	item->position = 0;
 	item->inspectedEntries = 0;
@@ -313,6 +339,7 @@ item_id(uint64_t reference)
 	[_publicationLock lock];
 	@try {
 		@synchronized(self) {
+			[_readCachePolicy stop];
 			for (item in _items.objectEnumerator.allObjects) {
 				[self releaseItem:item];
 			}
@@ -356,7 +383,11 @@ item_id(uint64_t reference)
 		return nil;
 	}
 	value = (NTFSItem *)item;
-	return value.owner == self && value->node != NULL ? value : nil;
+	if (value.owner != self || value->node == NULL) {
+		return nil;
+	}
+	[self finishReadCaches:value];
+	return value;
 }
 
 - (enum ntfs_result)admissionResult
@@ -486,6 +517,7 @@ item_id(uint64_t reference)
 			*error = ntfs_error(NTFS_UNSUPPORTED);
 			return nil;
 		}
+		[self finishReadCaches:item];
 		return item;
 	}
 	if (_items.count >= NTFS_FSKIT_ITEM_LIMIT) {
@@ -504,6 +536,7 @@ item_id(uint64_t reference)
 	item->wof = wof;
 	item.owner = self;
 	[_items setObject:item forKey:@(stat.reference)];
+	[self finishReadCaches:item];
 	return item;
 }
 
@@ -563,6 +596,9 @@ item_id(uint64_t reference)
 				*error = ntfs_error(NTFS_STALE);
 			}
 			[_lifecycleLock unlock];
+			if (item != nil) {
+				[_readCachePolicy start];
+			}
 		}
 		return item;
 	}
@@ -755,26 +791,30 @@ item_id(uint64_t reference)
 		if (value == nil) {
 			return NTFS_STALE;
 		}
-		if (offset < 0) {
-			return NTFS_INVALID;
+		@try {
+			if (offset < 0) {
+				return NTFS_INVALID;
+			}
+			if (value->linkTarget != nil) {
+				return NTFS_UNSUPPORTED;
+			}
+			if (value->stream == NULL) {
+				result = ntfs_stream_open(value->node, NULL, 0, &value->stream);
+			}
+			if (result == NTFS_OK) {
+				result = ntfs_stream_read(
+				    value->stream, (uint64_t)offset, bytes, length, completed);
+			}
+			if (result == NTFS_OK) {
+				result = [self admissionResult];
+			}
+			if (result != NTFS_OK) {
+				*completed = 0;
+			}
+			return result;
+		} @finally {
+			[self finishReadCaches:value];
 		}
-		if (value->linkTarget != nil) {
-			return NTFS_UNSUPPORTED;
-		}
-		if (value->stream == NULL) {
-			result = ntfs_stream_open(value->node, NULL, 0, &value->stream);
-		}
-		if (result == NTFS_OK) {
-			result = ntfs_stream_read(
-			    value->stream, (uint64_t)offset, bytes, length, completed);
-		}
-		if (result == NTFS_OK) {
-			result = [self admissionResult];
-		}
-		if (result != NTFS_OK) {
-			*completed = 0;
-		}
-		return result;
 	}
 }
 
@@ -819,38 +859,43 @@ item_id(uint64_t reference)
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
-		if (value->linkTarget != nil) {
-			return @[ [FSFileName nameWithString:reparseAttributeName] ];
-		}
-		catalog = [self catalogForItem:value error:error];
-		if (catalog == NULL) {
-			return nil;
-		}
-		names =
-		    [NSMutableArray arrayWithObject:[FSFileName nameWithString:streamManifestName]];
-		if (value->wof) {
-			[names addObject:[FSFileName nameWithString:reparseAttributeName]];
-		}
-		if (value->stat.directory) {
-			[names addObject:[FSFileName nameWithString:namesManifestName]];
-		}
-		for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
-			result = ntfs_stream_catalog_entry(catalog, i, &name);
+		@try {
+			if (value->linkTarget != nil) {
+				return @[ [FSFileName nameWithString:reparseAttributeName] ];
+			}
+			catalog = [self catalogForItem:value error:error];
+			if (catalog == NULL) {
+				return nil;
+			}
+			names = [NSMutableArray
+			    arrayWithObject:[FSFileName nameWithString:streamManifestName]];
+			if (value->wof) {
+				[names addObject:[FSFileName nameWithString:reparseAttributeName]];
+			}
+			if (value->stat.directory) {
+				[names addObject:[FSFileName nameWithString:namesManifestName]];
+			}
+			for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
+				result = ntfs_stream_catalog_entry(catalog, i, &name);
+				if (result != NTFS_OK) {
+					*error = ntfs_error(result);
+					return nil;
+				}
+				if (name.length != 0 &&
+				    !(value->wof &&
+					ntfs_wof_is_backing_stream(name.units, name.length))) {
+					[names addObject:stream_alias(i)];
+				}
+			}
+			result = [self admissionResult];
 			if (result != NTFS_OK) {
 				*error = ntfs_error(result);
 				return nil;
 			}
-			if (name.length != 0 &&
-			    !(value->wof && ntfs_wof_is_backing_stream(name.units, name.length))) {
-				[names addObject:stream_alias(i)];
-			}
+			return names;
+		} @finally {
+			[self finishReadCaches:value];
 		}
-		result = [self admissionResult];
-		if (result != NTFS_OK) {
-			*error = ntfs_error(result);
-			return nil;
-		}
-		return names;
 	}
 }
 
@@ -936,30 +981,124 @@ item_id(uint64_t reference)
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
-		if (value->linkTarget != nil ||
-		    (value->wof &&
-			[name.data
-			    isEqualToData:[FSFileName nameWithString:reparseAttributeName].data])) {
-			if (![name.data
-				isEqualToData:[FSFileName nameWithString:reparseAttributeName]
-						  .data]) {
+		@try {
+			if (value->linkTarget != nil ||
+			    (value->wof &&
+				[name.data
+				    isEqualToData:[FSFileName nameWithString:reparseAttributeName]
+						      .data])) {
+				if (![name.data
+					isEqualToData:[FSFileName
+							  nameWithString:reparseAttributeName]
+							  .data]) {
+					*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+								     code:ENOATTR
+								 userInfo:nil];
+					return nil;
+				}
+				result = NTFS_OK;
+				if (value->reparse == NULL) {
+					result = ntfs_reparse_open(value->node, &value->reparse);
+				}
+				if (result == NTFS_OK) {
+					result = ntfs_reparse_bytes(
+					    value->reparse, NULL, 0, &reparseSize);
+					if (result == NTFS_RANGE) {
+						data = [NSMutableData dataWithLength:reparseSize];
+						result = ntfs_reparse_bytes(value->reparse,
+						    data.mutableBytes, data.length, &reparseSize);
+					}
+				}
+				if (result == NTFS_OK) {
+					result = [self admissionResult];
+				}
+				if (result != NTFS_OK) {
+					*error = ntfs_error(result);
+					return nil;
+				}
+				return data;
+			}
+			if ([name.data
+				isEqualToData:[FSFileName nameWithString:namesManifestName].data] ||
+			    ordinal_xattr_index(name, nameEntryPrefix, &index)) {
+				if (!value->stat.directory) {
+					*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+								     code:ENOATTR
+								 userInfo:nil];
+					return nil;
+				}
+				result = ntfs_native_names_manifest(value->node,
+				    value->stat.reference, _maximumDirectoryEntries,
+				    ![name.data
+					isEqualToData:[FSFileName nameWithString:namesManifestName]
+							  .data],
+				    index, NTFS_FSKIT_XATTR_BYTES, &manifest);
+				if (result == NTFS_NOT_FOUND) {
+					*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+								     code:ENOATTR
+								 userInfo:nil];
+					return nil;
+				}
+				if (result == NTFS_RANGE) {
+					*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+								     code:E2BIG
+								 userInfo:nil];
+					return nil;
+				}
+				if (result == NTFS_OK) {
+					result = [self admissionResult];
+				}
+				if (result != NTFS_OK) {
+					*error = ntfs_error(result);
+					return nil;
+				}
+				return manifest;
+			}
+			catalog = [self catalogForItem:value error:error];
+			if (catalog == NULL) {
+				return nil;
+			}
+			if ([name.data isEqualToData:[FSFileName nameWithString:streamManifestName]
+							 .data]) {
+				manifest = [self streamManifest:value catalog:catalog error:error];
+				if (manifest != nil) {
+					result = [self admissionResult];
+					if (result != NTFS_OK) {
+						*error = ntfs_error(result);
+						return nil;
+					}
+				}
+				return manifest;
+			}
+			if (!ordinal_xattr_index(name, streamAliasPrefix, &index) ||
+			    ntfs_stream_catalog_entry(catalog, index, &streamName) != NTFS_OK ||
+			    streamName.length == 0 ||
+			    (value->wof &&
+				ntfs_wof_is_backing_stream(streamName.units, streamName.length))) {
 				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
 							     code:ENOATTR
 							 userInfo:nil];
 				return nil;
 			}
-			result = NTFS_OK;
-			if (value->reparse == NULL) {
-				result = ntfs_reparse_open(value->node, &value->reparse);
-			}
+			result = ntfs_stream_open(
+			    value->node, streamName.units, streamName.length, &stream);
 			if (result == NTFS_OK) {
-				result = ntfs_reparse_bytes(value->reparse, NULL, 0, &reparseSize);
-				if (result == NTFS_RANGE) {
-					data = [NSMutableData dataWithLength:reparseSize];
-					result = ntfs_reparse_bytes(value->reparse,
-					    data.mutableBytes, data.length, &reparseSize);
+				size = ntfs_stream_size(stream);
+				if (size > NTFS_FSKIT_XATTR_BYTES) {
+					ntfs_stream_close(stream);
+					*error = [NSError errorWithDomain:NSPOSIXErrorDomain
+								     code:E2BIG
+								 userInfo:nil];
+					return nil;
+				}
+				data = [NSMutableData dataWithLength:(NSUInteger)size];
+				result = ntfs_stream_read(
+				    stream, 0, data.mutableBytes, (size_t)size, &completed);
+				if (result == NTFS_OK && completed != size) {
+					result = NTFS_IO;
 				}
 			}
+			ntfs_stream_close(stream);
 			if (result == NTFS_OK) {
 				result = [self admissionResult];
 			}
@@ -968,93 +1107,9 @@ item_id(uint64_t reference)
 				return nil;
 			}
 			return data;
+		} @finally {
+			[self finishReadCaches:value];
 		}
-		if ([name.data isEqualToData:[FSFileName nameWithString:namesManifestName].data] ||
-		    ordinal_xattr_index(name, nameEntryPrefix, &index)) {
-			if (!value->stat.directory) {
-				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
-							     code:ENOATTR
-							 userInfo:nil];
-				return nil;
-			}
-			result = ntfs_native_names_manifest(value->node, value->stat.reference,
-			    _maximumDirectoryEntries,
-			    ![name.data
-				isEqualToData:[FSFileName nameWithString:namesManifestName].data],
-			    index, NTFS_FSKIT_XATTR_BYTES, &manifest);
-			if (result == NTFS_NOT_FOUND) {
-				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
-							     code:ENOATTR
-							 userInfo:nil];
-				return nil;
-			}
-			if (result == NTFS_RANGE) {
-				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
-							     code:E2BIG
-							 userInfo:nil];
-				return nil;
-			}
-			if (result == NTFS_OK) {
-				result = [self admissionResult];
-			}
-			if (result != NTFS_OK) {
-				*error = ntfs_error(result);
-				return nil;
-			}
-			return manifest;
-		}
-		catalog = [self catalogForItem:value error:error];
-		if (catalog == NULL) {
-			return nil;
-		}
-		if ([name.data isEqualToData:[FSFileName nameWithString:streamManifestName].data]) {
-			manifest = [self streamManifest:value catalog:catalog error:error];
-			if (manifest != nil) {
-				result = [self admissionResult];
-				if (result != NTFS_OK) {
-					*error = ntfs_error(result);
-					return nil;
-				}
-			}
-			return manifest;
-		}
-		if (!ordinal_xattr_index(name, streamAliasPrefix, &index) ||
-		    ntfs_stream_catalog_entry(catalog, index, &streamName) != NTFS_OK ||
-		    streamName.length == 0 ||
-		    (value->wof &&
-			ntfs_wof_is_backing_stream(streamName.units, streamName.length))) {
-			*error = [NSError errorWithDomain:NSPOSIXErrorDomain
-						     code:ENOATTR
-						 userInfo:nil];
-			return nil;
-		}
-		result =
-		    ntfs_stream_open(value->node, streamName.units, streamName.length, &stream);
-		if (result == NTFS_OK) {
-			size = ntfs_stream_size(stream);
-			if (size > NTFS_FSKIT_XATTR_BYTES) {
-				ntfs_stream_close(stream);
-				*error = [NSError errorWithDomain:NSPOSIXErrorDomain
-							     code:E2BIG
-							 userInfo:nil];
-				return nil;
-			}
-			data = [NSMutableData dataWithLength:(NSUInteger)size];
-			result = ntfs_stream_read(
-			    stream, 0, data.mutableBytes, (size_t)size, &completed);
-			if (result == NTFS_OK && completed != size) {
-				result = NTFS_IO;
-			}
-		}
-		ntfs_stream_close(stream);
-		if (result == NTFS_OK) {
-			result = [self admissionResult];
-		}
-		if (result != NTFS_OK) {
-			*error = ntfs_error(result);
-			return nil;
-		}
-		return data;
 	}
 }
 
@@ -1327,6 +1382,9 @@ item_id(uint64_t reference)
 				result = NTFS_STALE;
 			}
 			[_lifecycleLock unlock];
+			if (result == NTFS_OK) {
+				[_readCachePolicy start];
+			}
 		}
 		error = ntfs_error(result);
 	}
@@ -1345,6 +1403,7 @@ item_id(uint64_t reference)
 	  NTFSItem *item;
 
 	  @synchronized(self) {
+		  [self->_readCachePolicy stop];
 		  for (item in self->_items.objectEnumerator.allObjects) {
 			  [self clearItemCaches:item];
 		  }

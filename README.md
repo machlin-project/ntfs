@@ -93,3 +93,9 @@ qualify Windows-authored EFS or installed behavior. Native links retain separate
 path, identity, configuration and installed-acceptance limits.
 The [ext4 FSKit history review](docs/FSKIT-EXT4-LESSONS.md) maps observed native
 lessons to NTFS contracts and remaining runtime/distribution checks.
+Automatic [read-cache retention](docs/READ-CACHE-POLICY.md) now reacts to observed
+memory pressure without scanning dormant items. Accessed streams/catalogs/raw
+snapshots become disposable while directory continuation and item identity stay
+owned. Exact bytes, measured core allocation release, blocked-read delivery and
+fault/lifetime scenarios pass locally; installed delivery and memory stress remain
+separate requirements.

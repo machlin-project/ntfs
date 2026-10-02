@@ -22,12 +22,34 @@ reopen while one of those requests still needs to drain the operation monitor.
 Invalidation overrides unmount and is terminal. Replies run outside the monitor,
 including replies that inspect the owner from another thread.
 
+A separate recursive publication lock covers activation/lookup through their
+actual item-result replies, and serializes that interval against reclaim and
+teardown. Attribute snapshots still populate under the operation monitor. The
+lock order is publication lock, then operation monitor; the admission lock is
+released before waiting for either. Ordinary reads do not take the publication
+lock. A reply can inspect core state from another thread, but a reply that waits
+for another item publication can block that publication; installed callback
+scheduling remains unqualified.
+
 Unmount closes each item's stream catalog, directory cursor/pending entry and
 data stream, including compression-unit caches. It preserves the node and native
 item identity until reclaim or deactivation. The immutable core record cache and
 mounted metadata snapshot retain their ordinary core lifetime until invalidation;
 unmount is not a full core unload. Reclamation after unmount requires no device
-I/O. The directory verifier remains valid for the same immutable owner: cookies
+I/O. The canonical item index has weak values; each live item retains its volume.
+On macOS 27, cleanup runs only when `tryReclaimWithBlock:` allows it. A deferred
+reclaim replies successfully and preserves the node and canonical identity. On
+older runtimes, reclaim defers cleanup until the last item reference disappears.
+Final-reference cleanup removes the weak index entry and closes the item's
+children without I/O; it can also release the last volume owner. Terminal
+invalidation releases all children regardless of retained item references, after
+serializing against result publication. Retained invalidated items become stale.
+The conditional boundary follows Apple's
+[reclaim contract](https://developer.apple.com/documentation/fskit/fsitem/tryreclaim(_:)?language=objc),
+checked against the selected SDK. In-process eligibility models do not qualify
+the framework's real kernel/user-space counts.
+
+The directory verifier remains valid for the same immutable owner: cookies
 are ordinal continuations and rewind/replay produces the same names. Interleaved
 callers currently share one cursor and replay when their cookies differ; bounded
 checkpoint reuse remains a separate optimization.
@@ -92,6 +114,13 @@ enumerations with zero-capacity rewinds; both recover the complete independently
 expected ordered filename list and EOF cookies. Existing namespace budget and
 allocation/read fault sweeps remain in the same component run.
 
+Five additional cases use a controllable eligibility boundary to check deferred
+and accepted reclaim, canonical identity replacement, last-item ownership, and
+lookup-result publication racing reclaim, unmount or deactivation. Cleanup must
+wait for the held reply while another thread can still inspect the core owner.
+The old-runtime component also checks that reclaim leaves a retained item usable.
+These cases model conditional cleanup; they do not execute native FSKit counts.
+
 The reviewed component run passed under ASan/UBSan. Style and the current unsigned
 Debug app/extension build passed. Logs are
 `artifacts/plan-lifecycle-component-reviewed.log`,
@@ -105,3 +134,24 @@ The modern result classes are opaque; applicable modern tests inspect presence
 and error framing without claiming independent inspection of their byte fields.
 No installed mount, task cancellation, macOS 27 runtime or native authorization
 acceptance is established by these tests.
+
+The subsequent ownership/publication component, selected-toolchain style and
+current unsigned Debug app/extension build passed under
+`artifacts/plan-reclaim-{component-reviewed,style,app-build}.log`. All eight legacy
+read scenarios and the five eligibility/ownership/publication cases passed;
+the same three genuine macOS-27 runtime SKIPs remain. No portable-core source
+changed and the preceding core qualification was not rerun.
+
+## Enumeration contracts still open
+
+Attribute-requested enumeration currently fails on reparse items and unsupported
+default streams. Names-only enumeration omits the virtual current/parent entries,
+and invalid cookies/verifiers return EINVAL. Apple's
+[enumeration contract](https://developer.apple.com/documentation/fskit/fsvolume/operations/enumeratedirectory(_:startingat:verifier:attributes:packer:replyhandler:))
+requires dot entries for names-only calls and its dedicated invalid-cookie code.
+The [packer contract](https://developer.apple.com/documentation/fskit/fsdirectoryentrypacker/packentry(name:itemtype:itemid:nextcookie:attributes:))
+documents nil attributes for calls that did not request attributes; nullable
+storage alone does not qualify omission of requested attributes. Implement
+unsupported-object behavior with truthful metadata and stable continuation,
+and parent-reference/cookie handling for both protocol paths before closing
+this acceptance gap.

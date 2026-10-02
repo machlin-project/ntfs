@@ -232,7 +232,9 @@ test_volume(NSData *image)
 		 assert(e == nil);
 		 replies++;
 	       }];
-	assert([volume readItem:file offset:0 bytes:buffer length:1 completed:&done] == NTFS_STALE);
+	assert([volume readItem:file offset:0 bytes:buffer length:1 completed:&done] ==
+	    (ntfs_test_native_reclaim_available() ? NTFS_STALE : NTFS_OK));
+	assert(done == (ntfs_test_native_reclaim_available() ? 0 : 1));
 	file = [volume lookup:[FSFileName nameWithString:@"fragmented.bin"]
 		  inDirectory:root
 		   storedName:&stored

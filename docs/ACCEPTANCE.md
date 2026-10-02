@@ -21,7 +21,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain, eight blocked-read/overlapping-teardown scenarios, exactly-once replies and interleaved cookies under ASan/UBSan | Legacy in-process checks passed; modern lifecycle/case runtime explicitly skipped without macOS 27; synchronous I/O interruption and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain, eight blocked-read/overlapping-teardown scenarios, conditional reclaim bridge and five modeled eligibility/ownership/publication cases under ASan/UBSan | Legacy in-process checks passed; modern lifecycle/case runtime explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, enumeration gaps and installed lifetime remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
@@ -44,9 +44,20 @@ once, including overlapping unmount/deactivation and inspection from another
 thread. Three explicit macOS-27 runtime SKIPs remain: one lifecycle suite and two
 case-policy checks. Evidence uses `artifacts/plan-lifecycle-{component-reviewed,style,app-build}.log`.
 The portable core did not change and its preceding qualification was not rerun.
-Synchronous read interruption/deadlines, task cancellation, conditional modern
-reclaim and installed scheduling/buffer lifetime remain open; see
+Synchronous read interruption/deadlines, task cancellation, native conditional
+reclaim qualification and installed scheduling/buffer lifetime remain open; see
 [LIFECYCLE.md](LIFECYCLE.md).
+
+The subsequent item-ownership continuation passes the sanitized component,
+selected-toolchain style and current unsigned Debug app/extension build under
+`artifacts/plan-reclaim-{component-reviewed,style,app-build}.log`. The weak canonical
+index and retained item owner preserve identity on deferred reclaim and release
+the volume without a cycle when its last item disappears. Five modeled cases
+check conditional cleanup and lookup replies racing reclaim, unmount and
+deactivation while another thread can inspect core state. Both protocol classes
+compile; the same three macOS-27 runtime checks explicitly SKIP. The model does
+not execute native kernel/framework counts, and no installed mount ran. Core
+source is unchanged and its preceding 31-suite evidence was not rerun.
 
 The preceding consistency diagnostic checkpoint passes all 31 sanitized suites, both
 freestanding targets, selected-toolchain style and the current unsigned Debug
@@ -374,6 +385,10 @@ Stream names use exact UTF-16 matching. The
 adapter uses a single-user read-only mode/UID/GID presentation and rejects reparse
 items; it does not enforce Windows ACLs.
 Directory enumeration requesting attributes can fail on unsupported files.
+Names-only enumeration still omits the virtual dot/parent entries, and invalid
+cookies/verifiers currently return EINVAL rather than the native directory-cookie
+code. These are implementation gaps, separate from installed qualification;
+LIFECYCLE.md records the SDK contracts and required continuation.
 Named streams now have a bounded read-only xattr projection and reverse manifest
 in both FSKit protocol paths, qualified only by component/build tests. Unsupported
 default streams can still prevent item adoption, and installed projection remains

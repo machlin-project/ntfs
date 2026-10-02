@@ -27,6 +27,17 @@ enum lifecycle_scenario {
 	TEST_LIFECYCLE_SCENARIOS
 };
 
+BOOL
+ntfs_test_native_reclaim_available(void)
+{
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+	if (@available(macOS 27.0, *)) {
+		return YES;
+	}
+#endif
+	return NO;
+}
+
 static dispatch_time_t
 test_deadline(void)
 {
@@ -195,6 +206,278 @@ test_wait_for_state(NTFSVolume *volume, NTFSVolumeLifecycle state)
 @property NSMutableArray<NSString *> *names;
 @property FSDirectoryCookie cookie;
 @end
+
+/* A controllable native eligibility boundary, not FSKit's kernel counters. */
+@interface ReclaimModelVolume : NTFSLegacyVolume
+@property BOOL eligible;
+@property BOOL publicationOpen;
+@property NSUInteger attempts;
+@property NSUInteger cleanups;
+@end
+
+@implementation ReclaimModelVolume
+
+- (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup
+{
+	(void)item;
+	assert(!self.publicationOpen);
+	self.attempts++;
+	if (!self.eligible) {
+		return NO;
+	}
+	cleanup();
+	self.cleanups++;
+	return YES;
+}
+
+@end
+
+static ReclaimModelVolume *
+test_reclaim_volume(
+    NSData *image, LifecycleResource **resourceOut, LifecycleReader **readerOut, FSItem **rootOut)
+{
+	LifecycleReader *reader = [[LifecycleReader alloc] init];
+	LifecycleResource *resource;
+	ReclaimModelVolume *volume;
+	struct ntfs_environment env;
+	struct ntfs_limits limits;
+	struct ntfs_volume *core = NULL;
+	NSError *error = nil;
+
+	reader.image = image;
+	resource = [[LifecycleResource alloc] initWithReader:reader];
+	env = [resource environment];
+	ntfs_default_limits(&limits);
+	limits.record_cache_entries = 0;
+	assert(ntfs_mount(&env, &limits, &core) == NTFS_OK);
+	volume = [[ReclaimModelVolume alloc] initWithCore:core resource:resource];
+	assert(volume != nil);
+	*rootOut = [volume activate:&error];
+	assert(*rootOut != nil && error == nil);
+	*resourceOut = resource;
+	*readerOut = reader;
+	return volume;
+}
+
+static void
+test_held_item(NSData *image)
+{
+	LifecycleResource *resource;
+	LifecycleReader *reader;
+	ReclaimModelVolume *volume;
+	FSItem *root;
+	__weak FSItem *released;
+	FSFileName *stored;
+	NSError *error = nil;
+	NSUInteger baseline, reads;
+	size_t completed;
+	uint8_t byte;
+
+	volume = test_reclaim_volume(image, &resource, &reader, &root);
+	baseline = resource.liveAllocations;
+	@autoreleasepool {
+		FSItem *file, *again, *replacement;
+		LifecycleReply *deferred = [[LifecycleReply alloc] init];
+		LifecycleReply *accepted = [[LifecycleReply alloc] init];
+		LifecycleReply *stale = [[LifecycleReply alloc] init];
+		FSItemID identity;
+
+		file = [volume lookup:[FSFileName nameWithString:@"hello.txt"]
+			  inDirectory:root
+			   storedName:&stored
+				error:&error];
+		assert(file != nil && error == nil);
+		identity = [volume attributes:file error:&error].fileID;
+		released = file;
+		assert([volume readItem:file
+				 offset:0
+				  bytes:&byte
+				 length:sizeof(byte)
+			      completed:&completed] == NTFS_OK &&
+		    completed == sizeof(byte) && byte == 'H');
+		reads = reader.reads;
+		[volume reclaimItem:file
+		       replyHandler:^(NSError *e) {
+			 [deferred record:e completed:0];
+		       }];
+		assert(deferred.count == 1 && deferred.errorCode == 0);
+		assert(volume.attempts == 1 && volume.cleanups == 0 && reader.reads == reads);
+		assert([volume readItem:file
+				 offset:0
+				  bytes:&byte
+				 length:sizeof(byte)
+			      completed:&completed] == NTFS_OK &&
+		    byte == 'H' && reader.reads == reads);
+		again = [volume lookup:[FSFileName nameWithString:@"HELLO.TXT"]
+			   inDirectory:root
+			    storedName:&stored
+				 error:&error];
+		assert(again == file && error == nil);
+		volume.eligible = YES;
+		reads = reader.reads;
+		[volume reclaimItem:file
+		       replyHandler:^(NSError *e) {
+			 [accepted record:e completed:0];
+		       }];
+		assert(accepted.count == 1 && accepted.errorCode == 0);
+		assert(volume.attempts == 2 && volume.cleanups == 1 && reader.reads == reads);
+		assert([volume readItem:file
+				 offset:0
+				  bytes:&byte
+				 length:sizeof(byte)
+			      completed:&completed] == NTFS_STALE &&
+		    completed == 0);
+		[volume reclaimItem:file
+		       replyHandler:^(NSError *e) {
+			 [stale record:e completed:0];
+		       }];
+		assert(stale.count == 1 && stale.errorCode == ESTALE && volume.attempts == 2);
+		replacement = [volume lookup:[FSFileName nameWithString:@"hello.txt"]
+				 inDirectory:root
+				  storedName:&stored
+				       error:&error];
+		assert(replacement != nil && replacement != file && error == nil);
+		assert([volume attributes:replacement error:&error].fileID == identity);
+	}
+	assert(released == nil && resource.liveAllocations == baseline);
+	reads = reader.reads;
+	[volume invalidate];
+	assert(resource.liveAllocations == 0 && reader.reads == reads);
+}
+
+static void
+test_last_item_owner(NSData *image)
+{
+	LifecycleResource *resource = nil;
+	LifecycleReader *reader = nil;
+	__weak NTFSVolume *owner;
+	__attribute__((objc_precise_lifetime)) FSItem *file = nil;
+	NSUInteger reads;
+
+	@autoreleasepool {
+		ReclaimModelVolume *volume;
+		FSItem *root;
+		FSFileName *stored;
+		NSError *error = nil;
+
+		volume = test_reclaim_volume(image, &resource, &reader, &root);
+		file = [volume lookup:[FSFileName nameWithString:@"hello.txt"]
+			  inDirectory:root
+			   storedName:&stored
+				error:&error];
+		assert(file != nil && error == nil);
+		owner = volume;
+	}
+	assert(owner != nil && owner.lifecycle == NTFSVolumeActive);
+	reads = reader.reads;
+	@autoreleasepool {
+		file = nil;
+	}
+	assert(owner == nil && resource.liveAllocations == 0 && reader.reads == reads);
+}
+
+enum publication_action {
+	TEST_PUBLICATION_RECLAIM,
+	TEST_PUBLICATION_UNMOUNT,
+	TEST_PUBLICATION_DEACTIVATE,
+	TEST_PUBLICATION_ACTIONS
+};
+
+static void
+test_publication_race(NSData *image, enum publication_action action)
+{
+	LifecycleResource *resource;
+	LifecycleReader *reader;
+	ReclaimModelVolume *volume;
+	FSItem *root, *file;
+	FSFileName *stored;
+	NSError *error = nil;
+	LifecycleReply *publicationReply = [[LifecycleReply alloc] init];
+	LifecycleReply *controlReply = [[LifecycleReply alloc] init];
+	dispatch_group_t workers = dispatch_group_create();
+	dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+	dispatch_semaphore_t entered = dispatch_semaphore_create(0);
+	dispatch_semaphore_t resume = dispatch_semaphore_create(0);
+	dispatch_semaphore_t controlStarted = dispatch_semaphore_create(0);
+	dispatch_semaphore_t inspected = dispatch_semaphore_create(0);
+	NSUInteger live;
+
+	volume = test_reclaim_volume(image, &resource, &reader, &root);
+	file = [volume lookup:[FSFileName nameWithString:@"hello.txt"]
+		  inDirectory:root
+		   storedName:&stored
+			error:&error];
+	assert(file != nil && error == nil);
+	volume.eligible = YES;
+	live = resource.liveAllocations;
+	dispatch_group_async(workers, queue, ^{
+	  [volume
+	      lookupItemNamed:[FSFileName nameWithString:@"hello.txt"]
+		  inDirectory:root
+		 replyHandler:^(FSItem *item, FSFileName *name, NSError *e) {
+		   assert(item == file && [name.string isEqualToString:@"hello.txt"] && e == nil);
+		   volume.publicationOpen = YES;
+		   dispatch_semaphore_signal(entered);
+		   test_wait(resume);
+		   volume.publicationOpen = NO;
+		   [publicationReply record:e completed:0];
+		 }];
+	});
+	test_wait(entered);
+	dispatch_group_async(workers, queue, ^{
+	  dispatch_semaphore_signal(controlStarted);
+	  if (action == TEST_PUBLICATION_RECLAIM) {
+		  [volume reclaimItem:file
+			 replyHandler:^(NSError *e) {
+			   [controlReply record:e completed:0];
+			 }];
+	  } else if (action == TEST_PUBLICATION_UNMOUNT) {
+		  [volume unmountWithReplyHandler:^{
+		    [controlReply record:nil completed:0];
+		  }];
+	  } else {
+		  assert(action == TEST_PUBLICATION_DEACTIVATE);
+		  [volume deactivateWithOptions:0
+				   replyHandler:^(NSError *e) {
+				     [controlReply record:e completed:0];
+				   }];
+	  }
+	});
+	test_wait(controlStarted);
+	if (action != TEST_PUBLICATION_RECLAIM) {
+		test_wait_for_state(volume,
+		    action == TEST_PUBLICATION_UNMOUNT ? NTFSVolumeDraining
+						       : NTFSVolumeInvalidating);
+	}
+	/* An item publication does not hold the core operation monitor. */
+	dispatch_group_async(workers, queue, ^{
+	  NSError *e = nil;
+	  FSItemAttributes *attributes = [volume attributes:file error:&e];
+
+	  if (action == TEST_PUBLICATION_RECLAIM) {
+		  assert(attributes != nil && e == nil);
+	  } else {
+		  assert(attributes == nil && e.code == ESTALE);
+	  }
+	  dispatch_semaphore_signal(inspected);
+	});
+	test_wait(inspected);
+	assert(publicationReply.count == 0 && controlReply.count == 0);
+	assert(volume.attempts == 0 && volume.cleanups == 0);
+	assert(resource.liveAllocations == live);
+	dispatch_semaphore_signal(resume);
+	assert(dispatch_group_wait(workers, test_deadline()) == 0);
+	assert(
+	    publicationReply.count == 1 && controlReply.count == 1 && controlReply.errorCode == 0);
+	if (action == TEST_PUBLICATION_RECLAIM) {
+		assert(volume.attempts == 1 && volume.cleanups == 1);
+		assert([volume attributes:file error:&error] == nil && error.code == ESTALE);
+	} else {
+		assert(volume.attempts == 0 && volume.cleanups == 0);
+	}
+	[volume invalidate];
+	assert(resource.liveAllocations == 0);
+}
 
 static void
 test_read_request(
@@ -466,8 +749,9 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 				 offset:0
 				  bytes:buffer.mutableBytes
 				 length:buffer.length
-			      completed:&completed] == NTFS_STALE &&
-		    completed == 0);
+			      completed:&completed] ==
+		    (ntfs_test_native_reclaim_available() ? NTFS_STALE : NTFS_OK));
+		assert(completed == (ntfs_test_native_reclaim_available() ? 0 : buffer.length));
 	} else {
 		bytes = buffer.mutableBytes;
 		for (i = 0; i < buffer.length; i++) {
@@ -626,6 +910,7 @@ void
 ntfs_test_fskit_lifecycle(NSData *image, BOOL modern)
 {
 	enum lifecycle_scenario scenario;
+	enum publication_action action;
 
 	if (modern) {
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
@@ -644,6 +929,15 @@ ntfs_test_fskit_lifecycle(NSData *image, BOOL modern)
 		test_blocked_read(image, modern, scenario);
 	}
 	test_interleaved_enumeration(image, modern);
+	if (!modern) {
+		test_held_item(image);
+		test_last_item_owner(image);
+		for (action = 0; action < TEST_PUBLICATION_ACTIONS; action++) {
+			test_publication_race(image, action);
+		}
+		puts("PASS: modeled conditional reclaim, weak identity/last-item ownership and "
+		     "lookup publication against reclaim/unmount/deactivation");
+	}
 	printf("PASS: %s lifecycle, eight gated-read scenarios, exactly-once replies, "
 	       "admission/drain, cache release, permanent revocation and interleaved cookies\n",
 	    modern ? "modern" : "legacy");

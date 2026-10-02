@@ -6,11 +6,13 @@
 - (void)activateWithOptions:(FSTaskOptions *)options
 	       replyHandler:(void (^)(FSItem *, NSError *))reply
 {
-	NSError *error = nil;
-	FSItem *item = [self activate:&error];
-
 	(void)options;
-	reply(item, error);
+	[self performItemPublication:^{
+	  NSError *error = nil;
+	  FSItem *item = [self activate:&error];
+
+	  reply(item, error);
+	}];
 }
 
 - (void)deactivateWithOptions:(FSDeactivateOptions)options replyHandler:(void (^)(NSError *))reply
@@ -24,11 +26,13 @@
 	    inDirectory:(FSItem *)directory
 	   replyHandler:(void (^)(FSItem *, FSFileName *, NSError *))reply
 {
-	NSError *error = nil;
-	FSFileName *stored = nil;
-	FSItem *item = [self lookup:name inDirectory:directory storedName:&stored error:&error];
+	[self performItemPublication:^{
+	  NSError *error = nil;
+	  FSFileName *stored = nil;
+	  FSItem *item = [self lookup:name inDirectory:directory storedName:&stored error:&error];
 
-	reply(item, stored, error);
+	  reply(item, stored, error);
+	}];
 }
 
 - (void)getAttributes:(FSItemGetAttributesRequest *)request

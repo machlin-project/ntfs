@@ -97,9 +97,22 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 	enum ntfs_result cursorFailure;
 	struct ntfs_stat stat;
 }
-@property(weak) NTFSVolume *owner;
+@property(strong) NTFSVolume *owner;
 @end
+
+@interface NTFSVolume (NTFSItemLifetime)
+- (void)releaseUnreferencedItem:(NTFSItem *)item;
+@end
+
 @implementation NTFSItem
+
+- (void)dealloc
+{
+	__attribute__((objc_precise_lifetime)) NTFSVolume *owner = _owner;
+
+	[owner releaseUnreferencedItem:self];
+}
+
 @end
 
 static FSItemID
@@ -113,12 +126,13 @@ item_id(uint64_t reference)
 	struct ntfs_volume *_core;
 	struct ntfs_info _info;
 	NTFSResource *_resource;
-	NSMutableDictionary<NSNumber *, NTFSItem *> *_items;
+	NSMapTable<NSNumber *, NTFSItem *> *_items;
 	FSDirectoryVerifier _directoryVerifier;
 	uint64_t _freeClusters;
 	uint32_t _maximumDirectoryEntries;
 	BOOL _active;
 	NSLock *_lifecycleLock;
+	NSRecursiveLock *_publicationLock;
 	NTFSVolumeLifecycle _lifecycle;
 	NSUInteger _pendingUnmounts;
 }
@@ -151,13 +165,14 @@ item_id(uint64_t reference)
 		  volumeName:[FSFileName nameWithString:label.length != 0 ? label : @"NTFS"]];
 	if (self != nil) {
 		_lifecycleLock = [[NSLock alloc] init];
+		_publicationLock = [[NSRecursiveLock alloc] init];
 		_lifecycle = NTFSVolumeLoaded;
 		_core = core;
 		_info = info;
 		_resource = resource;
 		_freeClusters = freeClusters;
 		_maximumDirectoryEntries = maximum;
-		_items = [NSMutableDictionary dictionary];
+		_items = [NSMapTable strongToWeakObjectsMapTable];
 		_directoryVerifier =
 		    ((uint64_t)arc4random() << (sizeof(uint32_t) * CHAR_BIT)) | arc4random() | 1;
 	}
@@ -191,6 +206,41 @@ item_id(uint64_t reference)
 	item.owner = nil;
 }
 
+- (void)releaseUnreferencedItem:(NTFSItem *)item
+{
+	NTFSItem *current;
+
+	@synchronized(self) {
+		current = [_items objectForKey:@(item->stat.reference)];
+		if (current == nil || current == item) {
+			[_items removeObjectForKey:@(item->stat.reference)];
+		}
+		[self releaseItem:item];
+	}
+}
+
+- (void)performItemPublication:(void (^)(void))publication
+{
+	[_publicationLock lock];
+	@try {
+		publication();
+	} @finally {
+		[_publicationLock unlock];
+	}
+}
+
+- (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup
+{
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+	if (@available(macOS 27.0, *)) {
+		return [item tryReclaimWithBlock:cleanup];
+	}
+#endif
+	(void)item;
+	(void)cleanup;
+	return NO;
+}
+
 - (void)invalidate
 {
 	enum ntfs_result result;
@@ -202,25 +252,31 @@ item_id(uint64_t reference)
 		_lifecycle = NTFSVolumeInvalidating;
 	}
 	[_lifecycleLock unlock];
-	@synchronized(self) {
-		for (item in _items.allValues) {
-			[self releaseItem:item];
-		}
-		[_items removeAllObjects];
-		if (_core != NULL) {
-			result = ntfs_unmount(_core);
-			NSAssert(result == NTFS_OK, @"NTFS object leak");
-			if (result == NTFS_OK) {
-				_core = NULL;
+	/* This method also runs from dealloc; do not capture the owner in a block. */
+	[_publicationLock lock];
+	@try {
+		@synchronized(self) {
+			for (item in _items.objectEnumerator.allObjects) {
+				[self releaseItem:item];
+			}
+			[_items removeAllObjects];
+			if (_core != NULL) {
+				result = ntfs_unmount(_core);
+				NSAssert(result == NTFS_OK, @"NTFS object leak");
+				if (result == NTFS_OK) {
+					_core = NULL;
+				}
+			}
+			_active = NO;
+			if (_core == NULL) {
+				_resource = nil;
+				[_lifecycleLock lock];
+				_lifecycle = NTFSVolumeInvalidated;
+				[_lifecycleLock unlock];
 			}
 		}
-		_active = NO;
-		if (_core == NULL) {
-			_resource = nil;
-			[_lifecycleLock lock];
-			_lifecycle = NTFSVolumeInvalidated;
-			[_lifecycleLock unlock];
-		}
+	} @finally {
+		[_publicationLock unlock];
 	}
 }
 
@@ -278,7 +334,7 @@ item_id(uint64_t reference)
 		*error = ntfs_error(NTFS_UNSUPPORTED);
 		return nil;
 	}
-	item = _items[@(stat.reference)];
+	item = [_items objectForKey:@(stat.reference)];
 	if (item != nil) {
 		ntfs_node_close(node);
 		return item;
@@ -292,7 +348,7 @@ item_id(uint64_t reference)
 	item->node = node;
 	item->stat = stat;
 	item.owner = self;
-	_items[@(stat.reference)] = item;
+	[_items setObject:item forKey:@(stat.reference)];
 	return item;
 }
 
@@ -865,18 +921,25 @@ item_id(uint64_t reference)
 
 - (void)reclaimItem:(FSItem *)item replyHandler:(void (^)(NSError *))reply
 {
-	NTFSItem *value;
-	NSError *error = nil;
+	__block NSError *error = nil;
 
-	@synchronized(self) {
-		value = [self checkedItem:item];
-		if (value == nil) {
-			error = ntfs_error(NTFS_STALE);
-		} else {
-			[_items removeObjectForKey:@(value->stat.reference)];
-			[self releaseItem:value];
-		}
-	}
+	[self performItemPublication:^{
+	  NTFSItem *value;
+
+	  @synchronized(self) {
+		  value = [self checkedItem:item];
+		  if (value == nil) {
+			  error = ntfs_error(NTFS_STALE);
+		  } else {
+			  [self reclaimIfEligible:value
+					  cleanup:^{
+					    [self->_items
+						removeObjectForKey:@(value->stat.reference)];
+					    [self releaseItem:value];
+					  }];
+		  }
+	  }
+	}];
 	reply(error);
 }
 
@@ -912,25 +975,27 @@ item_id(uint64_t reference)
 
 - (void)unmountWithReplyHandler:(void (^)(void))reply
 {
-	NTFSItem *item;
-
 	[_lifecycleLock lock];
 	_pendingUnmounts++;
 	if (_lifecycle != NTFSVolumeInvalidating && _lifecycle != NTFSVolumeInvalidated) {
 		_lifecycle = NTFSVolumeDraining;
 	}
 	[_lifecycleLock unlock];
-	@synchronized(self) {
-		for (item in _items.allValues) {
-			[self clearItemCaches:item];
-		}
-		[_lifecycleLock lock];
-		_pendingUnmounts--;
-		if (_pendingUnmounts == 0 && _lifecycle == NTFSVolumeDraining) {
-			_lifecycle = NTFSVolumeUnmounted;
-		}
-		[_lifecycleLock unlock];
-	}
+	[self performItemPublication:^{
+	  NTFSItem *item;
+
+	  @synchronized(self) {
+		  for (item in self->_items.objectEnumerator.allObjects) {
+			  [self clearItemCaches:item];
+		  }
+		  [self->_lifecycleLock lock];
+		  self->_pendingUnmounts--;
+		  if (self->_pendingUnmounts == 0 && self->_lifecycle == NTFSVolumeDraining) {
+			  self->_lifecycle = NTFSVolumeUnmounted;
+		  }
+		  [self->_lifecycleLock unlock];
+	  }
+	}];
 	reply();
 }
 

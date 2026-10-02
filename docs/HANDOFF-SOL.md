@@ -90,10 +90,27 @@ counts, all transient cache kinds and interleaved enumeration passed under
 ASan/UBSan, along with the existing namespace fault/budget checks. Style and the
 current unsigned app/extension also passed. Three modern-runtime SKIPs remain.
 See LIFECYCLE.md and `artifacts/plan-lifecycle-{component-reviewed,style,app-build}.log`.
+The subsequent ownership continuation uses weak canonical indexing and each
+item's retained volume. macOS 27 reclaim executes cleanup only through the native
+eligibility API; older runtimes wait for the last FSItem reference. A separate
+publication lock covers activation/lookup replies against reclaim/teardown while
+replies remain outside the core monitor. Five modeled eligibility/ownership/
+publication cases, all existing legacy checks, style and the unsigned current
+app passed under `artifacts/plan-reclaim-{component-reviewed,style,app-build}.log`.
+The model proves adapter cleanup ordering, not the real framework/kernel counts.
 Do not claim interruption of a native synchronous read, task cancellation,
-conditional modern reclaim or installed lifetime/scheduling from this component
-checkpoint. A callback that never returns still prevents draining; buffers must
-remain owned until it does. The portable core is unchanged.
+native reclaim-count qualification or installed lifetime/scheduling from this
+component checkpoint. A callback that never returns still prevents draining;
+buffers must remain owned until it does. The portable core is unchanged.
+
+Continue the explicit enumeration gaps: unsupported objects can stop an
+attribute-requested page; names-only calls omit virtual dot/parent entries; bad
+cookies/verifiers use EINVAL rather than the native directory-cookie error.
+The packer's nullable argument is not evidence that requested attributes may be
+omitted. Define truthful unsupported-object metadata and parent/cookie ownership
+for both protocols, then test continuation, faults and admission. LIFECYCLE.md
+links the primary API contracts. These gaps are not closed by passing the current
+ordinary-file pagination tests.
 
 ## Core handoff checkpoint
 

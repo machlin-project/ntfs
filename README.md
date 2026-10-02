@@ -68,3 +68,8 @@ draining reads, clears transient caches at unmount and retains item ownership fo
 reclamation. Eight blocked-read/overlapping-teardown scenarios and interleaved
 enumerations pass locally; synchronous I/O interruption and installed lifecycle
 remain separate acceptance requirements.
+Conditional native reclaim now serializes against item-result publication;
+older runtimes retain item ownership until the last FSItem reference. Five
+modeled eligibility/ownership/publication cases and the current component/app
+checks pass. Native reclaim counts and unsupported-object/dot-entry enumeration
+contracts still require acceptance; see the lifecycle document.

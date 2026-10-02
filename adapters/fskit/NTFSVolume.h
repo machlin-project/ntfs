@@ -23,6 +23,12 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 /* Admission state can be inspected without waiting for an outstanding read.
  * Unmount retains item identities for reclamation; invalidation is terminal. */
 @property(readonly) NTFSVolumeLifecycle lifecycle;
+/* Serialize publication of native item results against reclaim and teardown.
+ * Replies still run outside the core operation monitor. */
+- (void)performItemPublication:(void (^)(void))publication;
+/* Native bridge, invoked with publication/core ownership already serialized.
+ * Older runtimes keep a node alive until the last FSItem reference disappears. */
+- (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup;
 - (FSItem *)activate:(NSError **)error;
 - (FSItem *)lookup:(FSFileName *)name
        inDirectory:(FSItem *)directory

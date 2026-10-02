@@ -7,11 +7,13 @@
 - (void)activateVolumeWithOptions:(FSTaskOptions *)options
 		     replyHandler:(void (^)(FSActivateResult *, NSError *))reply
 {
-	NSError *error = nil;
-	FSItem *item = [self activate:&error];
-
 	(void)options;
-	reply(item != nil ? [[FSActivateResult alloc] initWithRootItem:item] : nil, error);
+	[self performItemPublication:^{
+	  NSError *error = nil;
+	  FSItem *item = [self activate:&error];
+
+	  reply(item != nil ? [[FSActivateResult alloc] initWithRootItem:item] : nil, error);
+	}];
 }
 
 - (void)deactivateVolumeWithOptions:(FSDeactivateOptions)options
@@ -27,25 +29,27 @@
 		context:(FSContext *)context
 	   replyHandler:(void (^)(FSLookupItemResult *, NSError *))reply
 {
-	NSError *error = nil;
-	FSFileName *stored = nil;
-	FSItem *item;
-	FSItemAttributes *attrs;
-	FSLookupItemResult *result = nil;
-
 	(void)context;
-	@synchronized(self) {
-		item = [self lookup:name inDirectory:directory storedName:&stored error:&error];
-		if (item != nil) {
-			attrs = [self attributes:item error:&error];
-			if (attrs != nil) {
-				result = [[FSLookupItemResult alloc] initWithFoundItem:item
-									      itemName:stored
-									itemAttributes:attrs];
-			}
-		}
-	}
-	reply(result, error);
+	[self performItemPublication:^{
+	  NSError *error = nil;
+	  FSFileName *stored = nil;
+	  FSItem *item;
+	  FSItemAttributes *attrs;
+	  FSLookupItemResult *result = nil;
+
+	  @synchronized(self) {
+		  item = [self lookup:name inDirectory:directory storedName:&stored error:&error];
+		  if (item != nil) {
+			  attrs = [self attributes:item error:&error];
+			  if (attrs != nil) {
+				  result = [[FSLookupItemResult alloc] initWithFoundItem:item
+										itemName:stored
+									  itemAttributes:attrs];
+			  }
+		  }
+	  }
+	  reply(result, error);
+	}];
 }
 
 - (void)getAttributes:(FSItemGetAttributesRequest *)request

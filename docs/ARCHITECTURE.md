@@ -29,6 +29,13 @@ before waiting for an outstanding serialized read. Unmount drains operations and
 closes transient item caches while preserving nodes for reclamation; invalidation
 releases every child before the core/resource. Delayed reads cannot report success
 after observing closed admission. Replies run outside the operation monitor.
+Activation/lookup result publication has a separate lock shared with reclaim and
+teardown. On macOS 27, the adapter uses conditional native reclaim while preventing
+concurrent item returns. Older runtimes defer cleanup until the last FSItem
+reference. Weak canonical indexing and each item's retained owner avoid a cycle;
+final-reference cleanup releases children without device I/O. Native count and
+installed scheduling qualification remain separate from the tested eligibility
+model.
 [LIFECYCLE.md](LIFECYCLE.md) defines remount, overlapping teardown and the remaining
 synchronous cancellation/deadline and installed-runtime limits.
 Opening a named stream reads file metadata independently of the default stream:

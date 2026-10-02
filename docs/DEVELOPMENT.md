@@ -26,6 +26,10 @@ The component includes eight semaphore-gated resource-read/lifecycle scenarios
 and interleaved enumeration with five-second test deadlines. Modern runtime
 checks explicitly SKIP without macOS 27. See LIFECYCLE.md for admission/teardown
 ownership and the absence of a native synchronous-I/O timeout guarantee.
+Five additional modeled eligibility/ownership/publication cases cover conditional
+reclaim, weak canonical identity, final-item lifetime and lookup replies racing
+reclaim/unmount/deactivation. The eligibility model does not execute the real
+macOS 27 kernel/framework count mechanism.
 Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security` or `access`. The time budget applies per target. Each campaign retains its own

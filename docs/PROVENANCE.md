@@ -59,6 +59,7 @@ Primary references:
 - [NTFS-3G log layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/logfile.h)
 - [Original Linux-NTFS log structures](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html)
 - [Original LFS research and version boundaries](https://dfir.ru/2019/02/16/how-the-logfile-works/)
+- [LLVM libFuzzer process and corpus contracts](https://llvm.org/docs/LibFuzzer.html)
 - [Original Linux-NTFS Secure format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/secure.html)
 - [Original Linux-NTFS descriptor format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/security_descriptor.html)
 - [Original Linux-NTFS MFT and reserved-record notes](https://flatcap.github.io/linux-ntfs/ntfs/files/mft.html)
@@ -200,6 +201,12 @@ sources and expected metadata/restored-page bytes are authored from named wire
 fields, separately from implementation offsets. No foreign copy-routing or
 recovery implementation was imported for this continuation; tail/fast routing,
 current circular history and native Windows qualification remain open.
+The counted volume binder reuses the repository's existing stream/extent
+implementation and the documented reserved `$LogFile` slot. Its fixtures place
+independently authored journal bytes in named NTFS mappings; no foreign stream
+or recovery algorithm was imported. Process-isolated fuzzing follows LLVM's
+public corpus/process interface as test infrastructure; it is not product code
+or a change in the allocator/disk format.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

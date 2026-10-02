@@ -30,7 +30,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
 | Read-only log primitives | LFS 1.1/2.0 common restart/client/page framing, LSN geometry and exact logical records; nonempty-LCN NTFS update spans; bounded immutable inputs/caller scratch and diagnostic transport | 109 independent verdicts and 110 diagnostic contracts passed; structured USA-preserving fuzz passed; complete journal ownership/copy routing/wrapped assembly/checkpoint tables, LCN-less and Windows log qualification remain open |
-| Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz passed; counted stream/native ownership, tail/fast routing, circular currentness and record assembly remain open |
+| Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz passed; native journal ownership, tail/fast routing, circular currentness and record assembly remain open |
+| NTFS journal stream binding | Fixed MFT slot/unnamed ordinary stream, complete fragmented/list/sequence/base ownership, node-independent counted lifetime, logical versus physical read accounting, staged partial-read isolation and refusal of unsupported system-file forms | 24 image verdicts/exact reports, 54 allocation/58 physical-read faults with retry, two simultaneous owners, BUSY unmount and unchanged images passed; ordinary dirty-media policy is unchanged; native journal admission/drain remains open |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
@@ -40,7 +41,58 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The logical-source continuation passes all 43 sanitized C suites and style under
+The volume-binding continuation passes all 46 sanitized C suites, both
+freestanding 2-KiB-frame targets, style, the component's 17 PASS/seven runtime SKIPs
+and the unsigned arm64/x86_64 app under `artifacts/plan-logvolume-*-final.log`.
+Both app-core architectures compile the new owner; no installed mount ran.
+The 24 independently authored 8-MiB images include contiguous/fragmented storage,
+resident/nonresident attribute lists, ordinary 4-KiB and maximum 64-KiB restart
+pages, fast storage and a torn first copy. Conflicts, stale sequence/base
+ownership, continuation gaps, directory/reparse/view/uninterpreted records,
+encoded/sparse SI and attribute flags, partial initialized length and missing
+streams retain exact error reports. Five complete binding sweeps exercise 54
+allocation and 58 physical-read failures, including a late physical extent in a
+64-KiB logical read, with retry, exact release accounting and unchanged media.
+Two independently opened owners preserve BUSY until the last close. Cached
+restart/client snapshots survive the temporary node without reads/allocations;
+tail/circular bytes match original sidecars, including partial backend fills.
+The CLI additionally checks a core mount rejection and two transport errors.
+Initial fixture expectations used CORRUPT for a foreign extension owner; the
+existing shared resolver's documented STALE result was retained and the author
+corrected. Failed and corrected logs remain under
+`artifacts/plan-logvolume-{build-initial,focused-initial,focused-corrected}.log`.
+
+The image fuzz path now exercises counted journal owners. Its author includes 22
+unique journal-bearing 1-MiB volume seeds, explicitly excluding the two larger
+physical layouts, which remain in the full image/source suites. These are
+authored geometries, not truncated larger images. A fixed-file replay executes
+all 282 image seeds (260 existing and 22 journal volumes), exit zero, peak RSS
+348 MiB under `artifacts/plan-logvolume-image-corpus-replay.log`.
+The first in-process campaign reached the 1024-MiB process limit while libFuzzer
+retained roughly 557 MiB of corpus arrays plus ASan quarantine; its OOM, report
+and input remain in `artifacts/fuzz-logvolume-image-final/`. The retained input
+passes 2,000 fixed repeats without a sanitizer/assertion/OOM finding, peak RSS
+337 MiB, under `artifacts/plan-logvolume-image-oom-replay.log`.
+
+Whole-image exploration now uses one libFuzzer child at a time with bounded
+subsets/merges; OOM, timeout and crash remain fatal. The accepted campaign records
+55,049 executions over a 70-second supervisor interval, coverage 4,368/features
+15,132, no reported OOM/timeout/crash and exit zero in
+`artifacts/fuzz-logvolume-image-process-final/report.json`. Its configured
+1024-MiB limit is per process; actual peak or aggregate RSS is not reported by
+that supervisor. This is harness corpus retention, not driver optimization.
+The separate in-process logical-source campaign passes 116,814 executions in
+61 seconds, coverage 834/features 1,948, peak RSS 474 MiB and exit zero in
+`artifacts/fuzz-logvolume-source-final/report.json`. No Windows journal or native
+recovery/currentness/transaction acceptance is established by these runs.
+The permanent pre-exploration replay is also verified in bounded 32-file batches:
+282 image and 57 diagnostic seeds match every fixed execution, peak batch RSS
+128/126 MiB, with passing report status in
+`artifacts/fuzz-logvolume-{image,validation}-workflow/report.json`. Those requested
+one-second probes lasted three/two seconds and qualify the replay/process
+workflow only; they are not additional full-duration campaigns.
+
+The preceding logical-source continuation passes all 43 sanitized C suites and style under
 `artifacts/plan-logsource-{build,core,style}-final.log`. Product C passes both
 freestanding targets with the 2-KiB frame limit, the component's 17 PASS/seven
 explicit macOS-27 SKIP groups and the unsigned app build under
@@ -73,7 +125,7 @@ The earlier 128-KiB campaign remains in `artifacts/fuzz-logsource-reviewed/`; it
 excluded two large sources and did not exercise ordinary 4-KiB source geometry.
 The initial compile error used the wrong repository allocation-error enum;
 `artifacts/plan-logsource-build-initial.log` remains alongside corrected evidence.
-Counted volume/stream integration, routed/current circular records, checkpoints,
+Native journal ownership, routed/current circular records, checkpoints,
 transaction/crash/durability simulation, Windows and remote CI remain open.
 
 The preceding read-only log primitive continuation passes all 40 sanitized C suites, both

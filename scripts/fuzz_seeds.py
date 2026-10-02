@@ -12,6 +12,7 @@ from wof_fixtures import generate as generate_wof
 from lzx_fixtures import author as generate_lzx
 from logfile_fixtures import author as generate_logfile
 from logfile_source_fixtures import author as generate_logfile_sources
+from logfile_volume_fixtures import author as generate_logfile_volumes
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
@@ -47,6 +48,15 @@ ACCESS_DENY_ONLY = 0x00000010
 ACCESS_RESTRICTED = 0x01
 ACCESS_USER_DENY_ONLY = 0x02
 ACCESS_UNRELATED_RID = 1001
+
+
+def journal_volume_images(output, image_bytes):
+    sources = output / 'logfile-sources'
+    volumes = output / 'logfile-volumes'
+    generate_logfile_sources(sources)
+    cases = generate_logfile_volumes(volumes, sources, image_bytes,
+                                    name_prefix='logfile-volume-')
+    return [volumes / case['path'] for case in cases]
 
 
 def security_seeds():

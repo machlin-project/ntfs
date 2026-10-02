@@ -9,15 +9,19 @@ import subprocess
 import sys
 import tempfile
 from environment import tool_environment
-from fuzz_seeds import generate
+from fuzz_seeds import generate, journal_volume_images
 
 DEFAULT_SECONDS = 60
 MAX_SECONDS = 3600
-# All fixture payloads fit in one MiB. Author that physical geometry directly:
+# The image campaign's payloads fit in one MiB. Author that geometry directly;
+# larger journal-volume layouts stay in the dedicated component/source suites.
 # libFuzzer retains whole inputs, so unused disk tails amplify corpus memory.
 MAX_INPUT_BYTES = 1024 * 1024
 RSS_LIMIT_MIB = 1024
 INPUT_TIMEOUT_SECONDS = 5
+IMAGE_FUZZ_PROCESSES = 1
+FINISH_GRACE_SECONDS = 120
+SEED_REPLAY_BATCH_FILES = 32
 STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
@@ -70,6 +74,8 @@ try:
             # the original image API corpus without duplicating unused tails.
             paths = sorted(seeds.glob('validation-*.img')) if target == 'validation' else sorted(
                 path for path in seeds.glob('*.img') if not path.name.startswith('validation-'))
+            if target == 'image':
+                paths.extend(journal_volume_images(seeds, maximum))
             sources = [root / ('tests/fuzz_validation.c' if target == 'validation' else 'tests/fuzz.c'), root / 'tests/fuzz_mutator.c']
             flags = []
         else:
@@ -82,16 +88,51 @@ try:
             shutil.copyfile(path, corpus / path.name)
         binary = campaign / 'ntfs-fuzzer'
         command = [compiler, *sdk, '-std=c11', '-O1', '-g', '-fsanitize=fuzzer,address,undefined', '-fno-omit-frame-pointer', '-Wdeclaration-after-statement', '-I', str(root / 'include'), '-I', str(root / 'core'), *flags, *map(str, sorted((root / 'core').glob('*.c'))), *map(str, sources), str(root / 'tests/fuzz_device.c'), '-o', str(binary)]
-        item = {'target': target, 'input_bytes': maximum, 'status': 'building', 'log': str(campaign / 'run.log')}
+        # Whole-image corpora retain large raw byte arrays. LibFuzzer's process
+        # mode uses bounded subsets and merges discoveries between children,
+        # retaining sanitizer checks without accumulating one live image corpus.
+        # Every OOM, timeout and crash still fails; no finding is ignored.
+        process_flags = []
+        if target in ('image', 'validation'):
+            process_flags = [f'-fork={IMAGE_FUZZ_PROCESSES}', '-ignore_ooms=0',
+                             '-ignore_timeouts=0', '-ignore_crashes=0']
+        item = {'target': target, 'input_bytes': maximum, 'status': 'building',
+                'processes': IMAGE_FUZZ_PROCESSES if process_flags else 0,
+                'rss_limit_mib': RSS_LIMIT_MIB, 'timeout_seconds': INPUT_TIMEOUT_SECONDS,
+                'log': str(campaign / 'run.log')}
         report['targets'].append(item)
         report_path.write_text(json.dumps(report, indent=2) + '\n')
         subprocess.run(command, cwd=root, env=env, check=True)
         item['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         item['status'] = 'running'
         report_path.write_text(json.dumps(report, indent=2) + '\n')
+        if process_flags:
+            # Child subsets are coverage-guided exploration, not proof that
+            # every authored seed ran. Fixed-file batches check all seeds once
+            # without retaining a growing corpus or weakening sanitizer checks.
+            replay_log = campaign / 'seed-replay.log'
+            item['seed_replay'] = {'files': len(paths), 'log': str(replay_log), 'status': 'running'}
+            report_path.write_text(json.dumps(report, indent=2) + '\n')
+            with replay_log.open('w') as log:
+                for start in range(0, len(paths), SEED_REPLAY_BATCH_FILES):
+                    replay = subprocess.run([str(binary), *map(str, paths[start:start + SEED_REPLAY_BATCH_FILES]),
+                        '-runs=1', '-print_final_stats=1', f'-rss_limit_mb={RSS_LIMIT_MIB}',
+                        f'-timeout={INPUT_TIMEOUT_SECONDS}', f'-artifact_prefix={campaign}/'],
+                        cwd=campaign, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                        timeout=FINISH_GRACE_SECONDS)
+                    item['seed_replay']['exit_code'] = replay.returncode
+                    if replay.returncode != 0:
+                        item['seed_replay']['status'] = 'fail'
+                        raise subprocess.CalledProcessError(replay.returncode, replay.args)
+            item['seed_replay']['status'] = 'pass'
+            report_path.write_text(json.dumps(report, indent=2) + '\n')
         print(f'Fuzzing {target}: {args.seconds}s, max input {maximum} bytes', flush=True)
         with (campaign / 'run.log').open('w') as log:
-            run = subprocess.run([str(binary), str(corpus), f'-max_total_time={args.seconds}', f'-max_len={maximum}', f'-rss_limit_mb={RSS_LIMIT_MIB}', f'-timeout={INPUT_TIMEOUT_SECONDS}', f'-artifact_prefix={campaign}/'], cwd=root, env=env, stdout=log, stderr=log)
+            run = subprocess.run([str(binary), str(corpus), *process_flags,
+                '-print_final_stats=1', f'-max_total_time={args.seconds}', f'-max_len={maximum}',
+                f'-rss_limit_mb={RSS_LIMIT_MIB}', f'-timeout={INPUT_TIMEOUT_SECONDS}',
+                f'-artifact_prefix={campaign}/'], cwd=campaign, env=env, stdin=subprocess.DEVNULL,
+                stdout=log, stderr=log, timeout=args.seconds + FINISH_GRACE_SECONDS)
         item['exit_code'] = run.returncode
         item['status'] = 'pass' if run.returncode == 0 else 'fail'
         if run.returncode != 0:
@@ -101,6 +142,9 @@ except BaseException:
     report['status'] = 'fail'
     if report['targets'] and report['targets'][-1]['status'] in ('building', 'running'):
         report['targets'][-1]['status'] = 'fail'
+        replay = report['targets'][-1].get('seed_replay')
+        if replay and replay['status'] == 'running':
+            replay['status'] = 'fail'
     raise
 finally:
     report_path.write_text(json.dumps(report, indent=2) + '\n')

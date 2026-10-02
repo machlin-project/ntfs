@@ -16,7 +16,8 @@ post-crash journal history nor execute recovery. Clean hints and structural pars
 success never satisfy writable ownership or permit a dirty mount. The separate
 logical-source owner selects only compatible supported restart copies, retaining
 bounded conflicts and backend error evidence; physical page reading does not
-establish a post-crash journal history. Counted stream ownership and complete
+establish a post-crash journal history. Counted read-only stream binding is now
+implemented without admitting dirty mounts. Native journal admission/drain and complete
 tail/fast-page routing, wrapped records, native client checkpoints, transaction
 analysis and the crash/durability simulator remain required.
 

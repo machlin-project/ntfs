@@ -22,8 +22,24 @@ LFS version numbers do not establish the NTFS client's payload version.
 volume/block-device environment. Its exact read/allocate/release callbacks and
 context stay alive until `ntfs_logfile_close`; the caller serializes operations.
 An exported regular file can supply this source without mounting an NTFS volume.
-Integrating the source with a counted NTFS stream and native lifecycle remains
-separate work. No native dirty-mount or write policy changes.
+`ntfs_logfile_open_volume` instead binds the fixed MFT record 2's unnamed DATA
+stream in an already mounted immutable core volume. It uses the usual complete
+mapping/list/extension sequence and base-ownership checks. The temporary node
+closes before logical-source discovery; a counted public backing stream keeps
+the volume BUSY until the journal owner closes. Each independently opened owner
+has its own stream. Close releases the journal buffers/object before releasing
+that callback context's stream. Native admission/drain integration remains
+separate work. No dirty-mount or write policy changes.
+
+Automatic binding supports ordinary fully initialized, unencoded storage. It
+explicitly refuses directory, reparse, view/uninterpreted record, encoded/sparse
+standard-information or stream flags, and partial initialized-length forms.
+This is a bounded system-file policy, not a claim to decode those forms. Invalid
+owner arguments/limits fail before metadata reads. Binding errors release the
+temporary node and stream and leave the source NULL; pre-discovery failures have
+an empty report. Logical read credits/reporting begin after stream construction.
+Metadata/run limits and actual physical resource reads retain their own counters:
+one logical restart-page read may span multiple physical extents.
 
 Discovery probes offset zero and each possible second-copy position for supported
 512-byte through 64-KiB system pages. It therefore finds a valid second copy even
@@ -118,15 +134,21 @@ unsupported. Erased/missing restart storage is not treated as a valid clean page
 
 ## Diagnostic and qualification workflow
 
-`ntfs-logfile` reads bounded regular-file packets opened read-only. It decodes an
+The packet modes of `ntfs-logfile` read bounded regular files opened read-only. They decode an
 exported restart page, record page with an independent restart configuration,
-already assembled LFS record or NTFS update payload. It does not mount an image
+already assembled LFS record or NTFS update payload. They do not mount an image
 or report the journal/volume as consistent. Successful JSON reports retain
 `recovery_qualified: false`; a decoder error exits one with zero metadata, while
 transport/argument/configuration failures exit two. The `journal` mode uses exact
 bounded reads from a regular-file logical source rather than loading the entire
 export. JSON retains every candidate result, read accounting, selection and the
 selected lossless restart/client metadata, or NULL selected metadata on failure.
+`volume-journal` reads an NTFS regular-file image through the portable core's
+ordinary read-only mount and counted stream binding. It closes the journal,
+then the core volume, then the image; it does not perform a native mount. A
+mount/binding failure still produces a bounded report with no selected metadata.
+Ordinary dirty-media rejection remains in force, and every mode retains
+`recovery_qualified: false`.
 
 ```sh
 .build/ntfs-logfile restart EXPORTED_RESTART_PAGE LOGICAL_LOGFILE_BYTES
@@ -134,6 +156,7 @@ selected lossless restart/client metadata, or NULL selected metadata on failure.
 .build/ntfs-logfile record ASSEMBLED_RECORD RECORD_HEADER_BYTES
 .build/ntfs-logfile update NTFS_CLIENT_PACKET
 .build/ntfs-logfile journal EXPORTED_LOGICAL_LOGFILE
+.build/ntfs-logfile volume-journal NTFS_IMAGE_FILE
 python3 scripts/fuzz.py --target logfile --seconds 60 --compiler /opt/homebrew/opt/llvm/bin/clang --output artifacts/fuzz-logfile-next
 ```
 
@@ -159,7 +182,26 @@ includes every source fixture, including ordinary 4-KiB system/log pages and
 1-MiB files with maximum restart/mixed record-page sizes. Fuzz input/RSS is
 independent of the owner's bounded three-page allocation and I/O credits.
 
-Next work must integrate counted volume/stream ownership, route tail/fast-page
+Independent volume layouts place the original logical journal bytes in
+contiguous/fragmented runs and resident/nonresident attribute lists. They cover
+mixed/maximum restart pages, ordinary 4-KiB log pages, fast storage, torn copies,
+conflicts, stale sequence/base ownership, continuation gaps and unsupported
+system-file forms. Exact page/report oracles are retained independently of the
+core; failed physical reads may fill a prefix before returning an error. Fault
+sweeps check every binding allocation/read position in selected layouts, retries,
+exact release accounting and BUSY ownership, including two simultaneous owners.
+These focused metadata images are not a Windows-authored complete system-file
+namespace or whole-volume consistency oracle.
+
+The image fuzz target now opens counted journal owners on mounted volumes and
+checks cached clients, staged circular/tail pages, error guards and teardown.
+Its seed author uses genuine 1-MiB physical geometry for bounded corpus storage;
+larger journal layouts that cannot fit have explicit manifest skips and remain
+in the full component/source suites. It does not truncate an 8-MiB volume or
+treat a geometry skip as a passed layout. Separate logical-source fuzz retains
+all of its original 1-MiB journals under the 2-MiB envelope.
+
+Next work must integrate native journal admission/drain ownership, route tail/fast-page
 copies, validate circular currentness and assemble wrapped records, then resolve
 client sequences and interpret NTFS checkpoint/tables. Compare original
 Windows 1.1/2.0 packets, including LCN-less records and interrupted writes. Add

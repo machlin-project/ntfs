@@ -174,6 +174,45 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## NTFS-backed journal handoff checkpoint
+
+`ntfs_logfile_open_volume` now binds MFT record 2's unnamed ordinary initialized
+stream through the existing extent/list/sequence/base-owner checks. It closes the
+temporary source node, retains one counted stream per journal owner and releases
+the journal buffers/object before that callback context. Preserve BUSY unmount
+and the same serialized immutable-volume contract. Directory/reparse/view,
+encoded/sparse and partial initialized-length forms refuse binding explicitly;
+SI flags and actual stream flags are checked separately. Invalid owner policy
+fails before metadata I/O. Logical report credits begin after stream construction,
+separately from physical I/O and existing metadata/run budgets.
+
+All 46 sanitized core suites, both frame-limited freestanding targets, style,
+17 component PASS/seven runtime SKIPs and the unsigned arm64/x86_64 app pass under
+`artifacts/plan-logvolume-*-final.log`. Independent volume fixtures pass 24 exact
+verdicts/reports, unchanged-image checks, 54 allocation/58 physical-read faults
+with retry and two simultaneous owner lifetimes. The CLI's `volume-journal`
+mode uses only a portable read-only core mount of a regular file. It does not
+authorize dirty mounts or report a qualified journal history.
+
+The image target adds 22 small volume seeds and explicitly skips two physical
+layouts that cannot fit its authored 1-MiB geometry; all 24 remain in direct
+tests. Fixed-file replay executes all 282 original image seeds at peak RSS
+348 MiB. The first single-process campaign's corpus OOM remains recorded; the
+retained input passes 2,000 fixed repeats at 337 MiB. Child-process exploration
+then passes 55,049 executions/70-second supervisor interval, no OOM/timeout/crash,
+with a per-process cap that is not an actual aggregate memory measurement.
+All-source in-process fuzz passes 116,814 executions/61 seconds at peak RSS
+474 MiB. ACCEPTANCE.md retains exact logs/reports and the corrected author
+expectation for foreign extension ownership; do not erase either failed run.
+
+Next implement routed tail/fast copies, current circular history and wrapped
+record assembly, then client sequence/checkpoint/table interpretation and the
+transaction/crash/durability model. Native journal admission/drain integration,
+Windows lifecycle/version-transition packets and installed recovery/roundtrips
+remain separate acceptance. FSKit maintenance remains unimplemented; fresh ext4
+history adds unary-load/task-refusal requirements in FSKIT-EXT4-LESSONS.md without
+adding maintenance or writable capabilities to this driver.
+
 ## Logical log source handoff checkpoint
 
 LOGFILE.md and `ntfs/logfile.h` now define `ntfs_logfile_open` over a logical,
@@ -205,7 +244,8 @@ source fuzz now includes ordinary 4-KiB pages and directs resealed mutations int
 declared restart-area bytes. Process RSS is not retained core memory. The initial
 enum spelling compile failure and corrected/final evidence remain separate.
 
-Continue with counted NTFS-stream/volume and native source lifetime, legacy tail/
+The subsequent checkpoint above adds counted NTFS-stream/volume lifetime.
+Continue with native source lifetime, legacy tail/
 modern fast-page routing, current circular history, wrapped assembly, client
 sequence resolution and NTFS checkpoint/tables. Then complete transaction/crash/
 durability simulation under WRITES.md. Original Windows packets and lifecycle/

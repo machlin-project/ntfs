@@ -9,6 +9,7 @@ struct ntfs_logfile {
 	struct ntfs_logfile_restart restart;
 	uint8_t *raw, *scratch, *selected;
 	bool backend_failed;
+	struct ntfs_stream *backing;
 };
 
 void
@@ -18,6 +19,15 @@ ntfs_logfile_default_limits(struct ntfs_logfile_limits *limits)
 		*limits = (struct ntfs_logfile_limits){NTFS_LOGFILE_MAX_PAGE_BYTES,
 		    NTFS_LOGFILE_DEFAULT_READ_CALLS, NTFS_LOGFILE_DEFAULT_READ_BYTES};
 	}
+}
+
+static bool
+valid_limits(const struct ntfs_logfile_limits *limits)
+{
+	return limits->max_page_bytes >= NTFS_MST_STRIDE &&
+	    limits->max_page_bytes <= NTFS_LOGFILE_MAX_PAGE_BYTES &&
+	    (limits->max_page_bytes & (limits->max_page_bytes - 1u)) == 0 &&
+	    limits->max_read_calls != 0 && limits->max_read_bytes != 0;
 }
 
 static enum ntfs_result
@@ -168,7 +178,10 @@ discover(struct ntfs_logfile *source)
 void
 ntfs_logfile_close(struct ntfs_logfile *source)
 {
+	struct ntfs_stream *backing;
+
 	if (source != NULL) {
+		backing = source->backing;
 		if (source->raw != NULL) {
 			source->environment.release(source->environment.context, source->raw,
 			    source->limits.max_page_bytes);
@@ -182,7 +195,99 @@ ntfs_logfile_close(struct ntfs_logfile *source)
 			    source->limits.max_page_bytes);
 		}
 		source->environment.release(source->environment.context, source, sizeof(*source));
+		ntfs_stream_close(backing);
 	}
+}
+
+static enum ntfs_result
+volume_read(void *context, uint64_t offset, void *bytes, size_t size)
+{
+	return ntfs_stream_exact(context, offset, bytes, size);
+}
+
+static void *
+volume_allocate(void *context, size_t size)
+{
+	struct ntfs_stream *stream = context;
+
+	return stream->volume->env.allocate(stream->volume->env.context, size);
+}
+
+static void
+volume_release(void *context, void *bytes, size_t size)
+{
+	struct ntfs_stream *stream = context;
+
+	stream->volume->env.release(stream->volume->env.context, bytes, size);
+}
+
+enum ntfs_result
+ntfs_logfile_open_volume(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
+    struct ntfs_logfile_report *report, struct ntfs_logfile **out)
+{
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *stream = NULL;
+	struct ntfs_stat metadata;
+	struct ntfs_environment environment;
+	struct ntfs_logfile_limits policy;
+	const struct ntfs_disk_record *header;
+	enum ntfs_result result;
+
+	if (report != NULL) {
+		ntfs_zero(report, sizeof(*report));
+		report->selected_probe = NTFS_LOGFILE_NO_PROBE;
+	}
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	*out = NULL;
+	if (volume == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_logfile_default_limits(&policy);
+	if (limits != NULL) {
+		policy = *limits;
+	}
+	if (!valid_limits(&policy)) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_node_by_number(volume, NTFS_LOGFILE_RECORD, &node);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	header = (const void *)node->record;
+	result = ntfs_node_metadata(node, &metadata);
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	if (metadata.directory || metadata.reparse ||
+	    (ntfs_u16(header->flags) & (NTFS_RECORD_VIEW_INDEX | NTFS_RECORD_UNINTERPRETED)) != 0 ||
+	    (metadata.file_attributes &
+		(NTFS_FILE_SPARSE | NTFS_FILE_COMPRESSED | NTFS_FILE_ENCRYPTED)) != 0) {
+		result = NTFS_UNSUPPORTED;
+		goto done;
+	}
+	result = ntfs_stream_open(node, NULL, 0, &stream);
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	if (stream->flags != 0 || stream->initialized != stream->size) {
+		result = NTFS_UNSUPPORTED;
+		goto done;
+	}
+	ntfs_node_close(node);
+	node = NULL;
+	environment = (struct ntfs_environment){
+	    NTFS_API_VERSION, stream, stream->size, volume_read, volume_allocate, volume_release};
+	result = ntfs_logfile_open(&environment, &policy, report, out);
+	if (result == NTFS_OK) {
+		(*out)->backing = stream;
+		stream = NULL;
+	}
+done:
+	ntfs_node_close(node);
+	ntfs_stream_close(stream);
+	return result;
 }
 
 enum ntfs_result
@@ -208,10 +313,7 @@ ntfs_logfile_open(const struct ntfs_environment *environment,
 	}
 	if (environment == NULL || environment->api_version != NTFS_API_VERSION ||
 	    environment->read == NULL || environment->allocate == NULL ||
-	    environment->release == NULL || limits.max_page_bytes < NTFS_MST_STRIDE ||
-	    limits.max_page_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES ||
-	    (limits.max_page_bytes & (limits.max_page_bytes - 1u)) != 0 ||
-	    limits.max_read_calls == 0 || limits.max_read_bytes == 0) {
+	    environment->release == NULL || !valid_limits(&limits)) {
 		return NTFS_INVALID;
 	}
 	if (environment->size_bytes > NTFS_LOGFILE_MAX_FILE_BYTES) {

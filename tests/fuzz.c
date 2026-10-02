@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/ntfs.h>
 #include <ntfs/security.h>
+#include <ntfs/logfile.h>
 #include "fuzz_device.h"
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,10 @@ enum {
 	FUZZ_REPARSE_NAME_UNITS = 128,
 	FUZZ_DIRECTORY_ENTRIES = 64,
 	FUZZ_STREAM_NAMES = 32,
+	FUZZ_JOURNAL_CLIENTS = 32,
+	FUZZ_JOURNAL_PAGE_POSITIONS = 2,
+	FUZZ_JOURNAL_GUARD_BYTES = 16,
+	FUZZ_RESTART_PAGE_COUNT = 2,
 	FUZZ_CONTENT_POSITIONS = 3,
 	FUZZ_MUTATIONS = 2000,
 	FUZZ_MUTATION_REGION = 512 * 1024,
@@ -27,6 +32,54 @@ enum {
 #define FUZZ_RANDOM_SEED UINT32_C(0x85a7f12d)
 #define FUZZ_RANDOM_MULTIPLIER UINT32_C(1664525)
 #define FUZZ_RANDOM_INCREMENT UINT32_C(1013904223)
+
+static void
+fuzz_journal(struct ntfs_volume *volume, struct fuzz_device *device)
+{
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_restart restart;
+	struct ntfs_logfile_client client;
+	struct ntfs_logfile_page_view view, zero = {0};
+	uint8_t *guarded;
+	uint64_t offset;
+	size_t i, j, bytes;
+	enum ntfs_result result;
+
+	if (ntfs_logfile_open_volume(volume, NULL, NULL, &source) != NTFS_OK) {
+		assert(source == NULL);
+		return;
+	}
+	assert(ntfs_unmount(volume) == NTFS_BUSY);
+	assert(ntfs_logfile_get_restart(source, &restart) == NTFS_OK);
+	for (i = 0; i < restart.client_count && i < FUZZ_JOURNAL_CLIENTS; i++) {
+		assert(ntfs_logfile_get_client(source, (uint16_t)i, &client) == NTFS_OK);
+	}
+	bytes = restart.log_page_bytes + FUZZ_JOURNAL_GUARD_BYTES * 2;
+	guarded = fuzz_allocate(device, bytes);
+	if (guarded != NULL) {
+		for (i = 0; i < FUZZ_JOURNAL_PAGE_POSITIONS; i++) {
+			offset = i == 0
+			    ? restart.circular_offset
+			    : (uint64_t)FUZZ_RESTART_PAGE_COUNT * restart.system_page_bytes;
+			memset(guarded, FUZZ_COPY_GUARD, bytes);
+			result = ntfs_logfile_read_page(source, offset,
+			    guarded + FUZZ_JOURNAL_GUARD_BYTES, restart.log_page_bytes, &view);
+			if (result == NTFS_OK) {
+				assert(view.offset == offset);
+			} else {
+				assert(memcmp(&view, &zero, sizeof(view)) == 0);
+			}
+			for (j = 0; j < bytes; j++) {
+				if (result != NTFS_OK || j < FUZZ_JOURNAL_GUARD_BYTES ||
+				    j >= bytes - FUZZ_JOURNAL_GUARD_BYTES) {
+					assert(guarded[j] == FUZZ_COPY_GUARD);
+				}
+			}
+		}
+		fuzz_release(device, guarded, bytes);
+	}
+	ntfs_logfile_close(source);
+}
 
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
@@ -53,7 +106,10 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	enum ntfs_result result;
 
 	(void)ntfs_reparse_decode(data, size, &reparse_info);
-	if (ntfs_mount(&env, &limits, &v) == NTFS_OK && ntfs_root(v, &root) == NTFS_OK &&
+	if (ntfs_mount(&env, &limits, &v) == NTFS_OK) {
+		fuzz_journal(v, &d);
+	}
+	if (v != NULL && ntfs_root(v, &root) == NTFS_OK &&
 	    ntfs_directory_open(root, &directory) == NTFS_OK) {
 		for (i = 0;
 		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;

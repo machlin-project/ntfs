@@ -144,11 +144,12 @@ restart(const struct ntfs_logfile_restart *r, const uint8_t *scratch)
 }
 
 static int
-journal(const char *path)
+journal(const char *path, bool volume_source)
 {
 	struct ntfs_image image;
-	struct ntfs_logfile *source;
-	struct ntfs_logfile_report report;
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_report report = {0};
 	struct ntfs_logfile_restart r;
 	struct ntfs_logfile_client client;
 	const struct ntfs_logfile_probe *probe;
@@ -156,15 +157,24 @@ journal(const char *path)
 	enum ntfs_result result;
 
 	if (ntfs_image_open(path, &image) != 0) {
-		fprintf(stderr, "Cannot open read-only regular-file journal source\n");
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
 		return LOGFILE_ARGUMENT_ERROR;
 	}
-	result = ntfs_logfile_open(&image.environment, NULL, &report, &source);
-	printf("{\"schema_version\":%u,\"scope\":\"journal\",\"code\":%d,\"result\":\"%s\","
+	report.selected_probe = NTFS_LOGFILE_NO_PROBE;
+	if (volume_source) {
+		result = ntfs_mount(&image.environment, NULL, &volume);
+		if (result == NTFS_OK) {
+			result = ntfs_logfile_open_volume(volume, NULL, &report, &source);
+		}
+	} else {
+		result = ntfs_logfile_open(&image.environment, NULL, &report, &source);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"%s\",\"code\":%d,\"result\":\"%s\","
 	       "\"recovery_qualified\":false,\"scan_complete\":%s,\"selection\":%d,\"selected_"
 	       "probe\":",
-	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result),
-	    report.scan_complete ? "true" : "false", (int)report.selection);
+	    LOGFILE_DIAGNOSTIC_VERSION, volume_source ? "volume-journal" : "journal", (int)result,
+	    ntfs_result_string(result), report.scan_complete ? "true" : "false",
+	    (int)report.selection);
 	if (report.selected_probe == NTFS_LOGFILE_NO_PROBE) {
 		printf("null");
 	} else {
@@ -199,6 +209,9 @@ journal(const char *path)
 	}
 	printf("}\n");
 	ntfs_logfile_close(source);
+	if (ntfs_unmount(volume) != NTFS_OK) {
+		abort();
+	}
 	ntfs_image_close(&image);
 	return result == NTFS_OK ? 0 : 1;
 }
@@ -220,8 +233,9 @@ main(int argc, char **argv)
 	if (argc < 3) {
 		goto usage;
 	}
-	if (argc == 3 && strcmp(argv[1], "journal") == 0) {
-		return journal(argv[2]);
+	if (argc == 3 &&
+	    (strcmp(argv[1], "journal") == 0 || strcmp(argv[1], "volume-journal") == 0)) {
+		return journal(argv[2], strcmp(argv[1], "volume-journal") == 0);
 	}
 	is_restart = strcmp(argv[1], "restart") == 0;
 	is_page = strcmp(argv[1], "page") == 0;
@@ -313,7 +327,8 @@ usage:
 	    "       ntfs-logfile page PAGE RESTART_PAGE FILE_BYTES\n"
 	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
 	    "       ntfs-logfile update CLIENT_PACKET\n"
-	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n");
+	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
+	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n");
 done:
 	free(restart_scratch);
 	free(restart_bytes);

@@ -137,6 +137,16 @@ struct ntfs_logfile_page_view {
 void ntfs_logfile_default_limits(struct ntfs_logfile_limits *);
 enum ntfs_result ntfs_logfile_open(const struct ntfs_environment *,
     const struct ntfs_logfile_limits *, struct ntfs_logfile_report *, struct ntfs_logfile **out);
+/* Bind the fixed $LogFile MFT record's unnamed stream in an existing immutable
+ * volume. The counted backing stream keeps unmount BUSY through owner close;
+ * source nodes are temporary. Ordinary fully initialized, unencoded storage is
+ * supported; reparse/directory/view/uninterpreted or encoded/sparse/partial-VDL
+ * system-file forms reject explicitly. The usual extent/list/sequence checks
+ * apply before journal reads. Limits/report describe logical reads after stream
+ * construction, separately from native physical I/O and metadata/run budgets.
+ * This does not mount media, authorize dirty mounts or add a write capability. */
+enum ntfs_result ntfs_logfile_open_volume(struct ntfs_volume *, const struct ntfs_logfile_limits *,
+    struct ntfs_logfile_report *, struct ntfs_logfile **out);
 void ntfs_logfile_close(struct ntfs_logfile *);
 /* Cached selected restart/client snapshots use no allocation or device reads.
  * Error outputs are zero; client indexes past the bounded array return END. */

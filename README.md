@@ -105,5 +105,8 @@ Complete journal assembly, transaction analysis, recovery and Windows log
 qualification remain open; structural decoding cannot enable writes or dirty mounts.
 An independent logical-source owner now selects compatible restart copies with
 bounded conflict/partial-I/O reports, retains lossless clients and stages physical
-page reads. Its `ntfs-logfile journal` diagnostic reads exported regular files;
-counted volume/stream integration and complete circular history remain open.
+page reads. Counted ordinary `$LogFile` stream binding holds the core volume
+through owner close and validates fragmented/listed storage. The `journal`
+diagnostic reads exported regular files; `volume-journal` reads NTFS image files
+through an ordinary portable core mount. Complete circular history, copy routing,
+record assembly and native journal lifecycle remain open.

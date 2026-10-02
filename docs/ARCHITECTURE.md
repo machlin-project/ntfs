@@ -207,11 +207,18 @@ checks. The NTFS update decoder validates nonempty LCN vectors and redo/undo spa
 LCN-less/checkpoint payloads remain explicitly unsupported/opaque. LOGFILE.md
 defines the primitive/complete-journal boundary. An independent logical-source
 owner now probes bounded restart-copy candidates, selects compatible newer/equal
-areas and reports conflicts or partial read evidence. Its read-only environment
-context outlives the serialized owner; it is not a mounted-volume environment.
+areas and reports conflicts or partial read evidence. An exported source's
+read-only callback context outlives the serialized owner. The separate volume
+binder resolves fixed MFT record 2's ordinary fully initialized unnamed stream
+through complete extent/list/sequence checks, closes the temporary node and
+holds a counted backing stream. Unmount is BUSY until every journal owner closes;
+owner buffers/object release before the stream callback context. Logical-source
+credits start after construction, separately from metadata/run and physical I/O
+limits. Unsupported encoded/sparse/partial-VDL or reparse/directory/view forms
+refuse automatic binding explicitly.
 Three bounded private buffers retain selected metadata and stage physical page
-reads, publishing caller bytes only after complete integrity checks. Counted
-NTFS-stream integration, tail/fast routing, circular currentness, wrapped assembly,
+reads, publishing caller bytes only after complete integrity checks. Native
+journal admission/drain integration, tail/fast routing, circular currentness, wrapped assembly,
 transaction analysis and recovery remain separate work. The mount policy still
 refuses dirty media.
 

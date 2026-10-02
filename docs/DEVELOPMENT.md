@@ -55,15 +55,28 @@ Use `--target all` for the image, whole-volume diagnostic and ten standalone par
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security`, `access`, `wof` or `logfile`. The time budget applies per target. Each campaign retains its own
 binary, log and report; persistent corpora remain under the selected `--output`.
+Whole-image `image`/`validation` exploration uses one libFuzzer child at a time
+with bounded corpus subsets and merges. Fixed-file batches first execute every
+authored seed once and retain `seed-replay.log` plus its report outcome; child
+subset selection alone is not seed-coverage evidence. OOM/timeout/crash remain
+fatal, with unchanged sanitizers and per-process RSS/input limits. The configured
+RSS ceiling is not actual or aggregate memory usage. The observed earlier image
+corpus OOM and its fixed replay remain separately recorded in ACCEPTANCE.md.
 The `logfile` target uses a 2-MiB envelope for restart/client/page/logical-record/
 NTFS-update/LSN primitives and complete exported logical sources. Its custom
 mutator restores and reseals USA pages or either restart copy, reaching checked
 restart-area spans alongside ordinary framing mutations. The `logfile`,
 `logfile-cli` and `fuzz-logfile` suites check independent metadata/restored-byte
 oracles, zero errors, scratch/input guards and lossless names. `ntfs-logfile`
-inspects bounded exported packets and logical journals only. The `logfile-source`,
+inspects bounded exported packets/logical journals and read-only NTFS image files. The `logfile-source`,
 `logfile-source-cli` and `fuzz-logfile-source` suites cover bounded copy selection,
 conflicts, cached clients, staged physical pages, backend errors and read credits.
+The `logfile-volume`, `logfile-volume-cli` and `fuzz-logfile-volume` suites add
+counted ordinary-stream binding, fragmented/listed storage, source-node-independent
+ownership, mount/binding rejection, physical partial-read faults/retries and
+unchanged image/report oracles. `volume-journal` uses a portable core mount,
+never a native mount. Image fuzz also authors small journal-bearing volumes with
+explicit geometry skips for larger layouts; source/component suites retain them.
 All 22 independent sources fit the fuzz envelope, including three 1-MiB files;
 default core memory/I/O caps remain unchanged. LOGFILE.md defines commands and the
 remaining complete-journal, LCN-less, Windows and recovery requirements.

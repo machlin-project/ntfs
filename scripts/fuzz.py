@@ -21,7 +21,7 @@ INPUT_TIMEOUT_SECONDS = 5
 STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
-LOGFILE_INPUT_BYTES = 128 * 1024
+LOGFILE_INPUT_BYTES = 2 * 1024 * 1024
 TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security', 'access', 'wof', 'logfile')
 
 root = Path(__file__).resolve().parents[1]

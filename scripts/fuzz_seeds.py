@@ -11,9 +11,12 @@ from stat_fixtures import change_flags, UNKNOWN_COMPRESSION_FORMAT
 from wof_fixtures import generate as generate_wof
 from lzx_fixtures import author as generate_lzx
 from logfile_fixtures import author as generate_logfile
+from logfile_source_fixtures import author as generate_logfile_sources
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
+LOGFILE_SOURCE_KIND = 5
+LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 
 MAX_STRUCTURE_BYTES = 32768
 LZNT1_RAW_PAYLOAD = b'Independent raw chunk\n'
@@ -160,6 +163,12 @@ def generate(output):
         payload = (log_packets / case['path']).read_bytes()
         envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_FUZZ_KINDS[case['kind']], case['parameter'], len(configuration))
         (log_seeds / (case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + configuration + payload)
+    log_sources = output / 'logfile-sources'
+    for case in generate_logfile_sources(log_sources):
+        payload = (log_sources / case['path']).read_bytes()
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_SOURCE_KIND, 0, 0)
+        if len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES:
+            (log_seeds / ('source-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

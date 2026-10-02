@@ -55,12 +55,17 @@ Use `--target all` for the image, whole-volume diagnostic and ten standalone par
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security`, `access`, `wof` or `logfile`. The time budget applies per target. Each campaign retains its own
 binary, log and report; persistent corpora remain under the selected `--output`.
-The `logfile` target uses a 128-KiB envelope for restart/client/page/logical-record/
-NTFS-update/LSN primitives. Its custom mutator restores and reseals USA pages to
-reach inner structures, alongside ordinary framing mutations. The `logfile`,
+The `logfile` target uses a 2-MiB envelope for restart/client/page/logical-record/
+NTFS-update/LSN primitives and complete exported logical sources. Its custom
+mutator restores and reseals USA pages or either restart copy, reaching checked
+restart-area spans alongside ordinary framing mutations. The `logfile`,
 `logfile-cli` and `fuzz-logfile` suites check independent metadata/restored-byte
 oracles, zero errors, scratch/input guards and lossless names. `ntfs-logfile`
-inspects bounded exported packets only; LOGFILE.md defines commands and the
+inspects bounded exported packets and logical journals only. The `logfile-source`,
+`logfile-source-cli` and `fuzz-logfile-source` suites cover bounded copy selection,
+conflicts, cached clients, staged physical pages, backend errors and read credits.
+All 22 independent sources fit the fuzz envelope, including three 1-MiB files;
+default core memory/I/O caps remain unchanged. LOGFILE.md defines commands and the
 remaining complete-journal, LCN-less, Windows and recovery requirements.
 The `access` target independently mutates a descriptor/token envelope, including
 group attributes, user/restricting SIDs, requested rights and comparison limits.

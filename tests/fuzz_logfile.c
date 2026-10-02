@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 #include <ntfs/logfile.h>
+#include "fuzz_device.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,12 +13,16 @@ enum {
 	FUZZ_RECORD,
 	FUZZ_UPDATE,
 	FUZZ_CLIENT,
+	FUZZ_SOURCE,
 	FUZZ_KINDS,
-	FUZZ_INPUT_BYTES = 128 * 1024,
+	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
+	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
 	FUZZ_GUARD_BYTES = 32,
 	FUZZ_GUARD_VALUE = 0xa5,
 	FUZZ_MUTATIONS = 1024,
-	FUZZ_GENERIC_PERIOD = 4
+	FUZZ_GENERIC_PERIOD = 4,
+	FUZZ_SOURCE_ALLOCATIONS = 4,
+	FUZZ_SOURCE_OWNER_BYTES = 4096
 };
 
 /* Independent test envelope, not a stored LFS structure. Configuration is a
@@ -51,6 +56,72 @@ guard(const uint8_t *bytes, size_t used, size_t size)
 	}
 }
 
+static void
+fuzz_source(const uint8_t *bytes, size_t size, uint64_t argument)
+{
+	struct ntfs_logfile_report reports[2];
+	struct ntfs_logfile_restart restarts[2];
+	struct ntfs_logfile_client clients[2];
+	struct ntfs_logfile_page_view views[2], zero_view = {0};
+	struct ntfs_logfile *source;
+	struct fuzz_device device;
+	struct ntfs_environment environment;
+
+	enum ntfs_result results[2], page_results[2] = {NTFS_INVALID, NTFS_INVALID};
+
+	size_t i, used[2] = {0, 0};
+
+	memset(restarts, 0, sizeof(restarts));
+	memset(clients, 0, sizeof(clients));
+	memset(views, 0, sizeof(views));
+	for (i = 0; i < sizeof(results) / sizeof(results[0]); i++) {
+		device = (struct fuzz_device){.data = bytes,
+		    .size = size,
+		    .fail_read = argument % (NTFS_LOGFILE_DEFAULT_READ_CALLS + 1u),
+		    .fail_allocation =
+			(argument >> NTFS_BITS_PER_BYTE) % (FUZZ_SOURCE_ALLOCATIONS + 1u)};
+		environment = fuzz_environment(&device);
+		memset(scratch[i], FUZZ_GUARD_VALUE, sizeof(scratch[i]));
+		results[i] = ntfs_logfile_open(&environment, NULL, &reports[i], &source);
+		assert(reports[i].read_calls <= NTFS_LOGFILE_DEFAULT_READ_CALLS &&
+		    reports[i].read_bytes <= NTFS_LOGFILE_DEFAULT_READ_BYTES &&
+		    reports[i].probe_count <= NTFS_LOGFILE_RESTART_PROBES);
+		if (results[i] == NTFS_OK) {
+			assert(source != NULL && reports[i].scan_complete &&
+			    reports[i].selected_probe < reports[i].probe_count &&
+			    device.memory <=
+				FUZZ_SOURCE_OWNER_BYTES + 3u * NTFS_LOGFILE_MAX_PAGE_BYTES);
+			assert(ntfs_logfile_get_restart(source, &restarts[i]) == NTFS_OK);
+			if (restarts[i].client_count != 0) {
+				assert(ntfs_logfile_get_client(source,
+					   (uint16_t)(argument % restarts[i].client_count),
+					   &clients[i]) == NTFS_OK);
+			}
+			page_results[i] = ntfs_logfile_read_page(source,
+			    restarts[i].circular_offset, scratch[i] + FUZZ_GUARD_BYTES,
+			    NTFS_LOGFILE_MAX_PAGE_BYTES, &views[i]);
+			if (page_results[i] == NTFS_OK) {
+				used[i] = restarts[i].log_page_bytes;
+			} else {
+				assert(memcmp(&views[i], &zero_view, sizeof(zero_view)) == 0);
+			}
+			ntfs_logfile_close(source);
+		} else {
+			assert(
+			    source == NULL && reports[i].selected_probe == NTFS_LOGFILE_NO_PROBE);
+		}
+		assert(device.memory == 0);
+		guard(scratch[i], used[i], sizeof(scratch[i]));
+	}
+	assert(
+	    results[0] == results[1] && page_results[0] == page_results[1] && used[0] == used[1]);
+	assert(memcmp(&reports[0], &reports[1], sizeof(reports[0])) == 0);
+	assert(memcmp(&restarts[0], &restarts[1], sizeof(restarts[0])) == 0);
+	assert(memcmp(&clients[0], &clients[1], sizeof(clients[0])) == 0);
+	assert(memcmp(&views[0], &views[1], sizeof(views[0])) == 0);
+	assert(memcmp(scratch[0], scratch[1], sizeof(scratch[0])) == 0);
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -77,6 +148,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	configuration = data + sizeof(*header);
 	packet = configuration + configuration_size;
 	packet_size = size - sizeof(*header) - configuration_size;
+	if (kind == FUZZ_SOURCE) {
+		fuzz_source(packet, packet_size, argument);
+		assert(memcmp(data, original, size) == 0);
+		return 0;
+	}
 	if (kind == FUZZ_PAGE) {
 		memset(configuration_scratch, FUZZ_GUARD_VALUE, sizeof(configuration_scratch));
 		result = ntfs_logfile_restart_decode(configuration, configuration_size, argument,
@@ -198,6 +274,9 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	const struct ntfs_disk_mst *mst;
 	uint8_t *page;
 	size_t configuration_size, page_bytes, minimum, position, usa_offset, usa_bytes;
+	size_t candidate_offset, candidate_bytes;
+	size_t mutation_end, area_bytes;
+	const struct ntfs_disk_log_restart_area *area;
 	unsigned kind;
 	bool restored_page = false;
 
@@ -211,8 +290,25 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	}
 	page = data + sizeof(*envelope) + configuration_size;
 	page_bytes = size - sizeof(*envelope) - configuration_size;
+	if (kind == FUZZ_SOURCE && page_bytes >= sizeof(*restart)) {
+		restart = (const void *)page;
+		candidate_offset = (seed / FUZZ_GENERIC_PERIOD) % NTFS_LFS_RESTART_PAGES == 0
+		    ? 0
+		    : ntfs_u32(restart->system_page_bytes);
+		if (ntfs_bounds(candidate_offset, sizeof(*restart), page_bytes)) {
+			restart = (const void *)(page + candidate_offset);
+			candidate_bytes = ntfs_u32(restart->system_page_bytes);
+			if (candidate_bytes >= NTFS_MST_STRIDE &&
+			    candidate_bytes <= NTFS_LOGFILE_MAX_PAGE_BYTES &&
+			    (candidate_bytes & (candidate_bytes - 1u)) == 0 &&
+			    ntfs_bounds(candidate_offset, candidate_bytes, page_bytes)) {
+				page += candidate_offset;
+				page_bytes = candidate_bytes;
+			}
+		}
+	}
 	minimum = 0;
-	if (kind == FUZZ_RESTART) {
+	if (kind == FUZZ_RESTART || kind == FUZZ_SOURCE) {
 		minimum = sizeof(*restart);
 		restored_page = unprotect(page, page_bytes, minimum);
 		if (restored_page) {
@@ -223,8 +319,17 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		minimum = sizeof(struct ntfs_disk_log_page);
 		restored_page = unprotect(page, page_bytes, minimum);
 	}
-	if (page_bytes > minimum) {
-		position = minimum + (size_t)seed % (page_bytes - minimum);
+	mutation_end = page_bytes;
+	if ((kind == FUZZ_RESTART || kind == FUZZ_SOURCE) && restored_page &&
+	    ntfs_bounds(minimum, sizeof(*area), page_bytes)) {
+		area = (const void *)(page + minimum);
+		area_bytes = ntfs_u16(area->length);
+		if (area_bytes >= sizeof(*area) && ntfs_bounds(minimum, area_bytes, page_bytes)) {
+			mutation_end = minimum + area_bytes;
+		}
+	}
+	if (mutation_end > minimum) {
+		position = minimum + (size_t)seed % (mutation_end - minimum);
 		if (restored_page) {
 			/* Never mutate USA storage after restoring it; resealing must use
 			 * the original checked location, count and sequence. */

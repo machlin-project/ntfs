@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/logfile.h>
+#include "image.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -89,24 +90,46 @@ span(const char *name, struct ntfs_logfile_span value)
 }
 
 static void
-restart(const struct ntfs_logfile_restart *r, const uint8_t *scratch)
+restart_fields(const struct ntfs_logfile_restart *r, bool comma)
 {
-	struct ntfs_logfile_client client;
-	size_t i, j, client_bytes;
-
-	printf(",\"major\":%u,\"minor\":%u,\"flags\":%u,\"clean_hint\":%s,"
+	printf("%s\"major\":%u,\"minor\":%u,\"flags\":%u,\"clean_hint\":%s,"
 	       "\"system_page_bytes\":%" PRIu32 ",\"log_page_bytes\":%" PRIu32
 	       ",\"file_bytes\":%" PRIu64 ",\"usable_bytes\":%" PRIu64
 	       ",\"circular_offset\":%" PRIu64 ",\"current_lsn\":%" PRIu64
 	       ",\"sequence_bits\":%" PRIu32 ",\"last_data_bytes\":%" PRIu32
 	       ",\"open_count\":%" PRIu32 ",\"record_header_bytes\":%u,\"page_data_offset\":%u,"
 	       "\"free_head\":%u,\"in_use_head\":%u,\"client_count\":%u",
-	    r->major, r->minor, r->flags, r->clean_hint ? "true" : "false", r->system_page_bytes,
-	    r->log_page_bytes, r->file_bytes, r->usable_bytes, r->circular_offset, r->current_lsn,
-	    r->sequence_bits, r->last_data_bytes, r->open_count, r->record_header_bytes,
-	    r->page_data_offset, r->free_head, r->in_use_head, r->client_count);
+	    comma ? "," : "", r->major, r->minor, r->flags, r->clean_hint ? "true" : "false",
+	    r->system_page_bytes, r->log_page_bytes, r->file_bytes, r->usable_bytes,
+	    r->circular_offset, r->current_lsn, r->sequence_bits, r->last_data_bytes, r->open_count,
+	    r->record_header_bytes, r->page_data_offset, r->free_head, r->in_use_head,
+	    r->client_count);
 	span("area", r->area);
 	span("clients", r->clients);
+}
+
+static void
+client_fields(const struct ntfs_logfile_client *client, bool comma)
+{
+	size_t j;
+
+	printf("%s{\"oldest_lsn\":%" PRIu64 ",\"restart_lsn\":%" PRIu64
+	       ",\"previous\":%u,\"next\":%u,\"sequence\":%u,\"name_utf16\":[",
+	    comma ? "," : "", client->oldest_lsn, client->restart_lsn, client->previous,
+	    client->next, client->sequence);
+	for (j = 0; j < client->name_length; j++) {
+		printf("%s%u", j == 0 ? "" : ",", client->name[j]);
+	}
+	printf("]}");
+}
+
+static void
+restart(const struct ntfs_logfile_restart *r, const uint8_t *scratch)
+{
+	struct ntfs_logfile_client client;
+	size_t i, client_bytes;
+
+	restart_fields(r, true);
 	printf(",\"client_records\":[");
 	client_bytes = r->client_count == 0 ? 0 : r->clients.length / r->client_count;
 	for (i = 0; i < r->client_count; i++) {
@@ -115,16 +138,69 @@ restart(const struct ntfs_logfile_restart *r, const uint8_t *scratch)
 			/* Only successfully decoded restart snapshots reach this path. */
 			abort();
 		}
-		printf("%s{\"oldest_lsn\":%" PRIu64 ",\"restart_lsn\":%" PRIu64
-		       ",\"previous\":%u,\"next\":%u,\"sequence\":%u,\"name_utf16\":[",
-		    i == 0 ? "" : ",", client.oldest_lsn, client.restart_lsn, client.previous,
-		    client.next, client.sequence);
-		for (j = 0; j < client.name_length; j++) {
-			printf("%s%u", j == 0 ? "" : ",", client.name[j]);
-		}
-		printf("]}");
+		client_fields(&client, i != 0);
 	}
 	printf("]");
+}
+
+static int
+journal(const char *path)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source;
+	struct ntfs_logfile_report report;
+	struct ntfs_logfile_restart r;
+	struct ntfs_logfile_client client;
+	const struct ntfs_logfile_probe *probe;
+	uint16_t i;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file journal source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	result = ntfs_logfile_open(&image.environment, NULL, &report, &source);
+	printf("{\"schema_version\":%u,\"scope\":\"journal\",\"code\":%d,\"result\":\"%s\","
+	       "\"recovery_qualified\":false,\"scan_complete\":%s,\"selection\":%d,\"selected_"
+	       "probe\":",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result),
+	    report.scan_complete ? "true" : "false", (int)report.selection);
+	if (report.selected_probe == NTFS_LOGFILE_NO_PROBE) {
+		printf("null");
+	} else {
+		printf("%u", report.selected_probe);
+	}
+	printf(",\"read_calls\":%" PRIu32 ",\"read_bytes\":%" PRIu64 ",\"probes\":[",
+	    report.read_calls, report.read_bytes);
+	for (i = 0; i < report.probe_count; i++) {
+		probe = &report.probes[i];
+		printf("%s{\"offset\":%" PRIu64 ",\"page_bytes\":%" PRIu32
+		       ",\"code\":%d,\"current_lsn\":%" PRIu64 "}",
+		    i == 0 ? "" : ",", probe->offset, probe->page_bytes, (int)probe->result,
+		    probe->restart.current_lsn);
+	}
+	printf("],\"selected_restart\":");
+	if (result == NTFS_OK) {
+		if (ntfs_logfile_get_restart(source, &r) != NTFS_OK) {
+			abort();
+		}
+		printf("{");
+		restart_fields(&r, false);
+		printf(",\"client_records\":[");
+		for (i = 0; i < r.client_count; i++) {
+			if (ntfs_logfile_get_client(source, i, &client) != NTFS_OK) {
+				abort();
+			}
+			client_fields(&client, i != 0);
+		}
+		printf("]}");
+	} else {
+		printf("null");
+	}
+	printf("}\n");
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK ? 0 : 1;
 }
 
 int
@@ -143,6 +219,9 @@ main(int argc, char **argv)
 
 	if (argc < 3) {
 		goto usage;
+	}
+	if (argc == 3 && strcmp(argv[1], "journal") == 0) {
+		return journal(argv[2]);
 	}
 	is_restart = strcmp(argv[1], "restart") == 0;
 	is_page = strcmp(argv[1], "page") == 0;
@@ -233,7 +312,8 @@ usage:
 	    "Usage: ntfs-logfile restart PAGE FILE_BYTES\n"
 	    "       ntfs-logfile page PAGE RESTART_PAGE FILE_BYTES\n"
 	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
-	    "       ntfs-logfile update CLIENT_PACKET\n");
+	    "       ntfs-logfile update CLIENT_PACKET\n"
+	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n");
 done:
 	free(restart_scratch);
 	free(restart_bytes);

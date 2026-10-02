@@ -18,7 +18,12 @@ enum {
 	NTFS_LOGFILE_RECORD_RESTART = 2,
 	NTFS_LOGFILE_RECORD_MULTI_PAGE = 0x0001,
 	NTFS_LOGFILE_RECORD_DELETING = 0x0002,
-	NTFS_LOGFILE_RECORD_ADDING = 0x0004
+	NTFS_LOGFILE_RECORD_ADDING = 0x0004,
+	/* Offset zero plus each possible second-copy page size, 512..65536. */
+	NTFS_LOGFILE_RESTART_PROBES = 9,
+	NTFS_LOGFILE_NO_PROBE = UINT16_MAX,
+	NTFS_LOGFILE_DEFAULT_READ_CALLS = 32,
+	NTFS_LOGFILE_DEFAULT_READ_BYTES = 256 * 1024
 };
 
 /* Observed LFS file-size ceiling. Larger journals need separate qualification. */
@@ -70,6 +75,81 @@ struct ntfs_logfile_update {
 	uint16_t record_offset, attribute_offset, cluster_index, attribute_flags;
 	struct ntfs_logfile_span redo, undo, lcns;
 };
+
+struct ntfs_logfile;
+
+enum ntfs_logfile_selection {
+	NTFS_LOGFILE_UNSELECTED,
+	NTFS_LOGFILE_SINGLE_COPY,
+	NTFS_LOGFILE_EQUAL_COPIES,
+	NTFS_LOGFILE_NEWER_COPY,
+	NTFS_LOGFILE_CONFLICT
+};
+
+enum ntfs_logfile_storage {
+	NTFS_LOGFILE_CIRCULAR,
+	NTFS_LOGFILE_LEGACY_TAIL,
+	NTFS_LOGFILE_FAST_STORAGE
+};
+
+struct ntfs_logfile_limits {
+	/* Per operation. Discovery has at most 18 exact reads; page read has one. */
+	uint32_t max_page_bytes, max_read_calls;
+	uint64_t max_read_bytes;
+};
+
+struct ntfs_logfile_probe {
+	uint64_t offset;
+	uint32_t page_bytes;
+	enum ntfs_result result;
+	/* Zero unless this candidate was fully decoded successfully. */
+	struct ntfs_logfile_restart restart;
+};
+
+struct ntfs_logfile_report {
+	uint64_t read_bytes;
+	uint32_t read_calls;
+	uint16_t probe_count, selected_probe;
+	bool scan_complete;
+	enum ntfs_logfile_selection selection;
+	struct ntfs_logfile_probe probes[NTFS_LOGFILE_RESTART_PROBES];
+};
+
+struct ntfs_logfile_page_view {
+	uint64_t offset;
+	enum ntfs_logfile_storage storage;
+	struct ntfs_logfile_page page;
+};
+
+/* Independent ownership of a logical, immutable $LogFile byte source, not a
+ * volume environment. Its context must outlive the owner; calls are serialized.
+ * Defaults cap pages at 64 KiB, discovery at 32 reads/256 KiB. No disk-sized
+ * allocation occurs: storage is the owner plus three max_page_bytes buffers.
+ * All possible second-copy offsets are probed even when the first header is bad.
+ * Selection requires compatible geometry and increasing LSNs; equal-LSN areas
+ * must have identical declared bytes, ignoring page USA differences. Conflicts
+ * and unknown-version candidates reject rather than silently choosing an older
+ * copy. A selected restart is not a complete post-crash journal history.
+ * On failure *out is NULL. The optional report retains bounded partial evidence;
+ * scan_complete describes probing only, never consistency/recovery acceptance.
+ * Limits are optional; max_page_bytes is a power of two, 512..65536, and read
+ * budgets are positive. report/outputs and environment/source are disjoint. */
+void ntfs_logfile_default_limits(struct ntfs_logfile_limits *);
+enum ntfs_result ntfs_logfile_open(const struct ntfs_environment *,
+    const struct ntfs_logfile_limits *, struct ntfs_logfile_report *, struct ntfs_logfile **out);
+void ntfs_logfile_close(struct ntfs_logfile *);
+/* Cached selected restart/client snapshots use no allocation or device reads.
+ * Error outputs are zero; client indexes past the bounded array return END. */
+enum ntfs_result ntfs_logfile_get_restart(
+    const struct ntfs_logfile *, struct ntfs_logfile_restart *);
+enum ntfs_result ntfs_logfile_get_client(
+    const struct ntfs_logfile *, uint16_t index, struct ntfs_logfile_client *);
+/* A physical protected page from tail/fast/circular storage; no copy routing or
+ * record assembly is implied. Offset is aligned and after both restart pages.
+ * Capacity needs log_page_bytes. Errors leave output bytes unchanged and view
+ * zero, including partial backend reads. No source page is changed or cached. */
+enum ntfs_result ntfs_logfile_read_page(struct ntfs_logfile *, uint64_t offset, void *,
+    size_t capacity, struct ntfs_logfile_page_view *);
 
 /* Independent immutable-byte primitives; no allocation, device I/O or writes.
  * Output structures are zero on error. Inputs, outputs and scratch must not

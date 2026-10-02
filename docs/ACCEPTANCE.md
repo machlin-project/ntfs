@@ -30,6 +30,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
 | Read-only log primitives | LFS 1.1/2.0 common restart/client/page framing, LSN geometry and exact logical records; nonempty-LCN NTFS update spans; bounded immutable inputs/caller scratch and diagnostic transport | 109 independent verdicts and 110 diagnostic contracts passed; structured USA-preserving fuzz passed; complete journal ownership/copy routing/wrapped assembly/checkpoint tables, LCN-less and Windows log qualification remain open |
+| Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz passed; counted stream/native ownership, tail/fast routing, circular currentness and record assembly remain open |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
@@ -39,7 +40,43 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The subsequent read-only log continuation passes all 40 sanitized C suites, both
+The logical-source continuation passes all 43 sanitized C suites and style under
+`artifacts/plan-logsource-{build,core,style}-final.log`. Product C passes both
+freestanding targets with the 2-KiB frame limit, the component's 17 PASS/seven
+explicit macOS-27 SKIP groups and the unsigned app build under
+`artifacts/plan-logsource-{freestanding,component,app}-reviewed.log`. The new owner
+compiles into arm64 and x86_64 app-core objects; no native installation ran.
+
+The independent logical-source fixtures cover 22 verdicts and exact CLI reports,
+plus two transport errors. Supported/unknown/CHKD candidates, compatible newer
+and equivalent copies, different USA words, divergent equal-LSN areas and
+incompatible versions/geometry retain distinct outcomes. A valid second copy
+survives a damaged/missing first prefix or USA. Lossless cached clients, small,
+ordinary 4-KiB and maximum 64-KiB restart geometries, mixed record-page sizes and
+exact physical tail/fast/circular page bytes pass. Torn record pages and partial
+backend reads publish no caller bytes. Allocation/read fault sweeps, six original
+backend result codes and exact/exhausted page/read-credit boundaries pass with
+release accounting and unchanged source bytes. A selected restart does not
+establish an active post-crash history; LOGFILE.md defines the conservative
+equal-LSN refusal and the missing native lifecycle/version-transition evidence.
+
+All 22 original sources now have fuzz envelopes, including the three 1-MiB files;
+there are 131 unique combined packet/source seeds. The 2-MiB test ceiling leaves
+core page/allocation/read limits unchanged. The final campaign completes 108,449
+executions in 61 seconds, coverage 819/features 1,856, peak RSS 526 MiB and exit
+zero without a reported crash/sanitizer finding. It repeats source reports,
+cached metadata and staged physical reads, checks input/output guards and memory/
+read accounting, and restores/reseals either restart copy while mutating its
+checked declared area. `artifacts/fuzz-logsource-final/report.json` retains the
+binary and outcome; `artifacts/plan-logsource-fuzz-final.log` retains the runner.
+The earlier 128-KiB campaign remains in `artifacts/fuzz-logsource-reviewed/`; it
+excluded two large sources and did not exercise ordinary 4-KiB source geometry.
+The initial compile error used the wrong repository allocation-error enum;
+`artifacts/plan-logsource-build-initial.log` remains alongside corrected evidence.
+Counted volume/stream integration, routed/current circular records, checkpoints,
+transaction/crash/durability simulation, Windows and remote CI remain open.
+
+The preceding read-only log primitive continuation passes all 40 sanitized C suites, both
 freestanding targets with the 2-KiB frame limit, selected-toolchain style, the
 FSKit component and the current unsigned app/extension build. The component has
 17 PASS groups and seven explicit macOS-27 runtime SKIPs. The new module also

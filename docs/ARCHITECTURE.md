@@ -205,9 +205,15 @@ restart/client/page/LSN/record framing with bounded caller scratch and no I/O or
 allocation. Client chains have complete membership/backlink and active-LSN
 checks. The NTFS update decoder validates nonempty LCN vectors and redo/undo spans;
 LCN-less/checkpoint payloads remain explicitly unsupported/opaque. LOGFILE.md
-defines the primitive/complete-journal boundary. No redundant-copy selection,
-tail routing, wrapped assembly, transaction analysis or recovery is implied, and
-the mount policy still refuses dirty media.
+defines the primitive/complete-journal boundary. An independent logical-source
+owner now probes bounded restart-copy candidates, selects compatible newer/equal
+areas and reports conflicts or partial read evidence. Its read-only environment
+context outlives the serialized owner; it is not a mounted-volume environment.
+Three bounded private buffers retain selected metadata and stage physical page
+reads, publishing caller bytes only after complete integrity checks. Counted
+NTFS-stream integration, tail/fast routing, circular currentness, wrapped assembly,
+transaction analysis and recovery remain separate work. The mount policy still
+refuses dirty media.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not

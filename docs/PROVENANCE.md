@@ -194,6 +194,12 @@ facts. Short NTFS-3G recovery offset helpers were also inspected for the conflic
 LCN-less address-base fact; the product refuses that variant pending independent
 original-byte qualification. No foreign journal/replay/transaction algorithm was
 imported, and no NTFS-3G utility or library is linked to the product.
+The logical-source owner, compatible-copy comparison, partial diagnostic reports
+and private page-publication contracts are also original repository code. Its
+sources and expected metadata/restored-page bytes are authored from named wire
+fields, separately from implementation offsets. No foreign copy-routing or
+recovery implementation was imported for this continuation; tail/fast routing,
+current circular history and native Windows qualification remain open.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

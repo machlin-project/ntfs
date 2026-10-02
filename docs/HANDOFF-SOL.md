@@ -174,7 +174,45 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
-## Read-only log handoff checkpoint
+## Logical log source handoff checkpoint
+
+LOGFILE.md and `ntfs/logfile.h` now define `ntfs_logfile_open` over a logical,
+immutable exported journal environment. Do not pass a physical volume environment.
+Keep its context/callbacks alive through close and serialize operations. Discovery
+probes all nine candidate offsets with page/read caps, selects compatible newer/
+equal restart areas and refuses ambiguous or unknown-version copies. Failure
+leaves no owner/selected snapshot but retains bounded partial report evidence.
+Cached restart/client queries have no I/O/allocation; physical page reads stage
+complete integrity checks before copying caller bytes. Tail/fast labels do not
+route a complete circular history or authorize recovery.
+
+All 43 sanitized core suites and style pass under `artifacts/plan-logsource-*-final.log`.
+Product C, both 2-KiB-frame targets, component 17 PASS/seven runtime SKIPs and the
+current unsigned arm64/x86_64 app pass under the corresponding reviewed logs.
+The 22 independent source verdicts/reports cover copy/current-LSN conflicts,
+different USA words, damaged/missing first copies, unknown/CHKD versions,
+lossless clients, ordinary/mixed/maximum pages, exact tail/fast/circular bytes,
+partial I/O, original backend error codes, allocator/read faults and budgets.
+`ntfs-logfile journal EXPORTED_LOGICAL_LOGFILE` emits candidate/read/selection
+evidence without mounting media; every report retains `recovery_qualified: false`.
+
+The final 2-MiB fuzz envelope includes all 22 sources, including three 1-MiB
+files; 131 combined seeds are unique. The campaign completes 108,449 runs in
+61 seconds, coverage 819/features 1,856 and peak RSS 526 MiB, exit zero without a
+reported finding. Its report is `artifacts/fuzz-logsource-final/report.json`.
+The initial 128-KiB campaign is separate and excluded two large source fixtures;
+source fuzz now includes ordinary 4-KiB pages and directs resealed mutations into
+declared restart-area bytes. Process RSS is not retained core memory. The initial
+enum spelling compile failure and corrected/final evidence remain separate.
+
+Continue with counted NTFS-stream/volume and native source lifetime, legacy tail/
+modern fast-page routing, current circular history, wrapped assembly, client
+sequence resolution and NTFS checkpoint/tables. Then complete transaction/crash/
+durability simulation under WRITES.md. Original Windows packets and lifecycle/
+resize/version-transition qualification, native replay/roundtrips and full release
+acceptance remain required. CORE-QUALIFICATION.md retains the complete scope.
+
+## Read-only log primitive handoff checkpoint
 
 Read LOGFILE.md and `ntfs/logfile.h`. The original allocation-free primitives
 decode LFS 1.1/2.0 common restart areas/client lists, LSN geometry, USA-protected
@@ -200,9 +238,10 @@ published bases and are explicitly unsupported pending original Windows bytes;
 the enclosing LFS decoder still preserves their client payload. Keep the format
 provenance and this rejection rather than guessing a writable target.
 
-Continue with bounded journal ownership/reads, redundant restart conflict/selection,
-legacy tail/modern fast-page routing, wrapped multi-page assembly, client sequence
-resolution and native NTFS checkpoint/tables. Then implement the transaction/
+The newer logical-source checkpoint adds bounded source ownership/reads and
+restart conflict/selection. Continue with legacy tail/modern fast-page routing,
+wrapped multi-page assembly, client sequence resolution and native NTFS
+checkpoint/tables. Then implement the transaction/
 crash/durability simulator under WRITES.md, keeping native replay/Windows roundtrips
 and write enablement as separate acceptance. The full remaining functional and
 measured optimization scope stays in CORE-QUALIFICATION.md; this is a checkpoint.

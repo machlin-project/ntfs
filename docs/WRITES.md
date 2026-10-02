@@ -13,8 +13,11 @@ a recovery contract and must not be presented as native NTFS write support.
 The read-only primitives in LOGFILE.md now validate bounded restart/client/page/
 LSN/record framing and nonempty-LCN update spans. They neither choose a complete
 post-crash journal history nor execute recovery. Clean hints and structural parser
-success never satisfy writable ownership or permit a dirty mount. Redundant-copy/
-tail/fast-page selection, wrapped records, native client checkpoints, transaction
+success never satisfy writable ownership or permit a dirty mount. The separate
+logical-source owner selects only compatible supported restart copies, retaining
+bounded conflicts and backend error evidence; physical page reading does not
+establish a post-crash journal history. Counted stream ownership and complete
+tail/fast-page routing, wrapped records, native client checkpoints, transaction
 analysis and the crash/durability simulator remain required.
 
 The future transaction module owns private snapshots, MFT/$Bitmap reservations,

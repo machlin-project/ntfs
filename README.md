@@ -103,3 +103,7 @@ The independent [read-only log primitives](docs/LOGFILE.md) now decode LFS resta
 areas/client lists, LSNs, protected pages and logical record/update framing.
 Complete journal assembly, transaction analysis, recovery and Windows log
 qualification remain open; structural decoding cannot enable writes or dirty mounts.
+An independent logical-source owner now selects compatible restart copies with
+bounded conflict/partial-I/O reports, retains lossless clients and stages physical
+page reads. Its `ntfs-logfile journal` diagnostic reads exported regular files;
+counted volume/stream integration and complete circular history remain open.

@@ -19,6 +19,7 @@ enum {
 	TEST_CONTENT_PAGE_CAPACITY = 1,
 	TEST_WOF_XATTR_COUNT = 3,
 	TEST_WOF_PAGE_BACKING_CLUSTERS = 73,
+	TEST_WOF_LZX_PAGE_BACKING_CLUSTERS = 70,
 	TEST_WOF_PAGE_ENTRIES = 4096 / sizeof(uint32_t),
 	TEST_WOF_CROSS_PREFIX_BYTES = 7,
 	TEST_WOF_CROSS_TAIL_BYTES = 19
@@ -409,7 +410,7 @@ content_case(NSData *image, BOOL modern, BOOL empty, NSInteger errorCode)
 
 static void
 wof_read(NTFSVolume *volume, FSItem *file, NSData *oracle, off_t offset, size_t length, BOOL modern,
-    NSInteger code)
+    NSInteger code, size_t modifiedPrefix)
 {
 	NSMutableData *buffer = [NSMutableData dataWithLength:length + TEST_CONTENT_READ_BYTES];
 	size_t completed = 0, expected, i;
@@ -448,9 +449,13 @@ wof_read(NTFSVolume *volume, FSItem *file, NSData *oracle, off_t offset, size_t 
 	assert(replies == 1);
 	if (code == 0) {
 		completed = expected;
-		assert(completed == 0 ||
-		    memcmp(buffer.bytes, (const uint8_t *)oracle.bytes + offset, completed) == 0);
+	} else {
+		/* Both native ABIs refuse an error result, even if the core completed a
+		 * correct earlier unit. The untouched suffix must retain its sentinels. */
+		completed = modifiedPrefix;
 	}
+	assert(completed == 0 ||
+	    memcmp(buffer.bytes, (const uint8_t *)oracle.bytes + offset, completed) == 0);
 	for (i = completed; i < buffer.length; i++) {
 		assert(((const uint8_t *)buffer.bytes)[i] == TEST_CONTENT_GUARD_BYTE);
 	}
@@ -480,7 +485,8 @@ wof_case(NSString *fixtures, NSString *name, NSUInteger clusters, BOOL modern, N
 	NSMutableArray<NSString *> *names = [NSMutableArray array];
 	NSUInteger index, reads, allocations;
 	off_t offset = 0;
-	size_t length = NTFS_WOF_UNIT_32K;
+	size_t length = NTFS_WOF_UNIT_32K, modifiedPrefix = 0;
+	uint32_t unit;
 	NSError *error = nil;
 	__block NSUInteger replies = 0;
 
@@ -527,12 +533,16 @@ wof_case(NSString *fixtures, NSString *name, NSUInteger clusters, BOOL modern, N
 	assert([volume xattrNamed:[FSFileName nameWithString:plainADS] ofItem:file
 			    error:&error] == nil &&
 	    error.code == ENOATTR);
-	if ([name isEqualToString:@"pages"]) {
-		offset = (off_t)(TEST_WOF_PAGE_ENTRIES - 1) * NTFS_WOF_UNIT_4K -
-		    TEST_WOF_CROSS_PREFIX_BYTES;
-		length = NTFS_WOF_UNIT_4K + TEST_WOF_CROSS_TAIL_BYTES;
+	if ([name isEqualToString:@"pages"] || [name isEqualToString:@"lzx-pages"]) {
+		unit = [name isEqualToString:@"lzx-pages"] ? NTFS_WOF_UNIT_32K : NTFS_WOF_UNIT_4K;
+		offset = (off_t)(TEST_WOF_PAGE_ENTRIES - 1) * unit - TEST_WOF_CROSS_PREFIX_BYTES;
+		length = unit + TEST_WOF_CROSS_TAIL_BYTES;
 	}
-	wof_read(volume, file, oracle, offset, length, modern, readError);
+	if ([name isEqualToString:@"lzx-late-codec"]) {
+		length = NTFS_WOF_UNIT_32K + TEST_WOF_CROSS_TAIL_BYTES;
+		modifiedPrefix = NTFS_WOF_UNIT_32K;
+	}
+	wof_read(volume, file, oracle, offset, length, modern, readError, modifiedPrefix);
 	[volume unmountWithReplyHandler:^{
 	  replies++;
 	}];
@@ -548,11 +558,11 @@ wof_case(NSString *fixtures, NSString *name, NSUInteger clusters, BOOL modern, N
 			      ofItem:file
 			       error:&error];
 	assert(error == nil && [payload isEqualToData:packet]);
-	wof_read(volume, file, oracle, offset, length, modern, readError);
+	wof_read(volume, file, oracle, offset, length, modern, readError, modifiedPrefix);
 	reader.revoked = YES;
 	reads = reader.reads;
 	allocations = resource.allocations;
-	wof_read(volume, file, oracle, offset, length, modern, EIO);
+	wof_read(volume, file, oracle, offset, length, modern, EIO, 0);
 	assert([volume xattrsForItem:file error:&error] == nil && error.code == EIO);
 	assert([volume attributes:file error:&error] == nil && error.code == EIO);
 	assert(reader.reads == reads && resource.allocations == allocations);
@@ -592,6 +602,15 @@ ntfs_test_fskit_content(NSString *fixtures, BOOL modern)
 		@"listed" : @3,
 		@"nonresident-list" : @3,
 		@"lzx" : @17,
+		@"lzx-packed" : @9,
+		@"lzx-resident" : @0,
+		@"lzx-empty" : @0,
+		@"lzx-exact" : @9,
+		@"lzx-listed" : @10,
+		@"lzx-pages" : @(TEST_WOF_LZX_PAGE_BACKING_CLUSTERS),
+		@"lzx-call" : @9,
+		@"lzx-codec" : @9,
+		@"lzx-late-codec" : @1,
 		@"backing-efs" : @2,
 		@"codec" : @2,
 		@"duplicate" : @2
@@ -624,11 +643,12 @@ ntfs_test_fskit_content(NSString *fixtures, BOOL modern)
 		@autoreleasepool {
 			NSInteger readError = 0;
 
-			if ([name isEqualToString:@"lzx"] ||
-			    [name isEqualToString:@"backing-efs"]) {
+			if ([name isEqualToString:@"backing-efs"]) {
 				readError = ENOTSUP;
 			} else if ([name isEqualToString:@"codec"] ||
-			    [name isEqualToString:@"duplicate"]) {
+			    [name isEqualToString:@"duplicate"] ||
+			    [name isEqualToString:@"lzx-codec"] ||
+			    [name isEqualToString:@"lzx-late-codec"]) {
 				readError = EIO;
 			}
 			wof_case(fixtures, name, wofMetadata[name].unsignedIntegerValue, modern,
@@ -639,7 +659,7 @@ ntfs_test_fskit_content(NSString *fixtures, BOOL modern)
 	       "truthful sizes, independent ADS, zero-byte read errors, remount/revocation, "
 	       "exactly-once callbacks and no default-content I/O\n",
 	    modern ? "modern" : "legacy");
-	printf("PASS: %s WOF content, 14 provider metadata verdicts, raw/XPRESS byte oracles, "
+	printf("PASS: %s WOF content, 23 provider metadata verdicts, raw/XPRESS/LZX byte oracles, "
 	       "page crossing, opaque backing inventory, ADS/reparse xattrs, remount/revocation "
 	       "and exactly-once reads\n",
 	    modern ? "modern" : "legacy");

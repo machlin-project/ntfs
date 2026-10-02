@@ -1,10 +1,10 @@
 # WOF format and decoder contracts
 
-The core reads observed WOF file-provider XPRESS4K/8K/16K streams through the
+The core reads observed WOF file-provider XPRESS4K/8K/16K and LZX32K streams through the
 ordinary public stream API. Standalone metadata/table/codec primitives remain in
 `ntfs/wof.h`; storage and lifetime belong to `core/wof_stream.c`. FSKit projects known
 file-provider metadata as ordinary files with truthful sizes, independent ADS and
-original reparse bytes. LZX content, WIM backing and Windows/installed qualification
+original reparse bytes. WIM backing and Windows/installed qualification
 remain open.
 
 ## Stored metadata
@@ -28,7 +28,7 @@ Only format facts were used; no external filesystem implementation was imported.
 | Algorithm | Logical chunk size | Content primitive |
 | --- | --- | --- |
 | XPRESS4K | 4 KiB | Integrated XPRESS-Huffman reading |
-| LZX | 32 KiB | Not implemented |
+| LZX | 32 KiB | Integrated WOF/WIM-variant LZX reading |
 | XPRESS8K | 8 KiB | Integrated XPRESS-Huffman reading |
 | XPRESS16K | 16 KiB | Integrated XPRESS-Huffman reading |
 
@@ -66,14 +66,15 @@ with no physical runs (or an empty resident placeholder), plus the exact UTF-16
 Resident, fragmented and attribute-list backing storage use the ordinary bounded
 attribute reader. Node stat reports placeholder logical size and backing physical
 allocation independently of table contents and codec support. The placeholder's
-VDL does not describe decoded content. Malformed storage fails explicitly; known
-LZX or encrypted backing retains inspectable sizes while default reads return
+VDL does not describe decoded content. Malformed storage fails explicitly;
+encrypted backing retains inspectable sizes while default reads return
 UNSUPPORTED. Independent plaintext ADS do not require opening the default content.
 
 The public stream owns its complete provider state after source-node close and
 holds one counted volume child. A single lazy allocation contains private output,
-input and aligned queried XPRESS scratch; the largest supported unit currently
-uses 34,432 bytes. One decoded unit and one table page are cached. Failed fills
+input and aligned queried codec scratch. XPRESS16K uses 34,432 bytes and LZX32K
+uses 70,476 bytes, excluding the optional table page and backing metadata.
+One decoded unit and one table page are cached. Failed fills
 invalidate their tags before I/O, retain buffers for retry and publish no failed
 unit bytes. Core reads may return an already completed prefix if a later unit
 fails, following the existing stream contract. Teardown releases private backing,
@@ -81,7 +82,7 @@ page and buffers without additional reads.
 
 FSKit uses explicit provider classification rather than treating every reparse
 object as a symlink. Known provider objects have ordinary-file type/attributes,
-including metadata-only LZX/encrypted cases. The raw reparse xattr and lossless
+including metadata-only encrypted cases. The raw reparse xattr and lossless
 stream manifest remain available. The backing name retains its catalog ordinal
 but has no public encoded-content alias; ordinary ADS retain theirs. Admission
 also gates cached reads and xattrs after revocation. Unmount closes transient
@@ -106,9 +107,80 @@ exhaust input. Unused prefetched bits need not be zero. No arbitrary unread suff
 is accepted. This preserves the specification's optional EOF without inventing a
 zero-padding restriction.
 
+## LZX32K
+
+The original decoder implements independent WOF/WIM-variant units with a 32-KiB
+window. It starts directly with the block type and default-size flag; an explicit
+size has 16 bits. This differs from the CAB/Delta stream/header and 24-bit sizes
+in Microsoft's [MS-PATCH header](https://learn.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-patch/517e354e-a5c5-4239-ada5-25389cfe3170).
+The observed WIM variant follows the original
+[compression-format research](https://github.com/libyal/libfwnt/blob/main/documentation/Compression%20methods.asciidoc).
+Compression variant and provider are separate: decoding these LZX units does not
+implement the WIM-backed WOF provider.
+
+Verbatim, aligned-offset and raw blocks share unit-local output history and
+repeated offsets. Canonical main/secondary/pretree/aligned alphabets have exact
+bounded spans; oversubscribed and incomplete nonempty trees are corrupt. An
+unused secondary/aligned tree may be empty, but requesting a symbol from it is
+corrupt. Pretree length differences persist across blocks, including bounded
+short/long zero runs and repeated-length codes. Matches remain within completed
+history and the current block, with lengths through 257 bytes; Delta's extended
+length escape and external dictionary are outside this format.
+
+Raw block alignment, three little-endian offsets and odd-byte padding are checked
+before copying. Repeated slots swap with R0; a new offset shifts the queue. Aligned
+low bits apply when the footer has at least three bits, including equality.
+Unused final-word bits need not be zero; a producer's single extra zero lookahead
+word is allowed, while arbitrary unread suffixes are rejected. These are explicit
+single-unit bounds, not a continuing archive stream.
+
+Every encoded unit receives the inverse x86 CALL transform with WIM's fixed
+12,000,000-byte parameter, unit-local positions and untouched final ten bytes.
+The original author's [format constants](https://github.com/ebiggers/wimlib/blob/master/include/wimlib/lzx_constants.h)
+cross-check that parameter and the 32-KiB alphabets; its implementation was not
+imported. Equal-size WOF raw chunks bypass the decoder and transform entirely.
+Independent raw/encoded CALL fixtures check this distinction. The decoder uses
+4,940 bytes of caller-owned scratch aligned to four bytes, no allocation/I/O and
+the same zero-error-count/private-publication contract as XPRESS.
+
+`tests/lzx_oracle.py` optionally loads an explicitly selected external wimlib
+library in a separate test process. It captures packets from independently
+patterned original bytes at several compression levels, checks external exact
+roundtrips, and can run the core vector reader and externally decode our positive
+packets. Library version/hash, raw compressor refusals and failure reports remain
+generated artifacts. No product links that library; ordinary `make test` uses
+the repository-owned declarative author without an external codec dependency.
+For a fresh ignored report directory:
+
+```sh
+python3 tests/lzx_oracle.py --library /opt/homebrew/opt/wimlib/lib/libwim.dylib --output artifacts/lzx-oracle-next --synthetic .build/lzx-fixtures/lzx-vectors --reader .build/ntfs-lzx-tests --invalid .build/lzx-fixtures/lzx-invalid
+```
+
 ## Evidence and continuation
 
-All 35 sanitized C suites, both freestanding targets with the 2-KiB frame budget,
+The LZX integration passes all 37 sanitized C suites, both freestanding targets,
+style, the legacy component and current unsigned app. It adds 140 exact content
+and 31 invalid vectors; 192 independently compressed external packets decode
+exactly, and the external decoder checks 139 nonempty authored packets. Reports
+retain 168 raw compressor refusals separately. The public file suite now checks
+37 verdicts and all 376 allocation/101 read failure positions in selected
+operations, including LZX page changes, raw/encoded CALL distinctions and a late
+corrupt unit. Twenty-three legacy provider cases check bytes, truthful metadata,
+raw manifests, zero-count errors, remount/revocation and exactly-once replies.
+Six modern runtime checks explicitly SKIP. Source/component/build evidence is
+`artifacts/plan-lzx-*.log`; external provenance/results are under
+`artifacts/lzx-oracle-checked-2/`. ACCEPTANCE.md preserves earlier failures and
+the exact evidence boundaries. No Windows/installed WOF acceptance is established.
+
+The WOF/XPRESS/LZX campaign completes 1,122,244 executions in 61 seconds (coverage
+691, features 2,392, peak RSS 466 MiB); the image campaign completes 45,986
+(coverage 3,749, features 14,573, peak RSS 982 MiB). Both exit zero without a
+reported crash/sanitizer finding, under `artifacts/fuzz-lzx-{wof,image}/`.
+The near-cap image RSS includes runner corpus/sanitizer overhead; codec allocation
+bounds are separate. Longer Windows-seeded campaigns and provider-specific native
+fault/interleaving/hard-link qualification remain open.
+
+The preceding XPRESS integration passed all 35 sanitized C suites, both freestanding targets with the 2-KiB frame budget,
 selected Xcode style, legacy component and current unsigned app build pass. The
 new file suite checks 28 storage/format verdicts, exact original-byte oracles,
 complete stream lifetime, independent ADS, mixed raw/packed chunks, empty/exact/
@@ -158,6 +230,6 @@ feature count 1,129 and reported peak RSS 479 MiB, exit zero without a crash or
 sanitizer finding. Reports use `artifacts/fuzz-wof-primitives/` and launcher log
 `artifacts/plan-wof-fuzz-final.log`. This is standalone synthetic evidence.
 
-Next, implement LZX, expand provider-specific native fault/interleaving cases and
+Next, expand provider-specific native fault/interleaving and hard-link cases and
 acquire Windows-generated raw, packed, fragmented and partial-final samples for
 every algorithm. Installed authorization and performance remain distinct gates.

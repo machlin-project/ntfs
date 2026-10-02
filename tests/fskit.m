@@ -54,6 +54,43 @@
 
 @end
 
+@interface RevokedGeometryReader : TestReader
+@end
+@implementation RevokedGeometryReader
+
+- (uint64_t)blockSize
+{
+	/* Rejected acquisition must not inspect unavailable device geometry. */
+	assert(false);
+	return 0;
+}
+
+@end
+
+static void
+test_result_and_resource_admission(void)
+{
+	RevokedGeometryReader *reader = [[RevokedGeometryReader alloc] init];
+	NSObject *result = [[NSObject alloc] init];
+	NSError *operationError = [NSError errorWithDomain:@"test.original.operation"
+						      code:ENOMEM
+						  userInfo:@{@"witness" : @"retained"}];
+	NSError *constructionError;
+
+	reader.revoked = YES;
+	assert([[NTFSResource alloc] initWithReader:reader] == nil && reader.reads == 0);
+	assert([[NTFSResource alloc] initWithReader:nil] == nil);
+	/* Test the native result boundary without a macOS-27 result-class dependency.
+	 * An existing operation failure outranks an absent or already-created result. */
+	assert(ntfs_native_result_error(nil, operationError) == operationError);
+	assert(ntfs_native_result_error(result, operationError) == operationError);
+	assert(ntfs_native_result_error(result, nil) == nil);
+	constructionError = ntfs_native_result_error(nil, nil);
+	assert([constructionError.domain isEqualToString:NSPOSIXErrorDomain] &&
+	    constructionError.code == EIO);
+	puts("PASS: native result construction errors and revoked resource acquisition");
+}
+
 @implementation FaultResource
 
 - (void *)allocateSize:(size_t)size
@@ -1234,6 +1271,7 @@ main(int argc, char **argv)
 		size_t i;
 
 		assert(argc == 2);
+		test_result_and_resource_admission();
 		image = [NSData dataWithContentsOfFile:@(argv[1])];
 		assert(image != nil);
 		test_volume(image);

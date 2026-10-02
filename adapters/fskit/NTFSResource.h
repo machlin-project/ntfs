@@ -31,4 +31,7 @@ enum {
 @end
 
 NSError *ntfs_error(enum ntfs_result result);
+/* Modern handlers require a result on success; failed construction is EIO.
+ * Preserve an existing operation error, including its domain and metadata. */
+NSError *ntfs_native_result_error(id result, NSError *error);
 NSUUID *ntfs_uuid(uint64_t serial);

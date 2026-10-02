@@ -105,6 +105,59 @@ struct ntfs_disk_xpress {
 	uint8_t lengths[NTFS_XPRESS_SYMBOLS / NTFS_XPRESS_LENGTHS_PER_BYTE];
 };
 
+enum {
+	NTFS_LZX_WORD_BYTES = sizeof(uint16_t),
+	NTFS_LZX_WORD_BITS = NTFS_LZX_WORD_BYTES * NTFS_BITS_PER_BYTE,
+	NTFS_LZX_WINDOW_BITS = 15,
+	NTFS_LZX_POSITION_SLOTS = 2 * NTFS_LZX_WINDOW_BITS,
+	NTFS_LZX_LITERAL_SYMBOLS = 256,
+	NTFS_LZX_LENGTH_HEADER_BITS = 3,
+	NTFS_LZX_LENGTH_HEADERS = 1u << NTFS_LZX_LENGTH_HEADER_BITS,
+	NTFS_LZX_MAIN_SYMBOLS =
+	    NTFS_LZX_LITERAL_SYMBOLS + NTFS_LZX_POSITION_SLOTS * NTFS_LZX_LENGTH_HEADERS,
+	NTFS_LZX_MIN_MATCH = 2,
+	NTFS_LZX_MAX_MATCH = 257,
+	NTFS_LZX_LENGTH_ESCAPE = NTFS_LZX_LENGTH_HEADERS - 1,
+	NTFS_LZX_SECONDARY_BASE = NTFS_LZX_MIN_MATCH + NTFS_LZX_LENGTH_ESCAPE,
+	NTFS_LZX_LENGTH_SYMBOLS = NTFS_LZX_MAX_MATCH - NTFS_LZX_SECONDARY_BASE + 1,
+	NTFS_LZX_MAX_CODE_BITS = 16,
+	NTFS_LZX_PRETREE_SYMBOLS = 20,
+	NTFS_LZX_PRETREE_LENGTH_BITS = 4,
+	NTFS_LZX_PRETREE_MAX_BITS = (1u << NTFS_LZX_PRETREE_LENGTH_BITS) - 1,
+	NTFS_LZX_ZERO_SHORT = 17,
+	NTFS_LZX_ZERO_LONG = 18,
+	NTFS_LZX_REPEAT_LENGTH = 19,
+	NTFS_LZX_ZERO_SHORT_BITS = 4,
+	NTFS_LZX_ZERO_LONG_BITS = 5,
+	NTFS_LZX_REPEAT_LENGTH_BITS = 1,
+	NTFS_LZX_ZERO_SHORT_BASE = 4,
+	NTFS_LZX_ZERO_LONG_BASE = 20,
+	NTFS_LZX_REPEAT_LENGTH_BASE = 4,
+	NTFS_LZX_LENGTH_MODULUS = NTFS_LZX_MAX_CODE_BITS + 1,
+	NTFS_LZX_ALIGNED_BITS = 3,
+	NTFS_LZX_ALIGNED_SYMBOLS = 1u << NTFS_LZX_ALIGNED_BITS,
+	NTFS_LZX_ALIGNED_LENGTH_BITS = 3,
+	NTFS_LZX_ALIGNED_MAX_BITS = (1u << NTFS_LZX_ALIGNED_LENGTH_BITS) - 1,
+	NTFS_LZX_BLOCK_TYPE_BITS = 3,
+	NTFS_LZX_DEFAULT_SIZE_BITS = 1,
+	NTFS_LZX_EXPLICIT_SIZE_BITS = 16,
+	NTFS_LZX_VERBATIM = 1,
+	NTFS_LZX_ALIGNED = 2,
+	NTFS_LZX_RAW = 3,
+	NTFS_LZX_REPEATED_OFFSETS = 3,
+	NTFS_LZX_OFFSET_BIAS = 2,
+	NTFS_LZX_INITIAL_OFFSET = 1,
+	/* WIM's fixed transform parameter is independent of the logical file size. */
+	NTFS_LZX_E8_TRANSLATION_SIZE = 12000000,
+	NTFS_LZX_E8_OPCODE = 0xe8,
+	NTFS_LZX_E8_TAIL_BYTES = 10,
+	NTFS_LZX_E8_OPERAND_BYTES = sizeof(uint32_t)
+};
+
+struct ntfs_disk_lzx_offsets {
+	uint8_t repeated[NTFS_LZX_REPEATED_OFFSETS][sizeof(uint32_t)];
+};
+
 #define NTFS_REPARSE_MICROSOFT UINT32_C(0x80000000)
 #define NTFS_REPARSE_NAME_SURROGATE UINT32_C(0x20000000)
 #define NTFS_REPARSE_DIRECTORY UINT32_C(0x10000000)
@@ -288,6 +341,8 @@ _Static_assert(sizeof(struct ntfs_disk_ace) == 4, "ACE header");
 _Static_assert(sizeof(struct ntfs_disk_reparse) == 8, "reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_wof_file) == 16, "stored WOF file-provider layout");
 _Static_assert(sizeof(struct ntfs_disk_xpress) == 256, "XPRESS code length table");
+_Static_assert(sizeof(struct ntfs_disk_lzx_offsets) == NTFS_LZX_REPEATED_OFFSETS * sizeof(uint32_t),
+    "LZX raw repeated offsets");
 _Static_assert(sizeof(struct ntfs_disk_reparse_guid) == 24, "GUID reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_reparse_names) == 8, "mount point payload header");
 _Static_assert(sizeof(struct ntfs_disk_reparse_symlink) == 12, "symlink payload header");

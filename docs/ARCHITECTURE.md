@@ -95,7 +95,8 @@ UNSUPPORTED. Microsoft-tagged
 buffers whose size fits only the GUID envelope also report UNSUPPORTED; this is
 not validation of the GUID or its provider payload.
 The independent `ntfs/wof.h` primitives validate the observed file-provider
-payload, bounded cumulative chunk tables and one exact-size XPRESS-Huffman block.
+payload, bounded cumulative chunk tables and one exact-size XPRESS-Huffman block
+or independent WOF/WIM-variant LZX32K unit.
 The decoder uses caller-owned aligned scratch and no allocation/I/O. Failed
 decoding leaves its byte count zero but may replace an output prefix. The WOF
 stream owns sparse unnamed and exact named backing descriptions, validates all
@@ -107,7 +108,7 @@ private backing descriptions do not double-count it. Known provider metadata can
 report logical/backing-physical sizes without requiring a supported codec or
 reading the table. Placeholder VDL does not zero provider content. Independent ADS
 stay readable while the backing encoding itself remains catalogued but inaccessible
-through public streams/xattrs. WOF.md defines unsupported LZX and Windows/native gaps.
+through public streams/xattrs. WOF.md defines codec variants and Windows/native gaps.
 Default data reads reject other reparse nodes; directory traversal rejects all
 reparse nodes. An attribute existing without its standard-information flag is
 corrupt. Presence checks scan

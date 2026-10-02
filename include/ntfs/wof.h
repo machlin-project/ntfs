@@ -24,7 +24,8 @@ enum {
 	 * These are not NTFS format limits. Zero selects the default. */
 	NTFS_WOF_DEFAULT_MAX_CHUNKS = 1048576,
 	NTFS_WOF_MAX_CHUNKS = 16777216,
-	NTFS_XPRESS_MAX_BLOCK = 65536
+	NTFS_XPRESS_MAX_BLOCK = 65536,
+	NTFS_LZX_MAX_BLOCK = NTFS_WOF_UNIT_32K
 };
 
 struct ntfs_wof_info {
@@ -71,6 +72,15 @@ size_t ntfs_xpress_workspace_size(void);
 size_t ntfs_xpress_workspace_alignment(void);
 enum ntfs_result ntfs_xpress_huffman_decode(const void *input, size_t size, void *output,
     size_t expected, void *workspace, size_t workspace_size, size_t *written);
+
+/* One independent WOF/WIM LZX unit with a 32-KiB window. This variant has no
+ * CAB/Delta stream header or external dictionary. Scratch/output publication
+ * follows the XPRESS contract above. Encoded blocks receive the WIM x86 CALL
+ * inverse transform; a provider's equal-size raw chunk must bypass this API. */
+size_t ntfs_lzx_workspace_size(void);
+size_t ntfs_lzx_workspace_alignment(void);
+enum ntfs_result ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected,
+    void *workspace, size_t workspace_size, size_t *written);
 
 #ifdef __cplusplus
 }

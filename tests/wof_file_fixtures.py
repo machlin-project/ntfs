@@ -2,6 +2,7 @@
 import struct
 import fixtures as f
 import wof_fixtures as x
+import lzx_fixtures as l
 from stat_fixtures import change_header, change_flags
 
 FILE_RECORD = f.FILE_RECORDS['hello.txt']
@@ -31,11 +32,33 @@ MANIFEST_NAMED_COUNT = 2
 BACKING_ORDINAL, NOTES_ORDINAL = 1, 2
 UNIFORM = {symbol: (symbol, x.UNIFORM_CODE_BITS) for symbol in range(x.SYMBOLS)}
 UNIT_8K, UNIT_16K = 8192, 16384
+CALL_POSITION, CALL_ENCODED_TARGET = 7, 15
 UNITS = {x.WOF_XPRESS_4K: x.UNIT_4K, x.WOF_LZX_32K: x.UNIT_32K,
          x.WOF_XPRESS_8K: UNIT_8K, x.WOF_XPRESS_16K: UNIT_16K}
 
 
-def contents(algorithm, chunks=DEFAULT_CHUNKS, partial=True, mixed=True):
+def call_chunk(size, raw):
+    prefix = b'A' * CALL_POSITION + bytes([l.E8_OPCODE]) + l.CALL.pack(CALL_ENCODED_TARGET)
+    encoded = prefix + b'A' * (size - len(prefix))
+    if raw:
+        return encoded, encoded
+    original = prefix[:CALL_POSITION + 1] + l.CALL.pack(CALL_ENCODED_TARGET - CALL_POSITION)
+    original += b'A' * (size - len(prefix))
+    tokens = list(map(l.literal, prefix)) + [l.literal(ord('A'))]
+    remaining = size - len(prefix) - 1
+    while remaining >= l.SECONDARY_BASE:
+        length = min(l.MAX_MATCH, remaining)
+        tokens.append(l.match(0, length))
+        remaining -= length
+    tokens.extend(l.literal(ord('A')) for _ in range(remaining))
+    main = l.selected(l.MAIN_SYMBOLS, {*prefix, ord('A'), l.LITERALS + l.LENGTH_HEADERS - 1})
+    packet = l.Packet()
+    packet.compressed(size, tokens, main=main, default=size == l.UNIT_BYTES)
+    return original, packet.finish()
+
+
+def contents(algorithm, chunks=DEFAULT_CHUNKS, partial=True, mixed=True,
+             lzx_packed=False, calls=False):
     unit = UNITS[algorithm]
     originals, packets, offsets = [], [], []
     packed_bytes = 0
@@ -43,12 +66,13 @@ def contents(algorithm, chunks=DEFAULT_CHUNKS, partial=True, mixed=True):
         size = FINAL_BYTES if partial and index == chunks - 1 else unit
         value = ord('A') + index % len(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
         original = bytes([value]) * size
-        if mixed and index == 1:
+        if calls:
+            original, packet = call_chunk(size, mixed and index == 1)
+        elif mixed and index == 1:
             original = bytes((i * RAW_PATTERN_MULTIPLIER + RAW_PATTERN_ADDEND) % f.BYTE_VALUES for i in range(size))
             packet = original
         elif algorithm == x.WOF_LZX_32K:
-            # Valid raw chunk framing; this does not author or qualify LZX codes.
-            packet = original
+            packet = l.encode_uniform(original) if lzx_packed else original
         else:
             packet = x.encode(UNIFORM, [x.literal(value), x.match(1, size - 1)])
             if len(packet) >= size:
@@ -69,12 +93,18 @@ def author(output, source):
 
     def save(label, algorithm=x.WOF_XPRESS_4K, chunks=DEFAULT_CHUNKS, partial=True, mixed=True,
              resident=False, listed=False, reparse_listed=False, nonresident_list=False,
-             vdl_zero=True, mutation=None):
+             vdl_zero=True, mutation=None, lzx_packed=False, calls=False):
         image = bytearray(source)
-        original, packed = contents(algorithm, chunks, partial, mixed) if chunks else (b'', b'')
+        original, packed = contents(algorithm, chunks, partial, mixed, lzx_packed, calls) if chunks else (b'', b'')
         payload = x.WOF_FILE.pack(x.WOF_VERSION, x.WOF_PROVIDER_FILE, x.WOF_FILE_VERSION, algorithm)
         packet = x.REPARSE.pack(x.WOF_TAG, len(payload), 0) + payload
-        if mutation == 'codec':
+        if mutation == 'lzx-codec' or mutation == 'lzx-late-codec':
+            value = bytearray(packed)
+            table_bytes = (chunks - 1) * struct.calcsize('<I')
+            chunk_offset = struct.unpack_from('<I', value)[0] if mutation == 'lzx-late-codec' else 0
+            value[table_bytes + chunk_offset:table_bytes + chunk_offset + l.WORD.size] = l.WORD.pack(0)
+            packed = bytes(value)
+        elif mutation == 'codec':
             value = bytearray(packed)
             table_bytes = (chunks - 1) * struct.calcsize('<I')
             value[table_bytes:table_bytes + x.TABLE_BYTES] = bytes(x.TABLE_BYTES)
@@ -190,6 +220,18 @@ def author(output, source):
     save('nonresident-list', chunks=LISTED_CHUNKS, listed=True, nonresident_list=True)
     save('stale', chunks=LISTED_CHUNKS, listed=True, mutation='stale-extension')
     save('lzx', x.WOF_LZX_32K)
+    save('lzx-packed', x.WOF_LZX_32K, lzx_packed=True)
+    save('lzx-resident', x.WOF_LZX_32K, chunks=1, partial=False, mixed=False,
+         resident=True, lzx_packed=True)
+    save('lzx-empty', x.WOF_LZX_32K, chunks=0, resident=True)
+    save('lzx-exact', x.WOF_LZX_32K, partial=False, lzx_packed=True)
+    save('lzx-listed', x.WOF_LZX_32K, chunks=LISTED_CHUNKS, listed=True,
+         reparse_listed=True, lzx_packed=True)
+    save('lzx-pages', x.WOF_LZX_32K, chunks=PAGE_CHUNKS, mixed=False, lzx_packed=True)
+    save('lzx-call', x.WOF_LZX_32K, calls=True)
+    save('lzx-codec', x.WOF_LZX_32K, mutation='lzx-codec', lzx_packed=True)
+    save('lzx-late-codec', x.WOF_LZX_32K, mutation='lzx-late-codec', mixed=False,
+         lzx_packed=True)
     for mutation in ('codec', 'duplicate', 'descending', 'out-of-range', 'final-span',
                      'placeholder-resident', 'placeholder-physical', 'placeholder-encoding',
                      'backing-vdl', 'backing-flags', 'backing-efs', 'missing-backing',

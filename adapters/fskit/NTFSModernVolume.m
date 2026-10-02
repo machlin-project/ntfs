@@ -10,8 +10,10 @@
 	[self performItemPublication:^{
 	  NSError *error = nil;
 	  FSItem *item = [self activateWithOptions:options error:&error];
+	  FSActivateResult *result =
+	      item != nil ? [[FSActivateResult alloc] initWithRootItem:item] : nil;
 
-	  reply(item != nil ? [[FSActivateResult alloc] initWithRootItem:item] : nil, error);
+	  reply(result, ntfs_native_result_error(result, error));
 	}];
 }
 
@@ -47,7 +49,7 @@
 			  }
 		  }
 	  }
-	  reply(result, error);
+	  reply(result, ntfs_native_result_error(result, error));
 	}];
 }
 
@@ -58,10 +60,12 @@
 {
 	NSError *error = nil;
 	FSItemAttributes *attrs = [self attributes:item error:&error];
+	FSGetAttributesResult *result =
+	    attrs != nil ? [[FSGetAttributesResult alloc] initWithAttributes:attrs] : nil;
 
 	(void)request;
 	(void)context;
-	reply(attrs != nil ? [[FSGetAttributesResult alloc] initWithAttributes:attrs] : nil, error);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)enumerateDirectory:(FSItem *)directory
@@ -77,12 +81,12 @@
 				verifier:verifier
 			      attributes:attributes != nil
 				  packer:packer];
+	FSEnumerateDirectoryResult *result = error == nil
+	    ? [[FSEnumerateDirectoryResult alloc] initWithVerifier:self.directoryVerifier]
+	    : nil;
 
 	(void)context;
-	reply(error == nil
-		? [[FSEnumerateDirectoryResult alloc] initWithVerifier:self.directoryVerifier]
-		: nil,
-	    error);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)readFromFile:(FSItem *)item
@@ -113,7 +117,7 @@
 			}
 		}
 	}
-	reply(result, error);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)writeContents:(NSData *)contents
@@ -228,12 +232,9 @@
 		if (attrs != nil) {
 			result = [[FSReadSymlinkResult alloc] initWithContents:target
 							     symlinkAttributes:attrs];
-			if (result == nil) {
-				error = ntfs_error(NTFS_IO);
-			}
 		}
 	}
-	reply(result, error);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)getXattrNamed:(FSFileName *)name
@@ -243,9 +244,11 @@
 {
 	NSError *error = nil;
 	NSData *data = [self xattrNamed:name ofItem:item error:&error];
+	FSGetXattrResult *result =
+	    data != nil ? [[FSGetXattrResult alloc] initWithXattrValue:data] : nil;
 
 	(void)context;
-	reply(data != nil ? [[FSGetXattrResult alloc] initWithXattrValue:data] : nil, error);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)listXattrsOfItem:(FSItem *)item
@@ -254,9 +257,11 @@
 {
 	NSError *error = nil;
 	NSArray<FSFileName *> *names = [self xattrsForItem:item error:&error];
+	FSListXattrsResult *result =
+	    names != nil ? [[FSListXattrsResult alloc] initWithXattrNames:names] : nil;
 
 	(void)context;
-	reply(names != nil ? [[FSListXattrsResult alloc] initWithXattrNames:names] : nil, error);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)setXattrNamed:(FSFileName *)name

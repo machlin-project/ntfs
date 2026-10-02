@@ -7,8 +7,8 @@ lookup and one decoded LZNT1 unit per stream. Sparse and uninitialized ranges
 produce zeros without backing I/O. Compressed physical prefixes are read in
 contiguous ranges, including prefixes fragmented across multiple runs.
 
-WOF XPRESS streams now retain one decoded unit, private input/workspace and one
-4-KiB offset page. The largest supported unit uses 34,432 bytes for data/scratch;
+WOF XPRESS/LZX streams retain one decoded unit, private input/workspace and one
+4-KiB offset page. XPRESS16K uses 34,432 bytes and LZX32K uses 70,476 bytes for data/scratch;
 backing extents and any underlying storage codec have their separate allocations.
 Every fresh open validates the complete table within the default chunk-work cap.
 That linear startup cost, duplicated provider metadata inspection, unit/page
@@ -60,7 +60,7 @@ device-call counts, peak memory, CPU and latency percentiles:
 | Large directories | Lookup near each tree boundary, full scans, concurrent pagination |
 | Fragmented and sparse streams | Extent count independently varied from file length |
 | LZNT1 | Compressible, incompressible, sparse and partial final units |
-| WOF XPRESS | Independently encoded raw/packed units, partial final units, listed/fragmented backing and tables spanning multiple pages; separate table-open and warm-unit costs |
+| WOF XPRESS/LZX | Independently encoded raw/packed units, partial final units, listed/fragmented backing and tables spanning multiple pages; separate table-open and warm-unit costs; LZX CALL conversion and external codec packets |
 | FSKit concurrency | Throughput and tail latency as readers increase; teardown progress |
 | Memory pressure | Budget exhaustion returns errors without leaks or corrupting cursors |
 

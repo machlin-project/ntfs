@@ -55,16 +55,21 @@ group attributes, user/restricting SIDs, requested rights and comparison limits.
 It asserts deterministic decisions, exact grants and zero error outputs. See
 ACCESS.md for the discretionary contract and remaining authorization policies.
 The `wof` target independently mutates provider metadata, bounded chunk tables
-and exact-size XPRESS blocks with a 128-KiB input ceiling. It checks deterministic
+and exact-size XPRESS/LZX units with a 128-KiB input ceiling. It checks deterministic
 verdicts/counts and scratch/output guards; no filesystem provider reads or Windows
-codec execute. `tests/wof_fixtures.py` authors its seeds and separate content/error
-vectors. The separate `wof-files` suite authors 28 complete storage/format cases,
-byte oracles and 216 allocation/68 read faults in selected stat/open/cold-content
+codec execute. `tests/wof_fixtures.py` and `tests/lzx_fixtures.py` author its seeds
+and separate content/error vectors. The separate `wof-files` suite authors 37 complete storage/format cases,
+byte oracles and 376 allocation/101 read faults in selected stat/open/cold-content
 operations. The ordinary image target reads first/middle/tail default positions
-and therefore also exercises provider storage/table/content lifetimes. Fourteen
+and therefore also exercises provider storage/table/content lifetimes. Twenty-three
 legacy component cases cover WOF attributes/content, backing inventory, ADS/raw
 metadata and remount/revocation; modern content checks retain their runtime SKIP.
-See WOF.md for contracts and remaining LZX/Windows/native qualification.
+The LZX suite checks 140 content/31 invalid vectors; the optional external oracle
+command in WOF.md checks captured wimlib packets and reverse-direction synthetic
+decoding without linking that codec into product binaries. See WOF.md for contracts
+and remaining Windows/native qualification. FSKIT-EXT4-LESSONS.md records the
+inspected sibling history, adopted result/error and revoked-acquisition guards,
+and native/memory-pressure/distribution work still required.
 Image mutation can preserve FILE/INDX fixups and alter validated inner spans.
 The fuzzer authors 1-MiB physical images instead of retaining unused 8-MiB tails
 for every corpus entry. All fixture payload locations and large logical sparse

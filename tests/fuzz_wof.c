@@ -10,10 +10,11 @@ enum {
 	FUZZ_METADATA,
 	FUZZ_TABLE,
 	FUZZ_XPRESS,
+	FUZZ_LZX,
 	FUZZ_KINDS,
 	FUZZ_CHUNK_BUDGET = 4096,
 	FUZZ_INPUT_BYTES = 2 * NTFS_XPRESS_MAX_BLOCK,
-	FUZZ_SCRATCH_BYTES = 2048,
+	FUZZ_SCRATCH_BYTES = 8192,
 	FUZZ_GUARD_BYTES = sizeof(max_align_t),
 	FUZZ_GUARD_VALUE = 0xa5,
 	FUZZ_MUTATIONS = 512
@@ -53,6 +54,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	const uint8_t *payload;
 	size_t payload_size, expected, workspace_size, done[2], i;
 	enum ntfs_result result, repeat;
+	bool lzx;
 
 	if (size < sizeof(*header) || size > FUZZ_INPUT_BYTES) {
 		return 0;
@@ -93,19 +95,28 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		}
 		break;
 	case FUZZ_XPRESS:
-		expected = ntfs_u32(header->expected) % (NTFS_XPRESS_MAX_BLOCK + 1u);
-		workspace_size = ntfs_xpress_workspace_size();
+	case FUZZ_LZX:
+		lzx = header->kind % FUZZ_KINDS == FUZZ_LZX;
+		expected = ntfs_u32(header->expected) %
+		    ((lzx ? NTFS_LZX_MAX_BLOCK : NTFS_XPRESS_MAX_BLOCK) + 1u);
+		workspace_size = lzx ? ntfs_lzx_workspace_size() : ntfs_xpress_workspace_size();
 		assert(workspace_size <= FUZZ_SCRATCH_BYTES);
 		for (i = 0; i < 2; i++) {
 			memset(output[i], FUZZ_GUARD_VALUE, expected + 2 * FUZZ_GUARD_BYTES);
 			memset(scratch[i].bytes, FUZZ_GUARD_VALUE, sizeof(scratch[i].bytes));
 		}
-		result =
-		    ntfs_xpress_huffman_decode(payload, payload_size, output[0] + FUZZ_GUARD_BYTES,
-			expected, scratch[0].bytes + FUZZ_GUARD_BYTES, workspace_size, &done[0]);
-		repeat =
-		    ntfs_xpress_huffman_decode(payload, payload_size, output[1] + FUZZ_GUARD_BYTES,
-			expected, scratch[1].bytes + FUZZ_GUARD_BYTES, workspace_size, &done[1]);
+		result = lzx
+		    ? ntfs_lzx_decode(payload, payload_size, output[0] + FUZZ_GUARD_BYTES, expected,
+			  scratch[0].bytes + FUZZ_GUARD_BYTES, workspace_size, &done[0])
+		    : ntfs_xpress_huffman_decode(payload, payload_size,
+			  output[0] + FUZZ_GUARD_BYTES, expected,
+			  scratch[0].bytes + FUZZ_GUARD_BYTES, workspace_size, &done[0]);
+		repeat = lzx
+		    ? ntfs_lzx_decode(payload, payload_size, output[1] + FUZZ_GUARD_BYTES, expected,
+			  scratch[1].bytes + FUZZ_GUARD_BYTES, workspace_size, &done[1])
+		    : ntfs_xpress_huffman_decode(payload, payload_size,
+			  output[1] + FUZZ_GUARD_BYTES, expected,
+			  scratch[1].bytes + FUZZ_GUARD_BYTES, workspace_size, &done[1]);
 		assert(result == repeat && done[0] == done[1]);
 		assert(done[0] == (result == NTFS_OK ? expected : 0));
 		assert(memcmp(output[0], output[1], expected + 2 * FUZZ_GUARD_BYTES) == 0);
@@ -148,7 +159,7 @@ main(int argc, char **argv)
 		bytes[position] = saved;
 	}
 	free(bytes);
-	puts("PASS: bounded WOF/XPRESS mutations, deterministic errors, output/scratch guards");
+	puts("PASS: bounded WOF/XPRESS/LZX mutations, deterministic errors and guards");
 	return 0;
 }
 #endif

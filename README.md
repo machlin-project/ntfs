@@ -22,8 +22,8 @@ enumeration, $UpCase lookup and bounded reparse metadata decoding. Symlink and
 junction targets are available as lossless UTF-16. FSKit now projects a bounded
 single-edge subset with explicit Windows root bindings and reversible target
 aliases; see [native link policy](docs/LINK-POLICY.md). Intermediate reparse chains,
-cross-volume targets, LZX and cloud content remain open. WOF file-provider streams
-now read XPRESS4K/8K/16K with bounded storage/table validation. The FSKit app and extension
+cross-volume targets and cloud content remain open. WOF file-provider streams
+read XPRESS4K/8K/16K and LZX32K with bounded storage/table validation. The FSKit app and extension
 build unsigned from current source; a prior personally signed Release passed strict
 signature verification. Direct adapter tests and independent NTFS-3G image
 comparisons pass. Native installation and Windows-authored corpus acceptance
@@ -38,13 +38,13 @@ The no-VM continuation adds reference-based lossless inspection, Windows corpus
 acquisition/verification tools, standalone parser fuzz targets, an MS-DTYP security
 descriptor decoder/resolver and repeated portable workload measurements. Verified metadata
 reuse has a measured benefit for attribute-list opens. `$Secure` and per-file
-descriptors have bounded read-only snapshots; full authorization, LZX/provider qualification, complete
+descriptors have bounded read-only snapshots; full authorization, Windows/provider qualification, complete
 reparse resolution, Windows/native qualification and recovery remain open;
 see [the complete continuation scope](docs/CORE-QUALIFICATION.md).
 [WOF reading](docs/WOF.md) validates sparse unnamed storage, named backing extents,
-the complete paged chunk table and exact-size XPRESS-Huffman blocks. Counted streams
+the complete paged chunk table and exact-size XPRESS-Huffman/LZX units. Counted streams
 survive source nodes, retain one private decoded unit and retry failed fills.
-Core and legacy FSKit content checks pass locally; LZX and Windows/native provider
+Core and legacy FSKit content checks pass locally; Windows/native provider
 qualification remain open.
 Stored stream names now have a bounded immutable catalog and read-only FSKit
 xattr projection with a lossless UTF-16 reverse manifest. Bounded native filename
@@ -88,6 +88,8 @@ from content decoding. EFS-flagged and unsupported-compression files can retain
 truthful FSKit attributes and independent readable ADS while default reads return
 ENOTSUP. Six synthetic storage variants, corruption/rejection pages and remount/
 revocation checks pass locally. Known WOF file-provider metadata also retains truthful
-attributes and independent ADS beside unsupported LZX/encrypted backing. These checks do not
+attributes and independent ADS beside unsupported encrypted backing. These checks do not
 qualify Windows-authored EFS or installed behavior. Native links retain separate
 path, identity, configuration and installed-acceptance limits.
+The [ext4 FSKit history review](docs/FSKIT-EXT4-LESSONS.md) maps observed native
+lessons to NTFS contracts and remaining runtime/distribution checks.

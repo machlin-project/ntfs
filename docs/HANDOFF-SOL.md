@@ -34,7 +34,7 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
   names and opaque tag classification. Preserve rejection of unsupported provider
   data and all reparse-directory traversal, including attributes whose
   standard-information flag was cleared. Tag classification alone does not decode
-  content; known file-provider XPRESS uses the separately validated owning stream.
+  content; known file-provider XPRESS/LZX uses the separately validated owning stream.
 - Independent stream flags: an unencrypted ADS remains readable beside an
   encrypted default stream. Exact UTF-16 stream-name matching is documented.
 - Complete regular-file size metadata is independent of content decoding. Private
@@ -176,31 +176,51 @@ native scheduling and buffer lifetime also remain open.
 
 ## Core handoff checkpoint
 
-WOF file-provider XPRESS4K/8K/16K now uses the public stream API; read WOF.md for
+WOF file-provider XPRESS4K/8K/16K and LZX32K use the public stream API; read WOF.md for
 format provenance and the provider contract. Complete sparse unnamed/backing
 extents and the entire paged chunk table are checked before a readable stream is
 published. Streams survive source nodes and own one counted volume child. One
 private decoded unit, input/scratch allocation and 4-KiB table page remain bounded;
 failed fills invalidate cache tags before I/O and retry without publishing failed
 unit bytes. Placeholder VDL does not zero provider content. Provider stat validates
-storage independently of the table/codec, retaining truthful LZX/encrypted metadata
+storage independently of the table/codec, retaining truthful encrypted metadata
 and readable plaintext ADS. FSKit classifies known providers as ordinary files,
 keeps original-wire metadata/full stream manifests and hides the backing alias.
 
-All 35 sanitized suites, both freestanding targets, style, legacy component and
-current unsigned app passed. The file suite checks 28 verdicts and 216 allocation/
-68 read fault positions across selected stat/open/cold-read operations. Fourteen
+All 37 sanitized suites, both freestanding targets, style, legacy component and
+current unsigned app passed. The file suite checks 37 verdicts and 376 allocation/
+101 read fault positions across selected stat/open/cold-read operations. Twenty-three
 legacy provider scenarios check content/attributes/ADS/raw metadata, page changes,
-remount/revocation and exactly-once replies. The existing standalone suite retains
-87 content and 11 invalid vectors. Six modern checks explicitly SKIP. The image
-campaign completed 47,555 executions in 61 seconds without a reported finding;
-peak RSS was 958 MiB including corpus/sanitizer overhead. ACCEPTANCE.md records
-exact scope, retained failures and `artifacts/plan-wof-files-*.log` evidence.
-The prior standalone campaign remains under `artifacts/fuzz-wof-primitives/`;
-the integrated one uses `artifacts/fuzz-wof-files-image/`. No Windows/installed
-provider operation ran.
+remount/revocation, late-unit zero-count errors and exactly-once replies. Standalone
+XPRESS retains 87 content/11 invalid vectors; LZX adds 140 content/31 invalid
+vectors and a 4,940-byte caller-scratch contract. WIM-variant block headers,
+repeated queues, tree deltas, aligned offsets and CALL conversion are distinct
+from CAB/Delta stream grammar. Equal-size raw provider chunks bypass conversion.
+The external wimlib comparison passes 192 captured packets and 139 nonempty
+synthetic decodes; 168 compressor refusals remain raw fallbacks. No Windows codec ran.
 
-Continue LZX, provider-specific native fault/interleaving expansion, Windows
+Six modern checks explicitly SKIP. The WOF campaign completed 1,122,244 executions
+and the image campaign 45,986, each in 61 seconds without a reported finding.
+Peak RSS was 466/982 MiB respectively including corpus/sanitizer overhead;
+image runner memory approaches its separate cap. ACCEPTANCE.md records exact
+scope and retained failures. Current evidence uses `artifacts/plan-lzx-*.log`,
+`artifacts/lzx-oracle-checked-2/` and `artifacts/fuzz-lzx-{wof,image}/`.
+The preceding XPRESS checkpoint remains under `artifacts/plan-wof-files-*.log`.
+No Windows/installed provider operation ran.
+
+The final named-constant fixture review preserves 484 codec files, 148 full-image
+files, 148 compact-image files and all 360 external oracle level/payload pairs;
+see `artifacts/lzx-fixture-review/report.json`. No product source changed after
+the successful final checks.
+
+Read FSKIT-EXT4-LESSONS.md alongside the sibling's FSKIT.md and its Git fix history.
+Modern NTFS result handlers now reject absent successful results with EIO while
+preserving operation errors; initial revoked acquisition rejects before geometry.
+The shared boundary component passes locally. Runtime result-constructor failures,
+native reclamation, memory-pressure retention and distribution discovery still
+need their explicit evidence; ext4's mounted passes do not qualify this driver.
+
+Continue provider-specific native fault/interleaving and hard-link expansion, Windows
 codec/format observations, installed owning authorization and measured provider
 profiles. Preserve the full no-VM scope in CORE-QUALIFICATION.md; this checkpoint
 does not close security, recovery, optimizations or Windows/native acceptance.
@@ -404,7 +424,7 @@ and diagnostic bad-cluster handling, not blanket orphan or overlap exclusions.
 6. Qualify the core reparse reader and implemented LINK-POLICY.md projection with
    Windows-authored links and installed mounts. Extend intermediate resolution,
    hard-linked reparse identity and cross-volume ownership through explicit
-   contracts. WOF, cloud placeholders, third-party GUID owners and WSL tags still
+   contracts. WIM-backed WOF, cloud placeholders, third-party GUID owners and WSL tags still
    require separate content/resolution contracts. Do not expose encoded data as
    ordinary file content or turn every tag into a symlink.
 7. Extend security storage to whole-store consistency and Windows qualification;

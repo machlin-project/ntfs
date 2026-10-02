@@ -33,9 +33,14 @@ resource_release(void *context, void *buffer, size_t size)
 
 - (instancetype)initWithReader:(id<NTFSBlockReader>)reader
 {
-	uint64_t block = reader.blockSize, count = reader.blockCount;
-	uint64_t alignment = MAX(reader.physicalBlockSize, block);
+	uint64_t block, count, alignment;
 
+	if (reader == nil || reader.isRevoked) {
+		return nil;
+	}
+	block = reader.blockSize;
+	count = reader.blockCount;
+	alignment = MAX(reader.physicalBlockSize, block);
 	if (block == 0 || count == 0 || count > INT64_MAX / block ||
 	    alignment < NTFS_RESOURCE_MIN_ALIGNMENT || alignment > NTFS_RESOURCE_MAX_ALIGNMENT ||
 	    (alignment & (alignment - 1)) != 0 || count * block % alignment != 0) {
@@ -140,6 +145,12 @@ resource_release(void *context, void *buffer, size_t size)
 }
 
 @end
+
+NSError *
+ntfs_native_result_error(id result, NSError *error)
+{
+	return error != nil ? error : result == nil ? ntfs_error(NTFS_IO) : nil;
+}
 
 NSError *
 ntfs_error(enum ntfs_result result)

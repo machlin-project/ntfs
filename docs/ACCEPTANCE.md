@@ -20,11 +20,11 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
 | Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded single-edge symlink/junction projection, checked ancestry, explicit Windows root bindings and target aliases; opaque provider classification and raw-data rejection | Core checks and 47 legacy path/storage verdicts passed; 79 allocation/17 read fault positions across native lookup/reopened metadata passed; intermediate/multiply linked/cross-volume resolution, Windows links and installed path walking remain open |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
-| WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman decoding; exact output and hostile-input guards | 87 content/11 invalid vectors and bounded provider/table fuzz passed; LZX and Windows codec observations remain open |
-| WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K content, counted independent lifetime, lazy private unit, metadata-only unsupported codecs and native ADS/projection | 28 core verdicts, 216 allocation/68 read faults and 14 legacy provider scenarios passed; bounded image fuzz passed; LZX, provider-specific native fault/interleaving expansion, Windows and installed qualification remain open |
+| WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman/LZX decoding; exact output and hostile-input guards | 87 content/11 invalid XPRESS and 140 content/31 invalid LZX vectors passed; bidirectional wimlib comparison passed for 192 external packets and 139 nonempty synthetic packets; bounded provider/table/codec fuzz passed; Windows codec observations remain open |
+| WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 376 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; six modern lifecycle/enumeration/content/link/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; six modern lifecycle/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
@@ -32,12 +32,72 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
-| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS and WOF/cloud content | Not implemented; bounded single-edge native link projection is tracked separately |
+| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded single-edge native links and WOF file-provider content are tracked separately |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The WOF file-provider continuation passes all 35 sanitized C suites, both
+The LZX continuation passes all 37 sanitized C suites, both freestanding targets
+with the 2-KiB frame budget, selected Xcode style, the legacy component and the
+current unsigned app/extension build. The original WOF/WIM-variant decoder has
+140 exact-byte content vectors and 31 malformed vectors for all three block
+types, complete/empty alphabets, maximum code lengths, pretree runs/deltas,
+repeated/new offsets, aligned footer boundaries, overlapping copies, multiple
+blocks, CALL conversion and raw alignment/padding. Input immutability, queried
+scratch/output guards, argument limits and retry after failure pass. Scratch is
+4,940 bytes at four-byte alignment; an owning LZX stream's private data/scratch
+allocation is 70,476 bytes plus its separate table page/backing metadata.
+
+The independently authored file suite now has 37 verdicts with 376 allocation and
+101 read failure positions across selected stat/open/cold-read operations.
+Additional LZX cases include mixed raw/packed units, resident/empty/exact/listed
+storage, multi-page tables and CALL conversion that must bypass equal-size raw
+chunks. A later corrupt unit retains only the correct earlier core prefix and
+never publishes a failed private cache. Twenty-three legacy provider cases verify
+byte/metadata/manifest oracles, native zero-count errors, remount/revocation and
+exactly-once replies. Six modern checks explicitly SKIP; no installed mount ran.
+
+The optional external codec comparison uses wimlib 1.14.5 in a separate test
+process: 192 captured packets at three compression levels decode exactly through
+the core, and the external decoder verifies all 139 nonempty synthetic packets.
+The 168 compressor refusals remain explicit raw fallbacks, not codec passes.
+The empty synthetic unit qualifies the core API only. The report is
+`artifacts/lzx-oracle-checked-2/report.json`; library identities remain there.
+These comparisons qualify that external WIM-variant codec, not Windows WOF writers.
+
+Inspected ext4 history exposed modern result-construction and revoked-acquisition
+guards. The shared boundary component now checks preserved operation errors,
+EIO for a missing successful result, and rejecting an unavailable resource before
+geometry access. Both protocol sources compile; real modern result failures,
+installed reclamation/buffer lifetime and memory-pressure retention remain open.
+FSKIT-EXT4-LESSONS.md maps adopted contracts and remaining native requirements.
+
+Evidence uses `artifacts/plan-lzx-{core,freestanding,app,style}-final.log`,
+`plan-lzx-component-reviewed.log` and `plan-lzx-oracle-checked-2.log`. Earlier logs
+retain the tiny-input compressor refusal, an independently corrected repeat-queue
+byte oracle and the Xcode conditional-initialization diagnostic. External decoding
+confirmed the repeat-queue result before the expected bytes changed; header reads
+now have separate explicit status checks. None of those failures is counted as a
+pass.
+
+Final fixture constant naming preserved all previously tested bytes: 484 codec
+files, 148 full-image files and 148 compact-image files compare exactly against
+the retained inputs. All 360 external oracle level/payload pairs retain their
+inventory, sizes and captured-byte hashes. The review report is
+`artifacts/lzx-fixture-review/report.json`, with launcher log
+`artifacts/plan-lzx-fixture-review.log`.
+
+The expanded WOF/XPRESS/LZX campaign completed 1,122,244 executions in 61 seconds,
+coverage 691, feature count 2,392 and peak RSS 466 MiB. The image campaign completed
+45,986 executions in 61 seconds, coverage 3,749, feature count 14,573 and peak RSS
+982 MiB. Both exit zero without a reported crash/sanitizer finding, under
+`artifacts/fuzz-lzx-{wof,image}/` and `artifacts/plan-lzx-fuzz-{wof,image}.log`.
+Image RSS approaches the separate 1-GiB runner cap and includes corpus/sanitizer
+overhead; it does not describe driver allocations. Sustained Windows-seeded
+campaigns, native provider faults/interleavings/hard links, authorization and
+measured performance remain requirements.
+
+The preceding WOF file-provider continuation passed all 35 sanitized C suites, both
 freestanding targets with the 2-KiB frame limit, selected Xcode style, the legacy
 component and current unsigned app/extension build. Twenty-eight independently
 authored storage/format verdicts check exact bytes, raw/XPRESS4K/8K/16K chunks,

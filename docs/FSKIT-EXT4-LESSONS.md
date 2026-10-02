@@ -1,0 +1,24 @@
+# FSKit lessons from ext4
+
+The sibling ext4 repository's installed results and fix history inform this
+adapter. They do not qualify NTFS mounts. Inspect both `../ext4/docs/FSKIT.md`
+and the relevant implementation history with ordinary Git; source revisions
+remain in Git and native artifact identities remain in generated reports.
+
+| Ext4 finding and history subject | NTFS application | Evidence still required |
+| --- | --- | --- |
+| `Fix FSKit discovery and native ownership acceptance`: `usableButLimited` prevented Disk Arbitration recognition, and an underscore in the short name was truncated by its `_fskit` handling | Probe uses `usable`, short/type name `machlinntfs`, subtype zero; read-only policy is separate | Actual Disk Arbitration image discovery, mount point, ownership flags and registration; direct mounting alone is insufficient |
+| `Require macOS 26.5 for FSKit and reject writable opens`: cached writes and shared writable mappings must be refused before admission | Read-only open/close and mutation replies stay explicit; no kernel block-map protocol is advertised | Ordinary POSIX writes, writable mmap, Finder operations and read-only mount flags on both supported runtime families |
+| `Separate FSKit protocol generations and publish mutation metadata`: legacy counts and modern result objects are incompatible ABIs; a modern result is ignored on error | Separate complete sibling volume classes share the core engine. A late WOF decode error retains a correct core prefix but native handlers return an error with zero legacy count or no modern result | Installed buffer strategy and modern runtime execution; local late-block tests do not establish kernel behavior |
+| The modern bridge checks fallible result construction | All successful NTFS modern result-producing handlers now convert an absent result to EIO and preserve an existing operation error | The common result/error boundary runs locally; actual modern result-constructor failure injection still needs the appropriate runtime |
+| `Stop revoked FSKit owners and cover forced resource removal`: cached state must reject a revoked owner, and old ownership cannot recover when a resource reappears | Admission and post-read checks permanently latch revocation; initial revoked acquisition rejects before inspecting geometry. Cleanup frees state without another device read | Installed held descriptors, mappings, SIGBUS/EIO and complete remount bytes; forced image detach does not prove physical unplug/power-loss behavior |
+| Conditional reclaim must serialize with lookup publication; old runtimes retain ownership through the final item reference | Weak canonical identity, retained item owner, separate publication/admission/drain synchronization and modeled reclaim eligibility | Real framework counts, lookup/reclaim races, stale items after unload and native scheduling on each OS |
+| `Adapt FSKit read metadata retention to memory pressure`: read metadata is disposable, retained identities are not; coalesced elevated notifications outrank normal | Current NTFS caches are bounded but do not yet observe native pressure. Future work must preserve identities, pending directory entries and callback buffers; pressure callbacks should avoid eagerly paging in all caches | Design and fault/lifetime tests for selective release, then measured aggregate memory and installed notification behavior |
+| Ext4's installed cache experiments expose limitations that component callbacks cannot predict | Requested attributes, case/normalization keys, metadata cache changes and response masks remain separate NTFS acceptance requirements | Windows-authored case/security metadata and native observations. `FSContext` UID/GID alone is not a complete Windows token or authenticated identity mapping |
+| Ext4 packages a filesystem catalog and validates Developer ID installation independently of an unsigned build | NTFS currently has an app/extension development build; distribution remains open | Catalog/installer/signing/notarization, controlled VM installation and discovery beside Apple's existing NTFS support |
+
+The NTFS result/error and revoked-acquisition changes above are original adapter
+code informed by the inspected history. Ext4's writing, journal, maintenance,
+encryption and persistence-service implementations are not copied into the
+read-only NTFS core. Keep installed acceptance, core correctness and measured
+optimization as separate streams in CORE-QUALIFICATION.md.

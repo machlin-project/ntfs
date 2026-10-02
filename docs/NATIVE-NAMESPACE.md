@@ -115,7 +115,7 @@ Known WOF file-provider items retain that complete manifest, including the
 `WofCompressedData` entry and its stable catalog ordinal. The backing encoding is
 omitted from listxattr aliases and explicit gets of its alias return ENOATTR.
 Independent named ADS keep their original ordinals and read contracts. WOF items
-also expose original bytes through `org.machlin.ntfs.reparse`. Fourteen legacy
+also expose original bytes through `org.machlin.ntfs.reparse`. Twenty-three legacy
 provider cases compare complete byte/manifest oracles and remount/revocation
 behavior; installed projection and provider hard-link qualification remain open.
 
@@ -124,7 +124,8 @@ get returns E2BIG; unknown, malformed and default-stream aliases return ENOATTR.
 The adapter opens and validates the selected stream before reading exact bytes,
 checks revocation again before returning data, and does not cache file content.
 Setting or deleting any xattr returns EROFS. This projection does not provide
-Windows ACL authorization, EFS decryption or provider content support. Ordinary
+Windows ACL authorization or EFS decryption. Default WOF XPRESS/LZX content has
+the separate owning stream contract in WOF.md. Ordinary
 EFS-flagged and unsupported-compression files now have complete checked size
 metadata independent of decoding; they can be adopted by FSKit and expose a
 separate readable ADS. Default reads remain ENOTSUP. Reparse items and

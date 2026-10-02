@@ -4,8 +4,10 @@ The NTFS core is an original implementation in this repository. Its design uses
 published Microsoft descriptions, NTFS-3G's reverse-engineered format information,
 independently authored fixtures and Apple SDK interfaces. NTFS-3G layout comments
 are consulted for format facts; this is not a source-isolated clean-room process.
-The sibling ext4 repository informed component boundaries and
-development workflow. It is not an NTFS implementation dependency.
+The sibling ext4 repository informed component boundaries and development
+workflow. Its native FSKit fix history also informs the result/error and
+revoked-acquisition guards; FSKIT-EXT4-LESSONS.md maps inspected subjects and
+remaining NTFS evidence. It is not an NTFS implementation dependency.
 
 Primary references:
 
@@ -105,7 +107,26 @@ hand-authored packet qualify local encoding/decoding only. Independently authore
 file images now combine those packets with sparse placeholders, fragmented/listed
 backing and original-byte/manifest expectations. The owning stream and native
 projection are original implementation code. These checks do not qualify Windows
-WOF writers/codecs; LZX and installed provider acceptance remain open.
+WOF writers/codecs; Windows and installed provider acceptance remain open.
+
+LZX uses the WOF/WIM variant documented by original libfwnt format research,
+Microsoft MS-PATCH's shared Huffman/run/repeated-offset rules and the original
+wimlib author's format constants. MS-PATCH's Delta header and extended lengths
+are deliberately not substituted for WIM's 32-KiB variant. The constants header
+supplies format facts, including the fixed CALL transform parameter; no foreign
+codec implementation was imported. The compact canonical trees, bounded word
+reader, block state and caller-scratch API are repository-owned original code.
+See [MS-PATCH block format](https://learn.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-patch/517e354e-a5c5-4239-ada5-25389cfe3170),
+[original compression research](https://github.com/libyal/libfwnt/blob/main/documentation/Compression%20methods.asciidoc)
+and [original wimlib format constants](https://github.com/ebiggers/wimlib/blob/master/include/wimlib/lzx_constants.h).
+
+An already installed, explicitly selected wimlib library is an optional external
+test oracle, loaded only by tests/lzx_oracle.py through its documented compression
+API. The test process records library provenance and captured original/encoded
+bytes in ignored artifacts; no library/header/implementation is vendored into
+product sources or app bundles. Bidirectional codec comparisons are separate
+from the independent image author and from still-required native Windows WOF
+observations. Ordinary core tests need no external codec library.
 
 Native target translation uses Microsoft's substitute-name/relative-flag and
 namespace/root descriptions. Explicit current-owner bindings, numeric ancestry,

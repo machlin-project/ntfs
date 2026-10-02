@@ -19,7 +19,8 @@ enum {
 	READ_STRIDE = 773,
 	PAGE_BYTES = 4096,
 	PAGE_ENTRIES = PAGE_BYTES / sizeof(uint32_t),
-	PAGE_BACKING_CLUSTERS = 73
+	PAGE_BACKING_CLUSTERS = 73,
+	LZX_PAGE_BACKING_CLUSTERS = 70
 };
 
 enum { FAULT_STAT, FAULT_OPEN, FAULT_READ, FAULT_PHASES };
@@ -42,7 +43,16 @@ static const struct test_case cases[] = {
     {"pages", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_XPRESS_4K, PAGE_BACKING_CLUSTERS, true},
     {"listed", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_XPRESS_4K, 3, true},
     {"nonresident-list", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_XPRESS_4K, 3, true},
-    {"lzx", NTFS_OK, NTFS_UNSUPPORTED, NTFS_UNSUPPORTED, NTFS_WOF_LZX_32K, 17, true},
+    {"lzx", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 17, true},
+    {"lzx-packed", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 9, true},
+    {"lzx-resident", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 0, true},
+    {"lzx-empty", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 0, true},
+    {"lzx-exact", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 9, true},
+    {"lzx-listed", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 10, true},
+    {"lzx-pages", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, LZX_PAGE_BACKING_CLUSTERS, true},
+    {"lzx-call", NTFS_OK, NTFS_OK, NTFS_OK, NTFS_WOF_LZX_32K, 9, true},
+    {"lzx-codec", NTFS_OK, NTFS_OK, NTFS_CORRUPT, NTFS_WOF_LZX_32K, 9, true},
+    {"lzx-late-codec", NTFS_OK, NTFS_OK, NTFS_CORRUPT, NTFS_WOF_LZX_32K, 1, true},
     {"codec", NTFS_OK, NTFS_OK, NTFS_CORRUPT, NTFS_WOF_XPRESS_4K, 2, true},
     {"duplicate", NTFS_OK, NTFS_CORRUPT, NTFS_CORRUPT, NTFS_WOF_XPRESS_4K, 2, true},
     {"descending", NTFS_OK, NTFS_CORRUPT, NTFS_CORRUPT, NTFS_WOF_XPRESS_4K, 2, true},
@@ -115,6 +125,8 @@ exercise(struct fuzz_device *device, const struct test_case *test, const uint8_t
 	uint64_t reference = (uint64_t)FILE_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT | FILE_RECORD;
 	uint64_t offset = 0;
 	size_t length = size < RANGE_BYTES ? size : RANGE_BYTES, done, allocations, reads, i;
+	size_t expected_prefix;
+	uint32_t unit;
 	uint8_t *output;
 	enum ntfs_result result, expected_error;
 
@@ -190,10 +202,11 @@ exercise(struct fuzz_device *device, const struct test_case *test, const uint8_t
 	node = NULL;
 	if (stream != NULL) {
 		assert(ntfs_unmount(volume) == NTFS_BUSY && ntfs_stream_size(stream) == size);
-		if (strcmp(test->name, "pages") == 0) {
-			offset =
-			    (uint64_t)(PAGE_ENTRIES - 1) * NTFS_WOF_UNIT_4K - CROSS_PREFIX_BYTES;
-			length = NTFS_WOF_UNIT_4K + CROSS_TAIL_BYTES;
+		if (strcmp(test->name, "pages") == 0 || strcmp(test->name, "lzx-pages") == 0) {
+			unit = test->algorithm == NTFS_WOF_LZX_32K ? NTFS_WOF_UNIT_32K
+								   : NTFS_WOF_UNIT_4K;
+			offset = (uint64_t)(PAGE_ENTRIES - 1) * unit - CROSS_PREFIX_BYTES;
+			length = unit + CROSS_TAIL_BYTES;
 		}
 		output = malloc(length + 2 * GUARD_BYTES);
 		assert(output != NULL);
@@ -239,8 +252,16 @@ exercise(struct fuzz_device *device, const struct test_case *test, const uint8_t
 				    device->reads == reads);
 			}
 		} else {
-			assert(done == 0);
-			guards(output + GUARD_BYTES, length);
+			expected_prefix =
+			    strcmp(test->name, "lzx-late-codec") == 0 ? NTFS_WOF_UNIT_32K : 0;
+			assert(done == expected_prefix);
+			assert(memcmp(output + GUARD_BYTES, original, done) == 0);
+			guards(output + GUARD_BYTES + done, length - done);
+			/* The failed private block must remain invalid on the next fill. */
+			assert(ntfs_stream_read(stream, offset, output + GUARD_BYTES, length,
+				   &done) == test->read &&
+			    done == expected_prefix);
+			guards(output + GUARD_BYTES + done, length - done);
 		}
 		guards(output, GUARD_BYTES);
 		guards(output + GUARD_BYTES + length, GUARD_BYTES);

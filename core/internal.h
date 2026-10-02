@@ -104,6 +104,8 @@ enum ntfs_result ntfs_attr_value(const struct ntfs_attr_view *, const uint8_t **
 enum ntfs_result ntfs_stream_from_attr(
     struct ntfs_volume *, const struct ntfs_attr_view *, struct ntfs_stream **);
 enum ntfs_result ntfs_stream_append(struct ntfs_stream *, const struct ntfs_attr_view *);
+enum ntfs_result ntfs_bad_clusters_from_attr(
+    struct ntfs_node *, const struct ntfs_attr_view *, struct ntfs_stream **);
 enum ntfs_result ntfs_attribute_open(
     struct ntfs_node *, uint32_t, const uint16_t *, size_t, struct ntfs_stream **);
 enum ntfs_result ntfs_attribute_list_read(struct ntfs_node *, uint8_t **, size_t *);

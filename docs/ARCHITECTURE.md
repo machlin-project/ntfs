@@ -120,6 +120,14 @@ the volume-wide FSKit capability strategy requiring native qualification.
 
 Mount verifies primary and mirrored MFT bootstrap records, volume version and
 flags, $UpCase, and the root index. It does not claim a full filesystem check.
+The separate synchronous `ntfs_validate` API uses its own private mount and
+budgeted callback owner. It scans record allocation, complete supported attribute
+mappings, exact filename/index edges, directory reachability and physical cluster
+ownership. Bounded heapsort and an iterative graph walk keep temporary storage
+and traversal explicit. It never mutates an existing mounted owner or reads bad
+sectors. Its complete flag applies only to those defined passes; unsupported
+features, faults and budget exhaustion retain partial reports. VALIDATION.md
+defines system-file interpretation, evidence and remaining store/recovery gaps.
 Dirty/recovery-flagged volumes are refused without replay. MFT bootstrap supports
 resident/nonresident attribute lists. The first data extent belongs to record
 zero; each extension must be reachable through the already decoded MFT prefix.

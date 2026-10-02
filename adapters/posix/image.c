@@ -54,7 +54,7 @@ ntfs_image_open(const char *path, struct ntfs_image *image)
 	int saved;
 
 	*image = (struct ntfs_image){.fd = -1};
-	image->fd = open(path, O_RDONLY | O_CLOEXEC);
+	image->fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
 	if (image->fd < 0) {
 		return errno;
 	}

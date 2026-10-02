@@ -57,3 +57,9 @@ Stored per-directory case policy now selects exact UTF-16 or folded lookup while
 preserving NTFS B-tree ordering. Mixed-directory/alias and fault checks pass
 locally; installed cache behavior and Windows-authored flags remain unqualified.
 See [directory case policy](docs/CASE-POLICY.md).
+The separate [consistency diagnostic](docs/VALIDATION.md) now checks bounded
+MFT/cluster allocation, extension/list ownership, filename/index pairing,
+directory reachability and physical extents through a private read-only mount.
+Synthetic fault/budget checks and four independent bitmap geometries pass;
+complete reports retain a defined scope, with native Windows, view-store and
+recovery qualification still open.

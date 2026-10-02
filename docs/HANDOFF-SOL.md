@@ -231,6 +231,24 @@ volume-wide Sensitive capability strategy. Windows flags and installed cache
 behavior remain unrun. Do not treat compiled modern replies or a context double
 as runtime/authorization evidence.
 
+The metadata diagnostic checkpoint passes 31 sanitized suites and exposes
+`ntfs_validate`/`ntfs-validate`: private read-only ownership, MFT/cluster bitmap
+checks, extension/list membership, exact filename/index pairing, directory graph
+and physical extent ownership. Fifty-seven image verdicts, seven budget dimensions
+and 508 allocation/346 read faults pass with unchanged input and complete retry.
+Four independent bitmap geometries pass; all images remain unchanged. The final
+diagnostic fuzz run passes 47,096 executions in 61 seconds with peak RSS 609 MiB
+and no finding. Freestanding/style/unsigned app checks pass; applicable legacy
+component tests preserve two modern-runtime SKIPs. Logs are
+`artifacts/plan-validation-final-*.log`, `artifacts/plan-validation-fskit.log`,
+`artifacts/interoperability-validation-final/` and
+`artifacts/fuzz-validation-reviewed/`. VALIDATION.md defines what complete means.
+Keep explicit incompleteness for separate DOS header counts and listed/flagged
+bad-cluster storage. View-index semantic consistency, full replicas, native
+journal and Windows-authored large/fragmented metadata remain open. Retain the
+three failed initial external reports: they led to narrow system-record framing
+and diagnostic bad-cluster handling, not blanket orphan or overlap exclusions.
+
 1. Build a Windows-authored corpus and retain the independently generated oracle.
    Current handcrafted images target individual contracts; mkntfs tests provide
    independent ordinary formatting, data and indexes. Neither closes Windows

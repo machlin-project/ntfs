@@ -20,7 +20,7 @@ RSS_LIMIT_MIB = 1024
 INPUT_TIMEOUT_SECONDS = 5
 STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
-TARGETS = ('image', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security', 'access')
+TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security', 'access')
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -52,16 +52,19 @@ try:
     for target in targets:
         campaign = run_directory / target
         campaign.mkdir()
-        maximum = MAX_INPUT_BYTES if target == 'image' else STRUCTURE_INPUT_BYTES
+        maximum = MAX_INPUT_BYTES if target in ('image', 'validation') else STRUCTURE_INPUT_BYTES
         if target in ('security', 'access'):
             maximum = SECURITY_INPUT_BYTES
         corpus = output / target / f'corpus-{maximum}'
         corpus.mkdir(parents=True, exist_ok=True)
         seeds = campaign / 'seeds'
-        if target == 'image':
+        if target in ('image', 'validation'):
             subprocess.run([sys.executable, str(root / 'tests/fixtures.py'), str(seeds), '--image-bytes', str(maximum)], cwd=root, env=env, check=True)
-            paths = sorted(seeds.glob('*.img'))
-            sources = [root / 'tests/fuzz.c', root / 'tests/fuzz_mutator.c']
+            # Complete inventories have their own walker and corpus. Preserve
+            # the original image API corpus without duplicating unused tails.
+            paths = sorted(seeds.glob('validation-*.img')) if target == 'validation' else sorted(
+                path for path in seeds.glob('*.img') if not path.name.startswith('validation-'))
+            sources = [root / ('tests/fuzz_validation.c' if target == 'validation' else 'tests/fuzz.c'), root / 'tests/fuzz_mutator.c']
             flags = []
         else:
             generate(seeds)

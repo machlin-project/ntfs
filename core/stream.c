@@ -39,8 +39,8 @@ append_run(struct ntfs_stream *s, uint64_t vcn, uint64_t count, uint64_t lcn)
 	return NTFS_OK;
 }
 
-enum ntfs_result
-ntfs_stream_append(struct ntfs_stream *s, const struct ntfs_attr_view *a)
+static enum ntfs_result
+append_mapping(struct ntfs_stream *s, const struct ntfs_attr_view *a, bool implicit_holes)
 {
 	const struct ntfs_disk_nonresident *n;
 	const uint8_t *p, *end;
@@ -106,7 +106,8 @@ ntfs_stream_append(struct ntfs_stream *s, const struct ntfs_attr_view *a)
 				return NTFS_CORRUPT;
 			}
 			mapped = lcn;
-		} else if ((s->flags & (NTFS_ATTR_SPARSE | NTFS_ATTR_COMPRESSED)) == 0) {
+		} else if (!implicit_holes &&
+		    (s->flags & (NTFS_ATTR_SPARSE | NTFS_ATTR_COMPRESSED)) == 0) {
 			return NTFS_CORRUPT;
 		}
 		p += offset_bytes;
@@ -120,6 +121,80 @@ ntfs_stream_append(struct ntfs_stream *s, const struct ntfs_attr_view *a)
 		return NTFS_CORRUPT;
 	}
 	s->clusters = vcn;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_stream_append(struct ntfs_stream *s, const struct ntfs_attr_view *a)
+{
+	return append_mapping(s, a, false);
+}
+
+/* Internal diagnostic storage only. The $Bad stream describes physical bad
+ * clusters, not readable content. Its holes need no ordinary sparse flag. */
+enum ntfs_result
+ntfs_bad_clusters_from_attr(
+    struct ntfs_node *node, const struct ntfs_attr_view *attr, struct ntfs_stream **out)
+{
+	static const uint16_t name[] = {'$', 'B', 'a', 'd'};
+	struct ntfs_volume *volume = node->volume;
+	const struct ntfs_disk_nonresident *disk;
+	struct ntfs_stream *stream;
+	uint64_t bytes;
+	size_t unit;
+	uint32_t i;
+	enum ntfs_result result;
+
+	*out = NULL;
+	if ((node->reference & NTFS_REFERENCE_RECORD_MASK) != NTFS_BAD_CLUSTERS_RECORD ||
+	    attr->type != NTFS_ATTRIBUTE_DATA || !attr->disk->nonresident ||
+	    attr->disk->name_length != sizeof(name) / sizeof(name[0])) {
+		return NTFS_NOT_FOUND;
+	}
+	for (unit = 0; unit < sizeof(name) / sizeof(name[0]); unit++) {
+		if (ntfs_u16(attr->bytes + ntfs_u16(attr->disk->name_offset) +
+			unit * NTFS_UTF16_UNIT_BYTES) != name[unit]) {
+			return NTFS_NOT_FOUND;
+		}
+	}
+	if (attr->flags != 0) {
+		return NTFS_UNSUPPORTED;
+	}
+	disk = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr));
+	if (volume->info.cluster_count > (uint64_t)INT64_MAX / volume->info.cluster_size) {
+		return NTFS_CORRUPT;
+	}
+	bytes = volume->info.cluster_count * volume->info.cluster_size;
+	if (ntfs_u64(disk->lowest) != 0 || ntfs_u64(disk->size) != bytes ||
+	    ntfs_u64(disk->allocated) != bytes ||
+	    (ntfs_u64(disk->initialized) != 0 && ntfs_u64(disk->initialized) != bytes) ||
+	    disk->compression_unit != 0) {
+		return NTFS_CORRUPT;
+	}
+	stream = ntfs_alloc(volume, sizeof(*stream));
+	if (stream == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	stream->volume = volume;
+	stream->size = bytes;
+	stream->allocated = bytes;
+	stream->initialized = ntfs_u64(disk->initialized);
+	stream->cached_unit = UINT64_MAX;
+	result = append_mapping(stream, attr, true);
+	if (result == NTFS_OK && stream->clusters != volume->info.cluster_count) {
+		result = NTFS_CORRUPT;
+	}
+	for (i = 0; result == NTFS_OK && i < stream->run_count; i++) {
+		if (stream->runs[i].lcn != NTFS_HOLE &&
+		    stream->runs[i].lcn != stream->runs[i].vcn) {
+			result = NTFS_CORRUPT;
+		}
+	}
+	if (result != NTFS_OK) {
+		ntfs_stream_close(stream);
+		return result;
+	}
+	*out = stream;
 	return NTFS_OK;
 }
 

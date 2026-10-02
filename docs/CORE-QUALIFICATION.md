@@ -7,8 +7,8 @@ boundaries when updating ACCEPTANCE.md and HANDOFF-SOL.md.
 
 | Required outcome | Current implementation and evidence | Work remaining |
 | --- | --- | --- |
-| Independent corpus and sustained fuzzing | Windows-only read-only collector; local manifest verifier and synthetic acquisition/UTF-16/hard-link regressions; separate image, mapping-pair, attribute-list, index-root/block, LZNT1, reparse, security and DACL/token fuzz targets; FILE/INDX fixup-preserving image mutations | Execute acquisition on a Windows machine; extend expected-operation observations; use Windows seeds and longer scheduled campaigns; reduce every found defect to a retained regression |
-| Metadata consistency and corruption diagnosis | Existing fragmented-MFT/continuation/index/stream tests and allocation/read sweeps; cached metadata validates before publication and retries failures | Read-only validator for reference, allocation and namespace consistency; per-operation I/O/work budgets; real fragmented and large-directory corpus |
+| Independent corpus and sustained fuzzing | Windows-only read-only collector; local manifest verifier and synthetic acquisition/UTF-16/hard-link regressions; separate image, full diagnostic, mapping-pair, attribute-list, index-root/block, LZNT1, reparse, security and DACL/token fuzz targets; FILE/INDX fixup-preserving image mutations | Execute acquisition on a Windows machine; extend expected-operation observations; use Windows seeds and longer scheduled campaigns; reduce every found defect to a retained regression |
+| Metadata consistency and corruption diagnosis | Private read-only validator for MFT/cluster bitmaps, extension/list references, exact namespace pairing/link graph and physical ownership; seven budgets, 57 image verdicts, 508 allocation/346 I/O faults, four independent bitmap geometries and bounded diagnostic fuzz; cached metadata validates before publication | Windows/DOS and listed/flagged bad-cluster qualification; view-store and unreferenced index-block consistency, full replicas and native journal checks; per-operation budgets outside the diagnostic; real fragmented and large-directory corpus |
 | Names, hard links, streams | Reference-addressed inspector preserves UTF-16 code units; bounded ADS catalog/xattrs; reversible bounded FSKit filename aliases and raw per-link manifests; per-directory exact/folded lookup retaining B-tree collation, 17 policy images and 47 allocation/eight I/O faults; mixed parents and sensitive aliases pass components | Windows/native case-policy and volume-capability/cache qualification; installed filename/ADS and unsupported-object flows; native normalization behavior |
 | Links and special data | Reparse snapshots and symlink/junction names are lossless in core; filter-owned ordinary data/traversal remain rejected | FSKit symlink operations and explicit path/volume translation; WOF file-provider framing, chunk tables and XPRESS/LZX; provider-specific cloud/unknown/EFS policies |
 | Security | Original descriptor/SID/ACL/ACE parser and bounded immutable resolver for `$Secure` and per-file attributes; distinct absent/NULL/empty ACLs, checked index paths/hash/copies and four external image geometries; bounded ordered DACL evaluator with exact generic mappings, ordinary ownership and deny-only/restricting contexts, 196,608 independent per-right oracles | Whole-store/Windows qualification; native AccessCheck comparisons, restricted ownership, advanced ACE/SACL/privilege/maximum-access policy and Windows-to-native identities; integrate owning authorization |
@@ -59,6 +59,12 @@ unsupported driver operations fail their check. Reports list security and
 case-policy gaps separately. Neither collector nor verifier mounts the image.
 
 ## Evidence boundaries
+
+VALIDATION.md defines the implemented whole-volume diagnostic passes and their
+remaining semantic gaps. A complete report means those passes succeeded within
+budget; it does not close full metadata/security/recovery qualification. The
+independent mkntfs images and synthetic mutation cases are separate from native
+Windows-authored corpus evidence.
 
 Synthetic corpus tests qualify the manifest/transport and inspector contracts,
 not the Win32 calls or Windows-authored on-disk features. NTFS-3G utilities are

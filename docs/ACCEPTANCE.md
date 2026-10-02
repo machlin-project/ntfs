@@ -11,6 +11,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, exact filename/index pairing, namespace reachability/link counts and physical overlap/ownership; partial budget/fault/unsupported reports | 57 synthetic image verdicts, seven budget dimensions, 508 allocation/346 read faults and four independent bitmap geometries passed; DOS header counts, listed/flagged bad-cluster storage, view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
 | Native filenames and hard links | Bounded reversible aliases and per-link UTF-16 manifests; inode identity separated from link spelling; native length, Unicode, hidden/DOS ordinals, response/scan exhaustion, faults and revocation | Five authored namespace images and component sweeps passed; installed case/normalization and Windows-authored namespace untested |
@@ -32,6 +33,40 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
+
+The consistency diagnostic checkpoint passes all 31 sanitized suites, both
+freestanding targets, selected-toolchain style and the current unsigned Debug
+app build. Legacy FSKit components passed with two explicit macOS-27 runtime
+SKIPs; the new diagnostic has no FSKit runtime entry point. Its 57 complete
+metadata fixtures cover positive storage variants, damaged links/lists/bitmaps,
+cycles, physical overlaps and explicit unsupported cases. Four fault sweeps cover
+112/84, 137/88, 138/89 and 121/85 allocation/read positions, with retry, unchanged
+input, exact release sizes and zero leaked allocations. Tests also check all
+seven budget dimensions, API misuse, boundary equality, an independent existing
+live mount and refusal to read physical bad sectors.
+
+The independent diagnostic compares both standalone NTFS-3G bitmap exports
+against full core inventories in four geometries. Each image has 119 active MFT
+records; allocated cluster counts are 4,706, 1,179, 1,308 and 82 in sector/cluster
+profiles 512/1024, 512/4096, 4096/4096 and 512/65536 respectively. Every diagnostic
+was complete and every image hash unchanged. Final evidence is
+`artifacts/interoperability-validation-final/report.json` and
+`artifacts/plan-validation-final-oracle.log`. Initial failed oracle reports remain
+under `interoperability-validation-{initial,reviewed,system}`: they exposed the
+uninterpreted record flag, special bad-cluster mapping and preinitialized reserved
+record templates. None was silently skipped or counted as a pass.
+
+After final root-anchor/duplicate-stream review, the dedicated validation fuzz
+campaign completed 47,096 executions in 61 seconds, coverage 3,065, feature count
+8,505 and peak RSS 609 MiB, exit zero with no crash or sanitizer finding. Evidence
+is under `artifacts/fuzz-validation-reviewed/` and
+`artifacts/plan-validation-final-fuzz.log`; the earlier successful campaign is
+preserved separately under `artifacts/fuzz-validation/`. Final build/tests/style/
+freestanding/app logs use `artifacts/plan-validation-final-*.log`; applicable
+component evidence is `artifacts/plan-validation-fskit.log`. Python syntax checks
+passed for 30 files under `artifacts/plan-validation-python.log`. These bounded
+local campaigns and independent mkntfs layouts do not qualify Windows/native
+behavior. [VALIDATION.md](VALIDATION.md) defines complete-verdict scope and gaps.
 
 The original core handoff passed eleven suites: primitives/lifecycle on five filesystem layouts,
 stream boundaries, decoder vectors, reparse metadata, image contracts,

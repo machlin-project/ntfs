@@ -27,6 +27,7 @@ BOOT_MEDIA = 0xF8
 NTFS_MAJOR_VERSION, NTFS_MINOR_VERSION = 3, 1
 VOLUME_DIRTY = 1
 FILE_IN_USE, FILE_IS_DIRECTORY = 1, 2
+FILE_UNINTERPRETED = 4
 FILE_VIEW_INDEX = 8
 ALLOCATED_CLUSTERS = 160
 SECURITY_ID = 256
@@ -191,7 +192,8 @@ def protect(out, usa_offset):
         struct.pack_into('<H', out, tail, FIXUP_SEQUENCE)
 
 
-def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=False, links=1, view=False):
+def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=False, links=1, view=False,
+                uninterpreted=False):
     sequence = sequence if sequence is not None else (SYSTEM_SEQUENCE if number < SYSTEM_RECORD_LIMIT else FILE_SEQUENCE)
     header = FILE_HEADER_LEGACY if legacy else FILE_HEADER
     usa_offset = header.size
@@ -202,7 +204,8 @@ def file_record(number, attrs, directory=False, sequence=None, base=0, legacy=Fa
     assert used <= RECORD, (number, used)
     out = bytearray(RECORD)
     fields = (b'FILE', usa_offset, usa_count, 0, sequence, links, attrs_offset,
-              FILE_IN_USE | (FILE_IS_DIRECTORY if directory else 0) | (FILE_VIEW_INDEX if view else 0), used, RECORD, base, len(attrs))
+              FILE_IN_USE | (FILE_IS_DIRECTORY if directory else 0) | (FILE_VIEW_INDEX if view else 0)
+              | (FILE_UNINTERPRETED if uninterpreted else 0), used, RECORD, base, len(attrs))
     header.pack_into(out, 0, *fields, *(() if legacy else (0, number)))
     out[attrs_offset:used] = content
     protect(out, usa_offset)
@@ -748,6 +751,8 @@ def main():
     namespace_fixtures(output, image, contents)
     from case_fixtures import author as case_fixtures
     case_fixtures(output, image)
+    from validation_fixtures import author as validation_fixtures
+    validation_fixtures(output, image)
     from secure_fixtures import author as secure_fixtures
     secure_fixtures(output, image, contents)
     (output / 'standard.img').write_bytes(image)

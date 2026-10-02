@@ -22,7 +22,7 @@ exercises the real adapter against a bounded fake resource in-process; it neithe
 mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds a
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
-Use `--target all` for the image and eight standalone parser/decision targets, or select
+Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security` or `access`. The time budget applies per target. Each campaign retains its own
 binary, log and report; persistent corpora remain under the selected `--output`.
@@ -95,6 +95,20 @@ required allocation/read faults. `tests/case_fixtures.py` authors these images
 without importing parser code. FSKit components cover sensitive aliases and
 mixed directory identities; modern reply tests explicitly SKIP without macOS 27.
 See CASE-POLICY.md and ACCEPTANCE.md for evidence and native acceptance limits.
+
+`validation`, `validation-cli` and `fuzz-validation` qualify the private
+read-only diagnostic. Run `.build/ntfs-validate IMAGE` for a JSON report; exit zero
+requires a complete verdict. Seven positive-decimal options bound record/run/link
+counts, live memory, read calls/bytes and work. The dedicated `--target validation`
+campaign uses its own complete compact-image corpus and checks deterministic
+reports, exact cleanup and dynamic budgets. Ordinary mount does not implicitly
+run this diagnostic. See VALIDATION.md for supported passes and explicit gaps.
+Compare both bitmap inventories with independent external exports using existing
+images and a new evidence directory:
+
+```sh
+python3 tests/validation_oracle.py --images artifacts/interoperability-stream-catalog --output artifacts/interoperability-validation-next
+```
 
 Compare against external NTFS-3G exports using an existing interoperability image
 directory and a new evidence directory:

@@ -47,6 +47,10 @@ Primary references:
 - [NTFS-3G layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/layout.h)
 - [Original Linux-NTFS Secure format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/secure.html)
 - [Original Linux-NTFS descriptor format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/security_descriptor.html)
+- [Original Linux-NTFS MFT and reserved-record notes](https://flatcap.github.io/linux-ntfs/ntfs/files/mft.html)
+- [Original Linux-NTFS filename lifetime notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/file_name.html)
+- [Original Linux-NTFS root anchor notes](https://flatcap.github.io/linux-ntfs/ntfs/files/dot.html)
+- [Original Linux-NTFS bad-cluster format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/badclus.html)
 
 Cross-checked format details include the 512-byte fixup stride, compression-unit
 byte width, physical versus logical allocation, partial final compression units,
@@ -122,3 +126,15 @@ bytes. CASE-POLICY.md separates those facts from the original core/adapter
 implementation and the remaining Windows/native validation. Microsoft's WSL
 extended-attribute interface is not presumed to be literal NTFS EA storage.
 Synthetic policy images and component tests qualify local interpretation only.
+
+The consistency diagnostic uses Microsoft's two allocation planes and complete
+attribute-list membership rule, original Linux-NTFS filename/root/reserved-slot
+facts, and independently exported metadata. NTFS-3G's layout comments identify
+the observed but uninterpreted record flag `0x0004`; no behavior is inferred from
+it. Independent mkntfs templates narrow reserved-record handling to inert zero-link
+storage, and `$BadClus::$Bad` exports confirm implicit holes and volume-sized
+virtual allocation. The original bounded mapping parser is reused for diagnostic
+bad-cluster intervals. It never reads bad sectors and imports no external
+filesystem algorithm. VALIDATION.md separates observed facts, original graph/sort/ownership
+algorithms and unsupported DOS/listed-bad-cluster/store/recovery work. The oracle
+compares standalone raw bitmap exports, never links NTFS-3G into the product.

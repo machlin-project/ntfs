@@ -107,7 +107,7 @@ append_mapping(struct ntfs_stream *s, const struct ntfs_attr_view *a, bool impli
 			}
 			mapped = lcn;
 		} else if (!implicit_holes &&
-		    (s->flags & (NTFS_ATTR_SPARSE | NTFS_ATTR_COMPRESSED)) == 0) {
+		    (s->flags & (NTFS_ATTR_SPARSE | NTFS_ATTR_COMPRESSION_MASK)) == 0) {
 			return NTFS_CORRUPT;
 		}
 		p += offset_bytes;
@@ -198,9 +198,9 @@ ntfs_bad_clusters_from_attr(
 	return NTFS_OK;
 }
 
-enum ntfs_result
-ntfs_stream_from_attr(
-    struct ntfs_volume *v, const struct ntfs_attr_view *a, struct ntfs_stream **out)
+static enum ntfs_result
+stream_from_attr(struct ntfs_volume *v, const struct ntfs_attr_view *a, bool metadata_only,
+    struct ntfs_stream **out)
 {
 	struct ntfs_stream *s;
 	const struct ntfs_disk_nonresident *n;
@@ -210,10 +210,13 @@ ntfs_stream_from_attr(
 
 	*out = NULL;
 	if ((a->flags & ~(NTFS_ATTR_SPARSE | NTFS_ATTR_ENCRYPTED | NTFS_ATTR_COMPRESSION_MASK)) !=
-		0 ||
-	    (a->flags & NTFS_ATTR_ENCRYPTED) != 0 ||
-	    ((a->flags & NTFS_ATTR_COMPRESSION_MASK) != 0 &&
-		(a->flags & NTFS_ATTR_COMPRESSION_MASK) != NTFS_ATTR_COMPRESSED)) {
+	    0) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (!metadata_only &&
+	    ((a->flags & NTFS_ATTR_ENCRYPTED) != 0 ||
+		((a->flags & NTFS_ATTR_COMPRESSION_MASK) != 0 &&
+		    (a->flags & NTFS_ATTR_COMPRESSION_MASK) != NTFS_ATTR_COMPRESSED))) {
 		return NTFS_UNSUPPORTED;
 	}
 	s = ntfs_alloc(v, sizeof(*s));
@@ -222,6 +225,7 @@ ntfs_stream_from_attr(
 	}
 	s->volume = v;
 	s->flags = a->flags;
+	s->metadata_only = metadata_only;
 	s->cached_unit = UINT64_MAX;
 	result = NTFS_OK;
 	if (!a->disk->nonresident) {
@@ -234,8 +238,8 @@ ntfs_stream_from_attr(
 			s->size = length;
 			s->initialized = length;
 			s->allocated = length;
-			s->value_allocation = length;
-			if (length != 0) {
+			s->value_allocation = metadata_only ? 0 : length;
+			if (length != 0 && !metadata_only) {
 				s->value = ntfs_alloc(v, length);
 				if (s->value == NULL) {
 					result = NTFS_NO_MEMORY;
@@ -254,7 +258,7 @@ ntfs_stream_from_attr(
 		    s->allocated > INT64_MAX || s->allocated % v->info.cluster_size != 0) {
 			result = NTFS_CORRUPT;
 		}
-		if ((s->flags & (NTFS_ATTR_COMPRESSED | NTFS_ATTR_SPARSE)) != 0) {
+		if ((s->flags & (NTFS_ATTR_COMPRESSION_MASK | NTFS_ATTR_SPARSE)) != 0) {
 			const struct ntfs_disk_compressed_tail *tail;
 
 			if (ntfs_u16(n->mapping_offset) <
@@ -270,12 +274,13 @@ ntfs_stream_from_attr(
 				}
 			}
 		}
-		if ((s->flags & NTFS_ATTR_COMPRESSED) != 0) {
+		if (!metadata_only && (s->flags & NTFS_ATTR_COMPRESSED) != 0) {
 			if (s->compression_unit != NTFS_COMPRESSION_UNIT_SHIFT ||
 			    v->info.cluster_size > NTFS_COMPRESSION_MAX_CLUSTER_BYTES) {
 				result = NTFS_UNSUPPORTED;
 			}
-		} else if (s->compression_unit != 0 && (s->flags & NTFS_ATTR_SPARSE) == 0) {
+		} else if (!metadata_only && s->compression_unit != 0 &&
+		    (s->flags & NTFS_ATTR_SPARSE) == 0) {
 			result = NTFS_UNSUPPORTED;
 		}
 		if (result == NTFS_OK) {
@@ -288,6 +293,20 @@ ntfs_stream_from_attr(
 	}
 	*out = s;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_stream_from_attr(
+    struct ntfs_volume *v, const struct ntfs_attr_view *a, struct ntfs_stream **out)
+{
+	return stream_from_attr(v, a, false, out);
+}
+
+enum ntfs_result
+ntfs_stream_metadata_from_attr(
+    struct ntfs_volume *v, const struct ntfs_attr_view *a, struct ntfs_stream **out)
+{
+	return stream_from_attr(v, a, true, out);
 }
 
 const struct ntfs_run *
@@ -318,6 +337,9 @@ ntfs_stream_raw(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t len
 	uint32_t cluster = s->volume->info.cluster_size;
 	enum ntfs_result result;
 
+	if (s->metadata_only) {
+		return NTFS_UNSUPPORTED;
+	}
 	while (length != 0) {
 		vcn = offset / cluster;
 		within = (size_t)(offset % cluster);
@@ -436,6 +458,9 @@ ntfs_stream_read(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t le
 	*done = 0;
 	if (s == NULL || (length != 0 && buffer == NULL)) {
 		return NTFS_INVALID;
+	}
+	if (s->metadata_only) {
+		return NTFS_UNSUPPORTED;
 	}
 	if (offset >= s->size) {
 		return NTFS_OK;

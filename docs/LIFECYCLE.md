@@ -181,13 +181,30 @@ passed. Evidence is `artifacts/plan-enumeration-core-tests.log`,
 `artifacts/plan-enumeration-app-build.log`. Four modern-runtime checks explicitly
 SKIP: lifecycle, enumeration and two case-policy checks. No installed mount ran.
 
-Attribute-requested enumeration still fails on reparse items and unsupported
-default streams. The
+Attribute-requested enumeration now uses complete regular-file size metadata
+independently of content decoding. EFS-flagged and unsupported-compression files
+retain requested attributes and can expose an independent plaintext ADS, while
+default reads remain ENOTSUP with zero reported bytes. Reparse items,
+unknown flag families and malformed metadata still fail explicitly without
+consuming the failed entry. The
 [packer contract](https://developer.apple.com/documentation/fskit/fsdirectoryentrypacker/packentry(name:itemtype:itemid:nextcookie:attributes:))
 documents nil attributes for calls that did not request attributes; nullable
-storage alone does not qualify omission of requested attributes. Truthful
-unsupported-object metadata and stable continuation remain implementation work.
+storage alone does not qualify omission of requested attributes. Reparse/provider
+projection still needs its own truthful metadata and target/content policy.
 The component does not qualify native buffer lifetime, framework reclaim counts,
 or installed interpretation of cookies and virtual entries. Backend dot-name
 lookup and parent resolution are also not covered by the virtual-entry change.
 Bounded enumeration checkpoints and measured large-directory replay remain open.
+
+`tests/fskit_content.m` checks six encoded-stream metadata variants and ten
+explicit metadata/reparse rejections through the real protocol handlers. It
+covers truthful requested sizes, whole-directory continuation, retry at the
+failed entry, names-only inventory, independent ADS, sentinel-preserving read
+errors, remount, permanent revocation and exactly-once replies without reading
+the default content. All 32 sanitized core suites, both freestanding targets,
+component, style and the current unsigned app/extension passed; logs use
+`artifacts/plan-stat-{core-accepted,component-reviewed,style-reviewed,app-build}.log` and
+`artifacts/plan-stat-freestanding.log`. Five modern checks explicitly SKIP:
+lifecycle, enumeration, content metadata and two case-policy checks. Both protocol
+implementations compile, but no macOS 27 runtime, installed scheduling/buffer
+ownership or Windows-authored encoded-file behavior ran.

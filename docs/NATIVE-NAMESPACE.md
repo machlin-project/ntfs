@@ -59,8 +59,9 @@ apply to all these operations, and cleanup remains valid after revocation.
 
 Alias resolution currently scans from the directory root; index/checkpoint reuse
 is a separate measured optimization. NUL/slash wire names are rejected rather
-than projected. Unsupported default-stream adoption, native case/normalization
-behavior and Windows ACL authorization remain separate required contracts.
+than projected. Reparse/provider projection, unknown/malformed metadata, native
+case/normalization behavior and Windows ACL authorization remain separate
+required contracts.
 
 ## Read-only alternate streams
 
@@ -108,9 +109,11 @@ get returns E2BIG; unknown, malformed and default-stream aliases return ENOATTR.
 The adapter opens and validates the selected stream before reading exact bytes,
 checks revocation again before returning data, and does not cache file content.
 Setting or deleting any xattr returns EROFS. This projection does not provide
-Windows ACL authorization, EFS decryption or provider content support. Files whose
-default stream cannot currently be adopted by FSKit still need the separate
-unsupported-object metadata contract.
+Windows ACL authorization, EFS decryption or provider content support. Ordinary
+EFS-flagged and unsupported-compression files now have complete checked size
+metadata independent of decoding; they can be adopted by FSKit and expose a
+separate readable ADS. Default reads remain ENOTSUP. Reparse items and
+unknown/malformed metadata remain explicitly rejected at native adoption.
 
 ## Local evidence
 
@@ -155,3 +158,15 @@ inventories, without changing any image; evidence is retained under
 `artifacts/interoperability-stream-catalog/` and `artifacts/plan-ads-oracle.log`.
 Installed xattr behavior and Windows-authored stream inventories remain
 unqualified.
+
+The subsequent metadata/content component covers six ordinary encoded-stream
+variants, including empty encrypted data and both attribute-list storage forms.
+Lookup and requested-attribute pages preserve logical and physical sizes;
+independent plaintext ADS remain readable. Default reads fail with zero reported
+bytes and unchanged sentinel buffers, including after remount. Ten explicit
+metadata/reparse failures retain the pending attribute entry; names-only pages
+still contain the objects. Admission rejects cached metadata/ADS after permanent
+revocation without further core allocation or device I/O. The legacy checks pass
+under `artifacts/plan-stat-component-reviewed.log`; modern checks compile but
+explicitly SKIP without macOS 27. These synthetic results do not qualify
+Windows-authored EFS/compression or installed projection.

@@ -13,6 +13,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
 | Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, exact filename/index pairing, namespace reachability/link counts and physical overlap/ownership; partial budget/fault/unsupported reports | 57 synthetic image verdicts, seven budget dimensions, 508 allocation/346 read faults and four independent bitmap geometries passed; DOS header counts, listed/flagged bad-cluster storage, view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
+| Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
 | Native filenames and hard links | Bounded reversible aliases and per-link UTF-16 manifests; inode identity separated from link spelling; native length, Unicode, hidden/DOS ordinals, response/scan exhaustion, faults and revocation | Five authored namespace images and component sweeps passed; installed case/normalization and Windows-authored namespace untested |
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
@@ -21,7 +22,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain, eight blocked-read/overlapping-teardown scenarios, conditional reclaim bridge and five modeled eligibility/ownership/publication cases; virtual dot/parent entries, parent release/remount, stable aliases, separate cookie views/native errors and enumeration faults/budgets under ASan/UBSan | Legacy in-process checks passed; four modern lifecycle/enumeration/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, unsupported-object attribute pages and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain, eight blocked-read/overlapping-teardown scenarios, conditional reclaim bridge and five modeled eligibility/ownership/publication cases; virtual dot/parent entries, parent release/remount, stable aliases, separate cookie views/native errors and enumeration faults/budgets; encoded-stream attributes/ADS and explicit rejection pages under ASan/UBSan | Legacy in-process checks passed; five modern lifecycle/enumeration/content/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, reparse/provider projection and installed lifetime remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
@@ -33,6 +34,44 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
+
+The latest metadata/content continuation passes all 32 sanitized core suites,
+both freestanding compilation targets, the expanded FSKit component, selected
+Xcode style and the current unsigned app/extension build. Regular-file stat now
+validates the complete unnamed-stream mapping independently of content decoding,
+without reading data or copying resident payloads. Its 18 metadata verdicts cover
+encrypted data, unknown compression format, unsupported unit geometry, empty
+encrypted data, resident/nonresident attribute lists and malformed/stale mappings.
+All 29 allocation/four read failure positions return explicit errors and permit
+complete retry; independent ADS, unchanged input and exact cleanup also pass.
+
+The legacy FSKit component checks six encoded-stream storage variants and ten
+explicit metadata/reparse rejections. Requested-attribute pages retain truthful
+sizes, names-only pages retain the objects, and a failed attribute entry remains
+pending on retry. Default reads return ENOTSUP with zero bytes and unchanged
+sentinel data; independent plaintext ADS remain readable. Remount, permanent
+revocation, exactly-once replies and absence of default-content I/O also pass.
+The existing alias fault sweep now needs 16 allocations/six reads; name manifests
+retain 13/five. Five modern checks explicitly SKIP: lifecycle, enumeration,
+content metadata and two case-policy checks. Both protocol sources and the Swift
+bridge compile, but no installed mount or Windows-authored EFS/compression check
+ran. Reparse/provider projection and full authorization remain open.
+
+Evidence is `artifacts/plan-stat-{core-accepted,component-reviewed,style-reviewed,app-build}.log`
+and `artifacts/plan-stat-freestanding.log`. Earlier component failures remain in
+`plan-stat-{component-initial,component-diagnostic,component-cookie-diagnostic}.log`:
+the new fixture reused a neighboring file's continuation record and correctly
+triggered ESTALE. The fixture now reserves an unused MFT slot, while the complete
+directory/continuation assertions remain enforced.
+
+The updated mapping-pair target completed 3,469,071 executions in 61 seconds,
+coverage 675, feature count 1,784 and peak RSS 502 MiB. The attribute-list target
+completed 170,108 executions in 61 seconds, coverage 473, feature count 848 and
+peak RSS 405 MiB. Both exited zero without a crash or sanitizer finding, under
+`artifacts/fuzz-stat-mapping/` and `artifacts/fuzz-stat-list/`, with launcher logs
+`artifacts/plan-stat-fuzz-{mapping,list}.log`. Metadata-only read guards and size
+resolution are exercised separately from strict stream opening. These bounded
+synthetic campaigns do not establish Windows compatibility or complete coverage.
 
 The lifecycle adapter continuation passes eight semaphore-gated read scenarios,
 interleaved enumeration with empty packer rewinds, existing namespace allocation/
@@ -405,13 +444,17 @@ Windows/native case-policy and full WSL/POSIX namespace qualification remain ope
 Stream names use exact UTF-16 matching. The
 adapter uses a single-user read-only mode/UID/GID presentation and rejects reparse
 items; it does not enforce Windows ACLs.
-Directory enumeration requesting attributes can fail on unsupported files.
+Regular encoded files with supported metadata framing now retain requested
+attributes and independent ADS; their default content remains unsupported.
+Directory enumeration requesting attributes still fails explicitly on reparse
+items, unknown flag families and malformed metadata, without consuming the failed
+entry or reporting invented sizes.
 Names-only virtual dot/parent entries and native invalid-cookie errors now pass
 component checks, with view-specific cookies and stable stored alias ordinals.
 Backend dot lookup/parent resolution and installed interpretation remain separate
 acceptance work; LIFECYCLE.md records the SDK contracts and remaining gaps.
 Named streams now have a bounded read-only xattr projection and reverse manifest
-in both FSKit protocol paths, qualified only by component/build tests. Unsupported
-default streams can still prevent item adoption, and installed projection remains
-untested. Per-volume operations are serialized, with a 64-MiB core memory
+in both FSKit protocol paths, qualified only by component/build tests. Reparse and
+unknown/malformed metadata can still prevent item adoption; installed projection
+remains untested. Per-volume operations are serialized, with a 64-MiB core memory
 budget and 16,384 live FSItem limit. No read/write claim may omit these limits.

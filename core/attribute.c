@@ -19,11 +19,11 @@ validate_stream(struct ntfs_stream *s)
 			mapped += s->runs[i].length;
 		}
 	}
-	if ((s->flags & (NTFS_ATTR_COMPRESSED | NTFS_ATTR_SPARSE)) == 0 &&
+	if ((s->flags & (NTFS_ATTR_COMPRESSION_MASK | NTFS_ATTR_SPARSE)) == 0 &&
 	    mapped * cluster != s->allocated) {
 		return NTFS_CORRUPT;
 	}
-	if ((s->flags & (NTFS_ATTR_COMPRESSED | NTFS_ATTR_SPARSE)) != 0 &&
+	if ((s->flags & (NTFS_ATTR_COMPRESSION_MASK | NTFS_ATTR_SPARSE)) != 0 &&
 	    mapped * cluster != s->physical_size) {
 		return NTFS_CORRUPT;
 	}
@@ -194,7 +194,7 @@ ntfs_attribute_type_present(struct ntfs_node *node, uint32_t type, bool *out)
 
 static enum ntfs_result
 attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size_t name_length,
-    bool bootstrap, struct ntfs_stream **out)
+    bool bootstrap, bool metadata_only, struct ntfs_stream **out)
 {
 	struct ntfs_volume *v = node->volume;
 	struct ntfs_attr_view a, list_attr;
@@ -218,7 +218,8 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 		result = ntfs_attr_find(
 		    node->record, v->info.record_size, type, name, name_length, UINT16_MAX, &a);
 		if (result == NTFS_OK) {
-			result = ntfs_stream_from_attr(v, &a, &stream);
+			result = metadata_only ? ntfs_stream_metadata_from_attr(v, &a, &stream)
+					       : ntfs_stream_from_attr(v, &a, &stream);
 		}
 		if (result == NTFS_OK) {
 			result = validate_stream(stream);
@@ -307,8 +308,12 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 			result = NTFS_CORRUPT;
 			goto finish;
 		}
-		result = stream == NULL ? ntfs_stream_from_attr(v, &a, &stream)
-					: ntfs_stream_append(stream, &a);
+		if (stream == NULL) {
+			result = metadata_only ? ntfs_stream_metadata_from_attr(v, &a, &stream)
+					       : ntfs_stream_from_attr(v, &a, &stream);
+		} else {
+			result = ntfs_stream_append(stream, &a);
+		}
 		if (result == NTFS_OK && bootstrap &&
 		    (stream->resident || stream->flags != 0 || stream->run_count == 0 ||
 			stream->runs[0].lcn != v->mft_lcn || stream->initialized != stream->size ||
@@ -343,7 +348,22 @@ enum ntfs_result
 ntfs_attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size_t name_length,
     struct ntfs_stream **out)
 {
-	return attribute_open(node, type, name, name_length, false, out);
+	return attribute_open(node, type, name, name_length, false, false, out);
+}
+
+enum ntfs_result
+ntfs_attribute_sizes(struct ntfs_node *node, uint64_t *size, uint64_t *allocated)
+{
+	struct ntfs_stream *description = NULL;
+	enum ntfs_result result;
+
+	result = attribute_open(node, NTFS_ATTRIBUTE_DATA, NULL, 0, false, true, &description);
+	if (result == NTFS_OK) {
+		*size = description->size;
+		*allocated = description->physical_size;
+	}
+	ntfs_stream_close(description);
+	return result;
 }
 
 enum ntfs_result
@@ -361,7 +381,7 @@ ntfs_mft_open(struct ntfs_volume *v, uint8_t *record, struct ntfs_stream **out)
 	node.volume = v;
 	node.reference = (uint64_t)ntfs_u16(header->sequence) << NTFS_REFERENCE_SEQUENCE_SHIFT;
 	node.record = record;
-	result = attribute_open(&node, NTFS_ATTRIBUTE_DATA, NULL, 0, true, out);
+	result = attribute_open(&node, NTFS_ATTRIBUTE_DATA, NULL, 0, true, false, out);
 	return result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
 }
 

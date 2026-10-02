@@ -34,8 +34,12 @@ The separate enumeration component checks names-only virtual current/parent
 entries, parent release/remount and corrupt-edge rejection, separate native cookie
 views, alias stability, interleaved buffers, scan budgets, packer revocation and
 all 12 allocation/four I/O fault positions in its nested-index operation. The
-current component has four explicit macOS-27 runtime SKIPs: lifecycle, enumeration
-and two case-policy checks. These in-process results do not mount the filesystem.
+content component additionally exercises six encoded-stream metadata variants and
+ten explicit corruption/unsupported rejections, requested-size pages, independent
+ADS, zero-byte read errors, remount and revocation without default-content I/O.
+The current component has five explicit macOS-27 runtime SKIPs: lifecycle,
+enumeration, content metadata and two case-policy checks. These in-process
+results do not mount the filesystem.
 Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security` or `access`. The time budget applies per target. Each campaign retains its own
@@ -109,6 +113,14 @@ required allocation/read faults. `tests/case_fixtures.py` authors these images
 without importing parser code. FSKit components cover sensitive aliases and
 mixed directory identities; modern reply tests explicitly SKIP without macOS 27.
 See CASE-POLICY.md and ACCEPTANCE.md for evidence and native acceptance limits.
+
+The `stat` suite independently authors encrypted, unknown-compression and
+unsupported-unit metadata, including resident/nonresident attribute lists. It
+checks complete sizes/mappings, corruption and stale extensions, all required
+allocation/read fault positions, retry, independent ADS and exact cleanup.
+Private metadata-only descriptions cannot be read; both mapping-pair and
+attribute-list fuzz targets exercise that separation. A synthetic metadata
+verdict does not qualify EFS decryption or Windows-authored compression layouts.
 
 `validation`, `validation-cli` and `fuzz-validation` qualify the private
 read-only diagnostic. Run `.build/ntfs-validate IMAGE` for a JSON report; exit zero

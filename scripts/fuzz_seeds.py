@@ -7,6 +7,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 import fixtures as wire
+from stat_fixtures import change_flags, UNKNOWN_COMPRESSION_FORMAT
 
 MAX_STRUCTURE_BYTES = 32768
 LZNT1_RAW_PAYLOAD = b'Independent raw chunk\n'
@@ -81,6 +82,11 @@ def generate(output):
             'sparse': wire.nonresident(wire.DATA, [(1, 128), (2, None), (1, 130)], wire.CLUSTER * 4, flags=wire.SPARSE),
             'compressed': wire.nonresident(wire.DATA, [(1, 128), (wire.COMPRESSION_CLUSTERS - 1, None)], wire.COMPRESSION_UNIT_BYTES, flags=wire.COMPRESSED),
             'empty': wire.nonresident(wire.DATA, [], 0),
+            'encrypted': wire.nonresident(wire.DATA, [(1, 128), (1, 130)],
+                                           wire.FRAGMENTED_BYTES, flags=wire.ENCRYPTED),
+            'opaque-compression': change_flags(wire.nonresident(wire.DATA,
+                [(1, 128), (1, 130)], wire.FRAGMENTED_BYTES, flags=wire.COMPRESSED),
+                UNKNOWN_COMPRESSION_FORMAT),
         },
         'attribute-list': {
             'base-data': wire.list_entry(wire.ROOT_REF, 1, 0),

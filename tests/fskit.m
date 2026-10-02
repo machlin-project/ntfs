@@ -10,6 +10,7 @@
 #include "fixture.h"
 #import "fskit_lifecycle.h"
 #import "fskit_enumeration.h"
+#import "fskit_content.h"
 #import "fskit_resource.h"
 
 @implementation TestReader
@@ -1243,6 +1244,8 @@ main(int argc, char **argv)
 		fixtures = [@(argv[1]) stringByDeletingLastPathComponent];
 		ntfs_test_fskit_enumeration(image, fixtures, NO);
 		ntfs_test_fskit_enumeration(image, fixtures, YES);
+		ntfs_test_fskit_content(fixtures, NO);
+		ntfs_test_fskit_content(fixtures, YES);
 		longName[0] = TEST_UNPAIRED_HIGH_SURROGATE;
 		for (i = 1; i < NTFS_NAME_MAX; i++) {
 			longName[i] = 'x';

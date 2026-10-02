@@ -751,6 +751,8 @@ def main():
     namespace_fixtures(output, image, contents)
     from case_fixtures import author as case_fixtures
     case_fixtures(output, image)
+    from stat_fixtures import author as stat_fixtures
+    stat_fixtures(output, image)
     from validation_fixtures import author as validation_fixtures
     validation_fixtures(output, image)
     from secure_fixtures import author as secure_fixtures

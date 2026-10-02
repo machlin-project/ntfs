@@ -42,6 +42,18 @@ Opening a named stream reads file metadata independently of the default stream:
 an encrypted default stream does not prevent opening a separate unencrypted ADS.
 Stream names match exact UTF-16 units; filename lookup has a different contract.
 
+Regular-file stat uses a private metadata-only stream description. It validates
+the complete unnamed attribute and its extent/list ownership, VCN continuity,
+sizes and physical allocation without reading or copying its content. Known
+attribute framing remains inspectable when encryption, compression format or
+compression-unit geometry prevents content decoding. Unknown flag families and
+malformed mappings still fail explicitly. Every read entry point rejects a
+metadata-only description, including EOF and zero-length reads; public stream
+opening keeps its strict decoder checks. FSKit can therefore adopt such ordinary
+files, supply requested sizes and enumerate their independent ADS without
+presenting encoded bytes as file data. Reparse objects retain their separate
+fail-closed projection contract.
+
 The stream-name catalog is an independent immutable snapshot, sorted by exact
 UTF-16 units. It validates first-extent references without requiring content
 support; complete mappings are checked by stream open. Both FSKit protocols expose
@@ -105,7 +117,8 @@ A live node caches standard-information metadata and the checked reparse-presenc
 result only after that complete operation succeeds. The cache has no separate
 allocation or owner, inherits the record snapshot's immutable-media lifetime and
 is never populated by failed I/O, allocation or corruption checks. Sizes and runs
-of individual streams still undergo ordinary attribute validation. FSKit admission
+of individual streams still undergo complete attribute validation; stat does not
+cache a readable stream or bypass content checks. FSKit admission
 checks continue to gate cached operations after permanent revocation.
 
 The standalone security decoder in `ntfs/security.h` owns MS-DTYP byte framing.

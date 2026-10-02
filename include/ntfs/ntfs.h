@@ -175,6 +175,9 @@ enum ntfs_result ntfs_count_free_clusters(struct ntfs_volume *, uint64_t *);
 enum ntfs_result ntfs_root(struct ntfs_volume *, struct ntfs_node **);
 enum ntfs_result ntfs_node_open(struct ntfs_volume *, uint64_t reference, struct ntfs_node **);
 void ntfs_node_close(struct ntfs_node *);
+/* Ordinary-file sizes validate the complete unnamed-stream mapping without
+ * reading content. Directory/reparse nodes retain base metadata only.
+ * Successful stat does not imply support for decryption or decompression. */
 enum ntfs_result ntfs_node_stat(struct ntfs_node *, struct ntfs_stat *);
 /* Validate Microsoft reparse-buffer framing and link name spans. WOF, cloud and
  * unknown Microsoft payloads remain opaque: recognizing a tag is not data support.

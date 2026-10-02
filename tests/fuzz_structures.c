@@ -31,6 +31,7 @@ enum {
 	FUZZ_STRUCTURE_DIRECTORY_NODES = 128,
 	FUZZ_STRUCTURE_ENTRIES = 128,
 	FUZZ_STRUCTURE_READ_BYTES = 512,
+	FUZZ_GUARD_BYTE = 0xa6,
 	FUZZ_DECODED_BYTES = 65536,
 	FUZZ_FAULT_POSITIONS = 16,
 	FUZZ_DATA_INSTANCE = 1,
@@ -137,15 +138,37 @@ fuzz_mapping(struct ntfs_volume *volume, const uint8_t *data, size_t size)
 	struct ntfs_attr_view attribute;
 	struct ntfs_stream *stream = NULL;
 	uint8_t buffer[FUZZ_STRUCTURE_READ_BYTES];
+	uint8_t original[FUZZ_STRUCTURE_READ_BYTES];
 	uint32_t position = 0;
+	uint64_t reads;
 	size_t count;
 
-	if (ntfs_attr_at(data, size, &position, &attribute) == NTFS_OK &&
-	    ntfs_stream_from_attr(volume, &attribute, &stream) == NTFS_OK) {
+	if (ntfs_attr_at(data, size, &position, &attribute) != NTFS_OK) {
+		return;
+	}
+	if (ntfs_stream_from_attr(volume, &attribute, &stream) == NTFS_OK) {
 		(void)ntfs_stream_read(stream, 0, buffer, sizeof(buffer), &count);
 		(void)ntfs_stream_read(
 		    stream, ntfs_stream_size(stream), buffer, sizeof(buffer), &count);
 	}
+	ntfs_stream_close(stream);
+	stream = NULL;
+	reads = volume->stats.read_calls;
+	if (ntfs_stream_metadata_from_attr(volume, &attribute, &stream) == NTFS_OK) {
+		memset(original, FUZZ_GUARD_BYTE, sizeof(original));
+		memcpy(buffer, original, sizeof(buffer));
+		count = SIZE_MAX;
+		assert(ntfs_stream_read(stream, 0, buffer, sizeof(buffer), &count) ==
+			NTFS_UNSUPPORTED &&
+		    count == 0);
+		assert(ntfs_stream_read(stream, ntfs_stream_size(stream), buffer, sizeof(buffer),
+			   &count) == NTFS_UNSUPPORTED &&
+		    count == 0);
+		assert(ntfs_stream_raw(stream, 0, buffer, sizeof(buffer)) == NTFS_UNSUPPORTED);
+		assert(ntfs_stream_exact(stream, 0, buffer, 0) == NTFS_UNSUPPORTED);
+		assert(memcmp(buffer, original, sizeof(buffer)) == 0);
+	}
+	assert(volume->stats.read_calls == reads);
 	ntfs_stream_close(stream);
 }
 
@@ -156,6 +179,7 @@ fuzz_list(struct ntfs_volume *volume, const uint8_t *data, size_t size)
 	    .reference =
 		((uint64_t)FUZZ_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT) | NTFS_ROOT_RECORD};
 	struct ntfs_stream *stream = NULL;
+	uint64_t size_bytes, allocated;
 	size_t attrs = align_attribute(sizeof(struct ntfs_disk_record)), end;
 
 	node.record = ntfs_alloc(volume, FUZZ_STRUCTURE_RECORD_BYTES);
@@ -168,6 +192,7 @@ fuzz_list(struct ntfs_volume *volume, const uint8_t *data, size_t size)
 	finish_record(node.record, attrs, end, false);
 	(void)ntfs_attribute_open(&node, NTFS_ATTRIBUTE_DATA, NULL, 0, &stream);
 	ntfs_stream_close(stream);
+	(void)ntfs_attribute_sizes(&node, &size_bytes, &allocated);
 	ntfs_free(volume, node.record, FUZZ_STRUCTURE_RECORD_BYTES);
 }
 

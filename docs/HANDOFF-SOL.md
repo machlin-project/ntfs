@@ -36,6 +36,10 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
   was cleared. Classifying WOF/cloud tags does not decode their data.
 - Independent stream flags: an unencrypted ADS remains readable beside an
   encrypted default stream. Exact UTF-16 stream-name matching is documented.
+- Complete regular-file size metadata is independent of content decoding. Private
+  metadata-only descriptions validate all extents and cannot be read. Preserve
+  strict public stream checks and truthful native attributes without exposing
+  ciphertext or invented zero sizes.
 - Named format constants, wire structures and separate resource budgets. Keep
   fixture offsets and geometry explicit; avoid unexplained numeric values.
 - Complete separate legacy/modern FSKit protocol classes. Their read completion
@@ -114,10 +118,30 @@ passed under `artifacts/plan-enumeration-{core-tests,component-accepted,style,ap
 Four modern-runtime checks explicitly SKIP. LIFECYCLE.md records the exact
 contract and evidence boundaries; neither protocol has installed acceptance.
 
-Continue unsupported-object attribute pages: reparse and unsupported default
-streams can still stop a page or prevent item adoption. The packer's nullable
-argument is not evidence that requested attributes may be omitted. Define
-truthful metadata and stable continuation, then test links, ADS and rejection
+The subsequent metadata/content continuation passes all 32 sanitized core suites,
+both freestanding targets, FSKit component, style and the unsigned app/extension.
+Regular-file stat validates complete unnamed-stream mappings without requiring a
+content decoder or copying resident payloads. EFS-flagged, unknown-compression,
+unsupported-unit and empty encrypted metadata retain truthful sizes, including
+resident/nonresident attribute-list storage. The core suite checks 18 verdicts
+and all 29 allocation/four read failure positions with retry and exact cleanup.
+Strict data opening is unchanged; metadata-only descriptions reject every read.
+
+Six legacy FSKit storage variants retain requested attributes and readable
+independent ADS while default reads return ENOTSUP, zero bytes and unchanged
+buffers. Ten explicit metadata/reparse failures preserve the failed entry on
+retry; names-only pages retain the inventory. Remount, permanent revocation and
+exactly-once callbacks pass without default-content I/O. Five modern checks
+explicitly SKIP: lifecycle, enumeration, content metadata and two case-policy
+checks. Logs use `artifacts/plan-stat-{core-accepted,component-reviewed,style-reviewed,app-build}.log`
+and `artifacts/plan-stat-freestanding.log`. Bounded mapping-pair and attribute-list
+campaigns pass under `artifacts/fuzz-stat-{mapping,list}/`; see ACCEPTANCE.md for
+counts and the retained fixture-collision failure. No installed mount,
+Windows-authored EFS/compression or decryption acceptance is established.
+
+Continue reparse/provider projection and explicit unknown/malformed metadata
+behavior. The packer's nullable argument is not evidence that requested
+attributes may be omitted. Preserve truthful metadata and stable continuation,
 without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
@@ -153,8 +177,10 @@ and bounded responses. Reclaim/unmount closes catalogs; revocation gates cached
 operations. All 23 core suites, expanded adapter tests and the current unsigned
 app passed, followed by a bounded image fuzz campaign and four independent
 NTFS-3G image geometries with byte and stream-inventory comparisons. Follow
-NATIVE-NAMESPACE.md for format and limits. Do not promote these results to
-installed ADS acceptance or close unsupported-default-stream adoption.
+NATIVE-NAMESPACE.md for format and limits. This catalog checkpoint alone did not
+close unsupported-default-stream adoption; the later metadata contract above
+covers the described regular-file component cases. Installed ADS acceptance
+remains separate.
 
 Native filenames also have a bounded reversible projection in NTFSNames.m.
 Oversized/unpaired/reserved names use parent-directory link ordinals and full file

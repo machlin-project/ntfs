@@ -40,6 +40,8 @@ struct ntfs_stream {
 	uint64_t size, initialized, allocated, physical_size, clusters;
 	uint16_t flags, compression_unit;
 	bool external, resident;
+	/* Metadata descriptions validate mappings but never provide readable data. */
+	bool metadata_only;
 	uint8_t *value;
 	size_t value_allocation;
 	struct ntfs_run *runs;
@@ -103,6 +105,8 @@ enum ntfs_result ntfs_attr_find(
 enum ntfs_result ntfs_attr_value(const struct ntfs_attr_view *, const uint8_t **, size_t *);
 enum ntfs_result ntfs_stream_from_attr(
     struct ntfs_volume *, const struct ntfs_attr_view *, struct ntfs_stream **);
+enum ntfs_result ntfs_stream_metadata_from_attr(
+    struct ntfs_volume *, const struct ntfs_attr_view *, struct ntfs_stream **);
 enum ntfs_result ntfs_stream_append(struct ntfs_stream *, const struct ntfs_attr_view *);
 enum ntfs_result ntfs_bad_clusters_from_attr(
     struct ntfs_node *, const struct ntfs_attr_view *, struct ntfs_stream **);
@@ -116,6 +120,7 @@ enum ntfs_result ntfs_listed_attribute(const uint8_t *, uint32_t, const uint16_t
     uint16_t, uint64_t, struct ntfs_attr_view *);
 enum ntfs_result ntfs_mft_open(struct ntfs_volume *, uint8_t *, struct ntfs_stream **);
 enum ntfs_result ntfs_stream_raw(struct ntfs_stream *, uint64_t, void *, size_t);
+enum ntfs_result ntfs_attribute_sizes(struct ntfs_node *, uint64_t *, uint64_t *);
 enum ntfs_result ntfs_stream_exact(struct ntfs_stream *, uint64_t, void *, size_t);
 const struct ntfs_run *ntfs_run_find(const struct ntfs_stream *, uint64_t);
 int ntfs_name_compare(struct ntfs_volume *, const uint16_t *, size_t, const uint8_t *, size_t);

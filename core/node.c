@@ -157,7 +157,6 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 enum ntfs_result
 ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
 {
-	struct ntfs_stream *s = NULL;
 	enum ntfs_result result;
 
 	result = ntfs_node_metadata(node, st);
@@ -167,12 +166,7 @@ ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
 	if (st->directory || st->reparse) {
 		return NTFS_OK;
 	}
-	result = ntfs_attribute_open(node, NTFS_ATTRIBUTE_DATA, NULL, 0, &s);
-	if (result != NTFS_OK) {
-		return result;
-	}
-	st->size = s->size;
-	st->allocated_size = s->physical_size;
-	ntfs_stream_close(s);
-	return NTFS_OK;
+	/* NTFS sizes describe the unnamed stream independently of our ability
+	 * to decrypt or decode its content. Validate its complete mapping first. */
+	return ntfs_attribute_sizes(node, &st->size, &st->allocated_size);
 }

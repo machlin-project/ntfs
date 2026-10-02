@@ -67,6 +67,16 @@ are repository-owned implementations. Synthetic vectors use independently
 authored named fields and expected bytes; Windows corpus qualification remains
 separate from both those vectors and the external NTFS-3G utility comparisons.
 
+Regular-file size inspection separates Microsoft's nonresident FileSize,
+AllocatedLength and ValidDataLength fields from content-decoder availability.
+The compression-format mask and sparse/encrypted flags determine known attribute
+framing; original Linux-NTFS/NTFS-3G layout notes cross-check the physical-size
+tail and extent fields. The repository's metadata-only description validates
+complete mappings and list ownership, rejects all data reads and imports no
+external filesystem implementation. Synthetic EFS/unknown-compression/unit
+fixtures establish local structural behavior; actual Windows-authored metadata
+and decryption remain separate qualification.
+
 The reparse decoder uses MS-FSCC's tag definitions, relative name offsets and
 symlink flags. Microsoft documents the complete 16-KiB buffer limit and separate
 third-party GUID envelope. NTFS-3G's `REPARSE_POINT` layout note confirms that the

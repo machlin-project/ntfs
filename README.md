@@ -73,6 +73,11 @@ older runtimes retain item ownership until the last FSItem reference. Five
 modeled eligibility/ownership/publication cases and the current component/app
 checks pass. Names-only enumeration now includes virtual current/parent entries
 with stable stored-name aliases, checked parent identity and native cookie errors.
-Local replay/fault/budget checks pass; attribute-requested unsupported objects,
-native reclaim counts and installed enumeration still require acceptance. See
-the lifecycle document.
+Local replay/fault/budget checks pass; native reclaim counts and installed
+enumeration still require acceptance. See the lifecycle document.
+Ordinary-file sizes now validate the complete unnamed-stream mapping separately
+from content decoding. EFS-flagged and unsupported-compression files can retain
+truthful FSKit attributes and independent readable ADS while default reads return
+ENOTSUP. Six synthetic storage variants, corruption/rejection pages and remount/
+revocation checks pass locally. Reparse projection and provider content remain
+open; these checks do not qualify Windows-authored EFS or installed behavior.

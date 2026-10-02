@@ -174,6 +174,44 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## Required mirror-prefix diagnostic
+
+`ntfs_validate` now opens fixed slot 1's complete unnamed stream and verifies the
+required first four logical MFT replicas independently of ordinary mount. It
+checks ordinary nonresident storage, the boot starting LCN and initialized/whole
+record coverage through the existing fragmented/listed stream owner. Allocated
+copies pass FILE/MST restoration and compare used bytes excluding protection
+state/slack; free slots require exact opaque raw replicas. All extents still
+undergo ownership/bitmap checks. Windows-dependent extended tails remain
+explicitly unqualified; no copy is selected for repair. See VALIDATION.md for
+sources, errors, counters and budgets. Stage MIRROR is appended to preserve
+existing numeric stage values; do not interpret enum order as pass order.
+
+All 39 new direct C/CLI cases, 96 total CLI verdicts, seven budgets,
+1,068 allocation/772 read failures,
+80 partial/full mirror-stage read failures and 48 prefix-budget checks pass.
+The original 57 image hashes remain unchanged. All 59 sanitized suites, style,
+both freestanding 2-KiB-frame targets and the unsigned arm64/x86_64 Release app
+pass under `artifacts/plan-mirror-*.log`. Current adapter behavior is unchanged;
+the preceding component evidence and modern-runtime SKIPs still apply separately.
+The initial compile/fixture failures are retained alongside passing logs.
+
+Four external mkntfs profiles in `artifacts/interoperability-mirror-reviewed/report.json`
+match independent bitmap inventories, exported FILE allocation geometry and exact
+required prefix bytes.
+The 64-KiB-cluster profile compares four of 64 declared records, reporting 60
+unchecked; image hashes stay unchanged. The bounded validation campaign
+fixed-replays all 96 compact inputs and completes 59,760 executions/68 seconds,
+coverage 3,289/features 9,107 and reported crash/timeout/OOM counts of zero under
+`artifacts/fuzz-mirror-validation/`. Its 1-MiB input, 1024-MiB RSS ceiling and
+five-second timeout are policies, not complete coverage or observed peak RSS.
+
+Native Windows replica observations, extended tails, boot replicas, complete
+store/index checks and the full recovery/transaction simulator remain required
+under CORE-QUALIFICATION.md and WRITES.md. Ordinary mount's strict record-zero
+comparison/dirty rejection and the absence of a write callback are unchanged.
+No VM, installation, Windows acquisition or native recovery was performed.
+
 ## Selected-client restart-record handoff checkpoint
 
 `ntfs_logfile_decode_client_restart_record` binds an exact already assembled

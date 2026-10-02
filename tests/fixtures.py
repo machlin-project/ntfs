@@ -24,6 +24,9 @@ FIXUP_SEQUENCE = 0xA55A
 BOOT_SIGNATURE = 0xAA55
 BOOT_SERIAL = 0x0123456789ABCDEF
 BOOT_MEDIA = 0xF8
+BOOT_FIELDS = {'jump': 0, 'oem': 3, 'sector_size': 11, 'cluster_sectors': 13,
+               'media': 21, 'sectors': 40, 'mft': 48, 'mirror': 56,
+               'record_code': 64, 'index_code': 68, 'serial': 72, 'signature': 510}
 NTFS_MAJOR_VERSION, NTFS_MINOR_VERSION = 3, 1
 VOLUME_DIRTY = 1
 FILE_IN_USE, FILE_IS_DIRECTORY = 1, 2
@@ -650,9 +653,7 @@ def repeated_chunk(literal):
 def make_image(legacy=False):
     image = bytearray(IMAGE_SIZE)
     # Named byte locations are the independent fixture's boot-format definition.
-    boot = {'jump': 0, 'oem': 3, 'sector_size': 11, 'cluster_sectors': 13,
-            'media': 21, 'sectors': 40, 'mft': 48, 'mirror': 56,
-            'record_code': 64, 'index_code': 68, 'serial': 72, 'signature': 510}
+    boot = BOOT_FIELDS
     jump = b'\xebR\x90'
     oem = b'NTFS    '
     image[boot['jump']:boot['jump'] + len(jump)] = jump

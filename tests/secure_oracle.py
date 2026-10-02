@@ -55,7 +55,7 @@ def capture(argv, log):
     output = bytearray()
     with tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(list(map(str, argv)), cwd=ROOT, env=tool_environment(),
-                                   stdout=subprocess.PIPE, stderr=errors)
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=errors)
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)

@@ -750,6 +750,145 @@ finish:
 	return result;
 }
 
+static enum ntfs_result
+compare_mirror_record(struct validation *v, uint8_t *primary, uint8_t *mirror, bool allocated)
+{
+	const struct ntfs_disk_record *header = (const void *)primary;
+	size_t size = v->volume->info.record_size, used, usa_start, usa_end;
+	enum ntfs_result result;
+
+	result = work(v, size);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (!allocated) {
+		/* Unallocated slots are opaque to the record inventory. Require an
+		 * exact replica rather than interpreting stale free-record contents. */
+		return ntfs_equal(primary, mirror, size) ? NTFS_OK : NTFS_CORRUPT;
+	}
+	result = ntfs_record_validate(primary, size);
+	if (result == NTFS_OK) {
+		result = work(v, size);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_record_validate(mirror, size);
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	used = ntfs_u32(header->used);
+	usa_start = ntfs_u16(header->mst.usa_offset);
+	usa_end = usa_start + (size_t)ntfs_u16(header->mst.usa_count) * NTFS_MST_WORD_BYTES;
+	result = work(v, used);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	/* Both copies have passed MST restoration. Compare the used logical body,
+	 * including USA geometry in the header, but not protection counters/saved
+	 * slack tails or bytes beyond the record's declared used span. */
+	return ntfs_equal(primary, mirror, usa_start) &&
+		ntfs_equal(primary + usa_end, mirror + usa_end, used - usa_end)
+	    ? NTFS_OK
+	    : NTFS_CORRUPT;
+}
+
+static enum ntfs_result
+scan_mirror(struct validation *v)
+{
+	struct ntfs_volume *volume = v->volume;
+	struct ntfs_node *owner = NULL;
+	struct ntfs_stream *mirror = NULL;
+	const struct ntfs_disk_record *header;
+	const struct ntfs_run *run;
+	uint8_t *primary = NULL, *copy = NULL;
+	uint64_t required = (uint64_t)NTFS_MFT_MIRROR_REQUIRED_RECORDS * volume->info.record_size;
+	uint64_t maximum, offset;
+	uint32_t i;
+	enum ntfs_result result;
+
+	v->report->stage = NTFS_VALIDATION_MIRROR;
+	v->report->record_number = NTFS_MFT_MIRROR_RECORD;
+	v->report->reference = 0;
+	v->report->related_reference = 0;
+	v->report->attribute_type = NTFS_ATTRIBUTE_DATA;
+	v->report->cluster = volume->mirror_lcn;
+	result = ntfs_node_by_number(volume, NTFS_MFT_MIRROR_RECORD, &owner);
+	if (result == NTFS_NOT_FOUND) {
+		result = NTFS_CORRUPT;
+	}
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	v->report->reference = owner->reference;
+	header = (const void *)owner->record;
+	if (ntfs_u64(header->base_reference) != 0) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	if (ntfs_u16(header->flags) != NTFS_RECORD_IN_USE) {
+		result = NTFS_UNSUPPORTED;
+		goto finish;
+	}
+	result = ntfs_stream_open(owner, NULL, 0, &mirror);
+	if (result == NTFS_NOT_FOUND) {
+		result = NTFS_CORRUPT;
+	}
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	v->report->mirror_record_slots = mirror->size / volume->info.record_size;
+	maximum = required > volume->info.cluster_size ? required : volume->info.cluster_size;
+	if (mirror->resident || mirror->size < required || mirror->initialized < required ||
+	    mirror->size % volume->info.record_size != 0 || mirror->run_count == 0 ||
+	    mirror->runs[0].lcn != volume->mirror_lcn ||
+	    v->report->record_slots < NTFS_MFT_MIRROR_REQUIRED_RECORDS) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	if (mirror->flags != 0 || mirror->size > maximum) {
+		result = NTFS_UNSUPPORTED;
+		goto finish;
+	}
+	v->report->mirror_unchecked_records =
+	    v->report->mirror_record_slots - NTFS_MFT_MIRROR_REQUIRED_RECORDS;
+	primary = validation_allocate(v, volume->info.record_size);
+	copy = validation_allocate(v, volume->info.record_size);
+	if (primary == NULL || copy == NULL) {
+		result = NTFS_NO_MEMORY;
+		goto finish;
+	}
+	for (i = 0; i < NTFS_MFT_MIRROR_REQUIRED_RECORDS; i++) {
+		offset = (uint64_t)i * volume->info.record_size;
+		v->report->record_number = i;
+		v->report->reference = v->records[i].reference;
+		v->report->related_reference = owner->reference;
+		run = ntfs_run_find(mirror, offset / volume->info.cluster_size);
+		if (run == NULL || run->lcn == NTFS_HOLE) {
+			result = NTFS_CORRUPT;
+			break;
+		}
+		v->report->cluster = run->lcn + offset / volume->info.cluster_size - run->vcn;
+		result = ntfs_stream_exact(volume->mft, offset, primary, volume->info.record_size);
+		if (result == NTFS_OK) {
+			result = ntfs_stream_exact(mirror, offset, copy, volume->info.record_size);
+		}
+		if (result == NTFS_OK) {
+			result =
+			    compare_mirror_record(v, primary, copy, v->records[i].reference != 0);
+		}
+		if (result != NTFS_OK) {
+			break;
+		}
+		v->report->mirror_records_compared++;
+	}
+finish:
+	validation_release(v, copy, volume->info.record_size);
+	validation_release(v, primary, volume->info.record_size);
+	ntfs_stream_close(mirror);
+	ntfs_node_close(owner);
+	return result;
+}
+
 enum ntfs_result
 ntfs_validate(const struct ntfs_environment *environment, const struct ntfs_limits *core_limits,
     const struct ntfs_validation_limits *limits, struct ntfs_validation_report *report)
@@ -790,6 +929,9 @@ ntfs_validate(const struct ntfs_environment *environment, const struct ntfs_limi
 	}
 	if (result == NTFS_OK) {
 		result = scan_attributes(&v);
+	}
+	if (result == NTFS_OK) {
+		result = scan_mirror(&v);
 	}
 	if (result == NTFS_OK) {
 		result = scan_namespace(&v);

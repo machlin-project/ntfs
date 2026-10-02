@@ -72,7 +72,9 @@ locally; installed cache behavior and Windows-authored flags remain unqualified.
 See [directory case policy](docs/CASE-POLICY.md).
 The separate [consistency diagnostic](docs/VALIDATION.md) now checks bounded
 MFT/cluster allocation, extension/list ownership, filename/index pairing,
-directory reachability and physical extents through a private read-only mount.
+required mirror-prefix/boot-anchor consistency, directory reachability and physical
+extents through a private read-only mount. Declared extended mirror tails retain
+explicit unchecked counts; prefix agreement selects no repair source.
 Synthetic fault/budget checks and four independent bitmap geometries pass;
 complete reports retain a defined scope, with native Windows, view-store and
 recovery qualification still open.

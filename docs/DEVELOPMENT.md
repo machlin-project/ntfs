@@ -215,7 +215,7 @@ counts, live memory, read calls/bytes and work. The dedicated `--target validati
 campaign uses its own complete compact-image corpus and checks deterministic
 reports, exact cleanup and dynamic budgets. Ordinary mount does not implicitly
 run this diagnostic. See VALIDATION.md for supported passes and explicit gaps.
-Compare both bitmap inventories with independent external exports using existing
+Compare both bitmap inventories and required mirror-prefix exports using existing
 images and a new evidence directory:
 
 ```sh

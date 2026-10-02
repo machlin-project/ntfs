@@ -47,6 +47,9 @@ print_report(const struct ntfs_validation_report *r)
 	       "\"filename_attributes\":\"%" PRIu64 "\",\"index_entries\":\"%" PRIu64 "\","
 	       "\"directories\":\"%" PRIu64 "\",\"deferred_dos_link_counts\":\"%" PRIu64 "\","
 	       "\"allocated_clusters\":\"%" PRIu64 "\",\"unclaimed_clusters\":\"%" PRIu64 "\","
+	       "\"mirror_record_slots\":\"%" PRIu64 "\",\"mirror_records_compared\":\"%" PRIu64
+	       "\","
+	       "\"mirror_unchecked_records\":\"%" PRIu64 "\","
 	       "\"read_calls\":\"%" PRIu64 "\",\"read_bytes\":\"%" PRIu64 "\","
 	       "\"allocation_calls\":\"%" PRIu64 "\",\"work_units\":\"%" PRIu64 "\","
 	       "\"peak_memory_bytes\":\"%" PRIu64 "\"}\n",
@@ -55,7 +58,8 @@ print_report(const struct ntfs_validation_report *r)
 	    r->attribute_type, r->cluster, r->record_slots, r->records_scanned, r->base_records,
 	    r->extension_records, r->attributes, r->streams, r->physical_runs, r->claimed_clusters,
 	    r->filename_attributes, r->index_entries, r->directories, r->deferred_dos_link_counts,
-	    r->allocated_clusters, r->unclaimed_clusters, r->read_calls, r->read_bytes,
+	    r->allocated_clusters, r->unclaimed_clusters, r->mirror_record_slots,
+	    r->mirror_records_compared, r->mirror_unchecked_records, r->read_calls, r->read_bytes,
 	    r->allocation_calls, r->work_units, (uint64_t)r->peak_memory_bytes);
 }
 

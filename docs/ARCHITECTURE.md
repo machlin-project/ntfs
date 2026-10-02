@@ -192,8 +192,12 @@ Mount verifies primary and mirrored MFT bootstrap records, volume version and
 flags, $UpCase, and the root index. It does not claim a full filesystem check.
 The separate synchronous `ntfs_validate` API uses its own private mount and
 budgeted callback owner. It scans record allocation, complete supported attribute
-mappings, exact filename/index edges, directory reachability and physical cluster
-ownership. Bounded heapsort and an iterative graph walk keep temporary storage
+mappings, the required four-record mirror prefix/boot-anchor mapping, exact
+filename/index edges, directory reachability and physical cluster ownership.
+Mirror replicas use two bounded private record buffers; allocated copies compare
+used logical bytes after MST restoration, while free slots remain opaque. Larger
+declared mirror tails have explicit unchecked counts and no native coverage claim.
+Bounded heapsort and an iterative graph walk keep temporary storage
 and traversal explicit. It never mutates an existing mounted owner or reads bad
 sectors. Its complete flag applies only to those defined passes; unsupported
 features, faults and budget exhaustion retain partial reports. VALIDATION.md

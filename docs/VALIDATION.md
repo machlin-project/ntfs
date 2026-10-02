@@ -31,6 +31,45 @@ listed continuations, VCN coverage, declared sizes and physical allocation.
 Only first extents contribute physical runs, so continuations are not counted
 twice. Resident bytes live inside their containing MFT allocation.
 
+The mirror pass opens fixed MFT slot 1's unnamed `$DATA` through complete
+attribute-list/extent validation. It requires ordinary nonresident storage,
+the boot-declared starting LCN, a whole number of records and an initialized
+prefix covering the first four records. Declared data may extend to the larger
+of that prefix and one cluster. Short/misaligned/underinitialized prefixes are
+corrupt; larger declared streams and encoded forms are explicitly unsupported.
+Fragmented storage and resident/nonresident attribute lists use the existing
+stream owner. All mirror extents still undergo physical ownership/bitmap checks.
+
+The required four-record coverage follows
+[Microsoft's MFT mirror definition](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/8ac44452-328c-4d7b-a784-d72afd19bd9f).
+[Original Linux-NTFS research](https://flatcap.github.io/linux-ntfs/ntfs/files/mftmirr.html)
+describes larger cluster-sized mirrors; the pinned NTFS-3G 2022.10.3
+[Windows observation](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/ntfsfix.c)
+reports different big-cluster mirroring behavior since Windows 10 in 2017.
+The diagnostic therefore compares the mandatory prefix and explicitly reports
+larger declared tails as unqualified. It does not infer an operating-system
+version or demand agreement across those tails.
+
+Allocated replicas must independently pass FILE/MST validation. Their used
+logical bytes must agree after sector-tail restoration, excluding the USA's
+protection state/saved slack tails and bytes beyond `BytesInUse`. USA geometry,
+sequence-bearing identity, LSN, flags and attribute bytes remain compared.
+[The original fixup description](https://flatcap.github.io/linux-ntfs/ntfs/concepts/fixup.html)
+identifies protection state separately from restored logical data. Free slots
+remain opaque and require exact raw replicas. Ordinary mount retains its earlier
+strict complete-record-zero bootstrap comparison; this diagnostic changes no
+mount admission or recovery policy. A mismatch identifies inconsistent copies,
+not an authoritative repair source.
+
+`mirror_record_slots` retains the declared slot count once the stream opens;
+`mirror_records_compared` advances only after each complete comparison.
+`mirror_unchecked_records` reports admitted slots beyond the required prefix.
+Errors retain the current primary slot/reference, related mirror-owner reference
+and physical mirror cluster. Stage `MIRROR` is appended to the stage enum to
+preserve existing numeric report values; enum values are not execution order.
+Two record-sized private buffers and every callback/comparison share the existing
+memory/read/work budgets. No tail-content read or repair is implied by success.
+
 Each filename contributes its original UTF-16 name, namespace, parent and file
 reference. Every directory is fully enumerated through the existing checked
 B-tree cursor, including DOS and system entries. Exact keys must have one
@@ -86,10 +125,11 @@ unsupported ordinary stream formats also retain incomplete verdicts.
 
 The diagnostic does not parse arbitrary resident payload semantics, validate
 all `$Secure`/quota/object-ID/reparse view-index relations, enumerate unreferenced
-index-allocation blocks, compare every MFT mirror record, verify boot replicas,
+index-allocation blocks, qualify Windows-dependent extended mirror tails, verify boot replicas,
 read all file content, decompress every compression unit or replay `$LogFile`.
 Those checks remain separate qualification work. Mount's existing mirror check
-still covers only bootstrap record zero. Windows-authored fragmented metadata,
+still covers only bootstrap record zero; the diagnostic compares the required
+four-record prefix separately. Windows-authored fragmented metadata,
 large directories and native DOS observations remain required.
 
 ## Budgets and reports
@@ -151,8 +191,9 @@ Required-allocation sweeps disable optional record caching; separate successful
 runs exercise cache-enabled owners. A best-effort cache miss is not a required
 allocation failure.
 
-The independent suite exports both bitmaps through standalone NTFS-3G utilities
-and compares core active-record/cluster counts in four geometries. It hashes every
+The independent suite exports both bitmaps and MFT/mirror data through standalone
+NTFS-3G utilities. It compares active-record/cluster counts, exact required replica
+prefix bytes and declared coverage in four geometries. It hashes every
 image before and after, preserves failed reports and refuses evidence-directory
 overwrites. This is independent mkntfs acceptance, not a Windows-native oracle.
 See ACCEPTANCE.md for current executions and retained initial failures. The

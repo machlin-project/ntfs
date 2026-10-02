@@ -16,6 +16,7 @@ FRAGMENTED_RECORD = 25
 EXTRA_RECORD = 26
 FIRST_DIRECTORY = 48
 SECOND_DIRECTORY = 49
+FRAGMENT_MIN_CLUSTERS = 2
 EXTENSION_RECORD = 40
 RESERVED_FIRST, RESERVED_LAST = 12, 15
 MIRROR_RECORDS = 4
@@ -50,6 +51,18 @@ class Link:
     size: int = 0
 
 
+@dataclass(frozen=True)
+class Mirror:
+    runs: tuple
+    size: int = MIRROR_RECORDS * f.RECORD
+    initialized: int | None = None
+    flags: int = 0
+    missing: bool = False
+    resident: bool = False
+    listed: bool = False
+    list_lcn: int | None = None
+
+
 def filename(link, instance=FILENAME_INSTANCE, directory=False):
     attributes = f.FILE_ATTRIBUTE_DIRECTORY if directory else 0
     return f.resident(f.FILENAME, f.key(link.name, link.size, link.namespace,
@@ -82,8 +95,11 @@ def root_value(entries, external=False):
                                   f.INDEX_LARGE if external else 0) + entries)
 
 
-def build(source, case):
+def build(source, case, *, mirror=None):
     image = bytearray(source)
+    if mirror is None:
+        clusters = (MIRROR_RECORDS * f.RECORD + f.CLUSTER - 1) // f.CLUSTER
+        mirror = Mirror(((clusters, f.MIRROR_LCN),))
     f.put_data(image, f.MFT_LCN, bytes(MFT_BYTES))
     links = {
         f.MFT_RECORD: [Link('$MFT')], MIRROR_RECORD: [Link('$MFTMirr')],
@@ -94,9 +110,17 @@ def build(source, case):
     }
     directories = {f.ROOT_RECORD}
     records = {}
-    occupied = {BOOT_LCN, f.MIRROR_LCN, f.INDEX_LCN, FIRST_DATA_LCN, SECOND_DATA_LCN}
+    fragmented_clusters = max(FRAGMENT_MIN_CLUSTERS,
+                              (f.FRAGMENTED_BYTES + f.CLUSTER - 1) // f.CLUSTER)
+    occupied = {BOOT_LCN, f.INDEX_LCN, FIRST_DATA_LCN, SECOND_DATA_LCN}
+    for clusters, lcn in mirror.runs:
+        if lcn is not None:
+            occupied.update(range(lcn, lcn + clusters))
+    if mirror.list_lcn is not None:
+        occupied.add(mirror.list_lcn)
     occupied.update(range(f.MFT_LCN, f.MFT_LCN + MFT_BYTES // f.CLUSTER))
     occupied.update(range(f.UPCASE_LCN, f.UPCASE_LCN + UPCASE_UNITS * f.U16_BYTES // f.CLUSTER))
+    occupied.update(range(SECOND_DATA_LCN, SECOND_DATA_LCN + fragmented_clusters - 1))
     first_lcn, second_lcn = FIRST_DATA_LCN, SECOND_DATA_LCN
     if case == 'overlap-streams':
         first_lcn = f.UPCASE_LCN
@@ -151,8 +175,28 @@ def build(source, case):
                 *(filename(link, FILENAME_INSTANCE if i == 0 else EXTRA_FILENAME_INSTANCE,
                            number in directories) for i, link in enumerate(names)), *extras]
 
-    records[MIRROR_RECORD] = attrs(MIRROR_RECORD, [f.nonresident(
-        f.DATA, [(1, f.MIRROR_LCN)], MIRROR_RECORDS * f.RECORD, DATA_INSTANCE)])
+    mirror_data = (f.resident(f.DATA, b'', DATA_INSTANCE) if mirror.resident else
+                   f.nonresident(f.DATA, mirror.runs[:1] if mirror.listed else mirror.runs,
+                                 mirror.size, DATA_INSTANCE, initialized=mirror.initialized,
+                                 flags=mirror.flags,
+                                 allocated=sum(count for count, _ in mirror.runs) * f.CLUSTER))
+    records[MIRROR_RECORD] = attrs(MIRROR_RECORD, [] if mirror.missing else [mirror_data])
+    if mirror.listed:
+        owner, extension = f.file_reference(MIRROR_RECORD), f.file_reference(EXTENSION_RECORD)
+        first_clusters = mirror.runs[0][0]
+        listing = (f.list_entry(owner, SI_INSTANCE, 0, f.SI)
+                   + f.list_entry(owner, FILENAME_INSTANCE, 0, f.FILENAME)
+                   + f.list_entry(owner, DATA_INSTANCE, 0)
+                   + f.list_entry(extension, SI_INSTANCE, first_clusters))
+        list_attribute = (f.resident(f.ATTR_LIST, listing, LIST_INSTANCE)
+                          if mirror.list_lcn is None else
+                          f.nonresident(f.ATTR_LIST, [(1, mirror.list_lcn)],
+                                        len(listing), LIST_INSTANCE))
+        records[MIRROR_RECORD].append(list_attribute)
+        if mirror.list_lcn is not None:
+            f.put_data(image, mirror.list_lcn, listing)
+        records[EXTENSION_RECORD] = [f.nonresident(
+            f.DATA, mirror.runs[1:], 0, SI_INSTANCE, lowest=first_clusters)]
     records[f.VOLUME_RECORD] = attrs(f.VOLUME_RECORD, [
         f.resident(f.VOL_NAME, 'Validation'.encode('utf-16le'), VOLUME_NAME_INSTANCE),
         f.resident(f.VOL_INFO, VOLUME_INFORMATION.pack(f.NTFS_MAJOR_VERSION,
@@ -229,7 +273,7 @@ def build(source, case):
             records[EXTENSION_RECORD].append(filename(links[FRAGMENTED_RECORD][0]))
     else:
         records[FRAGMENTED_RECORD] = attrs(FRAGMENTED_RECORD, [f.nonresident(
-            f.DATA, [(1, first_lcn), (1, second_lcn)], f.FRAGMENTED_BYTES,
+            f.DATA, [(1, first_lcn), (fragmented_clusters - 1, second_lcn)], f.FRAGMENTED_BYTES,
             DATA_INSTANCE, initialized=f.FRAGMENTED_BYTES + 1 if case == 'invalid-size' else None)])
     if case == 'orphan-extension':
         records[EXTENSION_RECORD] = [f.resident(f.DATA, b'unlisted extension')]
@@ -312,7 +356,8 @@ def build(source, case):
 
     for number, attributes in records.items():
         attributes.sort(key=lambda attr: f.ATTR_HEADER.unpack_from(attr)[0])
-        base = f.file_reference(FRAGMENTED_RECORD) if number == EXTENSION_RECORD else 0
+        base = (f.file_reference(MIRROR_RECORD if mirror.listed else FRAGMENTED_RECORD)
+                if number == EXTENSION_RECORD else 0)
         if number == EXTENSION_RECORD and case == 'stale-extension':
             base = f.file_reference(FRAGMENTED_RECORD, f.FILE_SEQUENCE + 1)
         elif number == EXTENSION_RECORD and case in ('wrong-extension-owner', 'orphan-extension'):
@@ -326,7 +371,15 @@ def build(source, case):
                      directory=number in directories, base=base, links=header_links,
                      uninterpreted=case == 'uninterpreted-flag' and number == HELLO_RECORD))
     start = f.MFT_LCN * f.CLUSTER
-    f.put_data(image, f.MIRROR_LCN, image[start:start + MIRROR_RECORDS * f.RECORD])
+    payload = image[start:start + max(mirror.size, MIRROR_RECORDS * f.RECORD)]
+    # Keep the boot-addressed bootstrap copy even for malformed stream mappings.
+    f.put_data(image, f.MIRROR_LCN, payload[:MIRROR_RECORDS * f.RECORD])
+    position = 0
+    for clusters, lcn in mirror.runs:
+        length = clusters * f.CLUSTER
+        if lcn is not None:
+            f.put_data(image, lcn, payload[position:position + length])
+        position += length
     return image
 
 
@@ -367,4 +420,6 @@ def author(output, source):
         name = 'validation-' + case + '.img'
         (output / name).write_bytes(build(source, case))
         manifest.append({'image': name, 'result': names[expected], 'complete': expected == 'ok'})
+    from mirror_fixtures import author as mirror_fixtures
+    manifest.extend(mirror_fixtures(output, source))
     (output / 'validation-cases.json').write_text(json.dumps(manifest, indent=2) + '\n')

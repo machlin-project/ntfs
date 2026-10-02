@@ -10,7 +10,9 @@ enum ntfs_validation_stage {
 	NTFS_VALIDATION_ATTRIBUTES,
 	NTFS_VALIDATION_NAMESPACE,
 	NTFS_VALIDATION_ALLOCATION,
-	NTFS_VALIDATION_FINISHED
+	NTFS_VALIDATION_FINISHED,
+	/* Appended to preserve the numeric values of existing report stages. */
+	NTFS_VALIDATION_MIRROR
 };
 
 enum ntfs_validation_limit {
@@ -46,6 +48,9 @@ struct ntfs_validation_report {
 	uint64_t allocated_clusters, unclaimed_clusters;
 	uint64_t read_calls, read_bytes, allocation_calls, work_units;
 	size_t peak_memory_bytes;
+	/* Only the mandatory four-record prefix is compared. Extra declared slots
+	 * are reported explicitly; their Windows-dependent coverage is unqualified. */
+	uint64_t mirror_record_slots, mirror_records_compared, mirror_unchecked_records;
 };
 
 void ntfs_validation_default_limits(struct ntfs_validation_limits *);

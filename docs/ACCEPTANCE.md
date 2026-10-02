@@ -11,7 +11,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
-| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, exact filename/index pairing, namespace reachability/link counts and physical overlap/ownership; partial budget/fault/unsupported reports | 57 synthetic image verdicts, seven budget dimensions, 508 allocation/346 read faults and four independent bitmap geometries passed; DOS header counts, listed/flagged bad-cluster storage, view-index semantics and Windows qualification remain open |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, namespace reachability/link counts and physical ownership; partial budget/fault/unsupported reports | 96 synthetic verdicts, seven budgets, 1,068 allocation/772 read faults, 80 partial/full mirror-stage read failures, 48 prefix budgets and four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, listed/flagged bad-cluster storage, view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
@@ -46,6 +46,45 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource comparison | Specific allocation/metadata and aligned memory-reader improvement measured; native performance unmeasured |
+
+The mirror-prefix continuation passes all 59 sanitized core suites and style in
+`artifacts/plan-mirror-{core,style}-final.log`. Initial focused/build/frame logs
+under `artifacts/plan-mirror-*-geometry-fixed.log` qualify the three affected
+suites and both freestanding 2-KiB-frame targets. The unsigned Release app passes
+under `artifacts/plan-mirror-app-final.log`; both architectures compile the actual
+changed `core/validate.c`. Unchanged adapter components were not rerun; their
+preceding evidence and seven modern-runtime SKIPs remain separate below.
+
+Thirty-nine new images cover first-copy admission, stale identity/LSN/body data,
+torn/invalid records, independent protection/slack, opaque free slots, complete
+fragmented/listed mappings, 1/64-KiB clusters and unqualified extended tails.
+All 57 existing diagnostic images remain byte-identical in
+`artifacts/plan-mirror-fixture-compare-geometry-fixed.log`. Across eight successful
+storage configurations, the C suite sweeps 1,068 allocation and 772 read failures
+with retry and exact cleanup. Four mirror-stage partial/full sweeps cover another
+80 read failures and 48 read-call/byte/work prefix budgets. The CLI checks all 96
+verdicts/coverage counters, seven budgets, unchanged images and transport errors.
+The initial constant-name and fixture-bitmap sizing failures remain in
+`artifacts/plan-mirror-build-{initial,initial-fixed}.log`; neither failed run
+qualified the tests that had not executed.
+
+`artifacts/interoperability-mirror-reviewed/report.json` compares both allocation planes
+and independently exported exact required replica prefixes on four mkntfs
+geometries. Prefix lengths derive from the independently exported FILE allocation
+fields, cross-checked with the core geometry. Prefix sizes are 4 KiB for three profiles and 16 KiB with 4096-byte
+records. The 64-KiB-cluster profile explicitly compares four of 64 declared
+records and reports 60 unqualified slots. Every image hash remains unchanged.
+This external-tool evidence does not establish Windows-dependent tail coverage.
+
+The validation campaign fixed-replays all 96 complete compact authored images;
+the retained replay log has 96 execution lines. Exploration completes 59,760
+executions/68 seconds, coverage 3,289/features 9,107, exit zero and reported
+OOM/timeout/crash counts of zero in
+`artifacts/fuzz-mirror-validation/report.json`. The unchanged input/RSS/timeout
+policies remain 1 MiB/1024 MiB/five seconds; RSS is a policy ceiling, not an
+observed peak. Required-prefix agreement selects no authoritative repair copy,
+admits no dirty volume and enables no write. Windows and installed acceptance,
+extended mirror tails, boot replicas and native recovery remain open.
 
 The selected-client restart-record continuation passes all 59 sanitized core
 suites, style, 18 component PASS groups/seven explicit macOS-27 runtime SKIPs

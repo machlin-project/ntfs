@@ -32,7 +32,8 @@ def image_hash(path):
 def invoke(tool, arguments, status):
     # This executable emits one fixed-size report, or a fixed usage/error line.
     result = subprocess.run([str(tool), *map(str, arguments)], cwd=ROOT,
-                            env=tool_environment(), capture_output=True, timeout=TOOL_SECONDS)
+                            env=tool_environment(), stdin=subprocess.DEVNULL,
+                            capture_output=True, timeout=TOOL_SECONDS)
     assert len(result.stdout) <= REPORT_BYTES and len(result.stderr) <= REPORT_BYTES
     if status is None:
         assert result.returncode in (0, 1), (arguments, result.returncode, result.stderr)
@@ -60,11 +61,14 @@ def main():
         assert report['result'] == case['result'], (case['image'], report)
         assert report['complete'] == case['complete'] and report['exhausted'] == LIMIT_NONE
         assert image_hash(image) == original
+        for name, expected in case.get('mirror', {}).items():
+            assert report[name] == expected, (case['image'], name, expected, report)
         if case['image'] == 'validation-dos.img':
             assert report['deferred_dos_link_counts'] == '1'
         if case['image'] == 'validation-allocated-unclaimed-cluster.img':
             assert report['unclaimed_clusters'] == '1'
         if case['complete']:
+            assert report['mirror_records_compared'] == '4'
             assert report['claimed_clusters'] == report['allocated_clusters']
             assert report['unclaimed_clusters'] == '0'
     image = fixtures / 'validation-standard.img'

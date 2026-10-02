@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Compare full diagnostic counts with independent NTFS-3G bitmap exports."""
+"""Compare diagnostic inventories and mirror coverage with NTFS-3G exports."""
 from pathlib import Path
 import argparse
+import hashlib
 import json
 import stat
+import struct
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,9 +13,14 @@ sys.path.insert(0, str(ROOT / 'tests'))
 from secure_oracle import capture, file_hash, GEOMETRIES
 from validation_cli import invoke
 
-MFT_RECORD, BITMAP_RECORD = 0, 6
+MFT_RECORD, MIRROR_RECORD, BITMAP_RECORD = 0, 1, 6
+REQUIRED_MIRROR_RECORDS = 4
 DATA_TYPE, BITMAP_TYPE = '0x80', '0xb0'
 BYTE_BITS = 8
+RECORD_HEADER = struct.Struct('<4sHHQHHHHIIQH')
+RECORD_FIELDS = ('magic', 'usa_offset', 'usa_count', 'lsn', 'sequence', 'links',
+                 'attrs_offset', 'flags', 'used', 'allocated', 'base_reference',
+                 'next_instance')
 
 
 def allocated_bits(data, count):
@@ -38,7 +45,7 @@ def main():
         if path.is_symlink() or not stat.S_ISREG(path.stat().st_mode):
             parser.error(f'A regular file is required: {path}')
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {'status': 'running', 'scope': 'supported metadata consistency and independent bitmaps',
+    report = {'status': 'running', 'scope': 'supported metadata, independent bitmaps and mandatory mirror prefix',
               'windows_acceptance': 'not run', 'journal_recovery': 'not checked', 'profiles': []}
     destination = args.output / 'report.json'
     try:
@@ -58,6 +65,38 @@ def main():
                     info = json.loads(capture([args.reader, image, 'info-json'], log))
                     mft = capture([args.tools / 'ntfscat', '-i', MFT_RECORD, '-a', BITMAP_TYPE, image], log)
                     allocation = capture([args.tools / 'ntfscat', '-i', BITMAP_RECORD, '-a', DATA_TYPE, image], log)
+                    mft_data = capture([args.tools / 'ntfscat', '-i', MFT_RECORD, '-a', DATA_TYPE, image], log)
+                    mirror_data = capture([args.tools / 'ntfscat', '-i', MIRROR_RECORD, '-a', DATA_TYPE, image], log)
+                    if min(len(mft_data), len(mirror_data)) < RECORD_HEADER.size:
+                        raise ValueError('Independent MFT/mirror exports lack their FILE headers')
+                    primary_header = dict(zip(RECORD_FIELDS, RECORD_HEADER.unpack_from(mft_data)))
+                    mirror_header = dict(zip(RECORD_FIELDS, RECORD_HEADER.unpack_from(mirror_data)))
+                    record_bytes = primary_header['allocated']
+                    if (primary_header['magic'] != b'FILE' or mirror_header['magic'] != b'FILE'
+                            or record_bytes < RECORD_HEADER.size
+                            or record_bytes != mirror_header['allocated']
+                            or record_bytes != int(info['record_size'])):
+                        raise ValueError('Core record geometry differs from independently exported headers')
+                    prefix_bytes = REQUIRED_MIRROR_RECORDS * record_bytes
+                    if len(mft_data) % record_bytes or len(mirror_data) % record_bytes:
+                        raise ValueError('Independent MFT/mirror exports contain a partial record')
+                    if len(mft_data) < prefix_bytes or len(mirror_data) < prefix_bytes:
+                        raise ValueError('Independent exports are shorter than the required mirror prefix')
+                    # These immutable mkntfs images have exact replica bytes.
+                    # The core deliberately supports distinct protection/slack;
+                    # this oracle does not generalize exact raw equality to Windows.
+                    if mft_data[:prefix_bytes] != mirror_data[:prefix_bytes]:
+                        raise ValueError('Independent mkntfs mirror prefix differs from its MFT export')
+                    mirror_slots = len(mirror_data) // record_bytes
+                    if (len(mft_data) // record_bytes != int(diagnostic['record_slots'])
+                            or mirror_slots != int(diagnostic['mirror_record_slots'])
+                            or int(diagnostic['mirror_records_compared']) != REQUIRED_MIRROR_RECORDS
+                            or int(diagnostic['mirror_unchecked_records']) != mirror_slots - REQUIRED_MIRROR_RECORDS):
+                        raise ValueError('Core mirror coverage differs from independently exported geometry')
+                    profile.update({'independent_mirror_record_slots': mirror_slots,
+                                    'independent_mirror_prefix_bytes': prefix_bytes,
+                                    'independent_mirror_prefix_sha256': hashlib.sha256(
+                                        mirror_data[:prefix_bytes]).hexdigest()})
                     active = allocated_bits(mft, int(diagnostic['record_slots']))
                     clusters = allocated_bits(allocation, int(info['cluster_count']))
                     profile.update({'independent_active_records': active,
@@ -79,7 +118,7 @@ def main():
                         raise ValueError('Independent image changed during read-only diagnostics')
                     destination.write_text(json.dumps(report, indent=2) + '\n')
         report['status'] = 'pass'
-        print(f'PASS: {len(images)} independent image geometries, active records, cluster ownership and unchanged hashes')
+        print(f'PASS: {len(images)} independent geometries, bitmap inventories, exact required mirror prefixes and unchanged hashes')
     except BaseException:
         report['status'] = 'fail'
         raise

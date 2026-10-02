@@ -182,6 +182,18 @@ enum ntfs_result ntfs_logfile_get_client(
  * establish a record's written/current history or interpret client payloads. */
 enum ntfs_result ntfs_logfile_get_active_client(
     const struct ntfs_logfile *, uint16_t index, uint16_t sequence, struct ntfs_logfile_client *);
+/* Decode an exact already assembled client-restart record against this owner's
+ * selected snapshot. Require the RESTART type, active index/sequence, exact NTFS
+ * client name and equality with its nonzero stored restart LSN before decoding
+ * the client prefix. Absent/free/mismatched identity or LSN returns STALE;
+ * another client name/type is UNSUPPORTED. Framing/payload errors retain their
+ * decoder result. Input is immutable/disjoint from source/output; errors zero
+ * output, with no allocation or I/O. extension is relative to the client payload.
+ * This binds snapshot identity only: page integrity, continuation provenance,
+ * current written history, registration lifetime, tables and recovery are not
+ * qualified. Native admission must still precede this cached operation. */
+enum ntfs_result ntfs_logfile_decode_client_restart_record(
+    const struct ntfs_logfile *, const void *, size_t, struct ntfs_logfile_client_restart *);
 /* A physical protected page from tail/fast/circular storage; no copy routing or
  * record assembly is implied. Offset is aligned and after both restart pages.
  * Capacity needs log_page_bytes. Errors leave output bytes unchanged and view

@@ -35,6 +35,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Physical circular-record observation | LSN-addressed adjacent protected fragments and one wrap, no-page-revisit bound, exact unpadded bytes/extended headers, shared read credits and bounded ephemeral staging | 30 C verdicts/exact CLI reports, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary passed; eight bound-volume storage forms also check exact records and resource/staging faults; written/current history, copy routing, active clients and recovery remain unqualified |
 | Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |
 | NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds passed; complete extensions/tables, containing-record ownership, selected current history and native Windows qualification remain open |
+| Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
@@ -46,7 +47,32 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource comparison | Specific allocation/metadata and aligned memory-reader improvement measured; native performance unmeasured |
 
-The client restart-prefix continuation passes all 56 sanitized core suites,
+The selected-client restart-record continuation passes all 59 sanitized core
+suites, style, 18 component PASS groups/seven explicit macOS-27 runtime SKIPs
+and the unsigned Release app under `artifacts/plan-logrestart-record-*-final.log`.
+Both arm64/x86_64 compile the changed `core/logfile_source.c`. The identical
+product passes both freestanding 2-KiB-frame targets in the retained initial
+build/eight-focused-suite/frame logs under
+`artifacts/plan-logrestart-record-*-initial.log`.
+Its 165 independent verdicts span 19 selected sources, including the 407-entry
+active chain, new second copy, zero/max sequence, exact/foreign names, stale/free
+identities, gate precedence, extended headers and complete-record cap. Armed
+next-read/allocation failures and exact counters prove no cached callbacks.
+The CLI compares 161 exact reports and four transports plus arguments/hashes.
+The fixture review replaces a numeric oracle-list position with a named payload
+key; all 265 authored files remain byte-identical and three focused suites pass
+in `artifacts/plan-logrestart-record-fixture-reviewed.log`.
+
+Its logfile campaign fixed-replays all 414 seeds, including all 165 complete new
+source/record pairs. The replay log contains 414 execution lines. Exploration
+passes 101,694 executions/61 seconds, coverage 1,065/features 2,687, peak RSS
+529 MiB and exit zero in `artifacts/fuzz-logrestart-record-final/report.json`.
+Input/RSS/timeout policies and the two explicit complete 4-MiB record-source
+exclusions are unchanged. Selected-snapshot matching does not establish native
+page/current-history provenance, complete checkpoint semantics or recovery.
+No VM, installed mount or Windows journal ran.
+
+The preceding client restart-prefix continuation passes all 56 sanitized core suites,
 style, both freestanding 2-KiB-frame targets, 18 component PASS groups/seven
 explicit macOS-27 runtime SKIPs and the unsigned Release app. Both arm64/x86_64
 compile the actual changed `core/logfile.c`. Logs are retained under

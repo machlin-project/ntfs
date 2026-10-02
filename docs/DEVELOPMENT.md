@@ -96,6 +96,15 @@ The separate `fuzz-logfile-checkpoint` smoke and 77 authored campaign seeds chec
 deterministic fields/zero errors and immutable guards; structured mutation focuses
 on the common prefix even when its tail is large. This does not interpret tables,
 optional extensions, current history or recovery; see LOGFILE.md.
+The `logfile-restart-records`/`logfile-restart-records-cli` suites add 165 complete
+source/record verdicts and 161 exact binding reports/four transport checks.
+`client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD` checks selected
+type/active identity/exact NTFS name/restart LSN before prefix interpretation.
+Its cached core operation reads/allocates nothing. The separate
+`fuzz-logfile-restart-record` smoke and complete source/record campaign seeds
+check deterministic outputs, guards, no cached callbacks and cleanup. Mutations
+reseal source restart pages or focus on record context/common-prefix fields.
+Physical/current-history provenance and native journal ownership remain open.
 The `logfile-volume`, `logfile-volume-cli` and `fuzz-logfile-volume` suites add
 counted ordinary-stream binding, fragmented/listed storage, source-node-independent
 ownership, mount/binding rejection, physical partial-read faults/retries and

@@ -426,6 +426,46 @@ ntfs_logfile_get_active_client(const struct ntfs_logfile *source, uint16_t index
 	return cursor == NTFS_LOGFILE_NO_CLIENT ? NTFS_STALE : NTFS_CORRUPT;
 }
 
+enum ntfs_result
+ntfs_logfile_decode_client_restart_record(const struct ntfs_logfile *source, const void *input,
+    size_t size, struct ntfs_logfile_client_restart *out)
+{
+	static const uint16_t client_name[] = {'N', 'T', 'F', 'S'};
+	struct ntfs_logfile_record record;
+	struct ntfs_logfile_client client;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	result =
+	    ntfs_logfile_record_decode(input, size, source->restart.record_header_bytes, &record);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (record.type != NTFS_LOGFILE_RECORD_RESTART) {
+		return NTFS_UNSUPPORTED;
+	}
+	result = ntfs_logfile_get_active_client(
+	    source, record.client_index, record.client_sequence, &client);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (client.name_length != sizeof(client_name) / sizeof(client_name[0]) ||
+	    !ntfs_equal(client.name, client_name, sizeof(client_name))) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (client.restart_lsn == 0 || record.lsn != client.restart_lsn) {
+		return NTFS_STALE;
+	}
+	return ntfs_logfile_client_restart_decode(
+	    (const uint8_t *)input + record.data.offset, record.data.length, out);
+}
+
 static enum ntfs_result
 load_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
     struct ntfs_logfile_page_view *out)

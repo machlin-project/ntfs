@@ -174,6 +174,47 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## Selected-client restart-record handoff checkpoint
+
+`ntfs_logfile_decode_client_restart_record` binds an exact already assembled
+record to the immutable selected snapshot before prefix decoding. It uses the
+selected extended/common header length and requires RESTART type, active
+index/sequence, exact UTF-16 `NTFS` name and equality with the client's nonzero
+stored restart LSN. Stale/free/absent identity or LSN returns STALE; foreign
+name/type is UNSUPPORTED. Framing/payload errors retain their decoder result.
+Errors zero output, source/record bytes stay immutable, and the cached operation
+allocates/reads nothing. Its complete-record 1-MiB cap includes header bytes;
+extension spans remain relative to client payload bytes. The standalone
+`client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD` retains
+`recovery_qualified: false`.
+
+Independent fixtures supply 165 aligned/unaligned verdicts across 19 snapshots
+and 161 exact CLI reports/four transports. They include maximum/non-numeric
+active chains, sequence/name/LSN boundaries, newer second selection, raw prefix
+fields, extended headers, every shorter header/prefix and whole-record limits.
+Armed next-read/allocation failures and exact counters prove no cached callbacks
+on success or failure; close releases all source memory. Numeric oracle-list
+indexing was replaced with a named payload key; all 265 authored fixture files
+remain byte-identical and three focused suites pass in
+`artifacts/plan-logrestart-record-fixture-reviewed.log`.
+
+All 59 sanitized core suites, style, 18 component PASS groups/seven explicit
+runtime SKIPs and the unsigned Release app pass under
+`artifacts/plan-logrestart-record-*-final.log`. Both app architectures compile
+the changed source owner. The unchanged product passed both freestanding
+2-KiB targets in the retained initial build/eight-focused-suite/frame logs.
+The campaign fixed-replays all 414 authored seeds, including all 165 complete
+new source/record pairs, then passes 101,694 executions/61 seconds, coverage
+1,065/features 2,687, peak RSS 529 MiB and exit zero under
+`artifacts/fuzz-logrestart-record-final/report.json`. Existing complete over-cap
+record sources remain explicit campaign exclusions and full C/CLI tests.
+
+This proves selected-snapshot binding, not physical/current-history provenance,
+registration lifetime, complete checkpoint tables/extensions or native recovery.
+No FSKit journal admission/drain owner, dirty mount or write capability was added.
+Continue those full contracts under CORE-QUALIFICATION.md and WRITES.md. No VM,
+installation or Windows journal was used.
+
 ## NTFS client restart-prefix handoff checkpoint
 
 `ntfs_logfile_client_restart_decode` now retains the common 64-byte prefix for

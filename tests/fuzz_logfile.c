@@ -16,6 +16,7 @@ enum {
 	FUZZ_SOURCE,
 	FUZZ_CIRCULAR_RECORD,
 	FUZZ_CLIENT_RESTART,
+	FUZZ_CLIENT_RESTART_RECORD,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -36,7 +37,8 @@ enum {
 /* Independent test envelope, not a stored LFS structure. Configuration is a
  * raw restart page only in page mode; the tested packet follows it. Circular
  * record mode uses argument as the LSN and configuration_bytes as fault/budget
- * controls, without a configuration payload. */
+ * controls, without a configuration payload. Client-restart-record mode uses
+ * a complete logical source as configuration, followed by an exact record. */
 struct fuzz_logfile_header {
 	uint8_t kind, argument[sizeof(uint64_t)], configuration_bytes[sizeof(uint32_t)];
 };
@@ -48,6 +50,12 @@ union fuzz_output {
 	struct ntfs_logfile_update update;
 	struct ntfs_logfile_client client;
 	struct ntfs_logfile_client_restart client_restart;
+};
+
+struct fuzz_restart_output {
+	uint8_t before[FUZZ_GUARD_BYTES];
+	struct ntfs_logfile_client_restart value;
+	uint8_t after[FUZZ_GUARD_BYTES];
 };
 
 static uint8_t scratch[2][NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES];
@@ -233,6 +241,59 @@ fuzz_circular_record(const uint8_t *bytes, size_t size, uint64_t requested_lsn, 
 	assert(memcmp(record_scratch[0], record_scratch[1], guarded_bytes) == 0);
 }
 
+static void
+fuzz_client_restart_record(const uint8_t *configuration, size_t configuration_size,
+    const uint8_t *packet, size_t packet_size, uint64_t argument)
+{
+	struct fuzz_restart_output outputs[2];
+	struct ntfs_logfile_client_restart zero = {0};
+	struct ntfs_logfile *source;
+	struct fuzz_device device;
+	struct ntfs_environment environment;
+	enum ntfs_result results[2];
+	size_t i, j, reads, allocations, memory;
+
+	for (i = 0; i < sizeof(results) / sizeof(results[0]); i++) {
+		device = (struct fuzz_device){.data = configuration,
+		    .size = configuration_size,
+		    .fail_read = argument % (NTFS_LOGFILE_DEFAULT_READ_CALLS + 1u),
+		    .fail_allocation =
+			(argument >> NTFS_BITS_PER_BYTE) % (FUZZ_SOURCE_ALLOCATIONS + 1u)};
+		environment = fuzz_environment(&device);
+		memset(&outputs[i], FUZZ_GUARD_VALUE, sizeof(outputs[i]));
+		results[i] = ntfs_logfile_open(&environment, NULL, NULL, &source);
+		assert(device.reads <= NTFS_LOGFILE_DEFAULT_READ_CALLS);
+		if (results[i] == NTFS_OK) {
+			assert(source != NULL &&
+			    device.memory <= FUZZ_SOURCE_OWNER_BYTES +
+				    FUZZ_SOURCE_PAGE_BUFFERS * NTFS_LOGFILE_MAX_PAGE_BYTES);
+			reads = device.reads;
+			allocations = device.allocations;
+			memory = device.memory;
+			device.fail_read = reads + 1;
+			device.fail_allocation = allocations + 1;
+			results[i] = ntfs_logfile_decode_client_restart_record(
+			    source, packet, packet_size, &outputs[i].value);
+			assert(device.reads == reads && device.allocations == allocations &&
+			    device.memory == memory);
+			ntfs_logfile_close(source);
+		} else {
+			assert(source == NULL);
+			memset(&outputs[i].value, 0, sizeof(outputs[i].value));
+		}
+		assert(device.memory == 0);
+		if (results[i] != NTFS_OK) {
+			assert(memcmp(&outputs[i].value, &zero, sizeof(zero)) == 0);
+		}
+		for (j = 0; j < FUZZ_GUARD_BYTES; j++) {
+			assert(outputs[i].before[j] == FUZZ_GUARD_VALUE &&
+			    outputs[i].after[j] == FUZZ_GUARD_VALUE);
+		}
+	}
+	assert(results[0] == results[1] &&
+	    memcmp(&outputs[0].value, &outputs[1].value, sizeof(outputs[0].value)) == 0);
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -252,13 +313,21 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	memcpy(original, data, size);
 	argument = ntfs_u64(header->argument);
 	kind = header->kind % FUZZ_KINDS;
-	configuration_size = kind == FUZZ_PAGE ? ntfs_u32(header->configuration_bytes) : 0;
+	configuration_size = kind == FUZZ_PAGE || kind == FUZZ_CLIENT_RESTART_RECORD
+	    ? ntfs_u32(header->configuration_bytes)
+	    : 0;
 	if (configuration_size > size - sizeof(*header)) {
 		return 0;
 	}
 	configuration = data + sizeof(*header);
 	packet = configuration + configuration_size;
 	packet_size = size - sizeof(*header) - configuration_size;
+	if (kind == FUZZ_CLIENT_RESTART_RECORD) {
+		fuzz_client_restart_record(
+		    configuration, configuration_size, packet, packet_size, argument);
+		assert(memcmp(data, original, size) == 0);
+		return 0;
+	}
 	if (kind == FUZZ_SOURCE) {
 		fuzz_source(packet, packet_size, argument);
 		assert(memcmp(data, original, size) == 0);
@@ -435,7 +504,7 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	uint8_t *page;
 	size_t configuration_size, page_bytes, minimum, position, usa_offset, usa_bytes;
 	size_t candidate_offset, candidate_bytes;
-	size_t mutation_end, area_bytes;
+	size_t mutation_end, area_bytes, record_header_bytes;
 	const struct ntfs_disk_log_restart_area *area;
 	unsigned kind;
 	bool restored_page = false, record_page = false, source_kind;
@@ -444,13 +513,21 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		return size;
 	}
 	kind = envelope->kind % FUZZ_KINDS;
-	configuration_size = kind == FUZZ_PAGE ? ntfs_u32(envelope->configuration_bytes) : 0;
+	configuration_size = kind == FUZZ_PAGE || kind == FUZZ_CLIENT_RESTART_RECORD
+	    ? ntfs_u32(envelope->configuration_bytes)
+	    : 0;
 	if (configuration_size > size - sizeof(*envelope)) {
 		return size;
 	}
 	page = data + sizeof(*envelope) + configuration_size;
 	page_bytes = size - sizeof(*envelope) - configuration_size;
 	source_kind = kind == FUZZ_SOURCE || kind == FUZZ_CIRCULAR_RECORD;
+	if (kind == FUZZ_CLIENT_RESTART_RECORD &&
+	    (seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD == 0) {
+		page = data + sizeof(*envelope);
+		page_bytes = configuration_size;
+		source_kind = true;
+	}
 	minimum = 0;
 	if (kind == FUZZ_CIRCULAR_RECORD &&
 	    (seed / (FUZZ_GENERIC_PERIOD * FUZZ_RECORD_MUTATION_PAGES)) % FUZZ_GENERIC_PERIOD !=
@@ -489,6 +566,30 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		restored_page = unprotect(page, page_bytes, minimum);
 	}
 	mutation_end = page_bytes;
+	if (kind == FUZZ_CLIENT_RESTART_RECORD && !source_kind) {
+		record_header_bytes = sizeof(struct ntfs_disk_log_record);
+		if (configuration_size >= sizeof(*restart)) {
+			restart = (const void *)(data + sizeof(*envelope));
+			candidate_offset = ntfs_u16(restart->area_offset);
+			if (ntfs_bounds(candidate_offset, sizeof(*area), configuration_size)) {
+				area = (const void *)(data + sizeof(*envelope) + candidate_offset);
+				candidate_bytes = ntfs_u16(area->record_header_bytes);
+				if (candidate_bytes >= record_header_bytes) {
+					record_header_bytes = candidate_bytes;
+				}
+			}
+		}
+		if (ntfs_bounds(record_header_bytes, sizeof(struct ntfs_disk_log_client_restart),
+			page_bytes)) {
+			mutation_end =
+			    record_header_bytes + sizeof(struct ntfs_disk_log_client_restart);
+			/* Preserve snapshot identity and version for deep field mutations. */
+			if ((seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD != 1) {
+				minimum = record_header_bytes +
+				    offsetof(struct ntfs_disk_log_client_restart, analysis_lsn);
+			}
+		}
+	}
 	if (kind == FUZZ_CLIENT_RESTART &&
 	    page_bytes >= sizeof(struct ntfs_disk_log_client_restart)) {
 		/* Focus on declared prefix fields even when an opaque extension is

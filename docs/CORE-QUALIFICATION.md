@@ -31,6 +31,14 @@ reproducibility report predates this decoder. A subsequent eight-product local
 comparison now qualifies its committed Release/O3 products under
 `artifacts/reproducibility-logcheckpoint/`; relocated/native and remote CI
 acceptance remains open.
+Selected-client restart-record binding now checks exact assembled framing,
+selected active index/sequence, RESTART type, exact NTFS client name and stored
+restart LSN before prefix interpretation, without cached callbacks/allocations.
+Its 165 verdicts across 19 sources, 161 exact reports/four transports, 59 sanitized
+suites and all 414 fixed-replayed logfile seeds pass. It does not qualify physical
+page/current-history provenance, native registration lifecycle or complete
+checkpoint tables/extensions. Those remain in the full recovery scope above;
+the earlier Release comparison predates this binding source change.
 
 Optimization is a separate acceptance stream:
 

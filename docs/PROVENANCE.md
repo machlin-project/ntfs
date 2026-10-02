@@ -228,6 +228,12 @@ payload fields were consulted only for the common layout/version facts, alongsid
 the original LFS research. No foreign parser, table, replay or recovery algorithm
 was imported. Only client 0.0/1.0 common fields are interpreted; raw table anchors
 and opaque extensions do not qualify complete checkpoints or native history.
+The selected-client record binder is original repository code, composing existing
+exact framing, active snapshot identity and common-prefix contracts. Its independent
+fixtures author whole selected sources and assembled records, gate precedence,
+sequence/name/LSN boundaries and complete-record limits. No foreign binding,
+registration or recovery implementation was imported; matching snapshot identity
+still requires native page/current-history qualification.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

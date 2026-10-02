@@ -19,6 +19,9 @@ lookup and the client restart prefix has a separate decoder; record liveness,
 complete native client payload interpretation, transaction analysis,
 redo/undo execution and Windows recovery acceptance remain separate work.
 LFS version numbers do not establish the NTFS client's payload version.
+An already assembled client restart record can now be bound to selected active
+snapshot identity before common-prefix decoding. This does not establish its
+physical/current-history provenance.
 
 ## Logical source ownership and copy reports
 
@@ -149,6 +152,25 @@ including a one-byte tail or a bounded maximum-size tail. A successful prefix
 decode makes no claim that an optional extension is complete or valid. No USN,
 table contents or extension version semantics are inferred.
 
+`ntfs_logfile_decode_client_restart_record` takes the immutable selected owner
+and an exact already assembled LFS record. It uses the selected record-header
+length, including opaque extended header bytes, then requires RESTART type,
+selected active index/sequence, the exact four UTF-16 units `NTFS` and equality
+with that client's nonzero stored restart LSN. These gates precede payload
+interpretation. Absent/free/mismatched identity or LSN returns STALE; a different
+known record type or client name returns UNSUPPORTED. Common-record framing and
+prefix errors retain their decoder result, including a corrupt sentinel client
+index. All errors zero output; neither source/record bytes nor cached state change.
+
+Binding is bounded by the cached client count and allocates/reads nothing. Its
+1-MiB cap covers the entire LFS record, so the allowed client payload is smaller
+than the standalone payload cap by the selected header length. The returned
+extension span remains relative to client payload bytes. The supplied bytes must
+still have independently qualified page integrity and continuation/current-history
+provenance before recovery use. A snapshot match does not prove registration
+lifetime or a complete checkpoint. Native admission remains necessary for cached
+queries after revocation; no FSKit journal owner is introduced here.
+
 ## Byte and resource contract
 
 The immutable input, output structure and caller-owned scratch must be disjoint.
@@ -227,6 +249,12 @@ default credits and reports only the physical observation described above.
 `active-client` takes an exported logical source and decimal index/sequence
 values. It reports the selected active entry or NULL with its lookup error;
 it does not read record content or change any recovery qualification.
+`client-restart-record` takes an exported logical journal and an already assembled
+record packet. Discovery selects the cached snapshot; binding makes no further
+source reads or allocations. Its JSON has the same prefix fields and zero-error
+contract as `client-restart`, with its own scope and `recovery_qualified: false`.
+Both inputs are opened read-only and remain unchanged. Packet and source transport
+errors exit two; discovery/binding/decoder reports exit zero or one as usual.
 
 ```sh
 .build/ntfs-logfile restart EXPORTED_RESTART_PAGE LOGICAL_LOGFILE_BYTES
@@ -234,6 +262,7 @@ it does not read record content or change any recovery qualification.
 .build/ntfs-logfile record ASSEMBLED_RECORD RECORD_HEADER_BYTES
 .build/ntfs-logfile update NTFS_CLIENT_PACKET
 .build/ntfs-logfile client-restart NTFS_CLIENT_RESTART_PACKET
+.build/ntfs-logfile client-restart-record EXPORTED_LOGICAL_LOGFILE ASSEMBLED_RESTART_RECORD
 .build/ntfs-logfile journal EXPORTED_LOGICAL_LOGFILE
 .build/ntfs-logfile volume-journal NTFS_IMAGE_FILE
 .build/ntfs-logfile circular-record EXPORTED_LOGICAL_LOGFILE DECIMAL_LSN
@@ -306,6 +335,21 @@ seeds inside the unchanged 2-MiB envelope. Structured mutations focus on declare
 prefix fields, usually preserving the client version gate, while generic
 mutations also reach version, truncation and framing errors.
 
+`tests/logfile_restart_record_fixtures.py` independently authors 165 source/record
+verdicts and exact prefix oracles. They cover both client versions, zero/maximum
+sequence, non-numeric/maximum active chains, newer second selection, LFS 2.0,
+extended headers, absent/free/foreign/stale clients, gate precedence, raw boundary
+pairs, all shorter headers/prefixes, opaque tails and the complete-record cap.
+The direct suite checks both input alignments, guards, zero outputs/padding and
+immutable source/record bytes. Armed next-read/next-allocation failures plus exact
+counters prove that cached binding performs neither callback, including failure
+paths; owner close releases every allocation. The CLI compares 161 exact reports
+and four transport checks plus arguments and original source/packet hashes.
+All 165 complete source/record pairs fit the unchanged 2-MiB fuzz envelope.
+Their separate mode checks deterministic binding/error outputs and guards,
+reseals selected restart-copy mutations, and directs record/payload mutations
+into context fields or the common prefix while usually preserving identity.
+
 Independent volume layouts place the original logical journal bytes in
 contiguous/fragmented runs and resident/nonresident attribute lists. They cover
 mixed/maximum restart pages, ordinary 4-KiB log pages, fast storage, torn copies,
@@ -345,6 +389,10 @@ The common NTFS client restart prefix was cross-checked against the declarative
 and the named payload fields in [Suhanov's original parser](https://github.com/msuhanov/dfir_ntfs/blob/master/dfir_ntfs/LogFile.py).
 Only layout facts were used for this original prefix decoder and independent
 fixture author; no foreign parser, table/replay or recovery algorithm was imported.
+The selected-client record binder reuses the repository's original record,
+active-snapshot and prefix contracts. Its gate ordering, complete source/record
+fixtures and cached fault/counter checks are original; no foreign registration,
+binding or recovery algorithm was imported.
 The short offset-base helpers in the separately retained NTFS-3G recovery utility
 were inspected only to establish the conflicting LCN-less format fact; no replay,
 parser or filesystem algorithm was imported. This is not source-isolated

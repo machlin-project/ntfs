@@ -323,6 +323,41 @@ active_client(const char *path, uint16_t index, uint16_t sequence)
 	return result == NTFS_OK ? 0 : 1;
 }
 
+static int
+client_restart_record(const char *path, const char *packet_path)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_client_restart value = {0};
+	uint8_t *bytes;
+	size_t size;
+	enum ntfs_result result;
+
+	bytes = read_packet(packet_path, NTFS_LOGFILE_MAX_RECORD_BYTES, &size);
+	if (bytes == NULL) {
+		fprintf(stderr, "Cannot read bounded regular-file packet\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	if (ntfs_image_open(path, &image) != 0) {
+		free(bytes);
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
+	if (result == NTFS_OK) {
+		result = ntfs_logfile_decode_client_restart_record(source, bytes, size, &value);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"client-restart-record\",\"code\":%d,"
+	       "\"result\":\"%s\",\"recovery_qualified\":false",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result));
+	client_restart_fields(&value);
+	printf("}\n");
+	free(bytes);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK ? 0 : 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -357,6 +392,12 @@ main(int argc, char **argv)
 			goto usage;
 		}
 		return active_client(argv[2], (uint16_t)argument, (uint16_t)sequence);
+	}
+	if (strcmp(argv[1], "client-restart-record") == 0) {
+		if (argc != 4) {
+			goto usage;
+		}
+		return client_restart_record(argv[2], argv[3]);
 	}
 	is_restart = strcmp(argv[1], "restart") == 0;
 	is_page = strcmp(argv[1], "page") == 0;
@@ -448,6 +489,7 @@ usage:
 	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
 	    "       ntfs-logfile update CLIENT_PACKET\n"
 	    "       ntfs-logfile client-restart CLIENT_PACKET\n"
+	    "       ntfs-logfile client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

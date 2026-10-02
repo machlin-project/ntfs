@@ -243,6 +243,13 @@ index/sequence and bounded in-use membership with no allocation or callback.
 Inactive entries remain inspectable through the separate raw snapshot getter;
 their old LSNs do not authorize active lookup. Matching a pair is separate from
 record liveness, current history and native payload interpretation.
+`ntfs_logfile_decode_client_restart_record` now combines exact assembled-record
+framing with selected active identity, the exact NTFS client name and equality
+with its nonzero stored restart LSN before common-prefix decoding. It uses the
+selected header length and no additional callbacks or allocations. Foreign types/
+names and stale identity/LSNs fail before payload interpretation, with zero output.
+This snapshot binding does not establish page/continuation provenance or current
+written history; native journal admission/drain remains separate.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not

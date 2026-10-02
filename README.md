@@ -127,3 +127,8 @@ for client formats 0.0/1.0, raw analysis/table LSNs and byte counts, and an opaq
 extension span. Its `client-restart` packet diagnostic makes no table-presence,
 current-history or recovery decision; these client versions are distinct from LFS
 restart-page versions.
+Already assembled client restart records can now be checked against the selected
+snapshot's type, active index/sequence, exact NTFS name and stored restart LSN
+before prefix decoding. Cached binding uses no I/O/allocation and preserves zero
+error outputs. Page provenance and current written history remain separate from
+this snapshot match; see the `client-restart-record` diagnostic and LOGFILE.md.

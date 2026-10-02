@@ -27,6 +27,10 @@ for client formats 0.0/1.0. Its raw analysis/table LSNs and byte counts authoriz
 no table reads, transaction state or recovery; containing-record ownership,
 selected current history, complete checkpoint tables and optional extensions
 must be qualified separately.
+Selected-client record binding now checks the exact assembled framing, RESTART
+type, active index/sequence, exact NTFS client name and stored restart LSN before
+prefix interpretation. This cached snapshot match establishes no native page
+provenance or current written history and cannot advance writable qualification.
 
 The future transaction module owns private snapshots, MFT/$Bitmap reservations,
 attribute-list growth, directory B-tree changes, $Secure references and rollback.

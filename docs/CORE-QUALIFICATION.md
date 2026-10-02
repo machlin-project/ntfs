@@ -38,7 +38,10 @@ Its 165 verdicts across 19 sources, 161 exact reports/four transports, 59 saniti
 suites and all 414 fixed-replayed logfile seeds pass. It does not qualify physical
 page/current-history provenance, native registration lifecycle or complete
 checkpoint tables/extensions. Those remain in the full recovery scope above;
-the earlier Release comparison predates this binding source change.
+the earlier Release comparison predates this binding source change. A subsequent
+comparison now passes both Release/O3 builds and all eight full product byte
+comparisons under `artifacts/reproducibility-logrestart-record/`. Relocated/native
+app and remote CI acceptance remains open.
 
 Optimization is a separate acceptance stream:
 

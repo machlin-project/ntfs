@@ -72,6 +72,15 @@ exclusions are unchanged. Selected-snapshot matching does not establish native
 page/current-history provenance, complete checkpoint semantics or recovery.
 No VM, installed mount or Windows journal ran.
 
+The committed binding source also passes both isolated Release/O3 builds and
+all eight archive/CLI full byte comparisons in
+`artifacts/reproducibility-logrestart-record/report.json`, with bounded build
+logs beside it and launcher evidence in
+`artifacts/plan-logrestart-record-reproducibility.log`. Compiler/SDK, source
+revision, selected options and hashes remain in the generated report. This
+qualifies the current local portable products; relocated checkout, native app/
+signing and remote CI still require separate evidence.
+
 The preceding client restart-prefix continuation passes all 56 sanitized core suites,
 style, both freestanding 2-KiB-frame targets, 18 component PASS groups/seven
 explicit macOS-27 runtime SKIPs and the unsigned Release app. Both arm64/x86_64

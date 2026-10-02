@@ -214,6 +214,12 @@ registration lifetime, complete checkpoint tables/extensions or native recovery.
 No FSKit journal admission/drain owner, dirty mount or write capability was added.
 Continue those full contracts under CORE-QUALIFICATION.md and WRITES.md. No VM,
 installation or Windows journal was used.
+The committed binding also passes both isolated ordinary Release/O3 builds and
+all eight archive/CLI byte comparisons under
+`artifacts/reproducibility-logrestart-record/`, with command evidence in
+`artifacts/plan-logrestart-record-reproducibility.log`. Source revision and
+artifact hashes stay in that generated report. Relocated/native app and remote
+CI scope limits remain open.
 
 ## NTFS client restart-prefix handoff checkpoint
 

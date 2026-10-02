@@ -16,6 +16,7 @@ adapter = root / 'adapters/fskit'
 executable = output / 'ntfs-fskit-test'
 command = [clang, '-isysroot', sdk, '-mmacosx-version-min=26.5', '-fobjc-arc', '-fblocks', '-O1', '-g', '-fsanitize=address,undefined', '-Wall', '-Wextra', '-Werror', '-Wdeclaration-after-statement', '-Wno-deprecated-declarations', '-I', str(root / 'include'), '-I', str(adapter), '-framework', 'Foundation', '-framework', 'FSKit', str(root / 'tests/fskit.m')]
 command += [str(adapter / name) for name in ('NTFSResource.m', 'NTFSNames.m', 'NTFSVolume.m', 'NTFSLegacyVolume.m', 'NTFSModernVolume.m')]
+command += [str(root / 'tests/fskit_lifecycle.m')]
 command += [str(root / '.build/libntfs.a'), '-o', str(executable)]
 subprocess.run(command, cwd=root, env=env, check=True)
 subprocess.run([str(executable), str(root / '.build/fixtures/standard.img')], cwd=root, env=env, check=True)

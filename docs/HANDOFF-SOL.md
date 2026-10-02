@@ -75,6 +75,26 @@ Luna (`gpt-6-luna`); diagnosis, implementation and acceptance belong to the curr
 main task owner. FSKit VM preparation belongs to Sol (`gpt-6.1-sol`); one agent
 owns a VM at a time. Give workers absolute directories and bounded tasks.
 
+## Native lifecycle continuation
+
+Unmount now closes admission using a separate short-held lock before waiting for
+the serialized operation. It closes stream/catalog/cursor caches while preserving
+nodes and FSItem identity for reclamation. Mount can reopen a drained immutable
+owner; deactivation/invalidation is terminal. Concurrent unmount requests cannot
+reopen admission before all have drained. Replies run outside the operation
+monitor, and a delayed read reports zero bytes on failure after closed admission
+or permanent resource revocation.
+
+Eight semaphore-gated read scenarios, overlapping teardown, exact completion
+counts, all transient cache kinds and interleaved enumeration passed under
+ASan/UBSan, along with the existing namespace fault/budget checks. Style and the
+current unsigned app/extension also passed. Three modern-runtime SKIPs remain.
+See LIFECYCLE.md and `artifacts/plan-lifecycle-{component-reviewed,style,app-build}.log`.
+Do not claim interruption of a native synchronous read, task cancellation,
+conditional modern reclaim or installed lifetime/scheduling from this component
+checkpoint. A callback that never returns still prevents draining; buffers must
+remain owned until it does. The portable core is unchanged.
+
 ## Core handoff checkpoint
 
 The core is ready for the next integration and compatibility work. Eleven sanitized

@@ -8,6 +8,7 @@
 #include <sys/xattr.h>
 #include <limits.h>
 #include "fixture.h"
+#import "fskit_lifecycle.h"
 
 @interface TestReader : NSObject <NTFSBlockReader>
 @property NSData *image;
@@ -1246,6 +1247,8 @@ main(int argc, char **argv)
 		assert(image != nil);
 		test_volume(image);
 		test_revocation(image);
+		ntfs_test_fskit_lifecycle(image, NO);
+		ntfs_test_fskit_lifecycle(image, YES);
 		test_ads(image, @"streamed.txt", notes, sizeof(notes) / sizeof(notes[0]), 1,
 		    [@"alternate payload" dataUsingEncoding:NSUTF8StringEncoding], NO);
 		fixtures = [@(argv[1]) stringByDeletingLastPathComponent];

@@ -63,3 +63,8 @@ directory reachability and physical extents through a private read-only mount.
 Synthetic fault/budget checks and four independent bitmap geometries pass;
 complete reports retain a defined scope, with native Windows, view-store and
 recovery qualification still open.
+The FSKit [lifecycle contract](docs/LIFECYCLE.md) now closes admission before
+draining reads, clears transient caches at unmount and retains item ownership for
+reclamation. Eight blocked-read/overlapping-teardown scenarios and interleaved
+enumerations pass locally; synchronous I/O interruption and installed lifecycle
+remain separate acceptance requirements.

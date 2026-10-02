@@ -21,7 +21,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned resource reads, short/error I/O, permanent resource revocation including cached data, item identity, stored names, pagination/replay, EROFS, concurrent reads and teardown under ASan/UBSan | Passed in-process on macOS 26.6.2 |
+| FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain, eight blocked-read/overlapping-teardown scenarios, exactly-once replies and interleaved cookies under ASan/UBSan | Legacy in-process checks passed; modern lifecycle/case runtime explicitly skipped without macOS 27; synchronous I/O interruption and installed lifetime remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
@@ -34,7 +34,21 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The consistency diagnostic checkpoint passes all 31 sanitized suites, both
+The lifecycle adapter continuation passes eight semaphore-gated read scenarios,
+interleaved enumeration with empty packer rewinds, existing namespace allocation/
+I/O sweeps, selected-toolchain style and the current unsigned Debug app/extension
+build. Unmount now closes admission before waiting for the serialized read, clears
+transient caches and preserves nodes for reclaim. Deactivation is terminal;
+revocation rejects a late successful device return. Replies are checked exactly
+once, including overlapping unmount/deactivation and inspection from another
+thread. Three explicit macOS-27 runtime SKIPs remain: one lifecycle suite and two
+case-policy checks. Evidence uses `artifacts/plan-lifecycle-{component-reviewed,style,app-build}.log`.
+The portable core did not change and its preceding qualification was not rerun.
+Synchronous read interruption/deadlines, task cancellation, conditional modern
+reclaim and installed scheduling/buffer lifetime remain open; see
+[LIFECYCLE.md](LIFECYCLE.md).
+
+The preceding consistency diagnostic checkpoint passes all 31 sanitized suites, both
 freestanding targets, selected-toolchain style and the current unsigned Debug
 app build. Legacy FSKit components passed with two explicit macOS-27 runtime
 SKIPs; the new diagnostic has no FSKit runtime entry point. Its 57 complete

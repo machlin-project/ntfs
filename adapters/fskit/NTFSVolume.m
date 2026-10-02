@@ -118,6 +118,9 @@ item_id(uint64_t reference)
 	uint64_t _freeClusters;
 	uint32_t _maximumDirectoryEntries;
 	BOOL _active;
+	NSLock *_lifecycleLock;
+	NTFSVolumeLifecycle _lifecycle;
+	NSUInteger _pendingUnmounts;
 }
 
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource
@@ -147,6 +150,8 @@ item_id(uint64_t reference)
 	    initWithVolumeID:[[FSVolumeIdentifier alloc] initWithUUID:ntfs_uuid(info.serial)]
 		  volumeName:[FSFileName nameWithString:label.length != 0 ? label : @"NTFS"]];
 	if (self != nil) {
+		_lifecycleLock = [[NSLock alloc] init];
+		_lifecycle = NTFSVolumeLoaded;
 		_core = core;
 		_info = info;
 		_resource = resource;
@@ -164,7 +169,7 @@ item_id(uint64_t reference)
 	[self invalidate];
 }
 
-- (void)releaseItem:(NTFSItem *)item
+- (void)clearItemCaches:(NTFSItem *)item
 {
 	ntfs_stream_catalog_close(item->catalog);
 	item->catalog = NULL;
@@ -172,6 +177,15 @@ item_id(uint64_t reference)
 	item->cursor = NULL;
 	ntfs_stream_close(item->stream);
 	item->stream = NULL;
+	item->pending = NO;
+	item->position = 0;
+	item->inspectedEntries = 0;
+	item->cursorFailure = NTFS_OK;
+}
+
+- (void)releaseItem:(NTFSItem *)item
+{
+	[self clearItemCaches:item];
 	ntfs_node_close(item->node);
 	item->node = NULL;
 	item.owner = nil;
@@ -180,9 +194,16 @@ item_id(uint64_t reference)
 - (void)invalidate
 {
 	enum ntfs_result result;
+	NTFSItem *item;
 
+	/* Never hold this lock while waiting for the core's operation monitor. */
+	[_lifecycleLock lock];
+	if (_lifecycle != NTFSVolumeInvalidated) {
+		_lifecycle = NTFSVolumeInvalidating;
+	}
+	[_lifecycleLock unlock];
 	@synchronized(self) {
-		for (NTFSItem *item in _items.allValues) {
+		for (item in _items.allValues) {
 			[self releaseItem:item];
 		}
 		[_items removeAllObjects];
@@ -194,8 +215,23 @@ item_id(uint64_t reference)
 			}
 		}
 		_active = NO;
-		_resource = nil;
+		if (_core == NULL) {
+			_resource = nil;
+			[_lifecycleLock lock];
+			_lifecycle = NTFSVolumeInvalidated;
+			[_lifecycleLock unlock];
+		}
 	}
+}
+
+- (NTFSVolumeLifecycle)lifecycle
+{
+	NTFSVolumeLifecycle state;
+
+	[_lifecycleLock lock];
+	state = _lifecycle;
+	[_lifecycleLock unlock];
+	return state;
 }
 
 - (NTFSItem *)checkedItem:(FSItem *)item
@@ -211,7 +247,7 @@ item_id(uint64_t reference)
 
 - (enum ntfs_result)admissionResult
 {
-	if (_core == NULL || !_active) {
+	if (_core == NULL || !_active || self.lifecycle != NTFSVolumeActive) {
 		return NTFS_STALE;
 	}
 	return _resource.isAvailable ? NTFS_OK : NTFS_IO;
@@ -222,8 +258,13 @@ item_id(uint64_t reference)
 	struct ntfs_stat stat;
 	enum ntfs_result result;
 	NTFSItem *item;
+	NTFSVolumeLifecycle state;
 
 	result = ntfs_node_stat(node, &stat);
+	state = self.lifecycle;
+	if (result == NTFS_OK && state != NTFSVolumeLoaded && state != NTFSVolumeActive) {
+		result = NTFS_STALE;
+	}
 	if (result == NTFS_OK && !_resource.isAvailable) {
 		result = NTFS_IO;
 	}
@@ -260,10 +301,12 @@ item_id(uint64_t reference)
 	struct ntfs_node *root = NULL;
 	enum ntfs_result result;
 	NTFSItem *item;
+	NTFSVolumeLifecycle state;
 
 	*error = nil;
 	@synchronized(self) {
-		if (_core == NULL) {
+		state = self.lifecycle;
+		if (_core == NULL || (state != NTFSVolumeLoaded && state != NTFSVolumeActive)) {
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
@@ -277,7 +320,17 @@ item_id(uint64_t reference)
 			return nil;
 		}
 		item = [self adoptNode:root error:error];
-		_active = item != nil;
+		if (item != nil) {
+			[_lifecycleLock lock];
+			if (_lifecycle == NTFSVolumeLoaded || _lifecycle == NTFSVolumeActive) {
+				_active = YES;
+				_lifecycle = NTFSVolumeActive;
+			} else {
+				item = nil;
+				*error = ntfs_error(NTFS_STALE);
+			}
+			[_lifecycleLock unlock];
+		}
 		return item;
 	}
 }
@@ -356,8 +409,8 @@ item_id(uint64_t reference)
 		if (result == NTFS_OK && !ntfs_native_entry_visible(&entry)) {
 			result = NTFS_NOT_FOUND;
 		}
-		if (result == NTFS_OK && !_resource.isAvailable) {
-			result = NTFS_IO;
+		if (result == NTFS_OK) {
+			result = [self admissionResult];
 		}
 		if (result != NTFS_OK) {
 			ntfs_node_close(node);
@@ -445,9 +498,11 @@ item_id(uint64_t reference)
 			result = ntfs_stream_read(
 			    value->stream, (uint64_t)offset, bytes, length, completed);
 		}
-		if (result == NTFS_OK && !_resource.isAvailable) {
+		if (result == NTFS_OK) {
+			result = [self admissionResult];
+		}
+		if (result != NTFS_OK) {
 			*completed = 0;
-			result = NTFS_IO;
 		}
 		return result;
 	}
@@ -465,8 +520,9 @@ item_id(uint64_t reference)
 			return NULL;
 		}
 	}
-	if (!_resource.isAvailable) {
-		*error = ntfs_error(NTFS_IO);
+	result = [self admissionResult];
+	if (result != NTFS_OK) {
+		*error = ntfs_error(result);
 		return NULL;
 	}
 	return item->catalog;
@@ -512,8 +568,9 @@ item_id(uint64_t reference)
 				[names addObject:stream_alias(i)];
 			}
 		}
-		if (!_resource.isAvailable) {
-			*error = ntfs_error(NTFS_IO);
+		result = [self admissionResult];
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
 			return nil;
 		}
 		return names;
@@ -627,8 +684,8 @@ item_id(uint64_t reference)
 							 userInfo:nil];
 				return nil;
 			}
-			if (result == NTFS_OK && !_resource.isAvailable) {
-				result = NTFS_IO;
+			if (result == NTFS_OK) {
+				result = [self admissionResult];
 			}
 			if (result != NTFS_OK) {
 				*error = ntfs_error(result);
@@ -642,9 +699,12 @@ item_id(uint64_t reference)
 		}
 		if ([name.data isEqualToData:[FSFileName nameWithString:streamManifestName].data]) {
 			manifest = [self streamManifest:value catalog:catalog error:error];
-			if (manifest != nil && !_resource.isAvailable) {
-				*error = ntfs_error(NTFS_IO);
-				return nil;
+			if (manifest != nil) {
+				result = [self admissionResult];
+				if (result != NTFS_OK) {
+					*error = ntfs_error(result);
+					return nil;
+				}
 			}
 			return manifest;
 		}
@@ -675,8 +735,8 @@ item_id(uint64_t reference)
 			}
 		}
 		ntfs_stream_close(stream);
-		if (result == NTFS_OK && !_resource.isAvailable) {
-			result = NTFS_IO;
+		if (result == NTFS_OK) {
+			result = [self admissionResult];
 		}
 		if (result != NTFS_OK) {
 			*error = ntfs_error(result);
@@ -732,8 +792,9 @@ item_id(uint64_t reference)
 			if (!item->pending) {
 				result = ntfs_directory_next(item->cursor, &item->pendingEntry);
 				if (result == NTFS_END) {
-					if (!_resource.isAvailable) {
-						return ntfs_error(NTFS_IO);
+					result = [self admissionResult];
+					if (result != NTFS_OK) {
+						return ntfs_error(result);
 					}
 					return item->position < cookie ? ntfs_error(NTFS_INVALID)
 								       : nil;
@@ -777,8 +838,9 @@ item_id(uint64_t reference)
 				}
 				attrs = [self attributesForStat:&stat];
 			}
-			if (!_resource.isAvailable) {
-				return ntfs_error(NTFS_IO);
+			result = [self admissionResult];
+			if (result != NTFS_OK) {
+				return ntfs_error(result);
 			}
 			if (![packer packEntryWithName:name
 					      itemType:(item->pendingEntry.file_attributes &
@@ -821,16 +883,54 @@ item_id(uint64_t reference)
 - (void)mountWithOptions:(FSTaskOptions *)options replyHandler:(void (^)(NSError *))reply
 {
 	NSError *error;
+	enum ntfs_result result;
+	NTFSVolumeLifecycle state;
 
 	(void)options;
 	@synchronized(self) {
-		error = ntfs_error([self admissionResult]);
+		state = self.lifecycle;
+		result = _core == NULL || !_active ||
+			(state != NTFSVolumeActive && state != NTFSVolumeUnmounted)
+		    ? NTFS_STALE
+		    : NTFS_OK;
+		if (result == NTFS_OK && !_resource.isAvailable) {
+			result = NTFS_IO;
+		}
+		if (result == NTFS_OK) {
+			[_lifecycleLock lock];
+			if (_lifecycle == NTFSVolumeActive || _lifecycle == NTFSVolumeUnmounted) {
+				_lifecycle = NTFSVolumeActive;
+			} else {
+				result = NTFS_STALE;
+			}
+			[_lifecycleLock unlock];
+		}
+		error = ntfs_error(result);
 	}
 	reply(error);
 }
 
 - (void)unmountWithReplyHandler:(void (^)(void))reply
 {
+	NTFSItem *item;
+
+	[_lifecycleLock lock];
+	_pendingUnmounts++;
+	if (_lifecycle != NTFSVolumeInvalidating && _lifecycle != NTFSVolumeInvalidated) {
+		_lifecycle = NTFSVolumeDraining;
+	}
+	[_lifecycleLock unlock];
+	@synchronized(self) {
+		for (item in _items.allValues) {
+			[self clearItemCaches:item];
+		}
+		[_lifecycleLock lock];
+		_pendingUnmounts--;
+		if (_pendingUnmounts == 0 && _lifecycle == NTFSVolumeDraining) {
+			_lifecycle = NTFSVolumeUnmounted;
+		}
+		[_lifecycleLock unlock];
+	}
 	reply();
 }
 
@@ -840,9 +940,7 @@ item_id(uint64_t reference)
 
 	(void)flags;
 	@synchronized(self) {
-		error = ntfs_error(_core == NULL ? NTFS_STALE
-			: _resource.isAvailable	 ? NTFS_OK
-						 : NTFS_IO);
+		error = ntfs_error([self admissionResult]);
 	}
 	reply(error);
 }

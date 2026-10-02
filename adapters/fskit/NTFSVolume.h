@@ -1,6 +1,15 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSResource.h"
 
+typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
+	NTFSVolumeLoaded,
+	NTFSVolumeActive,
+	NTFSVolumeDraining,
+	NTFSVolumeUnmounted,
+	NTFSVolumeInvalidating,
+	NTFSVolumeInvalidated
+};
+
 @interface NTFSVolume : FSVolume <FSVolumePathConfOperations>
 /* Takes core ownership only on success. The resource remains retained until
  * all child objects are invalidated and the core is unmounted. */
@@ -11,6 +20,9 @@
 		    resource:(NTFSResource *)resource
      maximumDirectoryEntries:(uint32_t)maximum;
 - (void)invalidate;
+/* Admission state can be inspected without waiting for an outstanding read.
+ * Unmount retains item identities for reclamation; invalidation is terminal. */
+@property(readonly) NTFSVolumeLifecycle lifecycle;
 - (FSItem *)activate:(NSError **)error;
 - (FSItem *)lookup:(FSFileName *)name
        inDirectory:(FSItem *)directory

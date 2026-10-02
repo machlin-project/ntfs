@@ -22,6 +22,10 @@ exercises the real adapter against a bounded fake resource in-process; it neithe
 mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds a
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
+The component includes eight semaphore-gated resource-read/lifecycle scenarios
+and interleaved enumeration with five-second test deadlines. Modern runtime
+checks explicitly SKIP without macOS 27. See LIFECYCLE.md for admission/teardown
+ownership and the absence of a native synchronous-I/O timeout guarantee.
 Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security` or `access`. The time budget applies per target. Each campaign retains its own

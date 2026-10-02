@@ -24,6 +24,13 @@ reads return I/O errors.
 The resource owner permanently latches FSKit revocation. Admission checks precede
 cached stream and metadata operations, and a completed read is checked again;
 cleanup remains permitted on a failed owner without further device reads.
+Native admission has a separate short-held lock, so unmount/deactivation close it
+before waiting for an outstanding serialized read. Unmount drains operations and
+closes transient item caches while preserving nodes for reclamation; invalidation
+releases every child before the core/resource. Delayed reads cannot report success
+after observing closed admission. Replies run outside the operation monitor.
+[LIFECYCLE.md](LIFECYCLE.md) defines remount, overlapping teardown and the remaining
+synchronous cancellation/deadline and installed-runtime limits.
 Opening a named stream reads file metadata independently of the default stream:
 an encrypted default stream does not prevent opening a separate unencrypted ADS.
 Stream names match exact UTF-16 units; filename lookup has a different contract.

@@ -46,14 +46,19 @@ LINK-POLICY.md for the supported subset and remaining resolution contracts.
 The current component has six explicit macOS-27 runtime SKIPs: lifecycle,
 enumeration, content metadata, link projection and two case-policy checks. These in-process
 results do not mount the filesystem.
-Use `--target all` for the image, whole-volume diagnostic and eight standalone parser/decision targets, or select
+Use `--target all` for the image, whole-volume diagnostic and nine standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
-`security` or `access`. The time budget applies per target. Each campaign retains its own
+`security`, `access` or `wof`. The time budget applies per target. Each campaign retains its own
 binary, log and report; persistent corpora remain under the selected `--output`.
 The `access` target independently mutates a descriptor/token envelope, including
 group attributes, user/restricting SIDs, requested rights and comparison limits.
 It asserts deterministic decisions, exact grants and zero error outputs. See
 ACCESS.md for the discretionary contract and remaining authorization policies.
+The `wof` target independently mutates provider metadata, bounded chunk tables
+and exact-size XPRESS blocks with a 128-KiB input ceiling. It checks deterministic
+verdicts/counts and scratch/output guards; no filesystem provider reads or Windows
+codec execute. `tests/wof_fixtures.py` authors its seeds and separate content/error
+vectors. See WOF.md for parser/decoder contracts and open integration.
 Image mutation can preserve FILE/INDX fixups and alter validated inner spans.
 The fuzzer authors 1-MiB physical images instead of retaining unused 8-MiB tails
 for every corpus entry. All fixture payload locations and large logical sparse

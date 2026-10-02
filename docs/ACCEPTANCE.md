@@ -20,6 +20,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
 | Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded single-edge symlink/junction projection, checked ancestry, explicit Windows root bindings and target aliases; opaque provider classification and raw-data rejection | Core checks and 47 legacy path/storage verdicts passed; 79 allocation/17 read fault positions across native lookup/reopened metadata passed; intermediate/multiply linked/cross-volume resolution, Windows links and installed path walking remain open |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
+| WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman decoding; exact output and hostile-input guards | 87 content/11 invalid vectors and bounded provider/table fuzz passed; public streams still reject WOF; LZX, provider content/lifetime integration and Windows/native qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
 | FSKit component | Aligned reads, permanent revocation, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; six modern lifecycle/enumeration/content/link/case checks explicitly skipped without macOS 27; native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
@@ -35,7 +36,28 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The latest native-link continuation passes all 32 sanitized core suites, both
+The WOF primitive continuation passes all 34 sanitized C suites, both freestanding
+targets with the 2-KiB frame limit, selected Xcode style, legacy FSKit component
+and current unsigned app/extension build. Its standalone decoder has 87 exact-byte
+vectors and 11 explicit invalid vectors covering short/maximal codes, lookahead
+boundaries, raw length extensions, distance-bit classes, overlapping copies,
+optional EOF/nonzero padding, truncations and scratch/output guards. Provider/table
+checks cover observed framing, unknown/future shapes, raw/packed/final spans,
+duplicate/descending offsets, work caps and widths below/at/above 4 GiB.
+Six modern runtime checks explicitly SKIP; no installed mount or Windows codec ran.
+Evidence uses `artifacts/plan-wof-{core,freestanding,style,component,app}-final.log`.
+
+The dedicated WOF/XPRESS campaign completed 3,079,633 executions in 61 seconds,
+coverage 360, feature count 1,129 and reported peak RSS 479 MiB. It exited zero
+without a reported crash or sanitizer finding, under `artifacts/fuzz-wof-primitives/`
+with launcher log `artifacts/plan-wof-fuzz-final.log`. Provider/table envelopes and
+independent codec blocks are exercised without media I/O. This bounded synthetic
+campaign does not establish Windows format/codec compatibility or integrated
+provider reads. [WOF.md](WOF.md) retains LZX, complete stream/storage/table/cache
+ownership, fault/retry, FSKit projection and native qualification requirements.
+The public reparse read guard remains closed.
+
+The preceding native-link continuation passes all 32 sanitized core suites, both
 freestanding targets, selected Xcode style, the expanded FSKit component and the
 current unsigned app/extension. Forty-seven independently authored path/storage
 verdicts cover explicit drive/GUID ownership, relative/rooted/dangling targets,

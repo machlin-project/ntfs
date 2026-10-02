@@ -93,6 +93,13 @@ tag variants and unknown Microsoft tags are classified with opaque payloads;
 their content is not decoded. GUID framing remains UNSUPPORTED. Microsoft-tagged
 buffers whose size fits only the GUID envelope also report UNSUPPORTED; this is
 not validation of the GUID or its provider payload.
+The independent `ntfs/wof.h` primitives validate the observed file-provider
+payload, bounded cumulative chunk tables and one exact-size XPRESS-Huffman block.
+The decoder uses caller-owned aligned scratch and no allocation/I/O. Failed
+decoding leaves its byte count zero but may replace an output prefix; future
+cache publication must occur only after complete success. These APIs do not
+bypass the public stream reparse guard or provide LZX/file-provider reads. See
+WOF.md for format provenance, budgets and the remaining integration contract.
 Ordinary data reads and directory traversal reject reparse nodes. An attribute
 existing without its standard-information flag is corrupt. Presence checks scan
 both the base record and the complete attribute-list envelope, regardless of name;

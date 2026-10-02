@@ -82,6 +82,29 @@ enum {
 	NTFS_SECURITY_HASH_BITS = sizeof(uint32_t) * NTFS_BITS_PER_BYTE
 };
 
+enum {
+	NTFS_XPRESS_SYMBOLS = 512,
+	NTFS_XPRESS_SYMBOL_BITS = 9,
+	NTFS_XPRESS_LITERAL_SYMBOLS = 256,
+	NTFS_XPRESS_END_SYMBOL = NTFS_XPRESS_LITERAL_SYMBOLS,
+	NTFS_XPRESS_LENGTH_BITS = 4,
+	NTFS_XPRESS_LENGTHS_PER_BYTE = NTFS_BITS_PER_BYTE / NTFS_XPRESS_LENGTH_BITS,
+	NTFS_XPRESS_MAX_CODE_BITS = 15,
+	NTFS_XPRESS_WORD_BYTES = sizeof(uint16_t),
+	NTFS_XPRESS_WORD_BITS = NTFS_XPRESS_WORD_BYTES * NTFS_BITS_PER_BYTE,
+	NTFS_XPRESS_RESERVOIR_BITS = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
+	NTFS_XPRESS_LOOKAHEAD_WORDS = NTFS_XPRESS_RESERVOIR_BITS / NTFS_XPRESS_WORD_BITS,
+	NTFS_XPRESS_MATCH_LENGTH_BITS = 4,
+	NTFS_XPRESS_MATCH_LENGTH_MASK = (1u << NTFS_XPRESS_MATCH_LENGTH_BITS) - 1,
+	NTFS_XPRESS_MIN_MATCH = 3,
+	NTFS_XPRESS_LONG_LENGTH = NTFS_XPRESS_MATCH_LENGTH_MASK,
+	NTFS_XPRESS_LENGTH_ESCAPE = UINT8_MAX
+};
+
+struct ntfs_disk_xpress {
+	uint8_t lengths[NTFS_XPRESS_SYMBOLS / NTFS_XPRESS_LENGTHS_PER_BYTE];
+};
+
 #define NTFS_REPARSE_MICROSOFT UINT32_C(0x80000000)
 #define NTFS_REPARSE_NAME_SURROGATE UINT32_C(0x20000000)
 #define NTFS_REPARSE_DIRECTORY UINT32_C(0x10000000)
@@ -225,6 +248,11 @@ struct ntfs_disk_reparse {
 	uint8_t tag[4], length[2], reserved[2];
 };
 
+/* Stored WOF file-provider metadata, not WOFAPI's parameter structures. */
+struct ntfs_disk_wof_file {
+	uint8_t version[4], provider[4], provider_version[4], algorithm[4];
+};
+
 struct ntfs_disk_guid {
 	uint8_t data1[4], data2[2], data3[2], data4[8];
 };
@@ -258,6 +286,8 @@ _Static_assert(sizeof(struct ntfs_disk_sid) == 8, "SID header");
 _Static_assert(sizeof(struct ntfs_disk_acl) == 8, "ACL header");
 _Static_assert(sizeof(struct ntfs_disk_ace) == 4, "ACE header");
 _Static_assert(sizeof(struct ntfs_disk_reparse) == 8, "reparse header layout");
+_Static_assert(sizeof(struct ntfs_disk_wof_file) == 16, "stored WOF file-provider layout");
+_Static_assert(sizeof(struct ntfs_disk_xpress) == 256, "XPRESS code length table");
 _Static_assert(sizeof(struct ntfs_disk_reparse_guid) == 24, "GUID reparse header layout");
 _Static_assert(sizeof(struct ntfs_disk_reparse_names) == 8, "mount point payload header");
 _Static_assert(sizeof(struct ntfs_disk_reparse_symlink) == 12, "symlink payload header");

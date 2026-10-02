@@ -147,3 +147,13 @@ lookup before introducing bounded checked-record/index/alias reuse. Preserve
 parent provenance, immutable target identity, scan limits, failure retry and
 revocation/unmount ordering. No performance gain or independent-driver comparison
 is established by the native-link component checkpoint.
+
+## Standalone XPRESS measurement scope
+
+The original XPRESS decoder now uses 1,664 bytes of caller scratch with an
+eight-bit prefix table and canonical fallback. Exact-byte vectors and bounded
+fuzz qualify correctness within WOF.md's single-block contract; they establish
+no throughput gain. Add matched codec profiles for short/long codes, literals,
+overlapping copies, extended lengths and WOF unit sizes. Record decode CPU,
+latency and scratch separately from compressed-input reads and future unit-cache
+hits/misses. Integrated provider/cache and native comparisons remain open.

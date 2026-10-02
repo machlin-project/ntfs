@@ -42,6 +42,10 @@ Primary references:
 - [NTFS native volume geometry](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-ntfs_volume_data_buffer)
 - [Native file information and hard-link identity](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-by_handle_file_information)
 - [Native stream enumeration](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-win32_find_stream_data)
+- [WOF external information](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_wof_external_info)
+- [WOF algorithm identifiers](https://learn.microsoft.com/en-us/windows/win32/api/wofapi/ns-wofapi-wof_file_compression_info_v1)
+- [MS-XCA Huffman encoding](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-xca/c7ec7ba9-ca8f-448f-bb85-027c1516db1c)
+- [MS-XCA Huffman decoding](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-xca/26db8e62-bbd8-472c-a09e-623f6de10f0b)
 - [Apple FSKit](https://developer.apple.com/documentation/fskit)
 - [Microsoft per-directory case semantics](https://learn.microsoft.com/en-us/windows/wsl/case-sensitivity)
 - [Original Keramics NTFS format research](https://keramics.github.io/ntfs.html)
@@ -86,6 +90,19 @@ third-party GUID envelope. NTFS-3G's `REPARSE_POINT` layout note confirms that t
 attribute may be resident or nonresident. No NTFS-3G reparse implementation was
 used or copied. The ownership, validation and copying code is original; synthetic
 buffers and storage layouts do not establish Windows-authored reparse acceptance.
+
+WOF.md records the standalone provider/table and XPRESS contract. The observed
+stored payload and stream arrangement use original libfsntfs format research;
+the original NTFS-3G system-compression layout comment supplies independent chunk
+and offset-width facts. The woftool author's README was also consulted for format
+context, without adopting its implementation. API parameter flags are not presumed
+to exist in stored bytes. The exact-multiple table interpretation remains subject
+to Windows qualification rather than an uncritical floor-division formula.
+XPRESS uses the Microsoft specification with an original compact canonical tree,
+bit reader and caller-scratch contract; no external codec source was imported.
+Declarative test alphabets, independently patterned expected bytes and one short
+hand-authored packet qualify local encoding/decoding only. LZX and end-to-end WOF
+reading remain open.
 
 Native target translation uses Microsoft's substitute-name/relative-flag and
 namespace/root descriptions. Explicit current-owner bindings, numeric ancestry,

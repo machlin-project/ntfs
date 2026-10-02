@@ -1,7 +1,7 @@
 project('machlin-ntfs', 'c', version: '0.1.0', default_options: ['c_std=c11', 'warning_level=3', 'werror=true', 'buildtype=debugoptimized'])
 cc = meson.get_compiler('c')
 inc = include_directories('include', 'adapters/posix')
-core_sources = files('core/support.c', 'core/record.c', 'core/stream.c', 'core/lznt1.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c', 'core/security.c', 'core/secure.c', 'core/access.c', 'core/validate.c')
+core_sources = files('core/support.c', 'core/record.c', 'core/stream.c', 'core/lznt1.c', 'core/wof.c', 'core/xpress.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c', 'core/security.c', 'core/secure.c', 'core/access.c', 'core/validate.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
 posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directories: inc, c_args: ['-D_POSIX_C_SOURCE=200809L'], install: false)
@@ -20,6 +20,9 @@ streams = executable('ntfs-stream-tests', 'tests/streams.c', include_directories
 test('streams', streams, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 codec = executable('ntfs-codec-tests', 'tests/codec.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('codec', codec)
+wof_fixture = custom_target('wof-fixtures', output: 'wof-fixtures.stamp', command: [python, files('tests/wof_fixtures.py'), meson.current_build_dir() / 'wof-fixtures', '@OUTPUT@'], build_by_default: true)
+wof = executable('ntfs-wof-tests', 'tests/wof.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('wof', wof, args: [meson.current_build_dir() / 'wof-fixtures/xpress-vectors', meson.current_build_dir() / 'wof-fixtures/xpress-invalid'], depends: wof_fixture, timeout: 120)
 reparse = executable('ntfs-reparse-tests', 'tests/reparse.c', include_directories: inc, link_with: [posix, core], c_args: ['-Wdeclaration-after-statement'])
 test('reparse', reparse, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 foreach layout : ['mft-resident-list', 'mft-nonresident-list', 'nested-index', 'ntfs30']
@@ -29,7 +32,7 @@ test('images', python, args: [files('tests/check_images.py'), inspector.full_pat
 fuzz_device = files('tests/fuzz_device.c')
 fuzz = executable('ntfs-fuzz-smoke', ['tests/fuzz.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
 test('fuzz-smoke', fuzz, args: [meson.current_build_dir() / 'fixtures/standard.img'], depends: fixture, timeout: 120)
-fuzz_seeds = custom_target('fuzz-seeds', output: 'fuzz-seeds.stamp', command: [python, files('scripts/fuzz_seeds.py'), meson.current_build_dir() / 'fuzz-seeds', '@OUTPUT@'], depend_files: files('tests/fixtures.py', 'tests/stat_fixtures.py'), build_by_default: true)
+fuzz_seeds = custom_target('fuzz-seeds', output: 'fuzz-seeds.stamp', command: [python, files('scripts/fuzz_seeds.py'), meson.current_build_dir() / 'fuzz-seeds', '@OUTPUT@'], depend_files: files('tests/fixtures.py', 'tests/stat_fixtures.py', 'tests/wof_fixtures.py'), build_by_default: true)
 foreach target : ['mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security']
   target_symbol = 'NTFS_FUZZ_' + target.replace('-', '_').to_upper()
   structure_fuzz = executable('ntfs-fuzz-' + target, ['tests/fuzz_structures.c', fuzz_device], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-DNTFS_FUZZ_TARGET=' + target_symbol, '-Wdeclaration-after-statement'])
@@ -39,6 +42,8 @@ endforeach
 test('tool-environment', python, args: [files('tests/test_environment.py')])
 access_fuzz = executable('ntfs-fuzz-access', 'tests/fuzz_access.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
 test('fuzz-access', access_fuzz, args: [meson.current_build_dir() / 'fuzz-seeds/access/allow-group.seed'], depends: fuzz_seeds, timeout: 120)
+wof_fuzz = executable('ntfs-fuzz-wof', 'tests/fuzz_wof.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
+test('fuzz-wof', wof_fuzz, args: [meson.current_build_dir() / 'fuzz-seeds/wof/interleaved-extensions.seed'], depends: fuzz_seeds, timeout: 120)
 test('corpus-contract', python, args: [files('tests/corpus_contract.py'), inspector.full_path()], timeout: 120)
 test('workload-contract', python, args: [files('tests/workload_contract.py'), workload.full_path(), inspector.full_path()], timeout: 120)
 metadata_cache = executable('ntfs-metadata-cache-tests', ['tests/metadata_cache.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])

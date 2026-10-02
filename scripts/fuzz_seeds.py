@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 import fixtures as wire
 from stat_fixtures import change_flags, UNKNOWN_COMPRESSION_FORMAT
+from wof_fixtures import generate as generate_wof
 
 MAX_STRUCTURE_BYTES = 32768
 LZNT1_RAW_PAYLOAD = b'Independent raw chunk\n'
@@ -144,6 +145,7 @@ def generate(output):
         for name, data in cases.items():
             assert 0 < len(data) <= MAX_STRUCTURE_BYTES
             (directory / (name + '.seed')).write_bytes(data)
+    generate_wof(output)
     return seeds
 
 

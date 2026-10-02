@@ -51,10 +51,17 @@ pressure changes. It measures disposable core bytes for LZNT1/XPRESS/LZX, delive
 an event during blocked I/O, sweeps cold LZX allocation/read faults and checks
 copied ADS/reparse data, identities, interleaved pending entries and remount.
 See READ-CACHE-POLICY.md for exact measurements and native delivery/stress gaps.
-Use `--target all` for the image, whole-volume diagnostic and nine standalone parser/decision targets, or select
+Use `--target all` for the image, whole-volume diagnostic and ten standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
-`security`, `access` or `wof`. The time budget applies per target. Each campaign retains its own
+`security`, `access`, `wof` or `logfile`. The time budget applies per target. Each campaign retains its own
 binary, log and report; persistent corpora remain under the selected `--output`.
+The `logfile` target uses a 128-KiB envelope for restart/client/page/logical-record/
+NTFS-update/LSN primitives. Its custom mutator restores and reseals USA pages to
+reach inner structures, alongside ordinary framing mutations. The `logfile`,
+`logfile-cli` and `fuzz-logfile` suites check independent metadata/restored-byte
+oracles, zero errors, scratch/input guards and lossless names. `ntfs-logfile`
+inspects bounded exported packets only; LOGFILE.md defines commands and the
+remaining complete-journal, LCN-less, Windows and recovery requirements.
 The `access` target independently mutates a descriptor/token envelope, including
 group attributes, user/restricting SIDs, requested rights and comparison limits.
 It asserts deterministic decisions, exact grants and zero error outputs. See

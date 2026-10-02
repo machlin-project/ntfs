@@ -56,3 +56,13 @@ jobs:
         with:
           python-version: '3.13'
       - run: python3 scripts/fuzz.py --seconds 60
+      - run: python3 scripts/fuzz.py --target logfile --seconds 60 --output artifacts/fuzz-logfile
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bounded-fuzz
+          path: |
+            artifacts/fuzz/report.json
+            artifacts/fuzz/run-*/image/run.log
+            artifacts/fuzz-logfile/report.json
+            artifacts/fuzz-logfile/run-*/logfile/run.log

@@ -56,6 +56,9 @@ Primary references:
 - [Original MFT Browser standard-information field template](https://github.com/kacos2000/MFT_Browser/blob/master/NTFS%20-%20MFT%20FILE%20Record.tpl)
 - [NTFS-3G release and source](https://github.com/tuxera/ntfs-3g/tree/2022.10.3)
 - [NTFS-3G layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/layout.h)
+- [NTFS-3G log layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/logfile.h)
+- [Original Linux-NTFS log structures](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html)
+- [Original LFS research and version boundaries](https://dfir.ru/2019/02/16/how-the-logfile-works/)
 - [Original Linux-NTFS Secure format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/secure.html)
 - [Original Linux-NTFS descriptor format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/security_descriptor.html)
 - [Original Linux-NTFS MFT and reserved-record notes](https://flatcap.github.io/linux-ntfs/ntfs/files/mft.html)
@@ -183,6 +186,14 @@ entitlements, payment integration and diagnostics outside filesystem algorithms.
 Before a future open-source release, the owner selects the license and reviews
 all contributor and third-party rights; proprietary status changes only through
 that explicit release decision.
+
+LOGFILE.md separates the original immutable-byte decoders and independent field/
+restored-byte fixtures from complete native journal/recovery work. NTFS-3G's
+declarative header and original Linux-NTFS/libfsntfs/Suhanov research supply format
+facts. Short NTFS-3G recovery offset helpers were also inspected for the conflicting
+LCN-less address-base fact; the product refuses that variant pending independent
+original-byte qualification. No foreign journal/replay/transaction algorithm was
+imported, and no NTFS-3G utility or library is linked to the product.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

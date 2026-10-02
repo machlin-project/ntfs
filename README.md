@@ -99,3 +99,7 @@ snapshots become disposable while directory continuation and item identity stay
 owned. Exact bytes, measured core allocation release, blocked-read delivery and
 fault/lifetime scenarios pass locally; installed delivery and memory stress remain
 separate requirements.
+The independent [read-only log primitives](docs/LOGFILE.md) now decode LFS restart
+areas/client lists, LSNs, protected pages and logical record/update framing.
+Complete journal assembly, transaction analysis, recovery and Windows log
+qualification remain open; structural decoding cannot enable writes or dirty mounts.

@@ -1,0 +1,243 @@
+/* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include <ntfs/logfile.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+enum { LOGFILE_DIAGNOSTIC_VERSION = 1, LOGFILE_ARGUMENT_ERROR = 2 };
+
+static bool
+number(const char *text, uint64_t maximum, uint64_t *out)
+{
+	uint64_t value = 0;
+	unsigned digit;
+
+	if (*text == '\0') {
+		return false;
+	}
+	while (*text != '\0') {
+		if (*text < '0' || *text > '9') {
+			return false;
+		}
+		digit = (unsigned)(*text++ - '0');
+		if (digit > maximum || value > (maximum - digit) / 10u) {
+			return false;
+		}
+		value = value * 10u + digit;
+	}
+	*out = value;
+	return true;
+}
+
+static uint8_t *
+read_packet(const char *path, size_t maximum, size_t *size)
+{
+	struct stat info;
+	uint8_t *bytes = NULL, extra;
+	size_t position = 0;
+	ssize_t got;
+	int fd;
+
+	fd = open(path, O_RDONLY | O_NONBLOCK);
+	if (fd < 0) {
+		return NULL;
+	}
+	if (fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) || info.st_size <= 0 ||
+	    (uint64_t)info.st_size > maximum) {
+		goto done;
+	}
+	*size = (size_t)info.st_size;
+	bytes = malloc(*size);
+	if (bytes == NULL) {
+		goto done;
+	}
+	while (position < *size) {
+		got = read(fd, bytes + position, *size - position);
+		if (got < 0 && errno == EINTR) {
+			continue;
+		}
+		if (got <= 0) {
+			goto invalid;
+		}
+		position += (size_t)got;
+	}
+	do {
+		got = read(fd, &extra, sizeof(extra));
+	} while (got < 0 && errno == EINTR);
+	if (got != 0) {
+		goto invalid;
+	}
+	goto done;
+invalid:
+	free(bytes);
+	bytes = NULL;
+done:
+	close(fd);
+	return bytes;
+}
+
+static void
+span(const char *name, struct ntfs_logfile_span value)
+{
+	printf(",\"%s\":{\"offset\":%" PRIu32 ",\"length\":%" PRIu32 "}", name, value.offset,
+	    value.length);
+}
+
+static void
+restart(const struct ntfs_logfile_restart *r, const uint8_t *scratch)
+{
+	struct ntfs_logfile_client client;
+	size_t i, j, client_bytes;
+
+	printf(",\"major\":%u,\"minor\":%u,\"flags\":%u,\"clean_hint\":%s,"
+	       "\"system_page_bytes\":%" PRIu32 ",\"log_page_bytes\":%" PRIu32
+	       ",\"file_bytes\":%" PRIu64 ",\"usable_bytes\":%" PRIu64
+	       ",\"circular_offset\":%" PRIu64 ",\"current_lsn\":%" PRIu64
+	       ",\"sequence_bits\":%" PRIu32 ",\"last_data_bytes\":%" PRIu32
+	       ",\"open_count\":%" PRIu32 ",\"record_header_bytes\":%u,\"page_data_offset\":%u,"
+	       "\"free_head\":%u,\"in_use_head\":%u,\"client_count\":%u",
+	    r->major, r->minor, r->flags, r->clean_hint ? "true" : "false", r->system_page_bytes,
+	    r->log_page_bytes, r->file_bytes, r->usable_bytes, r->circular_offset, r->current_lsn,
+	    r->sequence_bits, r->last_data_bytes, r->open_count, r->record_header_bytes,
+	    r->page_data_offset, r->free_head, r->in_use_head, r->client_count);
+	span("area", r->area);
+	span("clients", r->clients);
+	printf(",\"client_records\":[");
+	client_bytes = r->client_count == 0 ? 0 : r->clients.length / r->client_count;
+	for (i = 0; i < r->client_count; i++) {
+		if (ntfs_logfile_client_decode(scratch + r->clients.offset + i * client_bytes,
+			client_bytes, &client) != NTFS_OK) {
+			/* Only successfully decoded restart snapshots reach this path. */
+			abort();
+		}
+		printf("%s{\"oldest_lsn\":%" PRIu64 ",\"restart_lsn\":%" PRIu64
+		       ",\"previous\":%u,\"next\":%u,\"sequence\":%u,\"name_utf16\":[",
+		    i == 0 ? "" : ",", client.oldest_lsn, client.restart_lsn, client.previous,
+		    client.next, client.sequence);
+		for (j = 0; j < client.name_length; j++) {
+			printf("%s%u", j == 0 ? "" : ",", client.name[j]);
+		}
+		printf("]}");
+	}
+	printf("]");
+}
+
+int
+main(int argc, char **argv)
+{
+	struct ntfs_logfile_restart configuration, r = {0};
+	struct ntfs_logfile_page p = {0};
+	struct ntfs_logfile_record record = {0};
+	struct ntfs_logfile_update update = {0};
+	uint8_t *bytes = NULL, *scratch = NULL, *restart_bytes = NULL, *restart_scratch = NULL;
+	size_t size, restart_size, maximum;
+	uint64_t argument = 0;
+	enum ntfs_result result;
+	bool is_restart, is_page, is_record, is_update;
+	int status = LOGFILE_ARGUMENT_ERROR;
+
+	if (argc < 3) {
+		goto usage;
+	}
+	is_restart = strcmp(argv[1], "restart") == 0;
+	is_page = strcmp(argv[1], "page") == 0;
+	is_record = strcmp(argv[1], "record") == 0;
+	is_update = strcmp(argv[1], "update") == 0;
+	if ((is_restart && argc == 4) || (is_page && argc == 5)) {
+		if (!number(argv[argc - 1], NTFS_LOGFILE_MAX_FILE_BYTES, &argument)) {
+			goto usage;
+		}
+	} else if (is_record && argc == 4) {
+		if (!number(argv[3], UINT16_MAX, &argument)) {
+			goto usage;
+		}
+	} else if (!is_update || argc != 3) {
+		goto usage;
+	}
+	maximum =
+	    is_restart || is_page ? NTFS_LOGFILE_MAX_PAGE_BYTES : NTFS_LOGFILE_MAX_RECORD_BYTES;
+	bytes = read_packet(argv[2], maximum, &size);
+	if (bytes == NULL) {
+		fprintf(stderr, "Cannot read bounded regular-file packet\n");
+		goto done;
+	}
+	if (is_restart || is_page) {
+		scratch = malloc(size);
+		if (scratch == NULL) {
+			goto done;
+		}
+	}
+	if (is_page) {
+		restart_bytes = read_packet(argv[3], NTFS_LOGFILE_MAX_PAGE_BYTES, &restart_size);
+		if (restart_bytes == NULL) {
+			goto done;
+		}
+		restart_scratch = malloc(restart_size);
+		if (restart_scratch == NULL) {
+			goto done;
+		}
+		result = ntfs_logfile_restart_decode(restart_bytes, restart_size, argument,
+		    restart_scratch, restart_size, &configuration);
+		if (result != NTFS_OK) {
+			fprintf(stderr, "Restart configuration: %s\n", ntfs_result_string(result));
+			goto done;
+		}
+		result = ntfs_logfile_page_decode(bytes, size, &configuration, scratch, size, &p);
+	} else if (is_restart) {
+		result = ntfs_logfile_restart_decode(bytes, size, argument, scratch, size, &r);
+	} else if (is_record) {
+		result = ntfs_logfile_record_decode(bytes, size, (uint16_t)argument, &record);
+	} else {
+		result = ntfs_logfile_update_decode(bytes, size, &update);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"%s\",\"code\":%d,\"result\":\"%s\","
+	       "\"recovery_qualified\":false",
+	    LOGFILE_DIAGNOSTIC_VERSION, argv[1], (int)result, ntfs_result_string(result));
+	if (is_restart) {
+		restart(&r, scratch);
+	} else if (is_page) {
+		printf(",\"copy_value\":%" PRIu64 ",\"last_end_lsn\":%" PRIu64 ",\"flags\":%" PRIu32
+		       ",\"page_count\":%u,\"page_position\":%u,"
+		       "\"next_record_offset\":%u",
+		    p.copy_value, p.last_end_lsn, p.flags, p.page_count, p.page_position,
+		    p.next_record_offset);
+	} else if (is_record) {
+		printf(",\"lsn\":%" PRIu64 ",\"previous_lsn\":%" PRIu64
+		       ",\"undo_next_lsn\":%" PRIu64 ",\"type\":%" PRIu32
+		       ",\"transaction\":%" PRIu32 ",\"client_sequence\":%u,"
+		       "\"client_index\":%u,\"flags\":%u",
+		    record.lsn, record.previous_lsn, record.undo_next_lsn, record.type,
+		    record.transaction, record.client_sequence, record.client_index, record.flags);
+		span("data", record.data);
+	} else {
+		printf(",\"redo_operation\":%u,\"undo_operation\":%u,\"target_attribute\":%u,"
+		       "\"lcn_count\":%u,\"record_offset\":%u,\"attribute_offset\":%u,"
+		       "\"cluster_index\":%u,\"attribute_flags\":%u,\"target_vcn\":%" PRIu64,
+		    update.redo_operation, update.undo_operation, update.target_attribute,
+		    update.lcn_count, update.record_offset, update.attribute_offset,
+		    update.cluster_index, update.attribute_flags, update.target_vcn);
+		span("redo", update.redo);
+		span("undo", update.undo);
+		span("lcns", update.lcns);
+	}
+	printf("}\n");
+	status = result == NTFS_OK ? 0 : 1;
+	goto done;
+usage:
+	fprintf(stderr,
+	    "Usage: ntfs-logfile restart PAGE FILE_BYTES\n"
+	    "       ntfs-logfile page PAGE RESTART_PAGE FILE_BYTES\n"
+	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
+	    "       ntfs-logfile update CLIENT_PACKET\n");
+done:
+	free(restart_scratch);
+	free(restart_bytes);
+	free(scratch);
+	free(bytes);
+	return status;
+}

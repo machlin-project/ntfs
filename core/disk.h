@@ -49,6 +49,7 @@ enum {
 	NTFS_INDEX_VIEW_TYPE = 0,
 	NTFS_VOLUME_DIRTY = 1,
 	NTFS_MFT_RECORD = 0,
+	NTFS_LOGFILE_RECORD = 2,
 	NTFS_VOLUME_RECORD = 3,
 	NTFS_BITMAP_RECORD = 6,
 	NTFS_BAD_CLUSTERS_RECORD = 8,
@@ -184,6 +185,72 @@ struct ntfs_disk_boot {
 
 struct ntfs_disk_mst {
 	uint8_t magic[4], usa_offset[2], usa_count[2];
+};
+
+enum {
+	NTFS_LFS_MAJOR_LEGACY = 1,
+	NTFS_LFS_MINOR_LEGACY = 1,
+	NTFS_LFS_MAJOR_FAST = 2,
+	NTFS_LFS_MINOR_FAST = 0,
+	NTFS_LFS_RESTART_PAGES = 2,
+	NTFS_LFS_LEGACY_TAIL_PAGES = 2,
+	NTFS_LFS_FAST_PAGES = 32,
+	NTFS_LFS_MIN_RECORD_PAGES = 48,
+	NTFS_LFS_CLIENT_NAME_BYTES = 128,
+	NTFS_LFS_LSN_OFFSET_SHIFT = 3,
+	NTFS_LFS_LSN_BITS = sizeof(uint64_t) * NTFS_BITS_PER_BYTE
+};
+
+/* The 30-byte common restart prefix ends before the first possible USA word.
+ * That word is not a fixed header field. */
+struct ntfs_disk_log_restart_page {
+	struct ntfs_disk_mst mst;
+	uint8_t chkdsk_lsn[sizeof(uint64_t)];
+	uint8_t system_page_bytes[sizeof(uint32_t)], log_page_bytes[sizeof(uint32_t)];
+	uint8_t area_offset[sizeof(uint16_t)], minor[sizeof(uint16_t)], major[sizeof(uint16_t)];
+};
+
+struct ntfs_disk_log_restart_area {
+	uint8_t current_lsn[sizeof(uint64_t)], clients[sizeof(uint16_t)];
+	uint8_t free_head[sizeof(uint16_t)], in_use_head[sizeof(uint16_t)], flags[sizeof(uint16_t)];
+	uint8_t sequence_bits[sizeof(uint32_t)], length[sizeof(uint16_t)];
+	uint8_t clients_offset[sizeof(uint16_t)], file_bytes[sizeof(uint64_t)];
+	uint8_t last_data_bytes[sizeof(uint32_t)], record_header_bytes[sizeof(uint16_t)];
+	uint8_t page_data_offset[sizeof(uint16_t)], open_count[sizeof(uint32_t)];
+	uint8_t reserved[sizeof(uint32_t)];
+};
+
+struct ntfs_disk_log_client {
+	uint8_t oldest_lsn[sizeof(uint64_t)], restart_lsn[sizeof(uint64_t)];
+	uint8_t previous[sizeof(uint16_t)], next[sizeof(uint16_t)], sequence[sizeof(uint16_t)];
+	uint8_t reserved[6], name_bytes[sizeof(uint32_t)], name[NTFS_LFS_CLIENT_NAME_BYTES];
+};
+
+struct ntfs_disk_log_page {
+	struct ntfs_disk_mst mst;
+	uint8_t copy_value[sizeof(uint64_t)], flags[sizeof(uint32_t)];
+	uint8_t page_count[sizeof(uint16_t)], page_position[sizeof(uint16_t)];
+	uint8_t next_record_offset[sizeof(uint16_t)], reserved[3 * sizeof(uint16_t)];
+	uint8_t last_end_lsn[sizeof(uint64_t)];
+};
+
+struct ntfs_disk_log_record {
+	uint8_t lsn[sizeof(uint64_t)], previous_lsn[sizeof(uint64_t)],
+	    undo_next_lsn[sizeof(uint64_t)];
+	uint8_t data_bytes[sizeof(uint32_t)], client_sequence[sizeof(uint16_t)];
+	uint8_t client_index[sizeof(uint16_t)], type[sizeof(uint32_t)],
+	    transaction[sizeof(uint32_t)];
+	uint8_t flags[sizeof(uint16_t)], reserved[3 * sizeof(uint16_t)];
+};
+
+struct ntfs_disk_log_update {
+	uint8_t redo_operation[sizeof(uint16_t)], undo_operation[sizeof(uint16_t)];
+	uint8_t redo_offset[sizeof(uint16_t)], redo_bytes[sizeof(uint16_t)];
+	uint8_t undo_offset[sizeof(uint16_t)], undo_bytes[sizeof(uint16_t)];
+	uint8_t target_attribute[sizeof(uint16_t)], lcns[sizeof(uint16_t)];
+	uint8_t record_offset[sizeof(uint16_t)], attribute_offset[sizeof(uint16_t)];
+	uint8_t cluster_index[sizeof(uint16_t)], attribute_flags[sizeof(uint16_t)];
+	uint8_t target_vcn[sizeof(uint64_t)];
 };
 
 struct ntfs_disk_record {
@@ -325,6 +392,12 @@ struct ntfs_disk_reparse_symlink {
 };
 
 _Static_assert(sizeof(struct ntfs_disk_boot) == 512, "boot layout");
+_Static_assert(sizeof(struct ntfs_disk_log_restart_page) == 30, "LFS restart prefix");
+_Static_assert(sizeof(struct ntfs_disk_log_restart_area) == 48, "LFS restart area prefix");
+_Static_assert(sizeof(struct ntfs_disk_log_client) == 160, "LFS client record");
+_Static_assert(sizeof(struct ntfs_disk_log_page) == 40, "LFS record page prefix");
+_Static_assert(sizeof(struct ntfs_disk_log_record) == 48, "LFS logical record prefix");
+_Static_assert(sizeof(struct ntfs_disk_log_update) == 32, "NTFS log update prefix");
 _Static_assert(sizeof(struct ntfs_disk_record) == 42, "common record layout");
 _Static_assert(sizeof(struct ntfs_disk_record_extension) == 6, "NTFS 3.1 record extension");
 _Static_assert(sizeof(struct ntfs_disk_nonresident) == 48, "attribute layout");

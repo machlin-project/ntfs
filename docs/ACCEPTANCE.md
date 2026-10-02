@@ -29,7 +29,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
-| Write/recovery | Native log, allocation, namespace transactions, crash matrix | Not implemented |
+| Read-only log primitives | LFS 1.1/2.0 common restart/client/page framing, LSN geometry and exact logical records; nonempty-LCN NTFS update spans; bounded immutable inputs/caller scratch and diagnostic transport | 109 independent verdicts and 110 diagnostic contracts passed; structured USA-preserving fuzz passed; complete journal ownership/copy routing/wrapped assembly/checkpoint tables, LCN-less and Windows log qualification remain open |
+| Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
@@ -38,7 +39,39 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
 
-The subsequent FSKit pressure continuation passes 17 sanitized component PASS
+The subsequent read-only log continuation passes all 40 sanitized C suites, both
+freestanding targets with the 2-KiB frame limit, selected-toolchain style, the
+FSKit component and the current unsigned app/extension build. The component has
+17 PASS groups and seven explicit macOS-27 runtime SKIPs. The new module also
+compiled into both app-core architectures; no extension was installed.
+
+Its independently authored fixtures cover 109 structural verdicts across
+restart/client/page/record/update buffers: complete free/active client membership,
+cycles/backlinks, 407 clients/64-KiB pages, lossless names, geometry up to the
+observed 4-GiB log ceiling, wider LSN offsets, unknown integrity/version rejection,
+torn USA tails, opaque page-copy/operation values, logical header extensions,
+assembled multi-page inputs and shared/invalid redo/undo spans. Exact restored
+bytes, scratch/output/input guards, all baseline restart truncations, argument
+and policy boundaries pass. Short LCN-less variants reject from their shared
+prefix without requiring the unresolved target-VCN layout. Fixture generation
+and CLI checks enforce unique packet paths; odd and out-of-stride restart-area
+offsets have distinct packets. The CLI adds 110 exact metadata/transport contracts
+with unchanged file hashes. No native journal assembly, client checkpoint/table
+interpretation, transaction recovery or LCN-less addressing is accepted.
+
+The dedicated structured log campaign completes 126,853 executions in 61 seconds,
+coverage 343, feature count 1,079 and peak RSS 488 MiB, exit zero with no reported
+crash/sanitizer finding. The mutator restores/reseals USA while changing inner
+bytes; ordinary mutation also reaches framing/envelope errors. Its 128-KiB input
+cap and process RSS are distinct from the allocation-free decoder and 64-KiB
+caller page scratch. The report is `artifacts/fuzz-logfile-accepted/report.json`.
+Evidence uses `artifacts/plan-logfile-{build,core,freestanding,style,component,app,fuzz}-accepted.log`.
+Earlier successful focused/build logs remain separate; Windows log qualification,
+full transaction/crash/durability simulation and actual remote CI remain open.
+[LOGFILE.md](LOGFILE.md) defines the primitive/complete-journal and format-source
+boundaries without changing WRITES.md's acceptance gates.
+
+The preceding FSKit pressure continuation passes 17 sanitized component PASS
 groups, the current unsigned app/extension and selected-toolchain style. Seven
 modern runtime checks explicitly SKIP. The independent observer changes retention
 while resource I/O is blocked, without releasing outstanding buffers or visiting

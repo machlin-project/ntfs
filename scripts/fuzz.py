@@ -21,7 +21,8 @@ INPUT_TIMEOUT_SECONDS = 5
 STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
-TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security', 'access', 'wof')
+LOGFILE_INPUT_BYTES = 128 * 1024
+TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security', 'access', 'wof', 'logfile')
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -58,6 +59,8 @@ try:
             maximum = SECURITY_INPUT_BYTES
         if target == 'wof':
             maximum = COMPRESSION_INPUT_BYTES
+        if target == 'logfile':
+            maximum = LOGFILE_INPUT_BYTES
         corpus = output / target / f'corpus-{maximum}'
         corpus.mkdir(parents=True, exist_ok=True)
         seeds = campaign / 'seeds'
@@ -72,9 +75,9 @@ try:
         else:
             generate(seeds)
             paths = sorted((seeds / target).glob('*.seed'))
-            source = {'access': 'fuzz_access.c', 'wof': 'fuzz_wof.c'}.get(target, 'fuzz_structures.c')
+            source = {'access': 'fuzz_access.c', 'wof': 'fuzz_wof.c', 'logfile': 'fuzz_logfile.c'}.get(target, 'fuzz_structures.c')
             sources = [root / 'tests' / source]
-            flags = [] if target in ('access', 'wof') else ['-DNTFS_FUZZ_TARGET=NTFS_FUZZ_' + target.replace('-', '_').upper()]
+            flags = [] if target in ('access', 'wof', 'logfile') else ['-DNTFS_FUZZ_TARGET=NTFS_FUZZ_' + target.replace('-', '_').upper()]
         for path in paths:
             shutil.copyfile(path, corpus / path.name)
         binary = campaign / 'ntfs-fuzzer'

@@ -174,6 +174,39 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## Read-only log handoff checkpoint
+
+Read LOGFILE.md and `ntfs/logfile.h`. The original allocation-free primitives
+decode LFS 1.1/2.0 common restart areas/client lists, LSN geometry, USA-protected
+record pages, exact already assembled LFS records and NTFS update spans with a
+nonempty LCN vector. A caller owns immutable input and bounded private page
+scratch; every error zeroes its output. Complete client membership/backlinks and
+active-LSN checks, lossless names, copy-union metadata and shared redo/undo bytes
+retain their separate contracts. A clean hint cannot authorize a dirty mount.
+
+All 40 sanitized core suites, arm64/x86_64 freestanding compilation with the
+2-KiB frame limit, style, the 17-PASS/seven-SKIP component and current unsigned
+app/extension pass under `artifacts/plan-logfile-*-accepted.log`. The new suites
+have 109 independently authored buffer verdicts and 110 exact diagnostic/argument
+contracts, restored-byte/input/scratch/output guards and baseline truncations.
+The separate USA-preserving fuzz target completes 126,853 executions in 61 seconds,
+coverage 343/features 1,079 and peak RSS 488 MiB without a reported finding;
+its report is `artifacts/fuzz-logfile-accepted/report.json`. No installed or Windows
+log acceptance ran, and raw decoder scratch is distinct from process RSS.
+
+`ntfs-logfile` inspects bounded exported packets without mounting media. LFS
+client-restart bodies remain opaque. LCN-less update offsets have conflicting
+published bases and are explicitly unsupported pending original Windows bytes;
+the enclosing LFS decoder still preserves their client payload. Keep the format
+provenance and this rejection rather than guessing a writable target.
+
+Continue with bounded journal ownership/reads, redundant restart conflict/selection,
+legacy tail/modern fast-page routing, wrapped multi-page assembly, client sequence
+resolution and native NTFS checkpoint/tables. Then implement the transaction/
+crash/durability simulator under WRITES.md, keeping native replay/Windows roundtrips
+and write enablement as separate acceptance. The full remaining functional and
+measured optimization scope stays in CORE-QUALIFICATION.md; this is a checkpoint.
+
 ## FSKit pressure handoff checkpoint
 
 READ-CACHE-POLICY.md defines the independent observer and lazy disposable-cache

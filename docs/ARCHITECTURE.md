@@ -200,6 +200,15 @@ contiguous-VCN checks. The attribute list's own mapping must fit its base record
 EFS data, complete reparse resolution and NTFS security enforcement remain explicit gaps;
 see acceptance.
 
+Independent `ntfs/logfile.h` primitives decode immutable LFS 1.1/2.0 common
+restart/client/page/LSN/record framing with bounded caller scratch and no I/O or
+allocation. Client chains have complete membership/backlink and active-LSN
+checks. The NTFS update decoder validates nonempty LCN vectors and redo/undo spans;
+LCN-less/checkpoint payloads remain explicitly unsupported/opaque. LOGFILE.md
+defines the primitive/complete-journal boundary. No redundant-copy selection,
+tail routing, wrapped assembly, transaction analysis or recovery is implied, and
+the mount policy still refuses dirty media.
+
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not
 turn FSKit into a userspace syscall translator. No speculative kernel hooks are

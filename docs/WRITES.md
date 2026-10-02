@@ -22,6 +22,11 @@ has bounded exact-byte/read/fault checks, but does not establish written/current
 history or qualify continuation provenance. Native journal admission/drain,
 tail/fast-page routing, active circular history, native client checkpoints,
 transaction analysis and the crash/durability simulator remain required.
+The independent client restart decoder observes only the 64-byte common prefix
+for client formats 0.0/1.0. Its raw analysis/table LSNs and byte counts authorize
+no table reads, transaction state or recovery; containing-record ownership,
+selected current history, complete checkpoint tables and optional extensions
+must be qualified separately.
 
 The future transaction module owns private snapshots, MFT/$Bitmap reservations,
 attribute-list growth, directory B-tree changes, $Secure references and rollback.

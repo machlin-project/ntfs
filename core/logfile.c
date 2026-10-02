@@ -101,6 +101,48 @@ ntfs_logfile_lsn_decode(
 }
 
 enum ntfs_result
+ntfs_logfile_client_restart_decode(
+    const void *input, size_t size, struct ntfs_logfile_client_restart *out)
+{
+	const struct ntfs_disk_log_client_restart *header = input;
+	uint32_t major, minor;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (input == NULL) {
+		return NTFS_INVALID;
+	}
+	if (size > NTFS_LOGFILE_MAX_RECORD_BYTES) {
+		return NTFS_RANGE;
+	}
+	if (size < sizeof(*header)) {
+		return NTFS_CORRUPT;
+	}
+	major = ntfs_u32(header->major);
+	minor = ntfs_u32(header->minor);
+	if ((major != NTFS_LOG_CLIENT_MAJOR_BASE && major != NTFS_LOG_CLIENT_MAJOR_ATTRIBUTES) ||
+	    minor != NTFS_LOG_CLIENT_MINOR) {
+		return NTFS_UNSUPPORTED;
+	}
+	out->major = major;
+	out->minor = minor;
+	out->analysis_lsn = ntfs_u64(header->analysis_lsn);
+	out->open_attributes.lsn = ntfs_u64(header->open_attributes_lsn);
+	out->open_attributes.bytes = ntfs_u32(header->open_attributes_bytes);
+	out->attribute_names.lsn = ntfs_u64(header->attribute_names_lsn);
+	out->attribute_names.bytes = ntfs_u32(header->attribute_names_bytes);
+	out->dirty_pages.lsn = ntfs_u64(header->dirty_pages_lsn);
+	out->dirty_pages.bytes = ntfs_u32(header->dirty_pages_bytes);
+	out->transactions.lsn = ntfs_u64(header->transactions_lsn);
+	out->transactions.bytes = ntfs_u32(header->transactions_bytes);
+	out->extension.offset = sizeof(*header);
+	out->extension.length = (uint32_t)(size - sizeof(*header));
+	return NTFS_OK;
+}
+
+enum ntfs_result
 ntfs_logfile_client_decode(const void *buffer, size_t size, struct ntfs_logfile_client *out)
 {
 	const struct ntfs_disk_log_client *disk = buffer;

@@ -15,6 +15,7 @@ enum {
 	FUZZ_CLIENT,
 	FUZZ_SOURCE,
 	FUZZ_CIRCULAR_RECORD,
+	FUZZ_CLIENT_RESTART,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -46,6 +47,7 @@ union fuzz_output {
 	struct ntfs_logfile_record record;
 	struct ntfs_logfile_update update;
 	struct ntfs_logfile_client client;
+	struct ntfs_logfile_client_restart client_restart;
 };
 
 static uint8_t scratch[2][NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES];
@@ -314,6 +316,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 			results[i] =
 			    ntfs_logfile_client_decode(packet, packet_size, &outputs[i].client);
 			break;
+		case FUZZ_CLIENT_RESTART:
+			output_size = sizeof(outputs[i].client_restart);
+			results[i] = ntfs_logfile_client_restart_decode(
+			    packet, packet_size, &outputs[i].client_restart);
+			break;
 		}
 		guard(scratch[i], used, sizeof(scratch[i]));
 		if (results[i] != NTFS_OK) {
@@ -482,6 +489,15 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		restored_page = unprotect(page, page_bytes, minimum);
 	}
 	mutation_end = page_bytes;
+	if (kind == FUZZ_CLIENT_RESTART &&
+	    page_bytes >= sizeof(struct ntfs_disk_log_client_restart)) {
+		/* Focus on declared prefix fields even when an opaque extension is
+		 * large. Most structured mutations preserve the version gate. */
+		mutation_end = sizeof(struct ntfs_disk_log_client_restart);
+		if ((seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD != 0) {
+			minimum = offsetof(struct ntfs_disk_log_client_restart, analysis_lsn);
+		}
+	}
 	if (!record_page && (kind == FUZZ_RESTART || source_kind) && restored_page &&
 	    ntfs_bounds(minimum, sizeof(*area), page_bytes)) {
 		area = (const void *)(page + minimum);

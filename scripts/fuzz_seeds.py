@@ -16,11 +16,13 @@ from logfile_source_fixtures import author as generate_logfile_sources
 from logfile_volume_fixtures import author as generate_logfile_volumes
 from logfile_record_fixtures import author as generate_logfile_records
 from logfile_client_fixtures import author as generate_logfile_clients
+from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
 LOGFILE_SOURCE_KIND = 5
 LOGFILE_CIRCULAR_RECORD_KIND = 6
+LOGFILE_CLIENT_RESTART_KIND = 7
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 LOGFILE_ALLOCATION_FAULT = 1 << 8
 LOGFILE_BUDGET_SHIFT = 16
@@ -220,6 +222,12 @@ def generate(output):
         envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_SOURCE_KIND, 0, 0)
         assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
         (log_seeds / ('client-source-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + payload)
+    log_checkpoints = output / 'logfile-checkpoints'
+    for case in generate_logfile_checkpoints(log_checkpoints):
+        payload = (log_checkpoints / case['path']).read_bytes()
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CLIENT_RESTART_KIND, 0, 0)
+        assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+        (log_seeds / ('checkpoint-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

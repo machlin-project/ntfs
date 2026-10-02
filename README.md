@@ -122,3 +122,8 @@ Cached active-client index/sequence lookup now distinguishes raw/free metadata
 from selected active membership without I/O or allocation. Independent chain,
 sequence-boundary and full UTF-16-name checks pass locally; record liveness and
 native checkpoint interpretation remain separate work.
+The separate NTFS client restart decoder now retains the 64-byte common prefix
+for client formats 0.0/1.0, raw analysis/table LSNs and byte counts, and an opaque
+extension span. Its `client-restart` packet diagnostic makes no table-presence,
+current-history or recovery decision; these client versions are distinct from LFS
+restart-page versions.

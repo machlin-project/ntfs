@@ -88,6 +88,14 @@ LOGICAL_JOURNAL_FILE INDEX SEQUENCE` reports selected active snapshot metadata.
 The `fuzz-logfile-clients` suite and dedicated campaign check the same cached
 lookup with mismatched sequences and no extra I/O/allocation. Snapshot membership
 does not qualify record liveness or current journal history.
+The `logfile-checkpoint`/`logfile-checkpoint-cli` suites add 77 independently
+authored NTFS client restart common-prefix verdicts and 75 exact packet reports
+plus two transport rejections. `client-restart NTFS_CLIENT_RESTART_PACKET` retains
+the client version, raw analysis/table anchors/counts and opaque extension span.
+The separate `fuzz-logfile-checkpoint` smoke and 77 authored campaign seeds check
+deterministic fields/zero errors and immutable guards; structured mutation focuses
+on the common prefix even when its tail is large. This does not interpret tables,
+optional extensions, current history or recovery; see LOGFILE.md.
 The `logfile-volume`, `logfile-volume-cli` and `fuzz-logfile-volume` suites add
 counted ordinary-stream binding, fragmented/listed storage, source-node-independent
 ownership, mount/binding rejection, physical partial-read faults/retries and

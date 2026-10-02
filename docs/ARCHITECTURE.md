@@ -212,7 +212,11 @@ Independent `ntfs/logfile.h` primitives decode immutable LFS 1.1/2.0 common
 restart/client/page/LSN/record framing with bounded caller scratch and no I/O or
 allocation. Client chains have complete membership/backlink and active-LSN
 checks. The NTFS update decoder validates nonempty LCN vectors and redo/undo spans;
-LCN-less/checkpoint payloads remain explicitly unsupported/opaque. LOGFILE.md
+LCN-less updates remain explicitly unsupported. The separate NTFS client restart
+decoder retains the 64-byte common prefix for client formats 0.0/1.0, raw LSN/count
+pairs and an opaque extension span. Named-field publication into a zeroed output
+retains deterministic padding without copying a temporary structure. Table
+contents, optional extensions and complete checkpoint semantics remain opaque. LOGFILE.md
 defines the primitive/complete-journal boundary. An independent logical-source
 owner now probes bounded restart-copy candidates, selects compatible newer/equal
 areas and reports conflicts or partial read evidence. An exported source's

@@ -76,6 +76,19 @@ struct ntfs_logfile_update {
 	struct ntfs_logfile_span redo, undo, lcns;
 };
 
+struct ntfs_logfile_table_reference {
+	uint64_t lsn;
+	uint32_t bytes;
+};
+
+struct ntfs_logfile_client_restart {
+	uint32_t major, minor;
+	uint64_t analysis_lsn;
+	struct ntfs_logfile_table_reference open_attributes, attribute_names, dirty_pages,
+	    transactions;
+	struct ntfs_logfile_span extension;
+};
+
 struct ntfs_logfile;
 
 enum ntfs_logfile_selection {
@@ -227,6 +240,16 @@ enum ntfs_result ntfs_logfile_record_decode(
  * Operation codes, target identifiers and LCNs are opaque format values; they
  * confer no writable address or recovery decision. Redo/undo may share bytes. */
 enum ntfs_result ntfs_logfile_update_decode(const void *, size_t, struct ntfs_logfile_update *);
+/* Decode the complete bounded NTFS client payload's 64-byte common restart
+ * prefix for client formats 0.0/1.0. Other client versions are UNSUPPORTED.
+ * Original input remains immutable; outputs are zero on error. extension names
+ * the opaque remaining bytes relative to the payload. No table/anchor geometry,
+ * presence, record ownership, current history or extension semantics are inferred.
+ * Raw LSN/byte-count pairs authorize no reads, allocations or recovery action.
+ * A qualified caller must separately establish the containing LFS record and
+ * selected active client. Inputs and output are disjoint; no allocation/I/O. */
+enum ntfs_result ntfs_logfile_client_restart_decode(
+    const void *, size_t, struct ntfs_logfile_client_restart *);
 
 #ifdef __cplusplus
 }

@@ -2,7 +2,8 @@
 
 `ntfs/logfile.h` provides independent byte decoders for the common LFS 1.1/2.0
 restart prefix/area, complete client lists, LSN geometry, protected record pages,
-exact logical LFS records and an NTFS update payload with a nonempty LCN vector.
+exact logical LFS records, an NTFS update payload with a nonempty LCN vector and
+the NTFS client's 64-byte common restart prefix for client formats 0.0/1.0.
 These byte primitives do not allocate, access a device, mutate input or provide
 a write capability.
 The ordinary mount and FSKit mutation contracts are unchanged. A successfully
@@ -14,7 +15,8 @@ journal inspection. A physical circular-record observer now assembles exact
 bytes across adjacent protected pages and one wrap. It does not route legacy
 tail/modern fast-page copies, validate the active circular history or interpret NTFS
 checkpoint tables. Active restart-snapshot identity now has a bounded pair
-lookup; record liveness, native client payload interpretation, transaction analysis,
+lookup and the client restart prefix has a separate decoder; record liveness,
+complete native client payload interpretation, transaction analysis,
 redo/undo execution and Windows recovery acceptance remain separate work.
 LFS version numbers do not establish the NTFS client's payload version.
 
@@ -124,6 +126,29 @@ the known record flags remain metadata. Active client identity, checkpoint
 tables and transaction interpretation remain separate. Do not use this
 observation as an authoritative recovery input.
 
+## NTFS client restart common prefix
+
+`ntfs_logfile_client_restart_decode` observes the 64-byte common prefix of an
+already acquired complete NTFS client restart payload. This is distinct from
+the LFS restart-page area and has its own major/minor fields. Client 0.0/1.0 are
+accepted; other versions return UNSUPPORTED with zero output. The decoder accepts
+byte-aligned immutable input, performs no allocation or I/O, refuses payloads
+larger than the named 1-MiB record cap and reports shorter common prefixes as
+CORRUPT. Input and output must be disjoint. Named fields are published into a
+zeroed output only after all prefix gates; padding and every error output stay
+zero.
+
+It retains the raw analysis LSN and four LSN/byte-count pairs: open attributes,
+attribute names, dirty pages and transactions. Zero or maximum fields are
+observations, not a presence or range decision; the decoder deliberately preserves
+even apparently inconsistent pairs. They do not authorize reads, allocation,
+table traversal or recovery. The caller must separately qualify the containing
+LFS record, selected active client, written/current history, table geometry and
+ownership. Optional data after the common prefix is an opaque relative span,
+including a one-byte tail or a bounded maximum-size tail. A successful prefix
+decode makes no claim that an optional extension is complete or valid. No USN,
+table contents or extension version semantics are inferred.
+
 ## Byte and resource contract
 
 The immutable input, output structure and caller-owned scratch must be disjoint.
@@ -173,15 +198,16 @@ as its shared prefix through the LCN count is available. It does not presume a
 full target-VCN layout for shorter packets. The LFS record decoder still preserves
 the original client payload. Do not resolve this
 disagreement by silently choosing an offset formula; obtain original Windows
-packets and independent observations. Client restart/table bodies also remain
-opaque, and unknown LFS record types/flags, CHKD and other page versions are
+packets and independent observations. Checkpoint table bodies and optional client
+restart extensions remain opaque, and unknown LFS record types/flags, CHKD and other page versions are
 unsupported. Erased/missing restart storage is not treated as a valid clean page.
 
 ## Diagnostic and qualification workflow
 
 The packet modes of `ntfs-logfile` read bounded regular files opened read-only. They decode an
 exported restart page, record page with an independent restart configuration,
-already assembled LFS record or NTFS update payload. They do not mount an image
+already assembled LFS record, NTFS update payload or client restart common prefix.
+They do not mount an image
 or report the journal/volume as consistent. Successful JSON reports retain
 `recovery_qualified: false`; a decoder error exits one with zero metadata, while
 transport/argument/configuration failures exit two. The `journal` mode uses exact
@@ -207,6 +233,7 @@ it does not read record content or change any recovery qualification.
 .build/ntfs-logfile page EXPORTED_RECORD_PAGE EXPORTED_RESTART_PAGE LOGICAL_LOGFILE_BYTES
 .build/ntfs-logfile record ASSEMBLED_RECORD RECORD_HEADER_BYTES
 .build/ntfs-logfile update NTFS_CLIENT_PACKET
+.build/ntfs-logfile client-restart NTFS_CLIENT_RESTART_PACKET
 .build/ntfs-logfile journal EXPORTED_LOGICAL_LOGFILE
 .build/ntfs-logfile volume-journal NTFS_IMAGE_FILE
 .build/ntfs-logfile circular-record EXPORTED_LOGICAL_LOGFILE DECIMAL_LSN
@@ -268,6 +295,17 @@ deterministic active lookup, mismatched sequences and zero errors, adding all
 seven complete sources inside the existing envelope. Bound-volume cached tests
 also compare active metadata and mismatched-sequence results without I/O.
 
+`tests/logfile_checkpoint_fixtures.py` independently authors 77 common-prefix
+verdicts from named wire fields: both client versions, distinct and maximum raw
+LSN/count pairs, opaque/extended/exact-cap tails, unknown versions, every shorter
+prefix and an over-cap payload. The direct suite checks both aligned and
+unaligned input, exact zero padding/error outputs, input/output guards and
+immutable bytes. The CLI compares 75 exact JSON reports and two packet-transport
+rejections, arguments and unchanged hashes. All 77 complete payloads have fuzz
+seeds inside the unchanged 2-MiB envelope. Structured mutations focus on declared
+prefix fields, usually preserving the client version gate, while generic
+mutations also reach version, truncation and framing errors.
+
 Independent volume layouts place the original logical journal bytes in
 contiguous/fragmented runs and resident/nonresident attribute lists. They cover
 mixed/maximum restart pages, ordinary 4-KiB log pages, fast storage, torn copies,
@@ -288,8 +326,9 @@ treat a geometry skip as a passed layout. Separate logical-source fuzz retains
 all of its original 1-MiB journals under the 2-MiB envelope.
 
 Next work must integrate native journal admission/drain ownership, route tail/fast-page
-copies and validate written/current circular history and continuation provenance, then resolve
-client sequences and interpret NTFS checkpoint/tables. Compare original
+copies and validate written/current circular history and continuation provenance,
+then qualify client sequence lifetimes and interpret complete NTFS checkpoint
+tables/extensions beyond the common prefix. Compare original
 Windows 1.1/2.0 packets, including LCN-less records and interrupted writes. Add
 transaction/crash/durability simulation under WRITES.md before any writable
 environment, and retain native recovery/Windows roundtrips as separate acceptance.
@@ -301,6 +340,11 @@ facts were consulted in [NTFS-3G's original log layout header](https://github.co
 [original Linux-NTFS log notes](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html),
 [original libfsntfs research](https://github.com/libyal/libfsntfs/blob/main/documentation/New%20Technologies%20File%20System%20%28NTFS%29.asciidoc)
 and [Maxim Suhanov's original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/).
+The common NTFS client restart prefix was cross-checked against the declarative
+`NTFS_RESTART` field layout in [Linux v6.12's NTFS log source](https://github.com/torvalds/linux/blob/v6.12/fs/ntfs3/fslog.c)
+and the named payload fields in [Suhanov's original parser](https://github.com/msuhanov/dfir_ntfs/blob/master/dfir_ntfs/LogFile.py).
+Only layout facts were used for this original prefix decoder and independent
+fixture author; no foreign parser, table/replay or recovery algorithm was imported.
 The short offset-base helpers in the separately retained NTFS-3G recovery utility
 were inspected only to establish the conflicting LCN-less format fact; no replay,
 parser or filesystem algorithm was imported. This is not source-isolated

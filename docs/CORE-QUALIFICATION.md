@@ -21,6 +21,13 @@ arm64 archives/CLI products without normalization. It retains compiler/SDK,
 Git revision, selected options and bounded diagnostics in generated reports.
 Prepared macOS/Linux CI, relocated sources and native app/signing still require
 their own execution. See DEVELOPMENT.md and ACCEPTANCE.md.
+The subsequent NTFS client restart decoder retains only the 64-byte common
+prefix for client formats 0.0/1.0, raw analysis/table LSN/count fields and an opaque
+tail. Its 77 aligned/unaligned verdicts, 75 exact reports/two transport checks,
+56 sanitized suites and 249 fixed-replayed logfile seeds pass. Complete table and
+extension semantics, containing-record ownership, written/current history and
+native Windows qualification remain in the recovery scope above. The earlier
+reproducibility report predates this decoder and does not qualify its products.
 
 Optimization is a separate acceptance stream:
 

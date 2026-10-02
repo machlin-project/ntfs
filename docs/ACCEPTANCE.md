@@ -34,6 +34,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | NTFS journal stream binding | Fixed MFT slot/unnamed ordinary stream, complete fragmented/list/sequence/base ownership, node-independent counted lifetime, logical versus physical read accounting, staged partial-read isolation and refusal of unsupported system-file forms | 24 image verdicts/exact reports, 54 allocation/58 physical-read faults with retry, two simultaneous owners, BUSY unmount and unchanged images passed; ordinary dirty-media policy is unchanged; native journal admission/drain remains open |
 | Physical circular-record observation | LSN-addressed adjacent protected fragments and one wrap, no-page-revisit bound, exact unpadded bytes/extended headers, shared read credits and bounded ephemeral staging | 30 C verdicts/exact CLI reports, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary passed; eight bound-volume storage forms also check exact records and resource/staging faults; written/current history, copy routing, active clients and recovery remain unqualified |
 | Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |
+| NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds passed; complete extensions/tables, containing-record ownership, selected current history and native Windows qualification remain open |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
@@ -45,11 +46,31 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource comparison | Specific allocation/metadata and aligned memory-reader improvement measured; native performance unmeasured |
 
-The resource transfer continuation passes 18 component PASS groups/seven explicit
+The client restart-prefix continuation passes all 56 sanitized core suites,
+style, both freestanding 2-KiB-frame targets, 18 component PASS groups/seven
+explicit macOS-27 runtime SKIPs and the unsigned Release app. Both arm64/x86_64
+compile the actual changed `core/logfile.c`. Logs are retained under
+`artifacts/plan-logcheckpoint-*-final.log`; the earlier build/eight focused
+suites/frame logs remain under `artifacts/plan-logcheckpoint-*-initial.log`.
+The independent 77-prefix corpus preserves raw boundary pairs and opaque tails,
+checks every shorter prefix, unknown versions and the exact/over-cap boundary,
+and proves zero padding/errors, unchanged input and caller guards. The CLI
+compares 75 exact reports and two transport rejections plus argument errors.
+
+The dedicated logfile campaign fixed-replays all 249 authored seeds, including
+all 77 new payloads; its replay log contains 249 execution lines. Exploration
+passes 103,509 executions in 61 seconds, coverage 1,033/features 2,677, peak RSS
+520 MiB and exit zero in `artifacts/fuzz-logcheckpoint-final/report.json`.
+The unchanged 2-MiB input cap still explicitly excludes the same two complete
+4-MiB record sources; both remain in direct C/CLI suites. Prefix success does
+not qualify extension/table contents, current history, native recovery or writes.
+No VM, installed mount or Windows journal ran.
+
+The preceding resource transfer continuation passes 18 component PASS groups/seven explicit
 macOS-27 runtime SKIPs, style, four affected tool contracts and an unsigned Release
 app under `artifacts/plan-resource-*-final-fixed.log`. Both arm64/x86_64 compile
-the actual changed resource. Core code is unchanged; its latest full 53-suite and
-freestanding evidence remains the active-client checkpoint below.
+the actual changed resource. Core code was unchanged at that checkpoint; its
+then-current full 53-suite/freestanding evidence was the active-client run below.
 Independent resource cases cover aligned/offset/address/length/mixed-tail/EOF
 transfers, zero-I/O bounds errors, short/partial/full errors, over-reported counts,
 retry, unchanged guards/source and permanent revocation. Native lifecycle tests
@@ -78,6 +99,8 @@ The earlier ordinary build probe also matches all eight products under
 `artifacts/reproducibility-probe/`. No source remapping, timestamp rewriting or
 binary normalization was needed. CI is prepared to repeat the comparison on
 macOS/Linux and upload bounded reports/logs; it has not run remotely.
+That report predates the client restart-prefix change; a new comparison is
+required for products compiled from the later source.
 
 The active-client continuation passes all 53 sanitized core suites, style,
 17 component PASS/seven runtime SKIPs and the unsigned arm64/x86_64 app under

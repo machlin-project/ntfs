@@ -204,6 +204,12 @@ enum {
 	NTFS_LFS_LSN_BITS = sizeof(uint64_t) * NTFS_BITS_PER_BYTE
 };
 
+enum {
+	NTFS_LOG_CLIENT_MAJOR_BASE = 0,
+	NTFS_LOG_CLIENT_MAJOR_ATTRIBUTES = 1,
+	NTFS_LOG_CLIENT_MINOR = 0
+};
+
 /* The 30-byte common restart prefix ends before the first possible USA word.
  * That word is not a fixed header field. */
 struct ntfs_disk_log_restart_page {
@@ -254,6 +260,17 @@ struct ntfs_disk_log_update {
 	uint8_t record_offset[sizeof(uint16_t)], attribute_offset[sizeof(uint16_t)];
 	uint8_t cluster_index[sizeof(uint16_t)], attribute_flags[sizeof(uint16_t)];
 	uint8_t target_vcn[sizeof(uint64_t)];
+};
+
+/* NTFS client data, distinct from an LFS restart-page area. Additional fields
+ * after this common prefix require separate interpretation and qualification. */
+struct ntfs_disk_log_client_restart {
+	uint8_t major[sizeof(uint32_t)], minor[sizeof(uint32_t)];
+	uint8_t analysis_lsn[sizeof(uint64_t)];
+	uint8_t open_attributes_lsn[sizeof(uint64_t)], attribute_names_lsn[sizeof(uint64_t)];
+	uint8_t dirty_pages_lsn[sizeof(uint64_t)], transactions_lsn[sizeof(uint64_t)];
+	uint8_t open_attributes_bytes[sizeof(uint32_t)], attribute_names_bytes[sizeof(uint32_t)];
+	uint8_t dirty_pages_bytes[sizeof(uint32_t)], transactions_bytes[sizeof(uint32_t)];
 };
 
 struct ntfs_disk_record {
@@ -401,6 +418,8 @@ _Static_assert(sizeof(struct ntfs_disk_log_client) == 160, "LFS client record");
 _Static_assert(sizeof(struct ntfs_disk_log_page) == 40, "LFS record page prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_record) == 48, "LFS logical record prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_update) == 32, "NTFS log update prefix");
+_Static_assert(
+    sizeof(struct ntfs_disk_log_client_restart) == 64, "NTFS client restart common prefix");
 _Static_assert(sizeof(struct ntfs_disk_record) == 42, "common record layout");
 _Static_assert(sizeof(struct ntfs_disk_record_extension) == 6, "NTFS 3.1 record extension");
 _Static_assert(sizeof(struct ntfs_disk_nonresident) == 48, "attribute layout");

@@ -59,6 +59,8 @@ Primary references:
 - [NTFS-3G log layout facts](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/logfile.h)
 - [Original Linux-NTFS log structures](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html)
 - [Original LFS research and version boundaries](https://dfir.ru/2019/02/16/how-the-logfile-works/)
+- [Declarative NTFS client restart prefix in Linux v6.12](https://github.com/torvalds/linux/blob/v6.12/fs/ntfs3/fslog.c)
+- [Original NTFS client restart payload fields](https://github.com/msuhanov/dfir_ntfs/blob/master/dfir_ntfs/LogFile.py)
 - [LLVM libFuzzer process and corpus contracts](https://llvm.org/docs/LibFuzzer.html)
 - [Original Linux-NTFS Secure format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/secure.html)
 - [Original Linux-NTFS descriptor format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/security_descriptor.html)
@@ -220,6 +222,12 @@ snapshot lookup. Independent chain orders, full UTF-16 names, field-boundary
 sequences and free-entry LSNs author its expected results. No native replay or
 client-registration implementation was imported; sequence lifecycle and record
 liveness still require original Windows qualification.
+The NTFS client restart common-prefix decoder and fixture author are original
+repository code. The pinned Linux `NTFS_RESTART` declaration and Suhanov's named
+payload fields were consulted only for the common layout/version facts, alongside
+the original LFS research. No foreign parser, table, replay or recovery algorithm
+was imported. Only client 0.0/1.0 common fields are interpreted; raw table anchors
+and opaque extensions do not qualify complete checkpoints or native history.
 
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage

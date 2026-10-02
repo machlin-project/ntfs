@@ -174,6 +174,43 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## NTFS client restart-prefix handoff checkpoint
+
+`ntfs_logfile_client_restart_decode` now retains the common 64-byte prefix for
+client formats 0.0/1.0: major/minor, analysis LSN and four table LSN/byte-count
+pairs. These client versions are independent of LFS page versions. Unknown
+versions return UNSUPPORTED; short prefixes return CORRUPT and over-cap payloads
+return RANGE. Input stays immutable, all error outputs/padding stay zero, and
+there is no allocation or I/O. Fields publish individually into zeroed output.
+
+Raw zero/max or inconsistent LSN/count pairs remain observable, authorizing no
+table read, allocation or recovery. Additional bytes are an opaque relative
+span; even a successful prefix does not validate extension completeness.
+Containing-record ownership, selected active client/current history, native
+sequence lifetimes, complete checkpoint tables/extensions and Windows recovery
+remain separate qualification. The standalone `client-restart` diagnostic retains
+`recovery_qualified: false` and cannot change the ordinary dirty-mount policy.
+
+The original fixture author supplies 77 verdicts, both aligned/unaligned direct
+checks and 75 exact CLI reports/two transport rejections. All 56 sanitized core
+suites, style, both freestanding 2-KiB targets, 18 component PASS groups/seven
+explicit runtime SKIPs and the unsigned Release app pass under
+`artifacts/plan-logcheckpoint-*-final.log`. Both app architectures compile the
+changed logfile source. Initial build/eight focused suites/frame evidence remains
+under `artifacts/plan-logcheckpoint-*-initial.log`.
+
+The campaign fixed-replays all 249 authored seeds, including all 77 new payloads,
+then completes 103,509 executions/61 seconds, coverage 1,033/features 2,677,
+peak RSS 520 MiB and exit zero in `artifacts/fuzz-logcheckpoint-final/report.json`.
+Both existing over-cap complete record sources remain explicit campaign skips
+and full direct C/CLI tests. No VM, installation or Windows journal was used.
+The declarative prefix facts/proprietary boundary are retained in LOGFILE.md and
+PROVENANCE.md; no foreign parser or recovery algorithm was imported.
+
+Continue full checkpoint-table/extension and current-history ownership work
+under CORE-QUALIFICATION.md and WRITES.md. This common-prefix decoder is a
+foundation, not complete journal recovery or completion of the no-VM plan.
+
 ## Portable Release reproducibility checkpoint
 
 `scripts/check_reproducible.py --output artifacts/reproducibility-next` creates
@@ -190,8 +227,9 @@ The local arm64 check passes all eight products under
 matches them under `artifacts/reproducibility-probe/`. Prepared CI calls the checker
 on its macOS/Linux matrix and retains reports/logs. It has not run remotely.
 This establishes repeat builds in distinct directories of one checkout, not
-relocated-source, cross-toolchain or FSKit app/signing reproducibility. Core source
-and behavior are unchanged since the earlier acceptance checkpoints.
+relocated-source, cross-toolchain or FSKit app/signing reproducibility. That run
+predates the client restart-prefix change above; later compiled source needs a
+new comparison.
 
 ## FSKit resource I/O handoff checkpoint
 
@@ -213,7 +251,7 @@ resource compilation for both app architectures. The lifecycle double owns raw
 aligned storage; `NSMutableData` may rehome a no-copy allocation and break a
 test's alignment assumption. Earlier failure/diagnostic logs are retained, and
 that test correction did not alter the measured product. Core code is unchanged;
-the preceding active-client checkpoint remains the latest full core/frame run.
+the preceding active-client checkpoint was then the latest full core/frame run.
 
 `scripts/benchmark_fskit_resource.py` builds the real resource at `-O2` over an
 original immutable memory reader. It retains the binary, bounds tool execution,

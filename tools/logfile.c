@@ -109,6 +109,22 @@ restart_fields(const struct ntfs_logfile_restart *r, bool comma)
 }
 
 static void
+client_restart_fields(const struct ntfs_logfile_client_restart *value)
+{
+	printf(",\"major\":%" PRIu32 ",\"minor\":%" PRIu32 ",\"analysis_lsn\":%" PRIu64,
+	    value->major, value->minor, value->analysis_lsn);
+	printf(",\"open_attributes\":{\"lsn\":%" PRIu64 ",\"bytes\":%" PRIu32 "}",
+	    value->open_attributes.lsn, value->open_attributes.bytes);
+	printf(",\"attribute_names\":{\"lsn\":%" PRIu64 ",\"bytes\":%" PRIu32 "}",
+	    value->attribute_names.lsn, value->attribute_names.bytes);
+	printf(",\"dirty_pages\":{\"lsn\":%" PRIu64 ",\"bytes\":%" PRIu32 "}",
+	    value->dirty_pages.lsn, value->dirty_pages.bytes);
+	printf(",\"transactions\":{\"lsn\":%" PRIu64 ",\"bytes\":%" PRIu32 "}",
+	    value->transactions.lsn, value->transactions.bytes);
+	span("extension", value->extension);
+}
+
+static void
 client_fields(const struct ntfs_logfile_client *client, bool comma)
 {
 	size_t j;
@@ -314,11 +330,12 @@ main(int argc, char **argv)
 	struct ntfs_logfile_page p = {0};
 	struct ntfs_logfile_record record = {0};
 	struct ntfs_logfile_update update = {0};
+	struct ntfs_logfile_client_restart client_restart = {0};
 	uint8_t *bytes = NULL, *scratch = NULL, *restart_bytes = NULL, *restart_scratch = NULL;
 	size_t size, restart_size, maximum;
 	uint64_t argument = 0, sequence;
 	enum ntfs_result result;
-	bool is_restart, is_page, is_record, is_update;
+	bool is_restart, is_page, is_record, is_update, is_client_restart;
 	int status = LOGFILE_ARGUMENT_ERROR;
 
 	if (argc < 3) {
@@ -345,6 +362,7 @@ main(int argc, char **argv)
 	is_page = strcmp(argv[1], "page") == 0;
 	is_record = strcmp(argv[1], "record") == 0;
 	is_update = strcmp(argv[1], "update") == 0;
+	is_client_restart = strcmp(argv[1], "client-restart") == 0;
 	if ((is_restart && argc == 4) || (is_page && argc == 5)) {
 		if (!number(argv[argc - 1], NTFS_LOGFILE_MAX_FILE_BYTES, &argument)) {
 			goto usage;
@@ -353,7 +371,7 @@ main(int argc, char **argv)
 		if (!number(argv[3], UINT16_MAX, &argument)) {
 			goto usage;
 		}
-	} else if (!is_update || argc != 3) {
+	} else if ((!is_update && !is_client_restart) || argc != 3) {
 		goto usage;
 	}
 	maximum =
@@ -389,6 +407,8 @@ main(int argc, char **argv)
 		result = ntfs_logfile_restart_decode(bytes, size, argument, scratch, size, &r);
 	} else if (is_record) {
 		result = ntfs_logfile_record_decode(bytes, size, (uint16_t)argument, &record);
+	} else if (is_client_restart) {
+		result = ntfs_logfile_client_restart_decode(bytes, size, &client_restart);
 	} else {
 		result = ntfs_logfile_update_decode(bytes, size, &update);
 	}
@@ -405,6 +425,8 @@ main(int argc, char **argv)
 		    p.next_record_offset);
 	} else if (is_record) {
 		record_fields(&record, true);
+	} else if (is_client_restart) {
+		client_restart_fields(&client_restart);
 	} else {
 		printf(",\"redo_operation\":%u,\"undo_operation\":%u,\"target_attribute\":%u,"
 		       "\"lcn_count\":%u,\"record_offset\":%u,\"attribute_offset\":%u,"
@@ -425,6 +447,7 @@ usage:
 	    "       ntfs-logfile page PAGE RESTART_PAGE FILE_BYTES\n"
 	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
 	    "       ntfs-logfile update CLIENT_PACKET\n"
+	    "       ntfs-logfile client-restart CLIENT_PACKET\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

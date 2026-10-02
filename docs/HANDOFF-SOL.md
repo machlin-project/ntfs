@@ -174,6 +174,45 @@ without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
 parent resolution remain separate from virtual enumeration. Bounded checkpoints,
 native scheduling and buffer lifetime also remain open.
 
+## FSKit resource I/O handoff checkpoint
+
+`NTFSResource` now transfers a fragment directly into caller storage only when
+its disk offset, caller address and complete transfer length satisfy physical
+alignment. Other fragments retain the aligned private window, including partial
+final sectors. All callbacks remain synchronous and capped at 1 MiB; the fixed
+window, 64-MiB core allocation cap and volume serialization remain. Full device
+completion and resource availability are required before success. Error paths
+may change requested caller bytes, which native handlers discard while replying
+with error/zero completed bytes. Outstanding buffer ownership survives through
+read completion and teardown drain.
+
+Final component/style/tool/unsigned Release app evidence is under
+`artifacts/plan-resource-*-final-fixed.log`: 18 PASS groups/seven explicit macOS-27
+runtime SKIPs, 120 resource geometry/fault verdicts at alignments 512/4096/65536,
+16 gated direct/window lifecycle cases, four affected tool contracts and actual
+resource compilation for both app architectures. The lifecycle double owns raw
+aligned storage; `NSMutableData` may rehome a no-copy allocation and break a
+test's alignment assumption. Earlier failure/diagnostic logs are retained, and
+that test correction did not alter the measured product. Core code is unchanged;
+the preceding active-client checkpoint remains the latest full core/frame run.
+
+`scripts/benchmark_fskit_resource.py` builds the real resource at `-O2` over an
+original immutable memory reader. It retains the binary, bounds tool execution,
+checks source/binary hashes and byte/guard oracles, and alternates reference/current
+executions. Reports retain all timings and callback destinations under
+`artifacts/fskit-resource-{baseline,direct,offset-repeat}/`: 85 baseline runs,
+170 matched runs and 20 longer offset-4-KiB repeats. Aligned 64-KiB/1-MiB wall and
+CPU medians fall about 47%/49%, with unchanged calls/bytes and zero inferred bounce
+copy; multi-window improvement is about 54%. The longer fallback repeat has
+matching median request percentiles and no sustained timing difference.
+
+Use PERFORMANCE.md's measurement commands for the next comparison. Measure real
+caller alignment frequency, native transport/buffer lifetime, physical-device
+throughput and independent-driver behavior separately. This optimization closes
+one measured I/O item; Windows/journal/security/native acceptance and the rest of
+CORE-QUALIFICATION.md remain open. No VM, driver installation or Windows run was
+used for this checkpoint.
+
 ## Selected active-client handoff checkpoint
 
 `ntfs_logfile_get_active_client` resolves an index/sequence pair only in the

@@ -31,6 +31,11 @@ are still required. Core and FSKit tests
 run with `make test` and `python3 scripts/test_fskit.py`; build the app with
 `make fskit`. See development prerequisites and exact evidence below.
 
+The resource now reads fully aligned fragments into caller storage and keeps a
+bounded window for unaligned requests. Separate retained-binary memory-reader
+measurements show a targeted improvement; [PERFORMANCE.md](docs/PERFORMANCE.md)
+records timings, fault/lifecycle checks and the remaining native qualification.
+
 Read [architecture](docs/ARCHITECTURE.md), [development](docs/DEVELOPMENT.md),
 [acceptance](docs/ACCEPTANCE.md) and [handoff](docs/HANDOFF-SOL.md).
 

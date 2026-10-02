@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
 
 enum {
@@ -71,6 +72,8 @@ test_wait_for_state(NTFSVolume *volume, NTFSVolumeLifecycle state)
 @property BOOL failed;
 @property BOOL shortRead;
 @property BOOL blockNextRead;
+@property void *caller;
+@property BOOL blockedDirect;
 @property NSUInteger reads;
 @property dispatch_semaphore_t entered;
 @property dispatch_semaphore_t resume;
@@ -109,6 +112,9 @@ test_wait_for_state(NTFSVolume *volume, NTFSVolumeLifecycle state)
 		self.reads++;
 		blocked = self.blockNextRead;
 		self.blockNextRead = NO;
+		if (blocked) {
+			self.blockedDirect = buffer == self.caller;
+		}
 	}
 	if (blocked) {
 		dispatch_semaphore_signal(self.entered);
@@ -119,7 +125,7 @@ test_wait_for_state(NTFSVolume *volume, NTFSVolumeLifecycle state)
 		return 0;
 	}
 	/* Revocation deliberately permits a late successful device return. The
-	 * production owner must reject it before copying its aligned window. */
+	 * production owner must reject it before reporting a successful read. */
 	memcpy(buffer, (const uint8_t *)self.image.bytes + (size_t)offset, length);
 	return self.shortRead ? length - 1 : length;
 }
@@ -160,22 +166,49 @@ test_wait_for_state(NTFSVolume *volume, NTFSVolumeLifecycle state)
 
 /* The SDK creates its mutable buffers. This double exercises the Objective-C
  * buffer boundary only; it is not an installed kernel-buffer test. */
-@interface LifecycleBuffer : NSObject
+@interface LifecycleBuffer : NSObject {
+	void *_alignedBytes;
+}
 @property NSMutableData *data;
 @property(readonly) NSUInteger length;
+- (instancetype)initAligned;
+- (NSData *)snapshot;
 - (void *)mutableBytes;
 @end
 
 @implementation LifecycleBuffer
 
+- (instancetype)initAligned
+{
+	self = [super init];
+	if (self != nil) {
+		assert(posix_memalign(&_alignedBytes, TEST_PHYSICAL_BLOCK_BYTES,
+			   TEST_PHYSICAL_BLOCK_BYTES) == 0);
+	}
+	return self;
+}
+
+- (void)dealloc
+{
+	free(_alignedBytes);
+}
+
 - (NSUInteger)length
 {
-	return self.data.length;
+	return _alignedBytes != NULL ? TEST_PHYSICAL_BLOCK_BYTES : self.data.length;
+}
+
+- (NSData *)snapshot
+{
+	/* NSMutableData may rehome a bytes-no-copy allocation on mutable access.
+	 * The fake native buffer owns its aligned bytes; test snapshots are copies. */
+	return _alignedBytes != NULL ? [NSData dataWithBytes:_alignedBytes length:self.length]
+				     : self.data;
 }
 
 - (void *)mutableBytes
 {
-	return self.data.mutableBytes;
+	return _alignedBytes != NULL ? _alignedBytes : self.data.mutableBytes;
 }
 
 @end
@@ -559,13 +592,26 @@ test_pattern(NSData *data)
 	}
 }
 
+static LifecycleBuffer *
+test_read_buffer(BOOL aligned)
+{
+	LifecycleBuffer *buffer;
+
+	if (aligned) {
+		return [[LifecycleBuffer alloc] initAligned];
+	}
+	buffer = [[LifecycleBuffer alloc] init];
+	buffer.data = [NSMutableData dataWithLength:TEST_READ_WINDOW_BYTES];
+	return buffer;
+}
+
 static void
-test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
+test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario, BOOL directBuffer)
 {
 	LifecycleReader *reader = [[LifecycleReader alloc] init];
 	LifecycleResource *resource;
-	LifecycleBuffer *buffer = [[LifecycleBuffer alloc] init];
-	LifecycleBuffer *queuedBuffer = [[LifecycleBuffer alloc] init];
+	LifecycleBuffer *buffer = test_read_buffer(directBuffer);
+	LifecycleBuffer *queuedBuffer = test_read_buffer(directBuffer);
 	LifecycleReply *readReply = [[LifecycleReply alloc] init];
 	LifecycleReply *controlReply = [[LifecycleReply alloc] init];
 	LifecycleReply *additionalControlReply = [[LifecycleReply alloc] init];
@@ -614,15 +660,13 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 		       storedName:&stored
 			    error:&error];
 	assert(file != nil && resident != nil && error == nil);
-	buffer.data = [NSMutableData dataWithLength:TEST_READ_WINDOW_BYTES];
-	queuedBuffer.data = [NSMutableData dataWithLength:TEST_READ_WINDOW_BYTES];
 	assert([volume readItem:file
 			 offset:0
 			  bytes:buffer.mutableBytes
 			 length:buffer.length
 		      completed:&completed] == NTFS_OK &&
 	    completed == buffer.length);
-	test_pattern(buffer.data);
+	test_pattern([buffer snapshot]);
 	/* Fill all transient cache kinds before testing the drain boundary. */
 	compressed = [volume lookup:[FSFileName nameWithString:@"compressed.bin"]
 			inDirectory:root
@@ -646,6 +690,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 			  packer:(FSDirectoryEntryPacker *)warmPage] == nil);
 	memset(buffer.mutableBytes, TEST_LIFECYCLE_UNUSED_BYTE, buffer.length);
 	live = resource.liveAllocations;
+	reader.caller = buffer.mutableBytes;
 	reader.blockNextRead = YES;
 	dispatch_group_async(workers, queue, ^{
 	  @autoreleasepool {
@@ -653,6 +698,15 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 	  }
 	});
 	test_wait(reader.entered);
+	if (reader.blockedDirect != directBuffer) {
+		fprintf(stderr,
+		    "lifecycle route mismatch: scenario=%u aligned=%u length=%lu "
+		    "caller_alignment_remainder=%lu direct=%u\n",
+		    (unsigned)scenario, (unsigned)directBuffer, (unsigned long)buffer.length,
+		    (unsigned long)((uintptr_t)buffer.mutableBytes % TEST_PHYSICAL_BLOCK_BYTES),
+		    (unsigned)reader.blockedDirect);
+	}
+	assert(reader.blockedDirect == directBuffer);
 	reads = reader.reads;
 	assert(readReply.count == 0);
 	if (unmounting) {
@@ -744,7 +798,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 		    completed == 0);
 	} else if (scenario == TEST_RECLAIM_BLOCKED_READ) {
 		assert(controlReply.count == 1 && controlReply.errorCode == 0);
-		test_pattern(buffer.data);
+		test_pattern([buffer snapshot]);
 		assert([volume readItem:file
 				 offset:0
 				  bytes:buffer.mutableBytes
@@ -753,9 +807,15 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 		    (ntfs_test_native_reclaim_available() ? NTFS_STALE : NTFS_OK));
 		assert(completed == (ntfs_test_native_reclaim_available() ? 0 : buffer.length));
 	} else {
-		bytes = buffer.mutableBytes;
-		for (i = 0; i < buffer.length; i++) {
-			assert(bytes[i] == TEST_LIFECYCLE_UNUSED_BYTE);
+		if (directBuffer && scenario != TEST_FAILED_BLOCKED_READ) {
+			/* Late direct device fills remain invalid: the reply above reports
+			 * an error and zero completed bytes, despite modified caller bytes. */
+			test_pattern([buffer snapshot]);
+		} else {
+			bytes = buffer.mutableBytes;
+			for (i = 0; i < buffer.length; i++) {
+				assert(bytes[i] == TEST_LIFECYCLE_UNUSED_BYTE);
+			}
 		}
 		reader.failed = NO;
 		reader.shortRead = NO;
@@ -775,7 +835,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 					 length:buffer.length
 				      completed:&completed] == NTFS_OK &&
 			    completed == buffer.length);
-			test_pattern(buffer.data);
+			test_pattern([buffer snapshot]);
 		}
 	}
 	if (unmounting && !invalidating) {
@@ -798,7 +858,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario)
 				 length:buffer.length
 			      completed:&completed] == NTFS_OK &&
 		    completed == buffer.length);
-		test_pattern(buffer.data);
+		test_pattern([buffer snapshot]);
 	}
 	reads = reader.reads;
 	[volume invalidate];
@@ -926,7 +986,8 @@ ntfs_test_fskit_lifecycle(NSData *image, BOOL modern)
 #endif
 	}
 	for (scenario = 0; scenario < TEST_LIFECYCLE_SCENARIOS; scenario++) {
-		test_blocked_read(image, modern, scenario);
+		test_blocked_read(image, modern, scenario, NO);
+		test_blocked_read(image, modern, scenario, YES);
 	}
 	test_interleaved_enumeration(image, modern);
 	if (!modern) {
@@ -938,7 +999,7 @@ ntfs_test_fskit_lifecycle(NSData *image, BOOL modern)
 		puts("PASS: modeled conditional reclaim, weak identity/last-item ownership and "
 		     "lookup publication against reclaim/unmount/deactivation");
 	}
-	printf("PASS: %s lifecycle, eight gated-read scenarios, exactly-once replies, "
+	printf("PASS: %s lifecycle, 16 gated direct/window-read scenarios, exactly-once replies, "
 	       "admission/drain, cache release, permanent revocation and interleaved cookies\n",
 	    modern ? "modern" : "legacy");
 }

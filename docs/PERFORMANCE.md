@@ -15,7 +15,9 @@ That linear startup cost, duplicated provider metadata inspection, unit/page
 misses and aggregate owner memory need cold/warm measurement before optimizing
 reuse. Correct content/fault checks do not establish a throughput improvement.
 
-The FSKit resource owns one aligned 1 MiB bounce buffer and caps aggregate core
+The FSKit resource reads physically aligned offsets/lengths directly into an
+equally aligned caller buffer, one bounded fragment at a time. Other fragments
+use its single aligned 1 MiB bounce buffer. It still caps aggregate core
 allocations at 64 MiB. A volume caps live FSItem identities at 16,384. Enumeration
 with attributes uses temporary node snapshots, not a permanent item per returned
 name. One cursor is retained per held directory item; sequential continuation is
@@ -175,3 +177,71 @@ no throughput gain. Add matched codec profiles for short/long codes, literals,
 overlapping copies, extended lengths and WOF unit sizes. Record decode CPU,
 latency and scratch separately from compressed-input reads and future unit-cache
 hits/misses. Integrated provider/cache and native comparisons remain open.
+
+## FSKit resource transfer measurements
+
+`tools/fskit_read_workload.m` compiles the actual `NTFSResource` with an original
+synchronous aligned memory reader. The runner builds an unsanitized `-O2` binary,
+retains it with source/binary hashes and compiler/SDK information, and refuses an
+existing output directory. It bounds subprocess output/deadlines and records
+failures. A reference run executes the preserved baseline binary alongside the
+candidate, alternating their order between repetitions. This is a resource
+microbenchmark, not an installed FSKit mount or physical-device measurement.
+
+```sh
+python3 scripts/benchmark_fskit_resource.py --output artifacts/resource-before --repetitions 5
+# After the product change, retaining the identical workload/compiler/SDK:
+python3 scripts/benchmark_fskit_resource.py --output artifacts/resource-after --reference artifacts/resource-before --repetitions 5
+```
+
+Each process owns a deterministic 64-MiB source, one caller buffer and the
+resource's fixed window. Source SHA-256 and full first/last-request bytes are
+checked outside measurement; every measured request checks three byte samples.
+Caller guards and source immutability must pass. Setup and 128 warmup requests
+precede reset counters/timers. The phase measures 2,000 sequential ring reads,
+wall/process CPU, p50/p95/p99 and process peak RSS. Reader callbacks check physical
+offset/length/address alignment, bounds and the 1-MiB transfer limit. Callback
+destinations distinguish caller-directed transfers from private-window transfers;
+inferred bounce-copy bytes equal requested bytes minus caller-directed device
+bytes. This does not instrument `memcpy`. The direct-reader control omits resource
+admission, checks and synchronization as well as copying, so its entire timing
+difference cannot be attributed to the copy alone.
+
+The initial 85-run/17-configuration baseline is retained under
+`artifacts/fskit-resource-baseline/`. The matched continuation under
+`artifacts/fskit-resource-direct/` contains 170 runs and 34 summaries: both
+versions, five repetitions, physical alignment 4 KiB, requests 4 KiB/64 KiB/1 MiB,
+aligned/offset/pointer/length profiles and a 1-MiB-plus-one-sector profile. All
+byte/guard/source checks pass; device call counts and bytes are identical per
+matched configuration. Aligned resource transfers now go into the caller, with
+zero inferred bounce-copy bytes. Unaligned profiles still use the fixed window.
+
+| Resource profile | Baseline/candidate wall median, ms | Wall reduction | Baseline/candidate p99 median, us |
+| --- | --- | --- | --- |
+| Aligned 4 KiB | 0.544 / 0.505 | 7.3% | 0.334 / 0.333 |
+| Aligned 64 KiB | 4.567 / 2.414 | 47.1% | 2.750 / 1.584 |
+| Aligned 1 MiB | 56.077 / 28.499 | 49.2% | 35.916 / 20.250 |
+| Aligned 1 MiB plus 4 KiB | 63.005 / 29.261 | 53.6% | 38.375 / 19.417 |
+
+Process CPU medians fall about 7%, 47%, 49% and 54% in the same profiles.
+The small 4-KiB phase lasts about half a millisecond and its timing is particularly
+sensitive to noise. An initial offset-4-KiB wall difference of +3.9% prompted a
+longer matched run: 100,000 requests, 1,024 warmups and ten repetitions, retained
+under `artifacts/fskit-resource-offset-repeat/`. Its 20 runs pass with wall
+medians 34.934/34.857 ms, candidate/reference ratio 1.0022; CPU ratio 0.9947.
+Per-run p50/p95/p99 medians match at 333/375/458 ns. Paired timings move in both
+directions, so that run does not establish a sustained fallback regression.
+
+Direct eligibility requires an aligned disk offset, aligned caller address and
+an exact aligned fragment length. Partial sectors and unaligned caller addresses
+never receive rounded device spans. Failed direct reads may change requested
+caller bytes; errors and late revocation still reject the operation, and native
+replies report zero completed bytes. Callers discard failed data. Earlier exact
+fragments can also be visible on a later failure in the window path. This is a
+synchronous exact-read contract, not atomic output publication.
+
+The optimization adds no core allocations and retains the 1-MiB resource window,
+64-MiB core limit and existing serialization. It proves a targeted memory-reader
+benefit; actual caller alignment frequency, native transport cost, installed
+buffer lifetime, physical-device throughput, other alignments' performance and
+independent-driver comparisons remain to be measured.

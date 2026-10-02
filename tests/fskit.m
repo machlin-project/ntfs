@@ -14,6 +14,7 @@
 #import "fskit_links.h"
 #import "fskit_resource.h"
 #import "fskit_pressure.h"
+#import "fskit_read_path.h"
 
 @implementation TestReader
 
@@ -1273,6 +1274,7 @@ main(int argc, char **argv)
 
 		assert(argc == 2);
 		test_result_and_resource_admission();
+		ntfs_test_fskit_read_path();
 		image = [NSData dataWithContentsOfFile:@(argv[1])];
 		assert(image != nil);
 		test_volume(image);

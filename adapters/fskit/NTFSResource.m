@@ -109,7 +109,9 @@ resource_release(void *context, void *buffer, size_t size)
 	uint8_t *bytes = buffer;
 	uint64_t start;
 	size_t prefix, take, total, completed;
+	void *destination;
 	NSError *error;
+	BOOL direct;
 
 	@synchronized(self) {
 		if (!self.isAvailable || offset > _size || length > _size - offset ||
@@ -127,15 +129,21 @@ resource_release(void *context, void *buffer, size_t size)
 			if (total > _size - start) {
 				return NTFS_IO;
 			}
+			/* Transfer only the requested caller span. Unaligned addresses, disk
+			 * offsets and partial final sectors keep the bounded private window. */
+			direct = prefix == 0 && take == total && (uintptr_t)bytes % _alignment == 0;
+			destination = direct ? bytes : _window;
 			error = nil;
-			completed = [_reader readInto:_window
+			completed = [_reader readInto:destination
 					   startingAt:(off_t)start
 					       length:total
 						error:&error];
 			if (error != nil || completed != total || !self.isAvailable) {
 				return NTFS_IO;
 			}
-			memcpy(bytes, (uint8_t *)_window + prefix, take);
+			if (!direct) {
+				memcpy(bytes, (uint8_t *)_window + prefix, take);
+			}
 			bytes += take;
 			offset += take;
 			length -= take;

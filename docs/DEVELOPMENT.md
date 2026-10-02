@@ -23,7 +23,8 @@ mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds 
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
 The component includes eight semaphore-gated resource-read/lifecycle scenarios
-and interleaved enumeration with five-second test deadlines. Modern runtime
+with both a private-window request and an explicitly aligned caller buffer
+(16 gated cases), and interleaved enumeration with five-second test deadlines. Modern runtime
 checks explicitly SKIP without macOS 27. See LIFECYCLE.md for admission/teardown
 ownership and the absence of a native synchronous-I/O timeout guarantee.
 Five additional modeled eligibility/ownership/publication cases cover conditional
@@ -223,3 +224,14 @@ supplied original stream payload and a new artifact directory; see PERFORMANCE.m
 The runner checks Meson's selected release/sanitizer options and never displays
 its complete option/environment reports. It records each run and integrity check,
 including failures, instead of overwriting earlier output.
+
+`scripts/benchmark_fskit_resource.py` separately compiles the real resource at
+`-O2` and measures it over a deterministic immutable memory reader without a core
+mount or extension installation. It retains its binary so `--reference` can
+alternate matched baseline/candidate executions. Aligned and offset/address/length
+profiles check bytes, caller guards, source hashes, physical transfer bounds and
+callback destinations. See PERFORMANCE.md for exact commands and measured limits.
+`tests/fskit_read_path.m` adds 120 geometry/fault verdicts at physical alignments
+512/4096/65536, covering direct and window reads, mixed tails, EOF, short/partial/
+full errors, over-reported lengths, retry and permanent revocation. Lifecycle
+buffers own raw aligned memory; a mutable Foundation data wrapper may rehome it.

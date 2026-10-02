@@ -41,7 +41,32 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded single-edge native links and WOF file-provider content are tracked separately |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
-| Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache | Specific allocation/metadata improvement measured; native performance unmeasured |
+| FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
+| Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource comparison | Specific allocation/metadata and aligned memory-reader improvement measured; native performance unmeasured |
+
+The resource transfer continuation passes 18 component PASS groups/seven explicit
+macOS-27 runtime SKIPs, style, four affected tool contracts and an unsigned Release
+app under `artifacts/plan-resource-*-final-fixed.log`. Both arm64/x86_64 compile
+the actual changed resource. Core code is unchanged; its latest full 53-suite and
+freestanding evidence remains the active-client checkpoint below.
+Independent resource cases cover aligned/offset/address/length/mixed-tail/EOF
+transfers, zero-I/O bounds errors, short/partial/full errors, over-reported counts,
+retry, unchanged guards/source and permanent revocation. Native lifecycle tests
+observe the blocked transfer's destination and retain aligned raw storage until
+completion. Failed direct fills still produce error replies with zero bytes;
+teardown/reclaim cannot free active storage early. The failed mutable-data buffer
+assumption and diagnostic runs remain in
+`artifacts/plan-resource-component-{final,diagnosis}.log`; owning raw aligned
+storage fixes the test without changing product code.
+
+The release resource benchmark passes 85 initial baseline runs, 170 matched
+old/new runs and a 20-run longer fallback repeat. Caller-directed aligned profiles
+eliminate inferred bounce-copy bytes without changing device calls/bytes or core
+allocation policy. Matched wall medians improve about 47%/49% for 64-KiB/1-MiB
+requests and 54% for 1-MiB-plus-sector requests over the memory reader.
+PERFORMANCE.md records scope, per-run percentiles, timing variance and exact
+reports under `artifacts/fskit-resource-{baseline,direct,offset-repeat}/`.
+Installed buffer lifetime and native throughput remain unqualified.
 
 The active-client continuation passes all 53 sanitized core suites, style,
 17 component PASS/seven runtime SKIPs and the unsigned arm64/x86_64 app under

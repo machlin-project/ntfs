@@ -35,7 +35,7 @@ def run_tool(arguments, *, timeout=DEFAULT_TIMEOUT_SECONDS, output_limit=DEFAULT
         raise ValueError('Invalid diagnostic execution budget')
     deadline = time.monotonic() + timeout
     output, errors = bytearray(), bytearray()
-    process = subprocess.Popen(arguments, cwd=ROOT, env=tool_environment(),
+    process = subprocess.Popen(arguments, cwd=ROOT, env=tool_environment(), stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         with selectors.DefaultSelector() as selector:

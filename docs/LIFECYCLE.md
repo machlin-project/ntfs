@@ -6,6 +6,12 @@ is never held while waiting for that monitor, performing core/device I/O or
 calling a reply. This lets unmount and deactivation close admission while a
 synchronous resource read is still outstanding.
 
+The resource may transfer aligned fragments directly into the caller's requested
+span. A failed/short/late-revoked transfer can change that span, so the handler
+discards it and reports an error with zero completed bytes. Buffer ownership is
+held until the synchronous transfer and handler return; teardown cannot free it
+to simulate cancellation. Unaligned fragments retain the fixed private window.
+
 ## State and ownership
 
 | State | Allowed work and transition |
@@ -100,7 +106,8 @@ checked against the selected Xcode SDK headers.
 `tests/fskit_lifecycle.m` drives the real adapter with a semaphore-gated aligned
 reader. The gate is reached only after the resource has accepted the read. Tests
 observe synchronized lifecycle transitions rather than assuming scheduling from
-a sleep, and use five-second test deadlines. Eight scenarios cover:
+a sleep, and use five-second test deadlines. Each of eight scenarios runs with
+both an unaligned small request and a physically aligned caller buffer:
 
 - Unmount during a delayed read, plus a queued resident read.
 - Protocol deactivation during that read.
@@ -113,7 +120,8 @@ a sleep, and use five-second test deadlines. Eight scenarios cover:
 
 Every scenario starts with stream, compression, catalog and enumeration caches.
 Checks cover completion counts, zero failure byte counts in legacy replies,
-unchanged sentinel data after rejected device returns, no premature cleanup,
+unchanged window-path sentinel data after rejected device returns, explicitly
+discarded direct-path device fills, no premature cleanup,
 drain without further device reads and zero tracked core allocations after
 invalidation. Unmount also checks cache release, retained canonical identities,
 repeated teardown and remount. A separate test interleaves one-entry and two-entry

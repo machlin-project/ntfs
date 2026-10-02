@@ -25,6 +25,8 @@ enum {
 - (struct ntfs_environment)environment;
 - (void *)allocateSize:(size_t)size;
 - (void)releaseBytes:(void *)bytes size:(size_t)size;
+/* Synchronous exact read. Failed reads may alter bytes inside the requested span;
+ * callers must discard them. No bytes outside that span are transferred there. */
 - (enum ntfs_result)readAt:(uint64_t)offset bytes:(void *)buffer length:(size_t)length;
 /* Revocation permanently fails this owner; cleanup remains valid. */
 @property(readonly, getter=isAvailable) BOOL available;

@@ -24,6 +24,14 @@ reads return I/O errors.
 The resource owner permanently latches FSKit revocation. Admission checks precede
 cached stream and metadata operations, and a completed read is checked again;
 cleanup remains permitted on a failed owner without further device reads.
+The resource uses caller storage directly only when the physical disk offset,
+caller address and complete bounded fragment length are aligned. Other fragments
+use one aligned private window; rounded device spans never reach a partial caller
+span. Exact-read errors may alter requested destination bytes, which callers
+discard. Full transfer and post-read availability are required before success;
+native read replies also require final admission and report zero bytes on error.
+The resource keeps the same 1-MiB fragment/window bound and core allocation cap.
+PERFORMANCE.md separates measured memory-reader benefit from native performance.
 Native admission has a separate short-held lock, so unmount/deactivation close it
 before waiting for an outstanding serialized read. Unmount drains operations and
 closes transient item caches while preserving nodes for reclamation; invalidation

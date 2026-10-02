@@ -22,6 +22,9 @@ enum {
 	NTFS_STREAM_ALIAS_DIGITS = sizeof(uint32_t) * NTFS_HEX_DIGITS_PER_BYTE,
 	NTFS_DIRECTORY_CURRENT_ENTRY = 0,
 	NTFS_DIRECTORY_VIRTUAL_ENTRIES = 2,
+	/* Two held continuations cover interleaved readers without an unbounded
+	 * cookie cache. Each still consumes the resource's aggregate memory budget. */
+	NTFS_DIRECTORY_CONTINUATIONS = 2,
 	NTFS_READ_ONLY_FILE_MODE = S_IRUSR,
 	NTFS_READ_ONLY_DIRECTORY_MODE = S_IRUSR | S_IXUSR
 };
@@ -109,24 +112,90 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 	return YES;
 }
 
+struct ntfs_directory_continuation {
+	struct ntfs_directory *cursor;
+	struct ntfs_dirent pending_entry;
+	uint64_t position;
+	uint32_t inspected_entries;
+	enum ntfs_result failure;
+	BOOL pending, attributes, in_use, complete;
+};
+
+static void
+close_directory_continuation(struct ntfs_directory_continuation *continuation)
+{
+	ntfs_directory_close(continuation->cursor);
+	memset(continuation, 0, sizeof(*continuation));
+}
+
+/* Allocate only for enumerated directories, through the same bounded allocator
+ * as the core. An in-flight native call retains this bridge across teardown;
+ * clear closes its core children before the mounted owner can be released. */
+@interface NTFSDirectoryContinuations : NSObject {
+      @public
+	struct ntfs_directory_continuation *states;
+	NSUInteger mostRecent;
+      @private
+	NTFSResource *_allocator;
+}
+- (instancetype)initWithResource:(NTFSResource *)resource;
+- (void)clear;
+@end
+
+@implementation NTFSDirectoryContinuations
+
+- (instancetype)initWithResource:(NTFSResource *)resource
+{
+	self = [super init];
+	if (self != nil) {
+		_allocator = resource;
+		states = [resource allocateSize:NTFS_DIRECTORY_CONTINUATIONS * sizeof(*states)];
+		if (states == NULL) {
+			return nil;
+		}
+		memset(states, 0, NTFS_DIRECTORY_CONTINUATIONS * sizeof(*states));
+	}
+	return self;
+}
+
+- (void)clear
+{
+	NSUInteger i;
+
+	if (states != NULL) {
+		for (i = 0; i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
+			close_directory_continuation(&states[i]);
+		}
+	}
+	mostRecent = 0;
+}
+
+- (void)dealloc
+{
+	[self clear];
+	if (states != NULL) {
+		[_allocator releaseBytes:states
+				    size:NTFS_DIRECTORY_CONTINUATIONS * sizeof(*states)];
+	}
+}
+
+@end
+
 @interface NTFSItem : FSItem {
       @public
 	struct ntfs_node *node;
 	struct ntfs_stream *stream;
-	struct ntfs_directory *cursor;
 	struct ntfs_stream_catalog *catalog;
 	struct ntfs_reparse *reparse;
 	FSFileName *linkTarget;
 	BOOL wof;
 	NTFSDirectoryPath *directoryPath;
-	struct ntfs_dirent pendingEntry;
-	BOOL pending;
-	uint64_t position;
+	NTFSDirectoryContinuations *continuations;
+	uint64_t continuationEpoch;
+	uint32_t activeEnumerations;
 	/* Owning native namespace edge, obtained from a checked index lookup.
 	 * Files may have many parents; only directories use this reference. */
 	uint64_t parentReference;
-	uint32_t inspectedEntries;
-	enum ntfs_result cursorFailure;
 	struct ntfs_stat stat;
 }
 @property(strong) NTFSVolume *owner;
@@ -263,20 +332,117 @@ item_id(uint64_t reference)
 
 - (void)finishReadCaches:(NTFSItem *)item
 {
+	NTFSDirectoryContinuations *continuations = item->continuations;
+	NSUInteger i;
+
 	if (!_readCachePolicy.retentionActive) {
 		[self releaseReadCaches:item];
+		/* Keep the last active continuation under pressure; older positions are
+		 * optional and can be reconstructed without changing any native cookie. */
+		for (i = 0; continuations != nil && i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
+			if (i != continuations->mostRecent && !continuations->states[i].in_use) {
+				close_directory_continuation(&continuations->states[i]);
+			}
+		}
 	}
 }
 
 - (void)clearItemCaches:(NTFSItem *)item
 {
 	[self releaseReadCaches:item];
-	ntfs_directory_close(item->cursor);
-	item->cursor = NULL;
-	item->pending = NO;
-	item->position = 0;
-	item->inspectedEntries = 0;
-	item->cursorFailure = NTFS_OK;
+	[item->continuations clear];
+	item->continuations = nil;
+	/* In-flight enumeration must observe this even after a reentrant remount;
+	 * the immutable owner's persistent directory verifier remains unchanged. */
+	item->continuationEpoch++;
+}
+
+- (enum ntfs_result)directoryContinuationForItem:(NTFSItem *)item
+					position:(uint64_t)position
+				      attributes:(BOOL)attributes
+					 initial:(BOOL)initial
+				    continuation:(struct ntfs_directory_continuation **)out
+{
+	NTFSDirectoryContinuations *continuations;
+	struct ntfs_directory_continuation *candidate, *selected = NULL;
+	NSUInteger i, index, selectedIndex = NTFS_DIRECTORY_CONTINUATIONS;
+	enum ntfs_result result;
+
+	*out = NULL;
+	if (item->continuations == nil) {
+		item->continuations =
+		    [[NTFSDirectoryContinuations alloc] initWithResource:_resource];
+		if (item->continuations == nil) {
+			return NTFS_NO_MEMORY;
+		}
+	}
+	continuations = item->continuations;
+	if (!initial) {
+		/* Prefer an exact saved position, then the closest earlier position in
+		 * the same native view. No cursor is copied or rewound in place. */
+		for (i = 0; i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
+			index = (continuations->mostRecent + i) % NTFS_DIRECTORY_CONTINUATIONS;
+			candidate = &continuations->states[index];
+			if (candidate->cursor != NULL && !candidate->in_use &&
+			    candidate->attributes == attributes &&
+			    candidate->position <= position &&
+			    (selected == NULL || candidate->position > selected->position)) {
+				selected = candidate;
+				selectedIndex = index;
+				if (candidate->position == position) {
+					break;
+				}
+			}
+		}
+	}
+	if (selected == NULL) {
+		/* A packer can call back into this monitor. Pinned continuations must
+		 * neither be advanced by that call nor be evicted beneath its caller. */
+		for (i = 0; i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
+			if (continuations->states[i].complete && !continuations->states[i].in_use) {
+				selectedIndex = i;
+				break;
+			}
+		}
+		/* Prefer replacing a completed scan to retaining an EOF-only cursor
+		 * alongside a new scan. Sequential callers then keep one core cursor. */
+		for (i = 0; i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
+			if (selectedIndex != NTFS_DIRECTORY_CONTINUATIONS) {
+				break;
+			}
+			if (continuations->states[i].cursor == NULL &&
+			    !continuations->states[i].in_use) {
+				selectedIndex = i;
+				break;
+			}
+		}
+		if (selectedIndex == NTFS_DIRECTORY_CONTINUATIONS) {
+			for (i = 1; i <= NTFS_DIRECTORY_CONTINUATIONS; i++) {
+				index =
+				    (continuations->mostRecent + i) % NTFS_DIRECTORY_CONTINUATIONS;
+				if (!continuations->states[index].in_use) {
+					selectedIndex = index;
+					break;
+				}
+			}
+		}
+		if (selectedIndex == NTFS_DIRECTORY_CONTINUATIONS) {
+			return NTFS_BUSY;
+		}
+		selected = &continuations->states[selectedIndex];
+		/* Evict before construction: even a failed open keeps at most two core
+		 * cursors. The other held continuation remains unchanged. */
+		close_directory_continuation(selected);
+		result = ntfs_directory_open(item->node, &selected->cursor);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		selected->attributes = attributes;
+	}
+	continuations->mostRecent = selectedIndex;
+	selected->in_use = YES;
+	*out = selected;
+	return NTFS_OK;
 }
 
 - (void)releaseItem:(NTFSItem *)item
@@ -1120,6 +1286,8 @@ item_id(uint64_t reference)
 		packer:(FSDirectoryEntryPacker *)packer
 {
 	NTFSItem *item;
+	__attribute__((objc_precise_lifetime)) NTFSDirectoryContinuations *continuations = nil;
+	struct ntfs_directory_continuation *continuation = NULL;
 	struct ntfs_node *node = NULL;
 	struct ntfs_reparse *snapshot = NULL;
 	struct ntfs_stat stat;
@@ -1130,7 +1298,7 @@ item_id(uint64_t reference)
 	FSItemType type;
 	FSFileName *target;
 	BOOL projected, packed;
-	uint64_t requestedPosition, reference, maximumPosition;
+	uint64_t requestedPosition, reference, maximumPosition, operationEpoch;
 	enum ntfs_result result;
 
 	@synchronized(self) {
@@ -1145,186 +1313,240 @@ item_id(uint64_t reference)
 		if (item->directoryPath == nil) {
 			return ntfs_error(NTFS_NOT_DIRECTORY);
 		}
-		requestedPosition = cookie & ~namesOnlyCookieTag;
-		maximumPosition = (uint64_t)_maximumDirectoryEntries +
-		    (attributes ? 0 : NTFS_DIRECTORY_VIRTUAL_ENTRIES);
-		if ((cookie != FSDirectoryCookieInitial && verifier != _directoryVerifier) ||
-		    (attributes && (cookie & namesOnlyCookieTag) != 0) ||
-		    (!attributes && cookie != FSDirectoryCookieInitial &&
-			(cookie & namesOnlyCookieTag) == 0) ||
-		    cookie == namesOnlyCookieTag || requestedPosition > maximumPosition) {
-			return invalid_directory_cookie();
+		/* Keep the native call depth bounded even if a packer drains/remounts
+		 * this item and recursively enters a newly constructed cursor cache. */
+		if (item->activeEnumerations == NTFS_DIRECTORY_CONTINUATIONS) {
+			return ntfs_error(NTFS_BUSY);
 		}
-		if (!attributes) {
-			while (requestedPosition < NTFS_DIRECTORY_VIRTUAL_ENTRIES) {
-				result = [self admissionResult];
+		item->activeEnumerations++;
+		@try {
+			operationEpoch = item->continuationEpoch;
+			requestedPosition = cookie & ~namesOnlyCookieTag;
+			maximumPosition = (uint64_t)_maximumDirectoryEntries +
+			    (attributes ? 0 : NTFS_DIRECTORY_VIRTUAL_ENTRIES);
+			if ((cookie != FSDirectoryCookieInitial &&
+				verifier != _directoryVerifier) ||
+			    (attributes && (cookie & namesOnlyCookieTag) != 0) ||
+			    (!attributes && cookie != FSDirectoryCookieInitial &&
+				(cookie & namesOnlyCookieTag) == 0) ||
+			    cookie == namesOnlyCookieTag || requestedPosition > maximumPosition) {
+				return invalid_directory_cookie();
+			}
+			if (!attributes) {
+				while (requestedPosition < NTFS_DIRECTORY_VIRTUAL_ENTRIES) {
+					result = [self admissionResult];
+					if (result == NTFS_OK &&
+					    operationEpoch != item->continuationEpoch) {
+						result = NTFS_STALE;
+					}
+					if (result != NTFS_OK) {
+						return ntfs_error(result);
+					}
+					name = [FSFileName nameWithString:requestedPosition ==
+						    NTFS_DIRECTORY_CURRENT_ENTRY
+						? @"."
+						: @".."];
+					reference =
+					    requestedPosition == NTFS_DIRECTORY_CURRENT_ENTRY
+					    ? item->stat.reference
+					    : item->parentReference;
+					packed = [packer packEntryWithName:name
+								  itemType:FSItemTypeDirectory
+								    itemID:item_id(reference)
+								nextCookie:namesOnlyCookieTag |
+					    (requestedPosition + 1)
+								attributes:nil];
+					result = [self admissionResult];
+					if (result == NTFS_OK &&
+					    operationEpoch != item->continuationEpoch) {
+						result = NTFS_STALE;
+					}
+					if (result != NTFS_OK) {
+						return ntfs_error(result);
+					}
+					if (!packed) {
+						return nil;
+					}
+					requestedPosition++;
+				}
+				requestedPosition -= NTFS_DIRECTORY_VIRTUAL_ENTRIES;
+			}
+			result =
+			    [self directoryContinuationForItem:item
+						      position:requestedPosition
+						    attributes:attributes
+						       initial:cookie == FSDirectoryCookieInitial
+						  continuation:&continuation];
+			if (result != NTFS_OK) {
+				return ntfs_error(result);
+			}
+			continuations = item->continuations;
+			/* The C pointer lives in this precisely retained bridge, including
+			 * when a packer detaches it from the item during native teardown. */
+			(void)continuations;
+			if (continuation->failure != NTFS_OK) {
+				return ntfs_error(continuation->failure);
+			}
+			for (;;) {
+				if (!continuation->pending) {
+					result = ntfs_directory_next(
+					    continuation->cursor, &continuation->pending_entry);
+					if (result == NTFS_END) {
+						continuation->complete = YES;
+						result = [self admissionResult];
+						if (result == NTFS_OK &&
+						    operationEpoch != item->continuationEpoch) {
+							result = NTFS_STALE;
+						}
+						if (result != NTFS_OK) {
+							return ntfs_error(result);
+						}
+						return continuation->position < requestedPosition
+						    ? invalid_directory_cookie()
+						    : nil;
+					}
+					if (result != NTFS_OK) {
+						return ntfs_error(result);
+					}
+					if (continuation->inspected_entries++ ==
+					    _maximumDirectoryEntries) {
+						continuation->failure = NTFS_RANGE;
+						return ntfs_error(NTFS_RANGE);
+					}
+					if (!ntfs_native_entry_visible(
+						&continuation->pending_entry)) {
+						continue;
+					}
+					continuation->pending = YES;
+				}
+				if (continuation->position < requestedPosition) {
+					continuation->pending = NO;
+					continuation->position++;
+					continue;
+				}
+				result = ntfs_native_entry_name(&continuation->pending_entry,
+				    (uint32_t)continuation->position, &name, &projected);
 				if (result != NTFS_OK) {
 					return ntfs_error(result);
 				}
-				name = [FSFileName
-				    nameWithString:requestedPosition == NTFS_DIRECTORY_CURRENT_ENTRY
-					? @"."
-					: @".."];
-				reference = requestedPosition == NTFS_DIRECTORY_CURRENT_ENTRY
-				    ? item->stat.reference
-				    : item->parentReference;
+				attrs = nil;
+				/* The index's cached attributes cannot distinguish a native link
+				 * from opaque provider data. Classify checked base metadata in both
+				 * views; only the attribute-requested view requires complete sizes.
+				 */
+				{
+					result = ntfs_node_open(
+					    _core, continuation->pending_entry.reference, &node);
+					if (result != NTFS_OK) {
+						return ntfs_error(result);
+					}
+					result = ntfs_node_metadata(node, &stat);
+					if (result == NTFS_OK && attributes && !stat.reparse) {
+						result = ntfs_node_stat(node, &stat);
+					}
+					type = FSItemTypeUnknown;
+					if (result == NTFS_OK && stat.reparse) {
+						result = ntfs_reparse_open(node, &snapshot);
+						if (result == NTFS_OK) {
+							ntfs_reparse_get_info(
+							    snapshot, &reparseInfo);
+							if (reparseInfo.kind ==
+								NTFS_REPARSE_SYMLINK ||
+							    reparseInfo.kind ==
+								NTFS_REPARSE_MOUNT_POINT) {
+								type = FSItemTypeSymlink;
+							}
+							if (reparseInfo.kind == NTFS_REPARSE_WOF) {
+								result = ntfs_reparse_wof_info(
+								    snapshot, &wofInfo);
+								if (result == NTFS_OK &&
+								    stat.directory) {
+									result = NTFS_CORRUPT;
+								}
+								if (result == NTFS_OK) {
+									type = FSItemTypeFile;
+									if (attributes) {
+										result =
+										    ntfs_node_stat(
+											node,
+											&stat);
+									}
+								}
+							} else if (attributes) {
+								result = stat.links != 1
+								    ? NTFS_UNSUPPORTED
+								    : ntfs_native_link_target(_core,
+									  snapshot,
+									  item->directoryPath,
+									  _linkPolicy,
+									  _maximumDirectoryEntries,
+									  &target);
+								if (result == NTFS_OK) {
+									stat.size =
+									    target.data.length;
+									stat.allocated_size =
+									    ntfs_reparse_allocated_size(
+										snapshot);
+								}
+							}
+						}
+						if (!attributes &&
+						    (result == NTFS_UNSUPPORTED ||
+							result == NTFS_RANGE)) {
+							result = NTFS_OK;
+						}
+					} else if (result == NTFS_OK) {
+						type = stat.directory ? FSItemTypeDirectory
+								      : FSItemTypeFile;
+					}
+					ntfs_reparse_close(snapshot);
+					snapshot = NULL;
+					ntfs_node_close(node);
+					node = NULL;
+					if (result != NTFS_OK) {
+						return ntfs_error(result);
+					}
+					if (attributes) {
+						attrs = [self
+						    attributesForStat:&stat
+							 symbolicLink:type == FSItemTypeSymlink];
+					}
+				}
+				result = [self admissionResult];
+				if (result == NTFS_OK &&
+				    operationEpoch != item->continuationEpoch) {
+					result = NTFS_STALE;
+				}
+				if (result != NTFS_OK) {
+					return ntfs_error(result);
+				}
 				packed = [packer
 				    packEntryWithName:name
-					     itemType:FSItemTypeDirectory
-					       itemID:item_id(reference)
-					   nextCookie:namesOnlyCookieTag | (requestedPosition + 1)
-					   attributes:nil];
+					     itemType:type
+					       itemID:item_id(continuation->pending_entry.reference)
+					   nextCookie:directory_cookie(
+							  continuation->position + 1, attributes)
+					   attributes:attrs];
 				result = [self admissionResult];
+				if (result == NTFS_OK &&
+				    operationEpoch != item->continuationEpoch) {
+					result = NTFS_STALE;
+				}
 				if (result != NTFS_OK) {
 					return ntfs_error(result);
 				}
 				if (!packed) {
 					return nil;
 				}
-				requestedPosition++;
+				continuation->position++;
+				continuation->pending = NO;
 			}
-			requestedPosition -= NTFS_DIRECTORY_VIRTUAL_ENTRIES;
-		}
-		if (cookie == FSDirectoryCookieInitial || item->cursor == NULL ||
-		    item->position != requestedPosition) {
-			ntfs_directory_close(item->cursor);
-			item->cursor = NULL;
-			item->position = 0;
-			item->inspectedEntries = 0;
-			item->cursorFailure = NTFS_OK;
-			item->pending = NO;
-			result = ntfs_directory_open(item->node, &item->cursor);
-			if (result != NTFS_OK) {
-				return ntfs_error(result);
+		} @finally {
+			if (continuation != NULL) {
+				continuation->in_use = NO;
 			}
-		}
-		if (item->cursorFailure != NTFS_OK) {
-			return ntfs_error(item->cursorFailure);
-		}
-		for (;;) {
-			if (!item->pending) {
-				result = ntfs_directory_next(item->cursor, &item->pendingEntry);
-				if (result == NTFS_END) {
-					result = [self admissionResult];
-					if (result != NTFS_OK) {
-						return ntfs_error(result);
-					}
-					return item->position < requestedPosition
-					    ? invalid_directory_cookie()
-					    : nil;
-				}
-				if (result != NTFS_OK) {
-					return ntfs_error(result);
-				}
-				if (item->inspectedEntries++ == _maximumDirectoryEntries) {
-					item->cursorFailure = NTFS_RANGE;
-					return ntfs_error(NTFS_RANGE);
-				}
-				if (!ntfs_native_entry_visible(&item->pendingEntry)) {
-					continue;
-				}
-				item->pending = YES;
-			}
-			if (item->position < requestedPosition) {
-				item->pending = NO;
-				item->position++;
-				continue;
-			}
-			result = ntfs_native_entry_name(
-			    &item->pendingEntry, (uint32_t)item->position, &name, &projected);
-			if (result != NTFS_OK) {
-				return ntfs_error(result);
-			}
-			attrs = nil;
-			/* The index's cached attributes cannot distinguish a native link
-			 * from opaque provider data. Classify checked base metadata in both
-			 * views; only the attribute-requested view requires complete sizes. */
-			{
-				result = ntfs_node_open(_core, item->pendingEntry.reference, &node);
-				if (result != NTFS_OK) {
-					return ntfs_error(result);
-				}
-				result = ntfs_node_metadata(node, &stat);
-				if (result == NTFS_OK && attributes && !stat.reparse) {
-					result = ntfs_node_stat(node, &stat);
-				}
-				type = FSItemTypeUnknown;
-				if (result == NTFS_OK && stat.reparse) {
-					result = ntfs_reparse_open(node, &snapshot);
-					if (result == NTFS_OK) {
-						ntfs_reparse_get_info(snapshot, &reparseInfo);
-						if (reparseInfo.kind == NTFS_REPARSE_SYMLINK ||
-						    reparseInfo.kind == NTFS_REPARSE_MOUNT_POINT) {
-							type = FSItemTypeSymlink;
-						}
-						if (reparseInfo.kind == NTFS_REPARSE_WOF) {
-							result = ntfs_reparse_wof_info(
-							    snapshot, &wofInfo);
-							if (result == NTFS_OK && stat.directory) {
-								result = NTFS_CORRUPT;
-							}
-							if (result == NTFS_OK) {
-								type = FSItemTypeFile;
-								if (attributes) {
-									result = ntfs_node_stat(
-									    node, &stat);
-								}
-							}
-						} else if (attributes) {
-							result = stat.links != 1
-							    ? NTFS_UNSUPPORTED
-							    : ntfs_native_link_target(_core,
-								  snapshot, item->directoryPath,
-								  _linkPolicy,
-								  _maximumDirectoryEntries,
-								  &target);
-							if (result == NTFS_OK) {
-								stat.size = target.data.length;
-								stat.allocated_size =
-								    ntfs_reparse_allocated_size(
-									snapshot);
-							}
-						}
-					}
-					if (!attributes &&
-					    (result == NTFS_UNSUPPORTED || result == NTFS_RANGE)) {
-						result = NTFS_OK;
-					}
-				} else if (result == NTFS_OK) {
-					type =
-					    stat.directory ? FSItemTypeDirectory : FSItemTypeFile;
-				}
-				ntfs_reparse_close(snapshot);
-				snapshot = NULL;
-				ntfs_node_close(node);
-				node = NULL;
-				if (result != NTFS_OK) {
-					return ntfs_error(result);
-				}
-				if (attributes) {
-					attrs = [self attributesForStat:&stat
-							   symbolicLink:type == FSItemTypeSymlink];
-				}
-			}
-			result = [self admissionResult];
-			if (result != NTFS_OK) {
-				return ntfs_error(result);
-			}
-			packed = [packer
-			    packEntryWithName:name
-				     itemType:type
-				       itemID:item_id(item->pendingEntry.reference)
-				   nextCookie:directory_cookie(item->position + 1, attributes)
-				   attributes:attrs];
-			result = [self admissionResult];
-			if (result != NTFS_OK) {
-				return ntfs_error(result);
-			}
-			if (!packed) {
-				return nil;
-			}
-			item->position++;
-			item->pending = NO;
+			[self finishReadCaches:item];
+			item->activeEnumerations--;
 		}
 	}
 }

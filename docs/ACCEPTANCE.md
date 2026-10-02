@@ -25,6 +25,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
 | FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; seven modern lifecycle/pressure/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed; full current component has 20 PASS groups/seven modern-runtime SKIPs; paired large/small legacy memory-reader benefit measured with increased bounded pool peak; installed/native/device qualification remains open |
 | FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
@@ -45,7 +46,39 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Portable Release reproducibility | Two isolated ordinary Meson build directories, clean compiled-source Git state/unchanged revision, identical selected release options, bounded failure logs and full archive/CLI byte comparisons | Eight products match on local arm64 macOS; relocated checkout, other toolchains, Linux remote and native app/signing qualification remain open |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
-| Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource comparison | Specific allocation/metadata and aligned memory-reader improvement measured; native performance unmeasured |
+| Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource and nine-repetition directory comparisons with independent exact inventories | Specific allocation/metadata, aligned resource and interleaved-directory memory-reader improvement measured; installed/device and independent-driver performance unmeasured |
+
+The current directory continuation component passes 20 groups with seven explicit
+macOS-27 runtime SKIPs in `artifacts/plan-directory-component-complete.log`.
+Names-only and interleaved fault sweeps cover all 34/13 and 151/41 allocation/read
+positions, exact prefixes, one native reply, fresh-scan retry, unchanged media and
+complete cleanup. Thirty-two independent cache cases include hidden/large layouts
+and same/separate views. Packer reentry, remount, retired-table lifetime, bounded
+recursive remount, completed-scan replacement and cached EOF have explicit tests.
+Style passes in `artifacts/plan-directory-style-complete.log`; the unsigned Release
+app passes in `artifacts/plan-directory-app-complete.log`, compiling the actual
+changed `NTFSVolume.m` for arm64 and x86_64. Core/include/POSIX/portable CLI sources
+are unchanged; their preceding 59-suite/frame/Release evidence was not rerun.
+
+`artifacts/fskit-directory-{large,small}-sustained/report.json` each retain 54 exact
+inventory-qualified paired runs, nine repetitions/profile/binary, immutable warm
+memory inputs and no MFT record cache. The 2,000-link interleaved profiles reduce
+wall medians by 88–89%; the 12-link profiles by 32–35%. Sequential ranges overlap
+with median changes of +1.35%/-1.68%, establishing no stable material change.
+Sequential peak pool cost is 1,152 bytes; two-reader added peaks are 53,016/16,537
+bytes respectively. The resource pool includes the charged adapter table and core
+children, excluding Foundation/window; process RSS retains its separate scope.
+Review verified actual binary/source/archive/input digests. Six original namespace
+images remain byte-identical in `artifacts/directory-fixture-before/report.json`;
+only independent expected-size/large-inventory manifests were added.
+
+The earlier helper-name/assert compilation failure remains in
+`artifacts/plan-directory-large.log`, and tuple/list reference-preflight failure
+in `artifacts/fskit-directory-large-optimized/report.json`. Neither ran a passing
+measurement matrix. Earlier shorter paired reports retain higher sequential
+medians and prompted EOF victim preference and the longer final comparison. See
+PERFORMANCE.md for complete scope/counters; no mount, Windows acquisition or
+modern runtime ran.
 
 The mirror-prefix continuation passes all 59 sanitized core suites and style in
 `artifacts/plan-mirror-{core,style}-final.log`. Initial focused/build/frame logs

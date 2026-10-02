@@ -58,10 +58,14 @@ even when the complete manifest exceeds the response budget.
 The default scan budget is 1,048,576 stored entries, including hidden/DOS entries;
 the native owner can select a smaller positive cap. A boundary entry can detect
 that the cap has been crossed. Enumeration reports EOVERFLOW and latches the
-failed continuation; retrying that cookie performs no further I/O and cannot
-turn exhaustion into a successful truncated listing. Rewind starts a new bounded
-cursor. Reverse-manifest exhaustion reports E2BIG. Independent reversal does not
-move a pending native enumeration entry. Resource admission and post-I/O checks
+failed continuation. While that state remains retained, retrying its cookie
+performs no further I/O; reconstruction still observes the same scan cap and
+cannot turn exhaustion into a successful truncated listing. Initial-cookie rewind starts
+a new bounded cursor. Each retained continuation has its own cumulative credit;
+reuse does not reset it. The adapter retains at most two actual cursors and may
+reconstruct evicted positions, under the resource pool and LIFECYCLE.md's native
+call bounds. Reverse-manifest exhaustion reports E2BIG. Independent reversal
+does not move a pending native enumeration entry. Resource admission and post-I/O checks
 apply to all these operations, and cleanup remains valid after revocation.
 
 Alias resolution currently scans from the directory root; index/checkpoint reuse

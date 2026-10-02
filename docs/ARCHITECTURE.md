@@ -49,7 +49,8 @@ synchronous cancellation/deadline and installed-runtime limits.
 An independent Dispatch pressure observer changes read-cache retention without
 waiting for the operation monitor or traversing dormant items. Access/completion
 boundaries release default streams, catalogs and raw reparse snapshots while
-preserving checked nodes, native targets and directory continuation. See
+preserving checked nodes, native targets and the latest or pinned directory
+continuations. Older inactive positions can be reconstructed after eviction. See
 READ-CACHE-POLICY.md for source lifetime, measured component bytes and the remaining
 installed delivery/aggregate-stress limits.
 Opening a named stream reads file metadata independently of the default stream:
@@ -86,6 +87,20 @@ Directories keep the checked owning edge's numeric parent reference without
 retaining a parent FSItem. Wrong-view/stale/out-of-range cookies use the native
 directory-cookie error. See LIFECYCLE.md for local parent/replay/fault evidence
 and the remaining unsupported-object and installed contracts.
+Each enumerated directory lazily allocates a two-position continuation table
+through the resource's bounded allocator. Every slot owns its actual core cursor,
+pending entry, native view, visible position, inspected-entry credit and budget
+failure; no core traversal state is copied or shared. Noninitial cookies select
+the same view's exact position or closest earlier retained position. Otherwise
+the adapter replaces a completed scan, unused slot or least-recent inactive
+position before constructing a fresh cursor. Initial cookies always start fresh.
+Native packing pins a slot, and the item bounds recursive enumerations to two
+calls even across reentrant remount. A precisely retained table owner keeps C
+storage and its allocator alive while teardown closes every core child and
+detaches the table. An item epoch makes the old call stale after that transition,
+even when a packer has already remounted the same immutable owner. Persistent
+cookie verification still describes that immutable owner. Pressure cleanup
+drops older inactive slots; neither pinned cursors nor native cookies change.
 
 Reparse metadata uses the ordinary attribute reader, including resident values,
 fragmented nonresident mappings and sequence-checked attribute-list extensions.

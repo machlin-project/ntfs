@@ -35,6 +35,10 @@ The resource now reads fully aligned fragments into caller storage and keeps a
 bounded window for unaligned requests. Separate retained-binary memory-reader
 measurements show a targeted improvement; [PERFORMANCE.md](docs/PERFORMANCE.md)
 records timings, fault/lifecycle checks and the remaining native qualification.
+Directory items now retain at most two independent enumeration continuations,
+allocated lazily within the resource pool. Repeated legacy component measurements
+reduce interleaved scan time on the authored large/small namespace workloads;
+installed performance and broader directory profiles remain unqualified.
 
 Read [architecture](docs/ARCHITECTURE.md), [development](docs/DEVELOPMENT.md),
 [acceptance](docs/ACCEPTANCE.md) and [handoff](docs/HANDOFF-SOL.md).
@@ -102,8 +106,9 @@ The [ext4 FSKit history review](docs/FSKIT-EXT4-LESSONS.md) maps observed native
 lessons to NTFS contracts and remaining runtime/distribution checks.
 Automatic [read-cache retention](docs/READ-CACHE-POLICY.md) now reacts to observed
 memory pressure without scanning dormant items. Accessed streams/catalogs/raw
-snapshots become disposable while directory continuation and item identity stay
-owned. Exact bytes, measured core allocation release, blocked-read delivery and
+snapshots and older inactive directory continuations become disposable while
+the latest/pinned positions and item identity remain protected. Exact bytes,
+measured core allocation release, blocked-read delivery and
 fault/lifetime scenarios pass locally; installed delivery and memory stress remain
 separate requirements.
 The independent [read-only log primitives](docs/LOGFILE.md) now decode LFS restart

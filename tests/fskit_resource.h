@@ -9,6 +9,11 @@
 @property BOOL revokeDuringRead;
 @property NSUInteger reads;
 @property NSUInteger failReadAt;
+/* Observe/refuse a physical interval without blocking unrelated metadata I/O. */
+@property uint64_t observedStart;
+@property uint64_t observedEnd;
+@property NSUInteger observedReads;
+@property BOOL refuseObservedReads;
 @end
 
 @interface FaultResource : NTFSResource

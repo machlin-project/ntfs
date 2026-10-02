@@ -171,8 +171,70 @@ Continue complete reparse resolution, provider content and explicit unknown/
 malformed metadata behavior. The packer's nullable argument is not evidence that requested
 attributes may be omitted. Preserve truthful metadata and stable continuation,
 without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
-parent resolution remain separate from virtual enumeration. Bounded checkpoints,
-native scheduling and buffer lifetime also remain open.
+parent resolution remain separate from virtual enumeration. Broader checkpoint/
+index reuse, native scheduling and buffer lifetime also remain open.
+
+## Bounded native directory continuations
+
+An enumerated item now lazily owns at most two independent actual core cursors.
+The table uses the resource allocator and retains separate pending entries,
+native views, visible positions, cumulative inspected-work credits and failures.
+Noninitial cookies use an exact or nearest earlier same-view position; misses
+replace a completed cursor, unused slot or least-recent inactive slot before
+opening a new one. Initial cookies always start fresh. Completed-scan replacement
+keeps repeated sequential scans to one retained core cursor and preserves cached
+EOF without I/O/allocation. Native aliases/cookies/verifiers keep their meanings.
+
+Packing pins a slot and the item admits at most two recursive enumeration calls,
+including virtual entries and calls across detach/remount. A third returns EBUSY.
+Unmount/invalidation close every core child, detach the table and advance an item
+epoch. The old native call precisely retains the table allocation and allocator
+until its C pointer is no longer used. Epoch checks return ESTALE after reentrant
+remount even if admission has reopened; the immutable owner's persistent verifier
+remains valid for a later retry. Elevated-pressure completion closes older
+inactive slots while protecting the latest/pinned positions. Do not copy or
+share core cursor frames, visited sets or scan budgets to extend this cache.
+
+The final sanitized component passes 20 groups/seven modern-runtime SKIPs under
+`artifacts/plan-directory-component-complete.log`. Thirty-two cases cover four
+layouts, same/separate views, exact resumes, failed new opens, third-position
+eviction and pressure. Refused physical index-prefix reads distinguish reuse from
+replay. Reentry, virtual/stored remount, terminal invalidation, recursive remount,
+completed-scan reuse and cached EOF have separate checks. Names-only passes all
+34 allocation/13 read faults; interleaved pages pass all 151 allocation/41 read
+faults with exact prefixes, one reply, fresh-scan retry, unchanged media and zero
+leaks. The unsigned Release app compiles the changed owner for both architectures
+under `artifacts/plan-directory-app-complete.log`; style passes under
+`artifacts/plan-directory-style-complete.log`.
+
+`scripts/benchmark_fskit_directory.py` and
+`tools/fskit_directory_workload.m` measure the actual legacy handler against
+independently authored complete inventories. The final large/small reports under
+`artifacts/fskit-directory-{large,small}-sustained/` retain 54 paired runs each,
+nine repetitions per profile/version, alternated binary order and explicit warmup
+with the MFT cache disabled. Adapter/workload O2 and ordinary Release/O3 core are
+unsanitized. Review verified full retained binaries and source/input/archive
+digests; only the owner source changes between matched versions. Six original
+namespace images remain byte-identical under `artifacts/directory-fixture-before/`.
+
+On the 2,000-hard-link/alias workload, interleaved/separate-view wall medians fall
+by 88–89% and physical reader calls from about 1.05 million to 64 thousand. The
+12-link workload improves by 32–35%. Sequential changes of +1.35%/-1.68% have
+overlapping ranges and establish no stable material gain or regression. Added
+peak resource-pool costs are 1,152 bytes sequentially and 53,016/16,537 bytes with
+two readers on the large/small inputs. The pool includes C children/charged table,
+excluding Foundation/window; process RSS is separate. Earlier compile/preflight
+failures and shorter paired reports remain retained. PERFORMANCE.md and
+DEVELOPMENT.md give the reproduction commands, counters and evidence boundaries.
+
+Core/include/POSIX/portable CLI sources are unchanged; the preceding 59-suite,
+freestanding and eight-product Release evidence was not rerun. This is a targeted
+memory-reader optimization, with no installed or macOS 27 acceptance. Continue
+the full CORE-QUALIFICATION.md plan: diverse independent/Windows-authored files,
+more than two interleaved positions, bounded checked-index/checkpoint reuse,
+native cancellation/authorization, real pressure/device profiles and the complete
+journal/transaction/crash/durability work. No VM or installation was used and no
+write capability is enabled.
 
 ## Required mirror-prefix diagnostic
 

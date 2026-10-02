@@ -555,7 +555,8 @@ def namespace_fixtures(output, image, contents):
             native = f'~ntfs-{target:016x}-{ordinal:08x}'
         else:
             native = name
-        expected.append({'units': list(units(name)), 'native': native, 'reference': target})
+        expected.append({'units': list(units(name)), 'native': native, 'reference': target,
+                         'size': len(payload)})
     (output / 'namespace.json').write_text(json.dumps(expected, indent=2) + '\n')
     (output / 'namespace-invalid.img').write_bytes(build(['\0bad']))
     stale = build(names)
@@ -567,6 +568,11 @@ def namespace_fixtures(output, image, contents):
     large = build(large_names)
     if large is not None:
         (output / 'namespace-large.img').write_bytes(large)
+        large_expected = [{'units': list(units(name)),
+                           'native': f'~ntfs-{target:016x}-{ordinal:08x}',
+                           'reference': target, 'size': len(payload)}
+                          for ordinal, name in enumerate(large_names)]
+        (output / 'namespace-large.json').write_text(json.dumps(large_expected) + '\n')
 
 
 def fragmented_mft(image, nonresident_list=False, damage=None):

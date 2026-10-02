@@ -37,8 +37,8 @@ lock. A reply can inspect core state from another thread, but a reply that waits
 for another item publication can block that publication; installed callback
 scheduling remains unqualified.
 
-Unmount closes each item's stream catalog, directory cursor/pending entry and
-data stream, including compression-unit caches. It preserves the node and native
+Unmount closes each item's stream catalog, directory continuations/pending entries
+and data stream, including compression-unit caches. It preserves the node and native
 item identity until reclaim or deactivation. The immutable core record cache and
 mounted metadata snapshot retain their ordinary core lifetime until invalidation;
 unmount is not a full core unload. Reclamation after unmount requires no device
@@ -56,15 +56,19 @@ checked against the selected SDK. In-process eligibility models do not qualify
 the framework's real kernel/user-space counts.
 
 The directory verifier remains valid for the same immutable owner: cookies
-are ordinal continuations and rewind/replay produces the same names. Interleaved
-callers currently share one cursor and replay when their cookies differ; bounded
-checkpoint reuse remains a separate optimization.
+are ordinal continuations and rewind/replay produces the same names. An enumerated
+item now retains at most two independent cursors, with separate views, positions,
+pending entries, inspected-work credits and failures. Exact or nearest earlier
+same-view positions avoid replaying already inspected prefixes. Initial cookies,
+evicted positions and rewinds before both saved positions reconstruct a cursor;
+there is no shared or cloned core traversal state.
 
 Active volumes also own the independently synchronized observer in
 [READ-CACHE-POLICY.md](READ-CACHE-POLICY.md). Memory-pressure callbacks change
 retention without waiting for core I/O or visiting items. Access and completion
 boundaries release disposable streams/catalogs/raw snapshots under the operation
-monitor while preserving pending enumeration state and native identity. Drained
+monitor while preserving the latest or pinned enumeration state and native
+identity. Older inactive continuations may be released at completion. Drained
 unmount/invalidation stop observation; remount retains the last observed level.
 
 A delayed successful read is checked against both admission and resource
@@ -173,7 +177,8 @@ carry a separate high-bit view tag; stored visible ordinals remain unchanged for
 filename aliases and manifests. Wrong-view cookies, bad verifiers, out-of-range
 positions and continuation beyond EOF use `FSErrorInvalidDirectoryCookie` in
 `NSPOSIXErrorDomain`. An initial cookie starts either view. Rewinds replay the
-bounded core cursor, and a full packer leaves the pending entry unconsumed.
+bounded core cursor when no eligible retained position precedes the cookie;
+a full packer leaves the selected continuation's pending entry unconsumed.
 Virtual entries do not consume the stored-entry scan budget; hidden/DOS entries
 still do. Exhaustion remains an error rather than successful truncation.
 Admission is checked before and after packing, including a packer returning NO,
@@ -210,7 +215,42 @@ complete reparse resolution and provider content remain separate work.
 The component does not qualify native buffer lifetime, framework reclaim counts,
 or installed interpretation of cookies and virtual entries. Backend dot-name
 lookup and parent resolution are also not covered by the virtual-entry change.
-Bounded enumeration checkpoints and measured large-directory replay remain open.
+Broader checkpoint/index-block reuse, more than two interleaved positions and
+installed scheduling/buffer performance remain open.
+
+The two-slot table is lazy and charged to the same bounded resource allocator as
+the core. A cache miss evicts a completed cursor first, then an unused slot or
+the least-recent eligible position, before allocating its replacement. A failed
+open leaves the other position intact. Repeated complete sequential scans retain
+one cursor; an exact cached EOF needs neither I/O nor allocation.
+
+Packing pins the selected slot. A nested packer may enumerate through the other
+slot, but a third active call on that item returns EBUSY. The per-item call bound
+also applies to virtual entries and survives cache detach/remount. Teardown
+closes core children immediately and advances an item epoch. The in-flight call
+precisely retains the detached table and allocator until it finishes using the
+C pointer; pre/post-packing epoch checks return ESTALE even after a synchronous
+remount. This epoch does not invalidate the immutable owner's persistent cookie
+verifier. Terminal invalidation therefore leaves only the retired table storage
+until the old call returns, then releases that allocation too.
+
+The current sanitized component checks 32 cases across standard, nested-index,
+hidden-name and 2,000-link layouts, same/separate native views, retained resumes,
+failed opens, third-position eviction and elevated pressure. Refusing physical
+index-prefix reads proves that saved resumes do not reread those blocks. Packer
+reentry, virtual/stored remount, terminal invalidation, recursive remount,
+completed-scan reuse and cached EOF have separate checks. A names-only sweep
+passes every 34 allocation/13 read failure position; interleaved pagination passes
+every 151 allocation/41 read position with exact partial prefixes, one reply,
+fresh-scan retry, unchanged media and complete cleanup.
+
+Evidence is `artifacts/plan-directory-component-complete.log` with 20 PASS groups
+and seven explicit modern-runtime SKIPs, and
+`artifacts/plan-directory-style-complete.log`. The unsigned Release app compiles
+the changed owner for arm64 and x86_64 and passes under
+`artifacts/plan-directory-app-complete.log`. PERFORMANCE.md records repeated
+retained-binary measurements and allocation costs. These checks do not establish
+macOS 27 execution, an installed mount or native callback scheduling.
 
 `tests/fskit_content.m` checks six encoded-stream metadata variants and ten
 explicit metadata/reparse rejections through the real protocol handlers. It

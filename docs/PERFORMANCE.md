@@ -20,15 +20,18 @@ equally aligned caller buffer, one bounded fragment at a time. Other fragments
 use its single aligned 1 MiB bounce buffer. It still caps aggregate core
 allocations at 64 MiB. A volume caps live FSItem identities at 16,384. Enumeration
 with attributes uses temporary node snapshots, not a permanent item per returned
-name. One cursor is retained per held directory item; sequential continuation is
-linear. Interleaved scans can replay a prefix, and that cost remains a target for
-native profiling. Admission is serialized per volume. Parallel core readers and
+name. An enumerated directory lazily retains at most two independent core cursors
+through a table charged to the same resource pool. Same-view exact or nearest
+earlier positions reuse traversal; initial cookies, evicted positions and older
+rewinds can still replay a prefix. Sequential continuation remains linear.
+Admission is serialized per volume. Parallel core readers and
 kernel-offloaded I/O are deliberately not claimed.
 
 FSKit now suspends optional read-cache retention on observed elevated pressure,
 without scanning dormant objects. Access/completion cleanup releases disposable
-stream/catalog/raw-snapshot allocations and preserves directory continuation and
-identity. The component measures 135,632/18,816/79,436 released core bytes in its
+stream/catalog/raw-snapshot allocations and older inactive directory positions,
+while preserving the latest/pinned continuations and identity. The component
+measures 135,632/18,816/79,436 released core bytes in its
 LZNT1/XPRESS4K/LZX32K scenarios, with record caching disabled. Warm normal reads
 retain their no-additional-I/O behavior. READ-CACHE-POLICY.md defines excluded
 memory and remaining aggregate/installed/performance measurements; these byte
@@ -149,6 +152,90 @@ consistent read-throughput improvement is established. Four-reader latency still
 exposes contention in the serialized volume. These measurements justify this
 specific metadata reuse; they do not establish FSKit performance, a broad driver
 advantage or completion of the remaining optimization program.
+
+## FSKit directory continuation measurements
+
+`tools/fskit_directory_workload.m` calls the actual legacy directory handler with
+an immutable aligned memory reader and external serialization. Independently
+authored manifests check every packed native spelling, original reference, type
+and requested size, including the names-only virtual prefix. Each reader checks
+complete order and explicit EOF. The large fixture contains 2,000 hard links with
+oversized UTF-16 aliases; the small fixture has 12 visible links. They are
+namespace workloads, not measurements of 2,000 independent file bodies.
+Adding their expected sizes/large inventory changes no image bytes: review
+compared all six original namespace images in full under
+`artifacts/directory-fixture-before/report.json`.
+
+```sh
+python3 scripts/build.py .build-release --release
+python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --output artifacts/directory-before --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+# After the adapter change, compare the retained binary and unchanged workload:
+python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --output artifacts/directory-after --reference artifacts/directory-before --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+```
+
+The runner requires an ordinary Release/O3 unsanitized core; adapter/workload
+compilation is O2 without sanitizers. It retains both binaries, full source/input/
+archive digests, compiler/SDK, run logs and failures. A paired comparison requires
+identical inputs, workload, core and toolchain and alternates binary order between
+repetitions. Both binaries run with the new invocation's arguments even when the
+reference's older matrix was shorter. Each process has a new owner, no MFT record
+cache and explicit full-scan warmup before timing/counter reset. The source and
+host caches are warm. Wall/process CPU and p50/p95/p99 include native object
+construction and inventory checks; reported percentiles remain per-run.
+
+The final reports are `artifacts/fskit-directory-large-sustained/report.json` and
+`artifacts/fskit-directory-small-sustained/report.json`. Each contains 54 passing
+runs and six summaries: nine repetitions of three profiles for both binaries.
+Large phases use ten rounds/five warmups and page sizes 8/16; small phases use
+100 rounds/ten warmups and page sizes 1/2. Sequential has one attribute-requested
+reader, interleaved has two in that view, and views alternates names-only with
+attribute-requested enumeration. Review verified the complete retained binaries,
+current source/input/archive digests and that only the native owner source differs.
+
+| Input/profile | Reference/current wall median, ms | Wall change | Reference/current reader calls |
+| --- | ---: | ---: | ---: |
+| Large sequential | 68.600 / 69.529 | +1.35% | 32,720 / 32,720 |
+| Large interleaved | 1,135.434 / 135.238 | -88.09% | 1,047,610 / 64,190 |
+| Large separate views | 1,139.495 / 122.318 | -89.27% | 1,046,340 / 64,200 |
+| Small sequential | 5.234 / 5.146 | -1.68% | 2,800 / 2,800 |
+| Small interleaved | 13.975 / 9.462 | -32.30% | 9,900 / 5,000 |
+| Small separate views | 13.143 / 8.565 | -34.83% | 9,700 / 5,100 |
+
+Large interleaved process CPU falls from 1,131.123 to 134.737 ms; separate views
+fall from 1,133.963 to 121.836 ms. Their p99 per-run medians fall from
+1,126.792/1,159.417 to 65.917/66.000 us respectively. Large interleaved reader bytes
+fall from 4,156,672,000 to 128,583,680 and allocations from 1,164,330 to 151,910.
+The reports retain all metrics/ranges for both inputs and profiles.
+
+Sequential timings do not establish a stable material benefit or regression:
+large reference/current ranges are 65.629–70.078/66.930–71.374 ms and small ranges
+are 4.891–6.190/4.976–5.732 ms. Both keep identical measured read and allocation
+counts. Earlier shorter paired reports under `artifacts/fskit-directory-{large,small}-compared/`
+showed higher sequential medians. They describe an earlier candidate and remain
+retained; they prompted completed-scan victim preference and the longer final
+comparison above.
+
+| Input/profile | Reference/current peak pool bytes | Added peak |
+| --- | ---: | ---: |
+| Large sequential | 194,832 / 195,984 | 1,152 |
+| Large two-reader profiles | 194,832 / 247,848 | 53,016 |
+| Small sequential | 150,161 / 151,313 | 1,152 |
+| Small two-reader profiles | 150,161 / 166,698 | 16,537 |
+
+The reported `baseline_core_bytes`/`peak_core_bytes` now describe the resource
+allocation pool: core children plus the charged continuation table. Foundation
+objects and the separate I/O window are excluded. Process peak RSS is reported
+separately and includes input/manifest/workload/native objects and warmup; these
+runs establish no aggregate installed-memory improvement. The 64-MiB pool limit
+still applies, and elevated-pressure completion discards older inactive slots.
+LIFECYCLE.md records 32 reuse/eviction/pressure cases, reentrant ownership checks
+and every 151 allocation/41 read fault position in interleaved pagination.
+
+This qualifies a targeted legacy memory-reader optimization. macOS 27 execution,
+installed native buffer scheduling, physical media, diverse independent files,
+Windows-authored fragmentation, more than two active positions and performance
+under real pressure remain open. Broader bounded checkpoints and checked index/
+alias reuse need their own profiles; no independent-driver advantage is claimed.
 
 ## Native link and type metadata measurements
 

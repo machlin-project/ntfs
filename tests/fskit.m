@@ -43,6 +43,13 @@
 	assert((uintptr_t)buffer % TEST_PHYSICAL_BLOCK_BYTES == 0 &&
 	    (uint64_t)offset <= self.image.length && length <= self.image.length - (size_t)offset);
 	self.reads++;
+	if ((uint64_t)offset < self.observedEnd && self.observedStart < (uint64_t)offset + length) {
+		self.observedReads++;
+		if (self.refuseObservedReads) {
+			*error = [NSError errorWithDomain:NSPOSIXErrorDomain code:EIO userInfo:nil];
+			return 0;
+		}
+	}
 	if (self.revokeDuringRead) {
 		self.revoked = YES;
 	}

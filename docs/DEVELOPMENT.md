@@ -34,7 +34,11 @@ macOS 27 kernel/framework count mechanism.
 The separate enumeration component checks names-only virtual current/parent
 entries, parent release/remount and corrupt-edge rejection, separate native cookie
 views, alias stability, interleaved buffers, scan budgets, packer revocation and
-all 33 allocation/13 I/O fault positions in its current nested-index operation. The
+all 34 allocation/13 I/O fault positions in its current names-only nested-index
+operation. Two retained continuations also have 32 layout/view/reuse/eviction/
+pressure cases and an interleaved 151 allocation/41 I/O sweep. Callback reentry,
+recursive remount, detached table lifetime, completed-scan replacement and cached
+EOF have explicit ownership checks. The
 content component additionally exercises six encoded-stream metadata variants and
 ten explicit corruption/unsupported rejections, requested-size pages, independent
 ADS, zero-byte read errors, remount and revocation without default-content I/O.
@@ -52,6 +56,25 @@ pressure changes. It measures disposable core bytes for LZNT1/XPRESS/LZX, delive
 an event during blocked I/O, sweeps cold LZX allocation/read faults and checks
 copied ADS/reparse data, identities, interleaved pending entries and remount.
 See READ-CACHE-POLICY.md for exact measurements and native delivery/stress gaps.
+
+The native directory workload checks every name, identity and requested size
+against independently authored namespace inventories. It measures the actual
+legacy protocol handler on an immutable memory reader, with no MFT record cache
+and separate warmup. Use a new artifact directory for each execution:
+
+```sh
+python3 scripts/build.py .build-release --release
+python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --build .build-release --output artifacts/directory-before --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+# Retain that binary before changing the adapter, then compare both versions:
+python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --build .build-release --output artifacts/directory-after --reference artifacts/directory-before --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+```
+
+The reference requires identical inputs, workload, core and toolchain. Both
+binaries run with the new invocation's parameters; their earlier measurement
+settings may differ. Reports retain both parameter sets, binaries, source/input
+digests, exact inventory outcomes and per-run counters. PERFORMANCE.md records
+the memory tradeoff and the limits of this synthetic component profile.
+
 Use `--target all` for the image, whole-volume diagnostic and ten standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security`, `access`, `wof` or `logfile`. The time budget applies per target. Each campaign retains its own

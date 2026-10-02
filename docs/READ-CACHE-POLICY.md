@@ -33,8 +33,14 @@ items or performs filesystem reads.
 | Stored stream-name catalog | Stable ADS ordinals and separately owned native response data |
 | Raw reparse snapshot | Immutable native readlink target, directory ancestry and per-edge name policy |
 
-Directory cursor, pending entry, position, visited-work budget and failure state
-remain owned until ordinary continuation, rewind or teardown. The core's bounded
+The latest directory continuation and every pinned slot preserve their cursor,
+pending entry, position, visited-work budget and failure state. Completion under
+elevated pressure closes older inactive slots in the bounded two-position table;
+their cookies retain the same meaning and reconstruct a cursor when used again.
+The table is allocated lazily through the bounded resource pool. Teardown closes
+all its core children and detaches it, while an in-flight native call retains the
+table allocation and allocator until return. LIFECYCLE.md defines that epoch and
+recursive-call contract. The core's bounded
 record cache, mounted MFT/$UpCase state, node record snapshots, retained native
 identities and the resource's aligned I/O window also retain their ordinary
 lifetimes. Aggregate budgets still apply; elevated pressure is not a promise to
@@ -93,3 +99,10 @@ mappings, aggregate allocation/RSS stress, native reclamation and performance
 under pressure still require separate acceptance. Ext4's mounted observations
 inform this policy but do not prove NTFS delivery, and successful execution of a
 pressure-simulation utility alone does not prove that this observer received it.
+
+The subsequent directory component checks older-position release and preserved
+latest/pinned resumes across four layouts and both native views, with index
+prefix reads refused to distinguish reuse from replay. Its interleaved fault and
+reentrant teardown evidence is in LIFECYCLE.md. The earlier three content-byte
+measurements above retain their scope; directory pool peaks and process RSS are
+reported separately in PERFORMANCE.md.

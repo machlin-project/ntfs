@@ -206,6 +206,14 @@ coverage 3,289/features 9,107 and reported crash/timeout/OOM counts of zero unde
 `artifacts/fuzz-mirror-validation/`. Its 1-MiB input, 1024-MiB RSS ceiling and
 five-second timeout are policies, not complete coverage or observed peak RSS.
 
+The committed diagnostic passes both isolated ordinary Release/O3 builds and
+all eight archive/CLI full byte comparisons under
+`artifacts/reproducibility-mirror/`, with launcher evidence in
+`artifacts/plan-mirror-reproducibility.log`. Review independently re-read the
+actual products and verified equality, reported lengths and digests. Source
+revision and artifact hashes remain in the generated report. Relocated-source,
+native app/signing and remote CI acceptance remain open.
+
 Native Windows replica observations, extended tails, boot replicas, complete
 store/index checks and the full recovery/transaction simulator remain required
 under CORE-QUALIFICATION.md and WRITES.md. Ordinary mount's strict record-zero

@@ -55,6 +55,15 @@ under `artifacts/plan-mirror-app-final.log`; both architectures compile the actu
 changed `core/validate.c`. Unchanged adapter components were not rerun; their
 preceding evidence and seven modern-runtime SKIPs remain separate below.
 
+The committed mirror diagnostic also passes both isolated ordinary Release/O3
+builds and all eight archive/CLI full byte comparisons in
+`artifacts/reproducibility-mirror/report.json`, with launcher evidence in
+`artifacts/plan-mirror-reproducibility.log`. Review independently re-read both
+copies of every product and verified full byte equality, reported lengths and
+digests. Compiler/SDK, source revision, selected options and hashes remain in
+the generated report. This qualifies the current local portable products;
+relocated checkout, native app/signing and remote CI remain open.
+
 Thirty-nine new images cover first-copy admission, stale identity/LSN/body data,
 torn/invalid records, independent protection/slack, opaque free slots, complete
 fragmented/listed mappings, 1/64-KiB clusters and unqualified extended tails.
@@ -117,7 +126,7 @@ all eight archive/CLI full byte comparisons in
 logs beside it and launcher evidence in
 `artifacts/plan-logrestart-record-reproducibility.log`. Compiler/SDK, source
 revision, selected options and hashes remain in the generated report. This
-qualifies the current local portable products; relocated checkout, native app/
+qualifies that binding's local portable products; relocated checkout, native app/
 signing and remote CI still require separate evidence.
 
 The preceding client restart-prefix continuation passes all 56 sanitized core suites,

@@ -21,6 +21,13 @@ arm64 archives/CLI products without normalization. It retains compiler/SDK,
 Git revision, selected options and bounded diagnostics in generated reports.
 Prepared macOS/Linux CI, relocated sources and native app/signing still require
 their own execution. See DEVELOPMENT.md and ACCEPTANCE.md.
+
+The current mirror diagnostic passes both ordinary Release/O3 builds and all
+eight full product byte comparisons under `artifacts/reproducibility-mirror/`.
+Review independently verified the actual products against each other and the
+reported lengths/digests. The same-checkout/toolchain scope remains unchanged;
+relocated sources, native app/signing and remote CI remain unqualified.
+
 The subsequent NTFS client restart decoder retains only the 64-byte common
 prefix for client formats 0.0/1.0, raw analysis/table LSN/count fields and an opaque
 tail. Its 77 aligned/unaligned verdicts, 75 exact reports/two transport checks,

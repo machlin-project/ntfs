@@ -101,6 +101,11 @@ binary normalization was needed. CI is prepared to repeat the comparison on
 macOS/Linux and upload bounded reports/logs; it has not run remotely.
 That report predates the client restart-prefix change; a new comparison is
 required for products compiled from the later source.
+The subsequent current-source comparison now passes both Release/O3 builds and
+all eight full byte comparisons under `artifacts/reproducibility-logcheckpoint/`,
+with launcher evidence in `artifacts/plan-logcheckpoint-reproducibility.log`.
+It covers the new prefix decoder; relocated/native app and remote CI limits
+remain unchanged.
 
 The active-client continuation passes all 53 sanitized core suites, style,
 17 component PASS/seven runtime SKIPs and the unsigned arm64/x86_64 app under

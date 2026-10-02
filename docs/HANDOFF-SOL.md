@@ -210,6 +210,10 @@ PROVENANCE.md; no foreign parser or recovery algorithm was imported.
 Continue full checkpoint-table/extension and current-history ownership work
 under CORE-QUALIFICATION.md and WRITES.md. This common-prefix decoder is a
 foundation, not complete journal recovery or completion of the no-VM plan.
+The current committed decoder also passes the eight-product Release/O3 byte
+comparison under `artifacts/reproducibility-logcheckpoint/`; its command log is
+`artifacts/plan-logcheckpoint-reproducibility.log`. This is local ordinary-build
+evidence, with the separate scope limits below.
 
 ## Portable Release reproducibility checkpoint
 

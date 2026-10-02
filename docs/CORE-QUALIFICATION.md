@@ -27,7 +27,10 @@ tail. Its 77 aligned/unaligned verdicts, 75 exact reports/two transport checks,
 56 sanitized suites and 249 fixed-replayed logfile seeds pass. Complete table and
 extension semantics, containing-record ownership, written/current history and
 native Windows qualification remain in the recovery scope above. The earlier
-reproducibility report predates this decoder and does not qualify its products.
+reproducibility report predates this decoder. A subsequent eight-product local
+comparison now qualifies its committed Release/O3 products under
+`artifacts/reproducibility-logcheckpoint/`; relocated/native and remote CI
+acceptance remains open.
 
 Optimization is a separate acceptance stream:
 

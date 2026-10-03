@@ -14,7 +14,8 @@ enum ntfs_validation_stage {
 	/* Appended to preserve the numeric values of existing report stages. */
 	NTFS_VALIDATION_MIRROR,
 	NTFS_VALIDATION_INDEX_ALLOCATION,
-	NTFS_VALIDATION_SECURITY
+	NTFS_VALIDATION_SECURITY,
+	NTFS_VALIDATION_BOOT
 };
 
 enum ntfs_validation_limit {

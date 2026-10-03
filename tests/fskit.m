@@ -36,6 +36,23 @@
 	return self.image.length / self.blockSize;
 }
 
+- (void)setAlignedImage:(NSData *)image
+{
+	NSMutableData *backing;
+	NSUInteger alignment, remainder;
+
+	alignment = (NSUInteger)MAX(self.blockSize, self.physicalBlockSize);
+	assert(image != nil && alignment != 0);
+	remainder = image.length % alignment;
+	if (remainder != 0) {
+		backing = [image mutableCopy];
+		[backing increaseLengthBy:alignment - remainder];
+		self.image = [backing copy];
+	} else {
+		self.image = image;
+	}
+}
+
 - (size_t)readInto:(void *)buffer
 	startingAt:(off_t)offset
 	    length:(size_t)length

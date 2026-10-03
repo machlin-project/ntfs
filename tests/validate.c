@@ -7,7 +7,9 @@
 #include <string.h>
 
 enum {
-	TEST_IMAGE_BYTES = 8 * 1024 * 1024,
+	TEST_VOLUME_BYTES = 8 * 1024 * 1024,
+	TEST_BOOT_MAX_SECTOR_BYTES = 4096,
+	TEST_IMAGE_BYTES = TEST_VOLUME_BYTES + TEST_BOOT_MAX_SECTOR_BYTES,
 	TEST_RECORDS = 64,
 	TEST_BASE_RECORDS = 9,
 	TEST_PRIMARY_NAMES = 8,
@@ -26,7 +28,19 @@ enum {
 	TEST_MIRROR_LCN = 32,
 	TEST_LOGFILE_RECORD = 2,
 	TEST_VOLUME_RECORD = 3,
+	TEST_BOOT_RECORD = 7,
+	/* Bounded observation storage for the two-owner authored boot profiles. */
+	TEST_BOOT_STAGE_CALLS = 32,
+	TEST_BOOT_TAIL_LCN = 160,
+	TEST_BOOT_IMAGE_NAME_BYTES = sizeof("validation-boot-trailing-resource.img"),
 	TEST_DATA_TYPE = 0x80
+};
+
+enum test_boot_budget_dimension {
+	TEST_BOOT_READ_CALLS,
+	TEST_BOOT_READ_BYTES,
+	TEST_BOOT_WORK,
+	TEST_BOOT_BUDGET_DIMENSIONS
 };
 
 enum {
@@ -175,6 +189,213 @@ validate(struct fuzz_device *device, const struct ntfs_validation_limits *limits
 		assert(report->peak_memory_bytes <= limits->max_memory_bytes);
 	}
 	return result;
+}
+
+struct boot_observation {
+	uint64_t call, bytes_before, work_before;
+	uint64_t offset;
+	size_t size;
+};
+
+struct boot_reads {
+	struct fuzz_device *device;
+	struct ntfs_validation_report *report;
+	struct boot_observation observations[TEST_BOOT_STAGE_CALLS];
+	uint64_t allocations[TEST_BOOT_STAGE_CALLS];
+	size_t count, allocation_count, primary_reads, replica_reads;
+	size_t sector;
+	uint64_t forbidden_first, forbidden_end;
+	bool full_failure;
+};
+
+static void *
+boot_allocate(void *context, size_t size)
+{
+	struct boot_reads *reads = context;
+
+	if (reads->report->stage == NTFS_VALIDATION_BOOT) {
+		assert(reads->allocation_count < TEST_BOOT_STAGE_CALLS);
+		reads->allocations[reads->allocation_count++] = reads->report->allocation_calls;
+	}
+	return fuzz_allocate(reads->device, size);
+}
+
+static void
+boot_release(void *context, void *bytes, size_t size)
+{
+	struct boot_reads *reads = context;
+
+	fuzz_release(reads->device, bytes, size);
+}
+
+static enum ntfs_result
+boot_read(void *context, uint64_t offset, void *bytes, size_t size)
+{
+	struct boot_reads *reads = context;
+	struct fuzz_device *device = reads->device;
+	struct ntfs_validation_report *report = reads->report;
+	size_t partial;
+
+	assert(offset <= device->size && size <= device->size - offset);
+	if (reads->forbidden_end != 0) {
+		assert(offset + size <= reads->forbidden_first || offset >= reads->forbidden_end);
+	}
+	if (report->stage == NTFS_VALIDATION_BOOT) {
+		assert(reads->count < TEST_BOOT_STAGE_CALLS);
+		reads->observations[reads->count++] = (struct boot_observation){report->read_calls,
+		    report->read_bytes - size, report->work_units - size, offset, size};
+		if (offset == 0) {
+			assert(size == reads->sector);
+			reads->primary_reads++;
+		} else if (offset == TEST_VOLUME_BYTES) {
+			assert(size == reads->sector);
+			reads->replica_reads++;
+		}
+	}
+	if (device->fail_read != 0 && device->reads + 1 == device->fail_read) {
+		partial = reads->full_failure ? size : size / 2;
+		memcpy(bytes, device->data + offset, partial);
+	}
+	return fuzz_read(device, offset, bytes, size);
+}
+
+static enum ntfs_result
+validate_boot(struct boot_reads *reads, const struct ntfs_validation_limits *limits)
+{
+	struct fuzz_device *device = reads->device;
+	struct ntfs_environment environment = {
+	    NTFS_API_VERSION, reads, device->size, boot_read, boot_allocate, boot_release};
+	struct ntfs_limits core_limits;
+	enum ntfs_result result;
+
+	device->reads = 0;
+	device->allocations = 0;
+	reads->count = 0;
+	reads->allocation_count = 0;
+	reads->primary_reads = 0;
+	reads->replica_reads = 0;
+	ntfs_default_limits(&core_limits);
+	core_limits.record_cache_entries = 0;
+	result = ntfs_validate(&environment, &core_limits, limits, reads->report);
+	assert(device->memory == 0 && result == reads->report->result);
+	assert(device->reads == reads->report->read_calls &&
+	    device->allocations == reads->report->allocation_calls);
+	return result;
+}
+
+static void
+check_boot(const char *directory)
+{
+	const struct {
+		const char *name;
+		size_t sector;
+		bool fragmented, trailing;
+	} profiles[] = {{"sector-512", 512, false, false}, {"sector-1024", 1024, false, false},
+	    {"sector-2048", 2048, false, false}, {"sector-4096", 4096, false, false},
+	    {"fragmented", 512, true, false}, {"listed", 512, true, false},
+	    {"trailing-resource", 512, false, true}};
+	struct fuzz_device device;
+	struct ntfs_validation_report baseline, report;
+	struct ntfs_validation_limits limits;
+	struct boot_reads observed, attempt;
+	struct boot_observation last;
+	uint8_t *original;
+	char image[TEST_BOOT_IMAGE_NAME_BYTES];
+	size_t profile, index, mode;
+	unsigned dimension;
+	enum ntfs_validation_limit refused;
+
+	for (profile = 0; profile < sizeof(profiles) / sizeof(profiles[0]); profile++) {
+		device = (struct fuzz_device){0};
+		assert(snprintf(image, sizeof(image), "validation-boot-%s.img",
+			   profiles[profile].name) > 0);
+		load_image(directory, image, &device);
+		original = malloc(device.size);
+		assert(original != NULL);
+		memcpy(original, device.data, device.size);
+		observed = (struct boot_reads){
+		    .device = &device, .report = &baseline, .sector = profiles[profile].sector};
+		if (profiles[profile].fragmented) {
+			observed.forbidden_first =
+			    (uint64_t)TEST_BOOT_TAIL_LCN * TEST_CLUSTER_BYTES;
+			observed.forbidden_end = observed.forbidden_first + TEST_CLUSTER_BYTES;
+		} else if (profiles[profile].trailing) {
+			observed.forbidden_first = TEST_VOLUME_BYTES + observed.sector;
+			observed.forbidden_end = device.size;
+		}
+		assert(validate_boot(&observed, NULL) == NTFS_OK && baseline.complete);
+		assert(observed.primary_reads == 1 && observed.replica_reads == 1);
+		assert(observed.count != 0 && observed.allocation_count != 0);
+		for (index = 0; index < observed.allocation_count; index++) {
+			attempt = observed;
+			attempt.report = &report;
+			device.fail_allocation = observed.allocations[index];
+			assert(validate_boot(&attempt, NULL) == NTFS_NO_MEMORY);
+			assert(!report.complete && report.stage == NTFS_VALIDATION_BOOT &&
+			    report.exhausted == NTFS_VALIDATION_LIMIT_NONE);
+			device.fail_allocation = 0;
+			assert(validate_boot(&attempt, NULL) == NTFS_OK);
+		}
+		for (index = 0; index < observed.count; index++) {
+			for (mode = 0; mode < 2; mode++) {
+				attempt = observed;
+				attempt.report = &report;
+				attempt.full_failure = mode != 0;
+				device.fail_read = observed.observations[index].call;
+				assert(validate_boot(&attempt, NULL) == NTFS_IO);
+				assert(!report.complete && report.stage == NTFS_VALIDATION_BOOT &&
+				    report.exhausted == NTFS_VALIDATION_LIMIT_NONE);
+				device.fail_read = 0;
+				assert(validate_boot(&attempt, NULL) == NTFS_OK);
+			}
+			for (dimension = 0; dimension < TEST_BOOT_BUDGET_DIMENSIONS; dimension++) {
+				ntfs_validation_default_limits(&limits);
+				switch (dimension) {
+				case TEST_BOOT_READ_CALLS:
+					limits.max_read_calls =
+					    observed.observations[index].call - 1;
+					refused = NTFS_VALIDATION_LIMIT_READ_CALLS;
+					break;
+				case TEST_BOOT_READ_BYTES:
+					limits.max_read_bytes =
+					    observed.observations[index].bytes_before +
+					    observed.observations[index].size - 1;
+					refused = NTFS_VALIDATION_LIMIT_READ_BYTES;
+					break;
+				default:
+					limits.max_work_units =
+					    observed.observations[index].work_before +
+					    observed.observations[index].size - 1;
+					refused = NTFS_VALIDATION_LIMIT_WORK;
+					break;
+				}
+				attempt = observed;
+				attempt.report = &report;
+				assert(validate_boot(&attempt, &limits) == NTFS_RANGE);
+				assert(!report.complete && report.stage == NTFS_VALIDATION_BOOT &&
+				    report.exhausted == refused);
+				assert(attempt.count == index);
+				assert(validate_boot(&attempt, NULL) == NTFS_OK);
+			}
+		}
+		last = observed.observations[observed.count - 1];
+		assert(last.offset == TEST_VOLUME_BYTES && last.size == observed.sector);
+		ntfs_validation_default_limits(&limits);
+		limits.max_work_units = last.work_before + last.size + observed.sector - 1;
+		attempt = observed;
+		attempt.report = &report;
+		assert(validate_boot(&attempt, &limits) == NTFS_RANGE);
+		assert(report.stage == NTFS_VALIDATION_BOOT &&
+		    report.exhausted == NTFS_VALIDATION_LIMIT_WORK && attempt.replica_reads == 1);
+		assert(validate_boot(&attempt, NULL) == NTFS_OK);
+		assert(memcmp(original, device.data, device.size) == 0);
+		printf("boot %s: %zu allocation faults, %zu partial/full read faults, %zu "
+		       "pre-callback budgets and comparison precharge; exact retry/cleanup\n",
+		    profiles[profile].name, observed.allocation_count, observed.count * 2,
+		    observed.count * TEST_BOOT_BUDGET_DIMENSIONS);
+		free(original);
+		free((void *)device.data);
+	}
 }
 
 static void
@@ -1092,6 +1313,7 @@ main(int argc, char **argv)
 		free((void *)device.data);
 	}
 	check_mirror_cases(argv[1]);
+	check_boot(argv[1]);
 	check_index_cases(argv[1]);
 	check_index_interruptions(argv[1]);
 	check_security(argv[1]);

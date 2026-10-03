@@ -816,6 +816,93 @@ compare_mirror_record(struct validation *v, uint8_t *primary, uint8_t *mirror, b
 }
 
 static enum ntfs_result
+scan_boot(struct validation *v)
+{
+	struct ntfs_volume *volume = v->volume;
+	struct ntfs_node *owner = NULL;
+	struct ntfs_stream *boot = NULL;
+	const struct ntfs_disk_record *header;
+	uint8_t *primary = NULL, *copy = NULL;
+	uint64_t backup = volume->info.size_bytes;
+	size_t sector = volume->info.sector_size;
+	enum ntfs_result result;
+
+	v->report->stage = NTFS_VALIDATION_BOOT;
+	v->report->record_number = NTFS_BOOT_RECORD;
+	v->report->reference = 0;
+	v->report->related_reference = 0;
+	v->report->attribute_type = NTFS_ATTRIBUTE_DATA;
+	v->report->cluster = 0;
+	result = ntfs_node_by_number(volume, NTFS_BOOT_RECORD, &owner);
+	if (result == NTFS_NOT_FOUND) {
+		result = NTFS_CORRUPT;
+	}
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	v->report->reference = owner->reference;
+	header = (const void *)owner->record;
+	if (ntfs_u64(header->base_reference) != 0) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	if (ntfs_u16(header->flags) != NTFS_RECORD_IN_USE) {
+		result = NTFS_UNSUPPORTED;
+		goto finish;
+	}
+	result = ntfs_stream_open(owner, NULL, 0, &boot);
+	if (result == NTFS_NOT_FOUND) {
+		result = NTFS_CORRUPT;
+	}
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	if (boot->resident || boot->size < sector || boot->initialized < sector ||
+	    boot->run_count == 0 || boot->runs[0].lcn != 0) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	if (boot->flags != 0) {
+		result = NTFS_UNSUPPORTED;
+		goto finish;
+	}
+	/* The supported NTFS 3.x profile reserves a sector after the boot-declared
+	 * data span. Its
+	 * device-relative position does not move when a larger resource is supplied.
+	 * It lies outside mounted stream I/O, so this private diagnostic checks the
+	 * backing bounds and charges its exact callback directly to its own owner. */
+	v->report->cluster = backup / volume->info.cluster_size;
+	if (!ntfs_bounds(backup, sector, v->source.size_bytes)) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	primary = validation_allocate(v, sector);
+	copy = validation_allocate(v, sector);
+	if (primary == NULL || copy == NULL) {
+		result = NTFS_NO_MEMORY;
+		goto finish;
+	}
+	v->report->cluster = 0;
+	result = ntfs_stream_exact(boot, 0, primary, sector);
+	if (result == NTFS_OK) {
+		v->report->cluster = backup / volume->info.cluster_size;
+		result = validation_read(v, backup, copy, sector);
+	}
+	if (result == NTFS_OK) {
+		result = work(v, sector);
+	}
+	if (result == NTFS_OK && !ntfs_equal(primary, copy, sector)) {
+		result = NTFS_CORRUPT;
+	}
+finish:
+	validation_release(v, copy, sector);
+	validation_release(v, primary, sector);
+	ntfs_stream_close(boot);
+	ntfs_node_close(owner);
+	return result;
+}
+
+static enum ntfs_result
 scan_mirror(struct validation *v)
 {
 	struct ntfs_volume *volume = v->volume;
@@ -955,6 +1042,9 @@ ntfs_validate(const struct ntfs_environment *environment, const struct ntfs_limi
 	}
 	if (result == NTFS_OK) {
 		result = scan_mirror(&v);
+	}
+	if (result == NTFS_OK) {
+		result = scan_boot(&v);
 	}
 	if (result == NTFS_OK) {
 		result = scan_namespace(&v);

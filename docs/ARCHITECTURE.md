@@ -259,6 +259,12 @@ released before the next; decoding shares diagnostic and mounted work credits.
 Mirror replicas use two bounded private record buffers; allocated copies compare
 used logical bytes after MST restoration, while free slots remain opaque. Larger
 declared mirror tails have explicit unchecked counts and no native coverage claim.
+The boot pass resolves fixed slot 7's ordinary nonresident LCN-zero data owner
+and compares one full logical sector with its declared reserved backup. Private
+sector buffers and exact backing bounds retain diagnostic credits without
+widening mounted stream bounds. Larger supplied resources cannot relocate the
+copy. Agreement is scoped to the observed backup profile; boot-loader tails,
+Windows variants and recovery authority remain separate. See VALIDATION.md.
 Bounded heapsort and an iterative graph walk keep temporary storage
 and traversal explicit. It never mutates an existing mounted owner or reads bad
 sectors. Its complete flag applies only to those defined passes; unsupported

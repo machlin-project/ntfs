@@ -7,7 +7,65 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current within-owner intermediate-link continuation resolves checked symlink/
+The current boot-consistency continuation validates fixed `$Boot` ownership,
+complete nonresident/listed mappings, initialized LCN-zero storage and a complete
+logical-sector replica at the declared data-span end. Larger backing resources
+do not relocate that copy. The pass retains diagnostic memory/read/work and
+native physical-read credits without changing ordinary mount or repair policy.
+`BOOT` appends stage value 10 without changing previous values/report size/API 2.
+VALIDATION.md defines the supported observed profile and Windows/historical gaps.
+
+All 67 ASan/UBSan suites, both 2-KiB freestanding targets, style, 42 FSKit PASS
+groups/ten genuine runtime SKIPs and the clean arm64/x86_64 Release app pass.
+Thirty-seven new images bring complete-volume verdicts to 244: 235 general CLI
+cases plus nine distinct security-store cases. Seven boot profiles add 49 required
+allocation faults, 44 partial/full read failures, 66 pre-callback read/work
+refusals and seven comparison precharges, with unchanged bytes, retry and exact
+cleanup. The 17 general diagnostic sweeps now cover 3,430 allocation/1,854 I/O
+failures; four bad-chain sweeps cover 959 allocation/914 partial/full failures.
+Other focused bounds/fault checks retain their existing scope. The full native
+checker sweeps 197 allocation/88 physical-read positions; quick scope retains
+25/7. A mountable damaged replica passes quick scope, fails full scope and leaves
+activation blocked with EIO. These are in-process checks, not installed dispatch.
+
+Current core logs use `artifacts/plan-boot-replicas-{build,core}-canonical-geometry.log`;
+freestanding evidence uses `*-freestanding-resource-fixed.log`, and complete
+component/style/app/oracle evidence uses `*-aligned-loaders.log`. Four independent
+NTFS-3G geometries compare the raw primary, separately exported `$Boot` prefix and
+declared reserved sector under `artifacts/interoperability-boot-replicas/`.
+Every source image is unchanged. Main checks all 37 actual default and compact
+images, owner/mapping/protection bytes, full suite results, external geometry,
+changed core compilation and both app binaries in `artifacts/boot-replicas-review.json`.
+The app has linker ad hoc signatures and no distribution team or authority.
+
+Fresh sequential validation/image campaigns replay all 242/392 authored files,
+including every boot case in validation and 22 journal-bearing images in image.
+Both exploration exits are zero, with all reported OOM/timeout/crash counters zero.
+Last periodic exploration counts are 41,479 at 70 seconds and 37,866 at 60 seconds;
+fork mode supplies no exact terminal execution total. The new resource cap is
+1 MiB plus 4 KiB; authored data geometry remains 1 MiB, with unchanged five-second
+input deadlines and 1-GiB per-process RSS policy. RSS is configured, not observed.
+Accepted reports use `artifacts/fuzz-boot-replicas-validation-canonical-reviewed/`
+and `artifacts/fuzz-boot-replicas-image-span-reviewed/`. Main checks actual retained
+binaries, unique fixed replay entries and periodic counters in the current review.
+
+Retain the initial full-core image-bound failure (`*-core-reviewed.log`), native
+unaligned-backing failures (`*-component-resource-fixed.log` and
+`*-component-native-padded.log`), Xcode runtime preflight failure
+(`*-fuzz-validation-reviewed.log`), compact authoring failure
+(`*-fuzz-validation-llvm-reviewed.log`) and image logical-span argument failure
+(`*-fuzz-image-canonical-reviewed.log`). The first three exposed test-resource
+assumptions; the canonical CLI now shares geometry with imported fixture authors,
+and journal authors receive data span separately from the resource envelope.
+Main confirms all 37 default boot images stayed byte-identical after canonical
+dispatch. These failed attempts are not qualified fuzz/component evidence.
+An initial review-only prefix check confused truncated `partial-SECTOR` copies
+with `partial-initialization`; the corrected exact labels preserve product and
+fixture bytes. Its retained diagnosis is `artifacts/boot-replicas-review-initial.log`.
+Windows boot variants, installed/modern FSKit, owning authorization, complete
+recovery, broader optimization and commercial release remain open.
+
+The preceding within-owner intermediate-link continuation resolves checked symlink/
 junction destinations for subsequent case/alias translation while retaining
 intermediate native components in emitted targets. An active full-reference stack
 detects recursion; cumulative snapshot, component and raw-entry credits cover the
@@ -371,21 +429,21 @@ claimed.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
-| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, complete unflagged bad-cluster lists with metadata-only/content guards, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 207 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 3,328 allocation/1,803 read faults plus 935 allocation/890 partial/full bad-chain failures, 25 private-open allocation/12 partial/full read failures and 38 operation boundaries; 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, flagged/native-Windows bad-cluster storage, other view-index semantics and Windows qualification remain open |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, complete unflagged bad-cluster lists with metadata-only/content guards, required four-record mirror prefix/anchor and declared reserved boot-sector agreement, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 244 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 3,430 allocation/1,854 read faults plus 959 allocation/914 partial/full bad-chain failures, 25 private-open allocation/12 partial/full read failures and 38 operation boundaries; 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; 49 boot allocation/44 partial-full read failures, 66 pre-callback budgets/seven comparison precharges and four independent bitmap/mirror/boot-export geometries passed; extended mirror tails, Windows/historical boot profiles, DOS counts, flagged/native-Windows bad-cluster storage, other view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
 | Native filenames and hard links | Bounded reversible aliases and per-link UTF-16 manifests; inode identity separated from link spelling; native length, Unicode, hidden/DOS ordinals, response/scan exhaustion, faults and revocation | Five authored namespace images and component sweeps passed; installed case/normalization and Windows-authored namespace untested |
 | Directories | Resident/external B-tree, allocation bitmap, cycle rejection, local ordering, ancestor bounds, persistent cursor and collision-aware $UpCase lookup | Synthetic and independent image tests passed |
 | Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
-| Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded single-edge symlink/junction projection, checked ancestry, explicit Windows root bindings and target aliases; opaque provider classification and raw-data rejection | Core checks and 47 legacy path/storage verdicts passed; 79 allocation/17 read fault positions across native lookup/reopened metadata passed; intermediate/multiply linked/cross-volume resolution, Windows links and installed path walking remain open |
+| Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded within-owner symlink/junction projection with checked intermediate destinations, ancestry, Windows root bindings, case/alias translation and shared limits; opaque provider classification and raw-data rejection | Core checks and 76 legacy path/storage verdicts passed, including 29 chain forms; 205 allocation/44 partial-full read positions and 28 ancestor budget boundaries passed; active-cycle/finite-reuse and 63-snapshot/512-component bounds checked; reparse hard links, cross-volume ownership, Windows links and installed path walking remain open |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
 | Operation budgets | API 2 cumulative exact-read/allocation/work credits, aggregate volume-owned live storage, nested scopes and pre-callback refusal; cleanup/detach/retry and optional cache omission; compound FSKit scopes with separate rounded physical transfers | 12 profiles/144 exact/one-below boundaries plus mount/ABI/nesting/callback/live-storage/cache/codec/native reply checks pass; Windows stress, native aggregate/RSS, installed scheduling and measured overhead remain open; work units do not provide deadlines |
 | WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman/LZX decoding; exact output and hostile-input guards | 87 content/11 invalid XPRESS and 140 content/31 invalid LZX vectors passed; bidirectional wimlib comparison passed for 192 external packets and 139 nonempty synthetic packets; bounded provider/table/codec fuzz passed; Windows codec observations remain open |
-| WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 376 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
+| WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 390 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries and exact dot lookup/released-parent reconstruction, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 25 in-process PASS groups; nine modern lifecycle/operation/pressure/enumeration/lookup/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries and exact dot lookup/released-parent reconstruction, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 42 in-process PASS groups; ten modern lifecycle/operation/pressure/enumeration/lookup/content/link/case/maintenance checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, cross-volume/reparse-hard-link and complete provider qualification and installed lifetime remain open |
 | FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed again with operation scopes; earlier paired large/small legacy memory-reader benefit had increased bounded pool peak; current guard overhead and installed/native/device qualification remain open |
 | FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
@@ -403,7 +461,7 @@ claimed.
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry; whole-volume selected per-file framing with explicit fixed-internal/inert source exceptions | 74 resolver contracts plus 46 whole-store/nine complete-volume store verdicts and 48 per-file diagnostic images, 496 allocation/730 partial-and-full store read positions, six operation profiles and whole-volume fault/budget checks; six per-file fault layouts and staged parser/I/O boundaries; four independent complete leaf-view/descriptor geometries passed; Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
-| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded single-edge native links and WOF file-provider content are tracked separately |
+| Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded within-owner intermediate native links and WOF file-provider content are tracked separately |
 | Distribution | Personal signing, notarization, installer, licensing and support | Not implemented |
 | Portable Release reproducibility | Two isolated ordinary Meson build directories, clean compiled-source Git state/unchanged revision, identical selected release options, bounded failure logs and full archive/CLI byte comparisons | Eight products match on local arm64 macOS; relocated checkout, other toolchains, Linux remote and native app/signing qualification remain open |
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |

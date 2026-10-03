@@ -70,6 +70,44 @@ preserve existing numeric report values; enum values are not execution order.
 Two record-sized private buffers and every callback/comparison share the existing
 memory/read/work budgets. No tail-content read or repair is implied by success.
 
+The boot pass opens fixed MFT slot 7's unnamed `$DATA` through the same complete
+attribute/list reader. Its ordinary allocated base owner must have nonresident,
+unflagged storage beginning at LCN zero, with data and initialized lengths
+covering one logical sector. Missing/resident/misanchored/short storage is
+CORRUPT; encoded storage or a nonordinary owner is UNSUPPORTED. Fragmented and
+listed continuations remain structurally checked, but their boot-loader content
+is not read. The diagnostic does not demand a particular whole `$Boot` length.
+[Microsoft's physical-structure description](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc781134(v=ws.10))
+defines the BPB and boot-code frame;
+[original Linux-NTFS research](https://flatcap.github.io/linux-ntfs/ntfs/files/boot.html)
+identifies the fixed owner, nonresident LCN-zero anchor and older backup variants.
+
+For the supported NTFS 3.x backup profile, the reserved sector begins at the
+boot-declared sector count multiplied by the logical sector size. This is the
+end of the mounted data span, not the last sector of a potentially larger supplied
+resource. The pinned standalone
+[mkntfs source](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/mkntfs.c)
+and independently exported images establish this observed profile; native
+Windows and older middle-copy layouts remain unqualified. Backing bounds must
+cover the complete reserved sector before staging or reading it. Ordinary
+mounted stream bounds remain limited to the declared data span.
+
+Two private sector-sized buffers compare the complete primary and reserved
+sectors, including boot code and larger-sector padding. All allocations and
+callbacks share diagnostic memory/read/work budgets; comparison work is charged
+before scanning bytes. The reserved callback also retains FSKit physical-read
+credits and cancellation/revocation admission. It is a private backing read,
+outside mounted stream I/O. Agreement selects no recovery authority, interprets
+no executable boot code and cannot permit a dirty mount or repair.
+
+Stage `BOOT` is appended with value 10, preserving previous enum values, the
+report layout and API version 2. Failures name slot 7 and `$DATA`; a validated
+owner supplies its full reference. Primary-read failures identify cluster zero,
+while reserved bounds/read/comparison failures identify the reserved position
+divided by cluster size. That diagnostic position can lie beyond the ordinary
+whole-cluster ownership plane. Ordinary mount and quick native checks do not
+run this pass; full native checks retain failed verdicts for activation.
+
 Each filename contributes its original UTF-16 name, namespace, parent and file
 reference. Every directory is fully enumerated through the existing checked
 B-tree cursor, including DOS and system entries. Exact keys must have one
@@ -187,7 +225,8 @@ to both accounting planes before decoding. Reports identify the FILE and
 
 The diagnostic does not parse arbitrary other resident payload semantics,
 unindexed SDS gaps, quota/object-ID/reparse view-index
-relations or their complete allocation inventories, qualify Windows-dependent extended mirror tails, verify boot replicas,
+relations or their complete allocation inventories, qualify Windows-dependent
+extended mirror tails or other boot-copy profiles,
 read all file content, decompress every compression unit or replay `$LogFile`.
 Those checks remain separate qualification work. Mount's existing mirror check
 still covers only bootstrap record zero; the diagnostic compares the required
@@ -252,8 +291,9 @@ The physical bad-cluster test refuses any callback read of its bad sector range.
 The separate `bad-clusters` suite checks nine complete storage/admission profiles,
 25 private-open allocation failures, 12 partial/full open-read failures and
 38 exact/one-below cumulative operation boundaries with independently counted
-callbacks/bytes. Four complete diagnostic sweeps add 935 allocation failures and
-890 partial/full read failures, exact release, unchanged media and fresh retry.
+callbacks/bytes. Four complete diagnostic sweeps retain exact release, unchanged
+media and fresh retry; current counts include the additional boot pass and are
+in ACCEPTANCE.md.
 The 32 new complete-volume cases include eight positive inventories and exact
 negative subjects for gaps/overlaps, missing/duplicate/reordered lists, stale
 references/owners, malformed mappings/size/units, unsupported first flags and
@@ -268,9 +308,22 @@ Required-allocation sweeps disable optional record caching; separate successful
 runs exercise cache-enabled owners. A best-effort cache miss is not a required
 allocation failure.
 
-The independent suite exports both bitmaps and MFT/mirror data through standalone
+Thirty-seven boot images cover four logical sector sizes from 512 to 4096 bytes,
+code/padding/header mismatches, missing/truncated copies, invalid owner/storage
+forms, fragmented/listed storage and larger backing resources. A plausible copy
+at the resource end cannot rescue a damaged declared copy. Seven positive
+profiles check 49 required allocation faults, 44 partial/full read failures,
+66 read-call/read-byte/work refusals before callbacks and seven comparison
+precharges. Every failed attempt retains original bytes, complete cleanup and a
+successful fresh retry. Forbidden-range observers keep boot-loader continuation
+and resource padding content unread.
+
+The independent suite exports both bitmaps, MFT/mirror data and `$Boot` through standalone
 NTFS-3G utilities. It compares active-record/cluster counts, exact required replica
-prefix bytes and declared coverage in four geometries. It hashes every
+prefix bytes and declared coverage in four geometries. An independently decoded
+BPB locates the reserved copy; its complete sector must match both the raw
+primary and exported `$Boot` prefix. It retains the sector size, stream length,
+backup offset and full-sector hash. It hashes every
 image before and after, preserves failed reports and refuses evidence-directory
 overwrites. This is independent mkntfs acceptance, not a Windows-native oracle.
 See ACCEPTANCE.md for current executions and retained initial failures. The

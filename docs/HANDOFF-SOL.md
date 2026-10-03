@@ -17,7 +17,47 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current within-owner intermediate links
+## Current boot consistency
+
+Full diagnostics now resolve fixed `$Boot` slot 7's ordinary nonresident/listed
+LCN-zero storage and compare one complete logical sector with its reserved copy
+at the boot-declared data-span end. Larger resources cannot move the copy.
+Bounds, staging, callbacks and comparison retain existing budgets; normal mount
+and recovery selection remain separate. Stage BOOT appends value 10 with stable
+previous enum values/report layout/API 2. VALIDATION.md defines exact supported
+profile, owner/storage rejection and Windows/historical gaps.
+
+Current source passes 67 sanitized suites, both 2-KiB freestanding targets, style,
+42 component PASS groups/ten runtime SKIPs and the clean dual-architecture Release
+app. There are 244 complete-volume verdicts, including 37 new boot cases. Seven
+boot profiles cover 49 allocation faults, 44 partial/full read failures, 66
+pre-callback refusals and seven comparison precharges with retry/cleanup. Native
+full checking rejects a mountable damaged copy and retains EIO for activation;
+quick checking remains partial. Four external NTFS-3G geometries compare full
+primary/exported/reserved sectors and retain unchanged source hashes.
+
+Accepted core logs are `artifacts/plan-boot-replicas-*-canonical-geometry.log`;
+freestanding uses `*-resource-fixed.log`, and component/style/app/oracle use
+`*-aligned-loaders.log`. Main independently reviews actual default/compact
+images, owner/mapping frames, results, external source bytes, compiled core and
+bundle binaries in `artifacts/boot-replicas-review.json`. The app retains linker
+ad hoc signatures without distribution authority. ACCEPTANCE.md records initial
+test-resource, compact-geometry, compiler-preflight and journal-span failures.
+Canonical fixture dispatch shares one configured module; default boot bytes are
+unchanged. Explicit test-loader padding keeps physical alignment and copy offsets.
+
+Sequential validation/image campaigns fixed-replay 242/392 actual inputs, including
+all 37 compact boot cases and 22 journal images. Exploration exits zero with all
+reported OOM/timeout/crash counters zero. Reports are
+`artifacts/fuzz-boot-replicas-validation-canonical-reviewed/` and
+`artifacts/fuzz-boot-replicas-image-span-reviewed/`. Resource inputs now admit
+1 MiB plus 4 KiB, while authored data span remains 1 MiB; five-second input and
+1-GiB per-process RSS policies remain. Last periodic counts are 41,479/37,866 at
+70/60 seconds, not exact terminal totals; actual RSS is not measured. Windows,
+installed/runtime, authorization, recovery and commercial qualification remain
+open. Earlier reproduction/performance evidence retains its source scope.
+
+## Preceding within-owner intermediate links
 
 The adapter now resolves checked intermediate symlink/junction destinations to
 translate subsequent components with their actual directory's case/alias policy.

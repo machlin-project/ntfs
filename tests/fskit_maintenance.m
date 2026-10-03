@@ -222,7 +222,9 @@ reader_for(NSData *image)
 	CheckReader *reader = [[CheckReader alloc] init];
 
 	assert(image != nil);
-	reader.image = image;
+	/* A reserved logical sector may end inside the fake device's physical
+	 * block. Pad the backing resource without moving the declared boot copy. */
+	[reader setAlignedImage:image];
 	return reader;
 }
 
@@ -704,9 +706,9 @@ test_inventory_verdicts(NSString *fixtures)
 {
 	NSArray<NSString *> *names = @[
 		@"validation-filename-mismatch.img", @"validation-allocated-unclaimed-cluster.img",
-		@"validation-dos.img"
+		@"validation-dos.img", @"validation-boot-signature.img"
 	];
-	const int expected[] = {EIO, EIO, ENOTSUP};
+	const int expected[] = {EIO, EIO, ENOTSUP, EIO};
 	NSData *image, *original;
 	CheckFileSystem *fileSystem;
 	CheckReader *reader;

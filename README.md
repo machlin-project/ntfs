@@ -87,7 +87,8 @@ locally; installed cache behavior and Windows-authored flags remain unqualified.
 See [directory case policy](docs/CASE-POLICY.md).
 The separate [consistency diagnostic](docs/VALIDATION.md) now checks bounded
 MFT/cluster allocation, extension/list ownership, filename/index pairing,
-required mirror-prefix/boot-anchor consistency, directory reachability and physical
+required mirror-prefix/boot-anchor consistency, declared reserved boot-sector
+agreement, directory reachability and physical
 extents through a private read-only mount. Complete ordinary directory bitmaps
 also reject used unreachable index blocks while leaving free storage unread;
 this check adds no whole-bitmap scan to normal FSKit enumeration.
@@ -100,6 +101,13 @@ explicit unchecked counts; prefix agreement selects no repair source.
 Synthetic fault/budget checks and four independent bitmap geometries pass;
 complete reports retain a defined scope, with native Windows, view-store and
 recovery qualification still open.
+The boot pass checks ordinary nonresident/listed LCN-zero `$Boot` storage and one
+full logical sector at the declared data-span end, even for a larger resource.
+Thirty-seven authored cases, bounded fault/quota profiles and four independent
+NTFS-3G exports pass; Windows backup variants and recovery authority remain open.
+Normal mount remains separate from that full diagnostic. Compact fuzz authors now
+share canonical CLI geometry and preserve the reserved copy within a 1-MiB data
+span plus a 4-KiB resource allowance. See VALIDATION.md and ACCEPTANCE.md.
 The FSKit [lifecycle contract](docs/LIFECYCLE.md) now closes admission before
 draining reads, clears transient caches at unmount and retains item ownership for
 reclamation. Eight blocked-read/overlapping-teardown scenarios and interleaved

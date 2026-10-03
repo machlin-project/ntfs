@@ -61,7 +61,7 @@ lookup_owner(NSData *image, BOOL modern, LookupReader **readerOut, FaultResource
 	NSError *error = nil;
 
 	assert(image != nil);
-	reader.image = image;
+	[reader setAlignedImage:image];
 	resource = [[FaultResource alloc] initWithReader:reader];
 	env = [resource environment];
 	ntfs_default_limits(&limits);

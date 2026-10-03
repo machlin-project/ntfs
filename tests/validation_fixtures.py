@@ -85,6 +85,17 @@ class Mirror:
 
 
 @dataclass(frozen=True)
+class Boot:
+    runs: tuple = ((1, BOOT_LCN),)
+    size: int | None = None
+    initialized: int | None = None
+    flags: int = 0
+    missing: bool = False
+    resident: bool = False
+    listed: bool = False
+
+
+@dataclass(frozen=True)
 class Index:
     block_bytes: int
     slots: int = 1
@@ -134,11 +145,13 @@ def root_value(entries, external=False, block_bytes=None):
                                   f.INDEX_LARGE if external else 0) + entries)
 
 
-def build(source, case, *, mirror=None, index=None):
+def build(source, case, *, mirror=None, index=None, boot=None):
     image = bytearray(source)
     if mirror is None:
         clusters = (MIRROR_RECORDS * f.RECORD + f.CLUSTER - 1) // f.CLUSTER
         mirror = Mirror(((clusters, f.MIRROR_LCN),))
+    boot = Boot() if boot is None else boot
+    assert not (mirror.listed and boot.listed)
     f.put_data(image, f.MFT_LCN, bytes(MFT_BYTES))
     links = {
         f.MFT_RECORD: [Link('$MFT')], MIRROR_RECORD: [Link('$MFTMirr')],
@@ -159,6 +172,9 @@ def build(source, case, *, mirror=None, index=None):
     fragmented_clusters = max(FRAGMENT_MIN_CLUSTERS,
                               (f.FRAGMENTED_BYTES + f.CLUSTER - 1) // f.CLUSTER)
     occupied = {BOOT_LCN, f.INDEX_LCN, FIRST_DATA_LCN, SECOND_DATA_LCN}
+    for clusters, lcn in boot.runs:
+        if lcn is not None:
+            occupied.update(range(lcn, lcn + clusters))
     for clusters, lcn in mirror.runs:
         if lcn is not None:
             occupied.update(range(lcn, lcn + clusters))
@@ -249,8 +265,26 @@ def build(source, case, *, mirror=None, index=None):
         f.resident(f.VOL_NAME, 'Validation'.encode('utf-16le'), VOLUME_NAME_INSTANCE),
         f.resident(f.VOL_INFO, VOLUME_INFORMATION.pack(f.NTFS_MAJOR_VERSION,
                                                     f.NTFS_MINOR_VERSION, 0), VOLUME_INFO_INSTANCE)])
-    records[BOOT_RECORD] = attrs(BOOT_RECORD, [f.nonresident(
-        f.DATA, [(1, BOOT_LCN)], f.CLUSTER, DATA_INSTANCE)])
+    boot_size = f.CLUSTER if boot.size is None else boot.size
+    boot_data = (f.resident(f.DATA, image[:f.SECTOR], DATA_INSTANCE) if boot.resident else
+                 f.nonresident(f.DATA, boot.runs[:1] if boot.listed else boot.runs,
+                               boot_size, DATA_INSTANCE, initialized=boot.initialized,
+                               flags=boot.flags,
+                               allocated=sum(count for count, lcn in boot.runs
+                                             if lcn is not None) * f.CLUSTER))
+    records[BOOT_RECORD] = attrs(BOOT_RECORD, [] if boot.missing else [boot_data])
+    if boot.listed:
+        owner = f.file_reference(BOOT_RECORD)
+        first_clusters = boot.runs[0][0]
+        listing = (f.list_entry(owner, SI_INSTANCE, 0, f.SI)
+                   + f.list_entry(owner, FILENAME_INSTANCE, 0, f.FILENAME)
+                   + f.list_entry(owner, SECURITY_INSTANCE, 0, SECURITY_ATTRIBUTE)
+                   + f.list_entry(owner, DATA_INSTANCE, 0)
+                   + f.list_entry(f.file_reference(EXTENSION_RECORD), SI_INSTANCE,
+                                  first_clusters))
+        records[BOOT_RECORD].append(f.resident(f.ATTR_LIST, listing, LIST_INSTANCE))
+        records[EXTENSION_RECORD] = [f.nonresident(
+            f.DATA, boot.runs[1:], 0, SI_INSTANCE, lowest=first_clusters)]
     records[f.UPCASE_RECORD] = attrs(f.UPCASE_RECORD, [f.nonresident(
         f.DATA, [(UPCASE_UNITS * f.U16_BYTES // f.CLUSTER, f.UPCASE_LCN)],
         UPCASE_UNITS * f.U16_BYTES, DATA_INSTANCE)])
@@ -458,7 +492,9 @@ def build(source, case, *, mirror=None, index=None):
 
     for number, attributes in records.items():
         attributes.sort(key=lambda attr: f.ATTR_HEADER.unpack_from(attr)[0])
-        base = (f.file_reference(MIRROR_RECORD if mirror.listed else FRAGMENTED_RECORD)
+        extension_owner = (MIRROR_RECORD if mirror.listed else
+                           BOOT_RECORD if boot.listed else FRAGMENTED_RECORD)
+        base = (f.file_reference(extension_owner)
                 if number == EXTENSION_RECORD else 0)
         if number == EXTENSION_RECORD and case == 'stale-extension':
             base = f.file_reference(FRAGMENTED_RECORD, f.FILE_SEQUENCE + 1)
@@ -482,6 +518,12 @@ def build(source, case, *, mirror=None, index=None):
         if lcn is not None:
             f.put_data(image, lcn, payload[position:position + length])
         position += length
+    # The boot-declared data span excludes the final reserved boot sector.
+    # Focused ordinary parser fixtures omit it; complete inventories retain it.
+    sector = struct.unpack_from('<H', image, f.BOOT_FIELDS['sector_size'])[0]
+    backup = struct.unpack_from('<Q', image, f.BOOT_FIELDS['sectors'])[0] * sector
+    assert backup + sector > len(image) and backup == len(image)
+    image.extend(image[:sector])
     return image
 
 
@@ -530,4 +572,6 @@ def author(output, source):
     manifest.extend(security_validation_fixtures(output, source))
     from bad_clusters_fixtures import author as bad_clusters_fixtures
     manifest.extend(bad_clusters_fixtures(output, source))
+    from boot_fixtures import author as boot_fixtures
+    manifest.extend(boot_fixtures(output, source))
     (output / 'validation-cases.json').write_text(json.dumps(manifest, indent=2) + '\n')

@@ -22,6 +22,9 @@ exercises the real adapter against a bounded fake resource in-process; it neithe
 mounts an image nor enables an extension. `scripts/fuzz.py --seconds 60` builds a
 separate libFuzzer binary with ASan/UBSan and bounded memory/I/O. Failures retain
 their corpus input under artifacts/fuzz for diagnosis.
+If the selected macOS toolchain lacks libFuzzer, pass a full LLVM compiler, for
+example `--compiler /opt/homebrew/opt/llvm/bin/clang`; a failed runtime preflight
+is not a completed campaign. The SDK still comes from the selected Xcode.
 The component includes eight semaphore-gated resource-read/lifecycle scenarios
 with both a private-window request and an explicitly aligned caller buffer
 (16 gated cases), and interleaved enumeration with five-second test deadlines. Modern runtime
@@ -120,7 +123,10 @@ Whole-image `image`/`validation` exploration uses one libFuzzer child at a time
 with bounded corpus subsets and merges. Fixed-file batches first execute every
 authored seed once and retain `seed-replay.log` plus its report outcome; child
 subset selection alone is not seed-coverage evidence. OOM/timeout/crash remain
-fatal, with unchanged sanitizers and per-process RSS/input limits. The configured
+fatal, with unchanged sanitizers, five-second input deadlines and a 1-GiB
+per-process RSS ceiling. Image/validation resources now admit up to 1 MiB plus
+4 KiB for the reserved boot sector; the authored data span remains 1 MiB.
+Standalone parser envelopes remain separate. The configured
 RSS ceiling is not actual or aggregate memory usage. The observed earlier image
 corpus OOM and its fixed replay remain separately recorded in ACCEPTANCE.md.
 The `access` target also replays every authored input before exploration. Its
@@ -347,7 +353,13 @@ counts, live memory, read calls/bytes and work. The dedicated `--target validati
 campaign uses its own complete compact-image corpus and checks deterministic
 reports, exact cleanup and dynamic budgets. Ordinary mount does not implicitly
 run this diagnostic. See VALIDATION.md for supported passes and explicit gaps.
-Compare both bitmap inventories and required mirror-prefix exports using existing
+Boot diagnostic fixtures preserve a reserved sector after their declared data
+span; they are larger than focused parser images. Maintenance, enumeration and
+lookup test loaders pad that backing to their existing physical alignment
+without changing the BPB or reserved-copy offset. Full checker tests include a
+mountable damaged copy: quick scope succeeds, full scope fails and subsequent
+activation retains EIO.
+Compare both bitmap inventories, required mirror-prefix and declared boot-copy exports using existing
 images and a new evidence directory:
 
 ```sh

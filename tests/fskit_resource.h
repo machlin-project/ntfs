@@ -14,6 +14,9 @@
 @property uint64_t observedEnd;
 @property NSUInteger observedReads;
 @property BOOL refuseObservedReads;
+
+/* Extend an authored resource to whole physical blocks without moving bytes. */
+- (void)setAlignedImage:(NSData *)image;
 @end
 
 @interface FaultResource : NTFSResource

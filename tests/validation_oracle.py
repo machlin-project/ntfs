@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare diagnostic inventories and mirror coverage with NTFS-3G exports."""
+"""Compare diagnostic inventories, mirrors and boot copies with NTFS-3G exports."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / 'tests'))
 from secure_oracle import capture, file_hash, GEOMETRIES
 from validation_cli import invoke
 
-MFT_RECORD, MIRROR_RECORD, BITMAP_RECORD = 0, 1, 6
+MFT_RECORD, MIRROR_RECORD, BITMAP_RECORD, BOOT_RECORD = 0, 1, 6, 7
 REQUIRED_MIRROR_RECORDS = 4
 DATA_TYPE, BITMAP_TYPE = '0x80', '0xb0'
 BYTE_BITS = 8
@@ -21,6 +21,39 @@ RECORD_HEADER = struct.Struct('<4sHHQHHHHIIQH')
 RECORD_FIELDS = ('magic', 'usa_offset', 'usa_count', 'lsn', 'sequence', 'links',
                  'attrs_offset', 'flags', 'used', 'allocated', 'base_reference',
                  'next_instance')
+BOOT_PREFIX = struct.Struct('<3s8sHBHBHHBHHHII4sQ')
+BOOT_FIELDS = ('jump', 'oem', 'sector_size', 'sectors_per_cluster', 'reserved_sectors',
+               'fat_count', 'root_entries', 'small_sectors', 'media', 'sectors_per_fat',
+               'sectors_per_track', 'heads', 'hidden_sectors', 'large_sectors',
+               'extended_reserved', 'sectors')
+
+
+def boot_copies(image, exported, sector, cluster, info):
+    """Observe the declared reserved copy independently of the core diagnostic."""
+    with image.open('rb') as source:
+        prefix = source.read(BOOT_PREFIX.size)
+        if len(prefix) != BOOT_PREFIX.size:
+            raise ValueError('Independent source lacks the NTFS boot prefix')
+        header = dict(zip(BOOT_FIELDS, BOOT_PREFIX.unpack(prefix)))
+        if (header['sector_size'] != sector
+                or header['sectors_per_cluster'] * sector != cluster):
+            raise ValueError('Independent boot geometry differs from the authored profile')
+        backup_offset = header['sectors'] * sector
+        if backup_offset != int(info['size_bytes']):
+            raise ValueError('Core data span differs from the independently decoded boot field')
+        if backup_offset > image.stat().st_size - sector:
+            raise ValueError('Independent resource lacks the declared reserved boot sector')
+        source.seek(0)
+        primary = source.read(sector)
+        source.seek(backup_offset)
+        backup = source.read(sector)
+    if (len(primary) != sector or len(backup) != sector or len(exported) < sector
+            or primary != exported[:sector] or primary != backup):
+        raise ValueError('Independent $Boot export, primary and reserved sectors differ')
+    return {'independent_boot_stream_bytes': len(exported),
+            'independent_boot_sector_bytes': sector,
+            'independent_boot_backup_offset': backup_offset,
+            'independent_boot_sector_sha256': hashlib.sha256(primary).hexdigest()}
 
 
 def allocated_bits(data, count):
@@ -45,7 +78,7 @@ def main():
         if path.is_symlink() or not stat.S_ISREG(path.stat().st_mode):
             parser.error(f'A regular file is required: {path}')
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {'status': 'running', 'scope': 'supported metadata, independent bitmaps and mandatory mirror prefix',
+    report = {'status': 'running', 'scope': 'supported metadata, independent bitmaps, mandatory mirror prefix and declared boot copy',
               'windows_acceptance': 'not run', 'journal_recovery': 'not checked', 'profiles': []}
     destination = args.output / 'report.json'
     try:
@@ -67,6 +100,8 @@ def main():
                     allocation = capture([args.tools / 'ntfscat', '-i', BITMAP_RECORD, '-a', DATA_TYPE, image], log)
                     mft_data = capture([args.tools / 'ntfscat', '-i', MFT_RECORD, '-a', DATA_TYPE, image], log)
                     mirror_data = capture([args.tools / 'ntfscat', '-i', MIRROR_RECORD, '-a', DATA_TYPE, image], log)
+                    boot_data = capture([args.tools / 'ntfscat', '-i', BOOT_RECORD, '-a', DATA_TYPE, image], log)
+                    profile.update(boot_copies(image, boot_data, sector, cluster, info))
                     if min(len(mft_data), len(mirror_data)) < RECORD_HEADER.size:
                         raise ValueError('Independent MFT/mirror exports lack their FILE headers')
                     primary_header = dict(zip(RECORD_FIELDS, RECORD_HEADER.unpack_from(mft_data)))
@@ -118,7 +153,7 @@ def main():
                         raise ValueError('Independent image changed during read-only diagnostics')
                     destination.write_text(json.dumps(report, indent=2) + '\n')
         report['status'] = 'pass'
-        print(f'PASS: {len(images)} independent geometries, bitmap inventories, exact required mirror prefixes and unchanged hashes')
+        print(f'PASS: {len(images)} independent geometries, bitmap inventories, exact required mirror prefixes, declared boot copies and unchanged hashes')
     except BaseException:
         report['status'] = 'fail'
         raise

@@ -154,7 +154,7 @@ enumeration_owner(NSData *image, BOOL modern, uint32_t maximum, TestReader **rea
 	NSError *error = nil;
 
 	assert(image != nil);
-	reader.image = image;
+	[reader setAlignedImage:image];
 	resource = [[FaultResource alloc] initWithReader:reader];
 	env = [resource environment];
 	ntfs_default_limits(&limits);

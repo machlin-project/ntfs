@@ -17,6 +17,10 @@ MAX_SECONDS = 3600
 # larger journal-volume layouts stay in the dedicated component/source suites.
 # libFuzzer retains whole inputs, so unused disk tails amplify corpus memory.
 MAX_INPUT_BYTES = 1024 * 1024
+# Complete diagnostic resources also contain the reserved sector after that
+# declared data span. Keep authored data geometry unchanged and retain the copy.
+IMAGE_RESERVED_BOOT_BYTES = 4096
+MAX_IMAGE_RESOURCE_BYTES = MAX_INPUT_BYTES + IMAGE_RESERVED_BOOT_BYTES
 RSS_LIMIT_MIB = 1024
 INPUT_TIMEOUT_SECONDS = 5
 IMAGE_FUZZ_PROCESSES = 1
@@ -66,11 +70,13 @@ try:
             maximum = COMPRESSION_INPUT_BYTES
         if target == 'logfile':
             maximum = LOGFILE_INPUT_BYTES
+        if target in ('image', 'validation'):
+            maximum = MAX_IMAGE_RESOURCE_BYTES
         corpus = output / target / f'corpus-{maximum}'
         corpus.mkdir(parents=True, exist_ok=True)
         seeds = campaign / 'seeds'
         if target in ('image', 'validation'):
-            subprocess.run([sys.executable, str(root / 'tests/fixtures.py'), str(seeds), '--image-bytes', str(maximum)], cwd=root, env=env, check=True)
+            subprocess.run([sys.executable, str(root / 'tests/fixtures.py'), str(seeds), '--image-bytes', str(MAX_INPUT_BYTES)], cwd=root, env=env, check=True)
             # Complete inventories have their own walker and corpus. Preserve
             # the original image API corpus without duplicating unused tails.
             paths = sorted(seeds.glob('validation-*.img')) if target == 'validation' else sorted(
@@ -79,7 +85,7 @@ try:
                 # Public stream admission must reject the fixed bad-cluster
                 # stream, while preserving ordinary ADS with the same name.
                 paths.extend(sorted(seeds.glob('validation-bad-*.img')))
-                paths.extend(journal_volume_images(seeds, maximum))
+                paths.extend(journal_volume_images(seeds, MAX_INPUT_BYTES))
             sources = [root / ('tests/fuzz_validation.c' if target == 'validation' else 'tests/fuzz.c'), root / 'tests/fuzz_mutator.c']
             flags = []
         else:
@@ -105,6 +111,9 @@ try:
                 'rss_limit_mib': RSS_LIMIT_MIB, 'timeout_seconds': INPUT_TIMEOUT_SECONDS,
                 'log': str(campaign / 'run.log')}
         item['authored_seeds'] = len(paths)
+        if target in ('image', 'validation'):
+            item['declared_image_bytes'] = MAX_INPUT_BYTES
+            item['reserved_boot_bytes'] = IMAGE_RESERVED_BOOT_BYTES
         if target == 'logfile':
             item['circular_record_seeds'] = json.loads((seeds / 'logfile-record-selection.json').read_text())
         report['targets'].append(item)

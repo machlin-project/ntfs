@@ -127,6 +127,18 @@ ownership, normalized used-span comparison, budgets, reports and synthetic
 geometry/fault oracles are original repository work. Native Windows replica
 coverage and repair remain separate acceptance requirements.
 
+The boot diagnostic uses
+[Microsoft's BPB/boot-frame description](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2003/cc781134(v=ws.10))
+and [original Linux-NTFS boot research](https://flatcap.github.io/linux-ntfs/ntfs/files/boot.html)
+for fixed slot 7, nonresident LCN-zero storage and older backup variants. Only
+the reservation/copy-placement facts in pinned NTFS-3G 2022.10.3
+[mkntfs.c](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/mkntfs.c)
+were inspected to establish the supported declared-end reserved-sector profile.
+No formatter or repair implementation was adopted. The original private owner,
+bounded staging/comparison, reports, fault/quota fixtures and independent BPB/
+standalone-export oracle retain this profile's scope. Windows-authored boot
+copies, historical middle-copy placement and recovery selection remain open.
+
 Regular-file size inspection separates Microsoft's nonresident FileSize,
 AllocatedLength and ValidDataLength fields from content-decoder availability.
 The compression-format mask and sparse/encrypted flags determine known attribute

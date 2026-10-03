@@ -190,6 +190,13 @@ and allocator overhead are not core cumulative allocation usage or core live
 bytes. Native identities, response sizes and namespace scans have separate caps.
 These caps are not a complete RSS or aggregate native-memory qualification.
 
+The full consistency diagnostic's reserved boot copy lies immediately outside
+the mounted data span. Its private read checks backing-resource bounds and
+charges diagnostic read/work limits plus the existing native physical-read scope.
+It is not a mounted-core exact-read charge and does not widen ordinary stream
+bounds. Sector staging shares the diagnostic memory cap and native resource pool.
+See VALIDATION.md for the supported copy profile and partial reports.
+
 ## Local qualification and remaining work
 
 `tests/operation.c` checks 12 independently authored storage/operation profiles

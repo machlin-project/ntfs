@@ -745,7 +745,7 @@ def main():
     parser.add_argument('output', type=Path)
     parser.add_argument('stamp', nargs='?', type=Path)
     parser.add_argument('--image-bytes', type=int, default=IMAGE_SIZE,
-                        help='Physical image size; payload placement and logical stream sizes stay fixed')
+                        help='Base data span; complete diagnostics also retain a reserved boot sector')
     args = parser.parse_args()
     if args.image_bytes < ALLOCATED_CLUSTERS * CLUSTER or args.image_bytes % (CLUSTER * BYTE_BITS):
         parser.error('image size must cover reserved clusters and a whole allocation-bitmap byte')
@@ -909,4 +909,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # Imported authors must observe the same geometry as the CLI entry point.
+    import fixtures as fixture_module
+    fixture_module.main()

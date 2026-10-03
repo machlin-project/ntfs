@@ -118,6 +118,26 @@ subset selection alone is not seed-coverage evidence. OOM/timeout/crash remain
 fatal, with unchanged sanitizers and per-process RSS/input limits. The configured
 RSS ceiling is not actual or aggregate memory usage. The observed earlier image
 corpus OOM and its fixed replay remain separately recorded in ACCEPTANCE.md.
+The `access` target also replays every authored input before exploration. Its
+request/stored generic-mask seeds distinguish concrete grants, unsupported raw/
+mixed ACEs and nonapplicable inherit-only entries, with ordinary and restricting
+contexts. These checks exercise the discretionary evaluator, not native identity
+mapping or Windows acquisition.
+
+Fuzz children, FSKit component children and bounded diagnostic tools use
+`sanitizer_environment()`: the normal tool allowlist plus explicit ASan/UBSan
+halt/abort options. Ambient options cannot restore recovering behavior. Meson's
+sanitized setup already selects fatal options. Exit zero alone is insufficient
+when a runtime can report and continue; see
+[Clang's UBSan runtime contract](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html).
+The `sanitizer-runtime` suite compiles two disposable, separately instrumented
+programs with the selected Clang and an explicit macOS SDK. Clean controls exit
+zero, a recovering UBSan control reports its injected fault and exits zero,
+and hardened UBSan/ASan faults terminate. The actual bounded diagnostic wrapper
+must also reject each injected fault. These expected negative-test diagnostics
+are kept separate from driver findings; the suite does not read filesystem images
+or access devices. Only selected sanitizer options are retained in reports.
+
 The image target additionally selects one tightened operation dimension from a
 named control seed, walks public owning calls under shared credits and compares
 usage with independent allocator/read attempts. This complements its original

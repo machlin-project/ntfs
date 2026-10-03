@@ -27,11 +27,23 @@ permits their absence. This follows the documented
 All applicable DACL entries undergo a feature/mask check before an earlier allow
 can cause a decision. Invalid later framing cannot become a successful grant.
 
-Generic file and directory rights map to named specific and standard rights.
-READ and WRITE both include SYNCHRONIZE; a generic WRITE deny can therefore deny
-a generic READ request. Mapping preserves unknown bits until explicit validation
-rather than discarding them. See
+Generic file and directory requests map to named specific and standard rights.
+READ and WRITE both include SYNCHRONIZE; a concrete FILE_GENERIC_WRITE deny can
+therefore deny a generic READ request. Request mapping preserves unknown bits
+until explicit validation rather than discarding them. See
 [file access rights and mappings](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights).
+
+Stored ACE masks are evaluated as concrete rights. An applicable ACE containing
+generic bits returns UNSUPPORTED, including mixed masks, a nonmatching trustee,
+zero-right requests and entries after a sufficient allow. This is the supported
+feature boundary; it does not emulate Windows' treatment of every unusual stored
+mask. Generic bits in an inherit-only entry remain nonapplicable while its byte
+framing is validated. Original descriptor/ACE snapshots preserve these bits.
+Microsoft distinguishes request mapping from stored-ACE interpretation in
+[MS-DTYP's access mask contract](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7a53f60e-e730-4dfe-bbe9-b21b62eb790b).
+The preceding implementation incorrectly mapped stored masks and could grant
+concrete access from a generic ACE. The retained local evaluator reproduces that
+behavior under `artifacts/stored-mask-before/`; current checks reject it.
 
 For supported exact masks, entries retain original storage order. Applicable
 allow entries satisfy only still-pending rights; an applicable deny fails if it
@@ -101,9 +113,9 @@ serialization requirements. This does not enable concurrent volume operations.
 
 Applicable object, callback, conditional, audit or unknown DACL ACEs return
 UNSUPPORTED even when a simpler earlier allow would suffice or a trustee would
-not match. Unknown access bits/attributes also fail explicitly. Nonapplicable
-inherit-only entries retain framing validation but do not participate in the
-feature policy. MAXIMUM_ALLOWED and ACCESS_SYSTEM_SECURITY are unsupported.
+not match. Stored generic and unknown access bits/attributes also fail explicitly.
+Nonapplicable inherit-only entries retain framing validation but do not participate
+in the feature policy. MAXIMUM_ALLOWED and ACCESS_SYSTEM_SECURITY are unsupported.
 
 Restricted-token ownership with implicit READ_CONTROL/WRITE_DAC or active OWNER
 RIGHTS returns UNSUPPORTED. The detailed interaction needs independent Windows
@@ -121,7 +133,7 @@ of a discretionary mask calculation.
 
 ## Evidence
 
-The local suite evaluates 196,809 decisions, including 196,608 comparisons with
+The local suite evaluates 197,201 decisions, including 196,608 comparisons with
 an independently implemented per-right first-decisive-ACE oracle. Its ordered
 vectors cover enabled/disabled/deny-only groups, ordinary and restricting contexts,
 inherit-only entries, accumulating grants and denies before/after grants. Separate
@@ -129,6 +141,19 @@ vectors cover ownership, OWNER RIGHTS, generic mappings, absent/NULL/empty ACLs,
 all 15 SID subauthorities, six-byte authorities, unsupported features, complete
 later-entry validation, output zeroing and aggregate limits. A valid high-integrity
 SACL vector demonstrates the DACL-only boundary, not integrity enforcement.
+
+Of these decisions, 392 independently authored stored-mask policy verdicts cover
+all four generic families, allow/deny entries, matching/unmatched trustees,
+ordinary/owner/restricting contexts and zero/concrete/generic/control requests.
+Raw and mixed masks follow a sufficient concrete grant; input bytes remain
+unchanged and errors zero the entire result. Inherit-only controls retain their
+concrete grants. The transport/SDK/token/cleanup/reporting suite passes 425 checks.
+
+Six identical retained local pre/post-fix packets under
+`artifacts/stored-mask-{before,after}/` reproduce the former stored-mask behavior.
+Four applicable generic-mask cases now return UNSUPPORTED with zero decisions;
+the generic-request and inherit-only controls remain exactly equal. This is local
+regression evidence, not a Windows AccessCheck observation.
 
 Storage tests evaluate snapshots after node close with the next allocation/read
 forced to fail, preserving exact no-I/O/no-allocation access. The genuine checksum

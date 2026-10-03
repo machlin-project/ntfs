@@ -84,6 +84,18 @@ def core_contract(evaluator, directory):
                        wire.ace(wire.ACE_ALLOW, wire.FILE_GENERIC_READ, TEST_USER)]
     evaluate(plain, wire.descriptor(TEST_OTHER, generic_overlap), wire.GENERIC_READ, False,
              mapped=wire.FILE_GENERIC_READ)
+    # Mapping applies to requests. Stored generic bits remain outside the
+    # concrete-ACE policy even after a sufficient grant or a zero request.
+    for generic in (wire.GENERIC_READ, wire.GENERIC_WRITE, wire.GENERIC_EXECUTE, wire.GENERIC_ALL):
+        for kind in (wire.ACE_ALLOW, wire.ACE_DENY):
+            raw = wire.ace(kind, generic, TEST_USER)
+            evaluate(plain, wire.descriptor(TEST_OTHER, [raw]), read, False, code=wire.NTFS_UNSUPPORTED)
+            evaluate(plain, wire.descriptor(TEST_OTHER, [allow, raw]), read, False, code=wire.NTFS_UNSUPPORTED)
+            evaluate(plain, wire.descriptor(TEST_OTHER, [raw]), 0, False, code=wire.NTFS_UNSUPPORTED)
+            mixed = wire.ace(kind, generic | read, TEST_OTHER)
+            evaluate(plain, wire.descriptor(TEST_OTHER, [allow, mixed]), read, False, code=wire.NTFS_UNSUPPORTED)
+            inherited = wire.ace(kind, generic, TEST_USER, wire.ACE_INHERIT_ONLY)
+            evaluate(plain, wire.descriptor(TEST_OTHER, [allow, inherited]), read, True)
     for attributes, allowed in ((wire.GROUP_ENABLED, True), (0, False), (wire.GROUP_DENY_ONLY, False)):
         context = token(groups=[{'sid': wire.WORLD, 'attributes': attributes}])
         evaluate(context, wire.descriptor(TEST_OTHER, [wire.ace(wire.ACE_ALLOW, read, wire.WORLD)]), read, allowed)

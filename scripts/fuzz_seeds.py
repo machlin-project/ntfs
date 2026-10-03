@@ -8,6 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 import fixtures as wire
+import access_transport as access_wire
 from stat_fixtures import change_flags, UNKNOWN_COMPRESSION_FORMAT
 from wof_fixtures import generate as generate_wof
 from lzx_fixtures import author as generate_lzx
@@ -160,6 +161,28 @@ def generate(output):
                                         attributes, user, SECURITY_BUILTIN_ADMINISTRATORS,
                                         SECURITY_BUILTIN_ADMINISTRATORS)
             seeds['access'][f'{name}-{context}'] = header + descriptor
+    access_user = access_wire.sid(SECURITY_NT_AUTHORITY, SECURITY_BUILTIN_DOMAIN,
+                                SECURITY_BUILTIN_ADMINISTRATORS)
+    for name, generic, mapped in (
+            ('read', access_wire.GENERIC_READ, access_wire.FILE_GENERIC_READ),
+            ('write', access_wire.GENERIC_WRITE, access_wire.FILE_GENERIC_WRITE),
+            ('execute', access_wire.GENERIC_EXECUTE, access_wire.FILE_GENERIC_EXECUTE),
+            ('all', access_wire.GENERIC_ALL, access_wire.FILE_ALL_ACCESS)):
+        concrete = access_wire.ace(access_wire.ACE_ALLOW, mapped, access_user)
+        for stored, entries in (
+                ('concrete', [concrete]),
+                ('generic', [access_wire.ace(access_wire.ACE_ALLOW, generic, access_user)]),
+                ('mixed-late', [concrete, access_wire.ace(access_wire.ACE_DENY,
+                                                       generic | SECURITY_FILE_READ_DATA, access_user)]),
+                ('inherit-only', [concrete, access_wire.ace(access_wire.ACE_DENY, generic,
+                                                         access_user, access_wire.ACE_INHERIT_ONLY)])):
+            packet = access_wire.descriptor(access_wire.UNRELATED, entries)
+            for context, flags in (('ordinary', 0), ('restricted', ACCESS_RESTRICTED)):
+                header = ACCESS_HEADER.pack(generic, ACCESS_COMPARISON_BUDGET - 1, flags,
+                                            ACCESS_ENABLED, SECURITY_BUILTIN_ADMINISTRATORS,
+                                            SECURITY_BUILTIN_ADMINISTRATORS,
+                                            SECURITY_BUILTIN_ADMINISTRATORS)
+                seeds['access'][f'request-{name}-stored-{stored}-{context}'] = header + packet
     for name, entries in (('empty', wire.entry()),
                           ('entries', wire.entry('hello.txt', wire.FILE_RECORDS['hello.txt']) + wire.entry()),
                           ('case-collision', wire.entry('HELLO.TXT', wire.FILE_RECORDS['fragmented.bin'], namespace=wire.NAMESPACE_POSIX) +

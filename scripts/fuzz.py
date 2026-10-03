@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from environment import tool_environment
+from environment import sanitizer_environment
 from fuzz_seeds import generate, journal_volume_images
 
 DEFAULT_SECONDS = 60
@@ -37,7 +37,7 @@ parser.add_argument('--compiler', help='Clang executable with a libFuzzer runtim
 args = parser.parse_args()
 if not 1 <= args.seconds <= MAX_SECONDS:
     parser.error(f'--seconds must be between 1 and {MAX_SECONDS}')
-env = tool_environment()
+env = sanitizer_environment()
 output = args.output.resolve()
 output.mkdir(parents=True, exist_ok=True)
 run_directory = Path(tempfile.mkdtemp(prefix='run-', dir=output))
@@ -51,7 +51,8 @@ else:
     compiler, sdk = args.compiler or 'clang', []
 targets = TARGETS if args.target == 'all' else (args.target,)
 report = {'status': 'running', 'compiler': compiler, 'seconds_per_target': args.seconds,
-          'directory': str(run_directory), 'targets': []}
+          'directory': str(run_directory), 'targets': [],
+          'sanitizer_options': {name: env[name] for name in ('ASAN_OPTIONS', 'UBSAN_OPTIONS')}}
 report_path = run_directory / 'report.json'
 report_path.write_text(json.dumps(report, indent=2) + '\n')
 try:
@@ -103,8 +104,8 @@ try:
                 'processes': IMAGE_FUZZ_PROCESSES if process_flags else 0,
                 'rss_limit_mib': RSS_LIMIT_MIB, 'timeout_seconds': INPUT_TIMEOUT_SECONDS,
                 'log': str(campaign / 'run.log')}
+        item['authored_seeds'] = len(paths)
         if target == 'logfile':
-            item['authored_seeds'] = len(paths)
             item['circular_record_seeds'] = json.loads((seeds / 'logfile-record-selection.json').read_text())
         report['targets'].append(item)
         report_path.write_text(json.dumps(report, indent=2) + '\n')
@@ -112,7 +113,7 @@ try:
         item['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         item['status'] = 'running'
         report_path.write_text(json.dumps(report, indent=2) + '\n')
-        if process_flags or target == 'logfile':
+        if process_flags or target in ('logfile', 'access'):
             # Child subsets are coverage-guided exploration, not proof that
             # every authored seed ran. Fixed-file batches check all seeds once
             # without retaining a growing corpus or weakening sanitizer checks.

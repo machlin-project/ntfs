@@ -98,8 +98,10 @@ void ntfs_dacl_default_limits(struct ntfs_dacl_limits *);
 
 /* Discretionary plane only: an allowed result is not complete authorization.
  * Validates the whole descriptor and all applicable DACL ACEs before deciding.
- * Supports exact file/directory masks, plain ordered allow/deny ACEs, inherit-only
- * exclusion, owner READ_CONTROL/WRITE_DAC and OWNER RIGHTS (S-1-3-4).
+ * Maps generic requests to exact file/directory masks. Stored plain ordered
+ * allow/deny ACEs require concrete rights; applicable stored generic bits return
+ * UNSUPPORTED, never an inferred grant. Supports inherit-only exclusion, owner
+ * READ_CONTROL/WRITE_DAC and OWNER RIGHTS (S-1-3-4).
  * Unknown/object/callback ACEs applying to this object, unknown masks/attributes,
  * MAXIMUM_ALLOWED and ACCESS_SYSTEM_SECURITY return UNSUPPORTED. Restricted-owner
  * implied/OWNER RIGHTS semantics await native qualification and are UNSUPPORTED.

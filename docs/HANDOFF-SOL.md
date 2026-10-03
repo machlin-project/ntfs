@@ -17,7 +17,44 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current read-only FSKit maintenance
+## Current stored-access masks and diagnostic processes
+
+Generic mappings belong to access requests. Applicable stored generic/mixed ACE
+masks now return UNSUPPORTED, including entries after a sufficient grant,
+nonmatching trustees, zero requests, ordinary ownership and restricting contexts.
+The core evaluates supported stored concrete rights without rewriting snapshots;
+inherit-only entries remain nonapplicable but retain framing checks. Six exact
+retained local pre/post packets reproduce four corrected refusals and two unchanged
+supported controls. ACCESS.md records the policy and primary format source.
+This is a deliberately limited DACL contract; FSKit still does not authenticate
+Windows principals or enforce this evaluator as native authorization.
+
+Current local evidence is 67 sanitized core suites, 197,201 access decisions
+(196,608 independent per-right oracles and 392 stored-mask verdicts), 425 transport
+checks, both 2-KiB freestanding targets, format/style, 36 FSKit component groups
+with ten runtime SKIPs and the clean unsigned arm64/x86_64 Release app. The app
+compiles the changed access core for both architectures; later test/process
+changes leave product source unchanged. Common fuzz, component and diagnostic
+children now explicitly select fatal ASan/UBSan options. A separate process suite
+proves recovering-control versus fatal exits and actual diagnostic-wrapper
+rejection using disposable injected faults. Its first missing-SDK compile failure
+is retained separately from the corrected complete run.
+
+The current 60-second access campaign replays all 52 seeds, completes 8,751,208
+executions in 61 seconds and observes a 519-MiB libFuzzer process peak under the
+unchanged 1-GiB ceiling. No crash, timeout, OOM or sanitizer finding is reported.
+Current logs use `artifacts/plan-stored-mask-*`, matched packets use
+`artifacts/stored-mask-{before,after}/`, and fatal campaign evidence is under
+`artifacts/fuzz-stored-mask-fatal/`. Main review is
+`artifacts/stored-mask-review.json`. Preserve preceding campaign/environment and
+cache/maintenance evidence with their exact source scopes.
+
+Next acquire real Windows AccessCheck vectors before expanding restricted-owner,
+maximum-access, privilege or advanced-ACE semantics. Native identity/owning
+authorization, installed FSKit, Windows interoperability and commercial release
+remain open. The broader work is tracked in CORE-QUALIFICATION.md.
+
+## Preceding read-only FSKit maintenance
 
 The private validator now runs through `FSManageableResourceMaintenanceOperations`.
 Default/`-n` runs a full supported inventory; `-q` is mount eligibility with an

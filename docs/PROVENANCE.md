@@ -35,6 +35,7 @@ Primary references:
 - [Object ACE fields](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-access_allowed_object_ace)
 - [Ordered discretionary access checks](https://learn.microsoft.com/en-us/windows/win32/secauthz/how-dacls-control-access-to-an-object)
 - [AccessCheck inputs and exact granted mask](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-accesscheck)
+- [Request mapping versus stored ACE masks](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/7a53f60e-e730-4dfe-bbe9-b21b62eb790b)
 - [File access rights and generic mappings](https://learn.microsoft.com/en-us/windows/win32/fileio/file-security-and-access-rights)
 - [Token group attributes](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-token_groups)
 - [Restricted token creation and two-check semantics](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-createrestrictedtoken)
@@ -195,6 +196,13 @@ original. It does not use a GPL security parser or establish Windows/native acce
 decisions. The collector uses documented Win32 volume, identity and stream APIs;
 fixed-width ctypes layouts and serialization pass local tests, while actual
 Windows calls remain a separate required observation.
+
+The DACL evaluator maps the desired request only. MS-DTYP distinguishes that
+mapping from the mask already stored in an ACE. Applicable stored generic bits
+therefore remain outside the evaluator's concrete-rights policy and return
+UNSUPPORTED; original metadata stays lossless. This corrects an independently
+retained local overgrant and adds request/stored/inherit-only fuzz inputs. These
+policy regressions are separate from native Windows AccessCheck observations.
 
 The resolver uses reverse-engineered view-index/SDS format facts, not imported
 filesystem algorithms. Raw external exports confirm ID ordering, hash/ID

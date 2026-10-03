@@ -6,7 +6,7 @@ import stat
 import subprocess
 import time
 
-from environment import tool_environment
+from environment import sanitizer_environment
 
 ROOT = Path(__file__).resolve().parents[1]
 PIPE_CHUNK_BYTES = 65536
@@ -35,7 +35,7 @@ def run_tool(arguments, *, timeout=DEFAULT_TIMEOUT_SECONDS, output_limit=DEFAULT
         raise ValueError('Invalid diagnostic execution budget')
     deadline = time.monotonic() + timeout
     output, errors = bytearray(), bytearray()
-    process = subprocess.Popen(arguments, cwd=ROOT, env=tool_environment(), stdin=subprocess.DEVNULL,
+    process = subprocess.Popen(arguments, cwd=ROOT, env=sanitizer_environment(), stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         with selectors.DefaultSelector() as selector:

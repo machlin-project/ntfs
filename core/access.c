@@ -202,7 +202,10 @@ validate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, bool *owner
 		}
 		if ((ace.type != NTFS_ACE_ALLOW && ace.type != NTFS_ACE_DENY) ||
 		    (ace.flags & ~APPLICABLE_ACE_FLAGS) != 0 ||
-		    (ntfs_file_map_rights(ace.mask) & ~NTFS_FILE_ALL_ACCESS) != 0) {
+		    (ace.mask & ~NTFS_FILE_ALL_ACCESS) != 0) {
+			/* Generic mapping belongs to the caller's request. A stored ACE
+			 * needs concrete file rights; inventing its mapping can grant
+			 * access the original descriptor did not specify. */
 			return NTFS_UNSUPPORTED;
 		}
 		*owner_rights |= owner_rights_sid(&ace.trustee);
@@ -233,7 +236,7 @@ evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, struct dacl
 		if ((ace.flags & NTFS_ACE_INHERIT_ONLY) != 0) {
 			continue;
 		}
-		mask = ntfs_file_map_rights(ace.mask);
+		mask = ace.mask;
 		if ((mask & remaining) == 0) {
 			continue;
 		}

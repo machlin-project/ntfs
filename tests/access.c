@@ -29,6 +29,7 @@ enum {
 	TEST_ORDER_REQUESTS = 8,
 	TEST_GROUP_MODES = 3,
 	TEST_RESTRICTION_MODES = 2,
+	TEST_STORED_MASK_FORMS = 2,
 	TEST_WORK_ACES = 300
 };
 
@@ -221,7 +222,7 @@ basic_tests(void)
 		assert(ntfs_file_map_rights(generic[i]) == mapped[i]);
 		assert(ntfs_file_map_rights(generic[i] | TEST_RESERVED_ACCESS) ==
 		    (mapped[i] | TEST_RESERVED_ACCESS));
-		aces[0].mask = generic[i];
+		aces[0].mask = mapped[i];
 		size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 1);
 		(void)check(bytes, size, &token, generic[i], NULL, NTFS_OK, true);
 		(void)check(bytes, size, &token, mapped[i], NULL, NTFS_OK, true);
@@ -264,8 +265,8 @@ basic_tests(void)
 	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, false);
 	/* Generic read and write both include SYNCHRONIZE: a write deny overlaps read. */
 	token.user_deny_only = false;
-	aces[0].mask = NTFS_ACCESS_GENERIC_WRITE;
-	aces[1].mask = NTFS_ACCESS_GENERIC_READ;
+	aces[0].mask = TEST_FILE_GENERIC_WRITE;
+	aces[1].mask = TEST_FILE_GENERIC_READ;
 	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);
 	(void)check(bytes, size, &token, NTFS_ACCESS_GENERIC_READ, NULL, NTFS_OK, false);
 	aces[0].flags = NTFS_ACE_INHERIT_ONLY | NTFS_ACE_CONTAINER_INHERIT;
@@ -274,6 +275,70 @@ basic_tests(void)
 	aces[0].flags = NTFS_ACE_INHERITED | NTFS_ACE_OBJECT_INHERIT | NTFS_ACE_NO_PROPAGATE;
 	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);
 	(void)check(bytes, size, &token, NTFS_ACCESS_GENERIC_READ, NULL, NTFS_OK, false);
+}
+
+static void
+stored_mask_tests(void)
+{
+	uint8_t bytes[TEST_BUFFER_BYTES], saved[TEST_BUFFER_BYTES];
+	struct ntfs_access_token tokens[] = {{.user = user_sid}, {.user = owner_sid},
+	    {.user = user_sid,
+		.restricting = &restricting_sid,
+		.restricting_count = 1,
+		.restricted = true}};
+	struct test_ace aces[] = {
+	    {NTFS_ACE_ALLOW, 0, TEST_FILE_ALL_ACCESS, user_sid}, {NTFS_ACE_ALLOW, 0, 0, user_sid}};
+	const struct ntfs_sid trustees[] = {user_sid, restricting_sid};
+	const uint32_t generic[] = {NTFS_ACCESS_GENERIC_READ, NTFS_ACCESS_GENERIC_WRITE,
+	    NTFS_ACCESS_GENERIC_EXECUTE, NTFS_ACCESS_GENERIC_ALL};
+	const uint32_t requests[] = {0, NTFS_FILE_READ_DATA, NTFS_ACCESS_GENERIC_READ,
+	    NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC};
+	const uint8_t types[] = {NTFS_ACE_ALLOW, NTFS_ACE_DENY};
+	size_t mask, type, trustee, context, request, mixed, size, before = decisions;
+
+	/* These wire policy expectations are independent of the decision loop.
+	 * A later unsupported mask is checked even after a sufficient allow, for
+	 * nonmatching trustees, zero requests, implicit owners and restrictions. */
+	for (mask = 0; mask < sizeof(generic) / sizeof(generic[0]); mask++) {
+		for (type = 0; type < sizeof(types) / sizeof(types[0]); type++) {
+			for (trustee = 0; trustee < sizeof(trustees) / sizeof(trustees[0]);
+			    trustee++) {
+				aces[1].type = types[type];
+				aces[1].trustee = trustees[trustee];
+				for (mixed = 0; mixed < TEST_STORED_MASK_FORMS; mixed++) {
+					aces[1].mask =
+					    generic[mask] | (mixed ? NTFS_FILE_READ_DATA : 0);
+					size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces,
+					    sizeof(aces) / sizeof(aces[0]));
+					memcpy(saved, bytes, size);
+					for (context = 0;
+					    context < sizeof(tokens) / sizeof(tokens[0]);
+					    context++) {
+						for (request = 0; request <
+						    sizeof(requests) / sizeof(requests[0]);
+						    request++) {
+							(void)check(bytes, size, &tokens[context],
+							    requests[request], NULL,
+							    NTFS_UNSUPPORTED, false);
+							assert(memcmp(bytes, saved, size) == 0);
+						}
+					}
+				}
+			}
+			/* Inherit-only data retains byte framing without applying its mask
+			 * to this object. It cannot alter a concrete preceding grant. */
+			aces[1].mask = generic[mask];
+			aces[1].flags = NTFS_ACE_INHERIT_ONLY;
+			size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces,
+			    sizeof(aces) / sizeof(aces[0]));
+			(void)check(
+			    bytes, size, &tokens[0], NTFS_ACCESS_GENERIC_READ, NULL, NTFS_OK, true);
+			aces[1].flags = 0;
+		}
+	}
+	printf("PASS: %zu stored generic/mixed-mask policy verdicts, complete later-ACE "
+	       "checks, owner/restricting/zero-request boundaries and inherit-only framing\n",
+	    decisions - before);
 }
 
 static void
@@ -643,6 +708,7 @@ int
 main(void)
 {
 	basic_tests();
+	stored_mask_tests();
 	ownership_and_restriction_tests();
 	ordered_tests();
 	boundary_tests();

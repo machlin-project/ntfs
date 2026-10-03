@@ -7,7 +7,47 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The read-only FSKit maintenance continuation now connects the private consistency
+The current discretionary-access correction maps generic requests only. Stored
+applicable generic/mixed ACE masks return UNSUPPORTED before any grant, including
+late entries, unmatched trustees, ordinary owners, restricting contexts and zero
+requests. The original snapshot remains unchanged. Six retained identical local
+pre/post packets demonstrate four corrected refusals and two unchanged supported
+controls; this does not claim Windows or native authorization qualification.
+
+All 67 current ASan/UBSan core suites pass, including the new sanitizer-process
+contract; the access suite has 197,201 decisions, 196,608 independent per-right
+oracles and 392 stored-mask policy verdicts. The transport contract passes 425
+checks. Both 2-KiB freestanding targets, format/style, 36 FSKit component groups
+and the clean unsigned arm64/x86_64 Release app pass. Ten genuine modern-runtime
+SKIPs remain. The app log confirms access.c compilation for both architectures
+and two benign App Intents metadata warnings. No product source changed after
+that app build. The later environment/test additions pass the complete suite and
+component again with explicit fatal sanitizer options.
+
+The first process-contract compile lacked a macOS SDK and failed to find
+stdlib.h; the other 66 suites passed. Its failed
+`artifacts/plan-stored-mask-core-fatal.log` remains. The corrected explicit-SDK
+test observes seven contracts: clean controls, recovering UBSan exit-zero control,
+fatal UBSan/ASan exits and actual bounded-wrapper rejection. These disposable
+injected faults are expected negative tests, not driver findings. Common fuzz,
+component and diagnostic child environments now select fatal ASan/UBSan options
+instead of relying on stripped ambient options.
+
+The current access campaign fixed-replays all 52 authored seeds, then completes
+8,751,208 executions in 61 seconds with 392 new units and no reported crash,
+timeout, OOM or sanitizer finding. The observed libFuzzer process peak is 519 MiB;
+the unchanged configured ceiling is 1,024 MiB, not an aggregate memory observation.
+Input/time limits remain 1 MiB/five seconds. Its report retains selected fatal
+options under `artifacts/fuzz-stored-mask-fatal/`. The preceding 8,718,367-run
+campaign under `artifacts/fuzz-stored-mask/` retains its earlier environment scope.
+Current logs use `artifacts/plan-stored-mask-*-{initial,sdk,fatal}.log`; matched
+packets use `artifacts/stored-mask-{before,after}/`. Main independent review is
+`artifacts/stored-mask-review.json`. The prior read-workload measurements remain
+source-scoped observations; no new performance result is claimed by this change.
+Windows acquisition, full/native authorization, installed mounts and commercial
+release qualification remain open.
+
+The preceding read-only FSKit maintenance continuation connects the private consistency
 diagnostic to resource-bound tasks, with quick/full scope, cooperative cancellation,
 bounded cancellation drain and asynchronous repair/format refusal. Explicit
 forced failed-layout loads can retain a nonmountable unary identity; retired
@@ -17,7 +57,7 @@ preparation. Lifecycle, aggregate resource ownership, late-handler detachment
 and native limits are
 defined in LIFECYCLE.md; no writer or journal recovery is added.
 
-The current ASan/UBSan component passes 36 groups with ten explicit macOS-27
+Its ASan/UBSan component passes 36 groups with ten explicit macOS-27
 runtime SKIPs. Full/quick helpers sweep 191/25 allocation positions and 86/7
 physical-read positions with both partial and full failed transfers. The 216
 allocation injections produce 204 required failures and 12 successful optional

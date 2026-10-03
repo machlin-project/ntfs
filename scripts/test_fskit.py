@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Compile/run FSKit adapter component tests without installing an extension."""
 from pathlib import Path
-from environment import tool_environment
+from environment import sanitizer_environment
 import subprocess
 
 root = Path(__file__).resolve().parents[1]
 output = root / 'artifacts/fskit-component'
 output.mkdir(parents=True, exist_ok=True)
-env = tool_environment()
+env = sanitizer_environment()
 for key in ('CC', 'CXX', 'CFLAGS', 'CPPFLAGS', 'CXXFLAGS', 'LDFLAGS', 'SDKROOT'):
     env.pop(key, None)
 clang = subprocess.check_output(['xcrun', '--find', 'clang'], text=True).strip()

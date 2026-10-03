@@ -18,7 +18,7 @@ root, dangling, unique-edge, native stack/memory and installed limits.
 
 All 67 current ASan/UBSan suites, both 2-KiB freestanding targets, format/style,
 42 FSKit component groups and the clean arm64/x86_64 Release app pass. Ten genuine
-modern-runtime SKIPs remain. The component checks all 76 original path/storage
+modern-runtime SKIPs remain. The component checks all 76 authored path/storage
 verdicts, including 29 new chain forms, 28 exact/one-below ancestor boundaries,
 205 allocation positions and 44 physical-read positions with partial/full failed
 transfers. Exact retries, original source bytes, once-only replies and complete
@@ -38,6 +38,12 @@ failures are test-contract errors, not repaired product findings. The complete
 accepted sequence uses `artifacts/plan-link-chains-*-contracts.log`. Main checks
 actual suite results, all original chain image geometries/packets/edges, compiled
 architectures and bundle binaries in `artifacts/link-chains-review.json`.
+Fresh committed-source portable Release/O3 reproducibility matches eight actual
+full products in two build directories under
+`artifacts/reproducibility-link-chains/`; main verifies complete bytes, hashes and
+actual selected build options. This is the same arm64 checkout/toolchain scope,
+with relocated-source and native-app qualification explicitly false. The launcher
+log is `artifacts/plan-link-chains-reproducibility.log`.
 Preceding access-fuzz and workload measurements retain their exact source scopes;
 this change claims no new general performance or Windows observation. Native
 path walking/loop policy, aggregate memory, cross-volume ownership, reparse hard

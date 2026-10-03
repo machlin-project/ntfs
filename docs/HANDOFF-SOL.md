@@ -45,6 +45,11 @@ CODE_SIGNING_ALLOWED=NO retains linker ad hoc signatures, not a distribution tea
 or authority. Native/Windows path walking, loop/memory stress, cross-volume and
 reparse hard-link contracts, identity/authorization and commercial release remain
 open. Preceding fuzz and workload reports retain their exact source scopes.
+Fresh committed-source portable Release/O3 reproducibility matches all eight
+actual full products under `artifacts/reproducibility-link-chains/`. Main compares
+complete bytes and actual selected build options in the current review. This is
+one arm64 checkout/toolchain in distinct build directories, with native-app and
+relocated-source qualification explicitly false.
 
 ## Preceding stored-access masks and diagnostic processes
 

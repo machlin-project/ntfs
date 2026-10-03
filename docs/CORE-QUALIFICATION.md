@@ -28,6 +28,11 @@ fixture/test errors and corrected complete evidence. The app has linker ad hoc
 signatures and no distribution authority. Installed/Windows behavior, native
 aggregate memory, full security/recovery and the optimization program remain
 open; no new general performance claim follows.
+Current committed-source portable Release/O3 reproducibility matches eight full
+actual products and both selected build configurations under
+`artifacts/reproducibility-link-chains/`, independently read by main. The scope is
+one arm64 checkout/toolchain in distinct build directories; relocated-source and
+native-app reproducibility remain explicitly unqualified.
 
 The preceding stored-mask checkpoint passes all 67 sanitized suites, including a process contract that
 observes recovering UBSan versus fatal ASan/UBSan exits and actual diagnostic

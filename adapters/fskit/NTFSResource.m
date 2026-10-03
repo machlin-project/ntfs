@@ -310,6 +310,9 @@ ntfs_error(enum ntfs_result result)
 	case NTFS_BUSY:
 		code = EBUSY;
 		break;
+	case NTFS_TOO_MANY_LINKS:
+		code = ELOOP;
+		break;
 	default:
 		code = EIO;
 		break;

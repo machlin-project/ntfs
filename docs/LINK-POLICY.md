@@ -43,10 +43,21 @@ selects a visible link to the same full file reference in that directory.
 
 Dangling targets retain plain representable components. A missing target cannot
 invent a sequence/ordinal alias for a reserved or unrepresentable name. Existing
-nonterminal components must be ordinary directories; intermediate reparse
-resolution remains UNSUPPORTED. Ordinary-directory cycles are corrupt. Native
-loop handling, multi-hop reparse chains, junction ownership across volumes and
-Windows-authored semantics remain separate work.
+nonterminal components must resolve to ordinary directories. Intermediate
+symlinks/junctions use immutable checked snapshots under the same root policy,
+including terminal links within a nested directory resolution. The logical
+destination selects subsequent case, spelling and alias translation; emitted
+native bytes retain the intermediate link components and do not flatten their
+targets. Ordinary target content is never read. Non-directory destinations return
+NOT_DIRECTORY; malformed metadata remains an error and opaque providers refuse.
+
+The active full-reference stack detects self, mutual and initial-source cycles.
+Finite reuse after a nested expansion returns is allowed, while cumulative
+expansion credits are never refunded. Active cycles or the expansion ceiling
+return TOO_MANY_LINKS, mapped to ELOOP. This additive result is appended to API 2's
+enum without changing existing values. Ordinary-directory cycles remain corrupt.
+Installed native loop handling, junction ownership across volumes and Windows-
+authored semantics remain separate qualification.
 
 Native readlink bytes are inode-scoped. This implementation requires exactly one
 stored hard-link edge for a projected reparse object. Multiply linked reparse
@@ -81,12 +92,25 @@ Snapshots retain counted core lifetime and report their checked physical size.
 ## Bounds and lifetime
 
 Output is limited to PATH_MAX minus its terminator (currently 1,023 bytes).
-Component count and ancestry depth are capped at PATH_MAX/2 (currently 512).
+Aggregate component count across the complete nested translation and ancestry
+depth are capped at PATH_MAX/2 (currently 512). At most 63 reparse snapshots expand,
+including the initial link; this is an explicit adapter work/stack bound separate
+from the installed native path-walk limit.
 Configuration permits at most 64 root bindings and 128 option tokens, each at
 most PATH_MAX units. Required alias scans share one raw-entry budget across all
-components, including hidden metadata and DOS entries; equality succeeds and
+expansions, including hidden metadata and DOS entries; equality succeeds and
 exhaustion returns RANGE. Indexed lookup and structural parsing retain the core's
-own bounds. These are distinct from an aggregate native deadline/I/O budget.
+own bounds. The enclosing operation charges every nested core allocation, read
+and work unit, and every rounded physical resource read to active ancestors.
+Scope closure succeeds independently of its retained exhausted-credit verdict.
+Allocation exhaustion reports NO_MEMORY/ENOMEM; read/work exhaustion reports
+RANGE/EOVERFLOW. These credits are distinct from a native elapsed deadline.
+
+Resolution uses bounded native recursion. Each active frame can retain one
+16-KiB core snapshot and bounded Foundation raw/path buffers; core storage is
+charged to the live-memory pool and operation scopes. Foundation buffers and
+native stack remain outside that core allocation counter. Installed aggregate
+memory/stack stress is a separate qualification requirement.
 
 Ancestry tokens retain numeric parent provenance, not parent FSItems or core nodes.
 The volume weakly indexes them under the existing bounded ownership model. Cached
@@ -104,7 +128,10 @@ bytes. They exercise relative/rooted/drive/GUID targets, canonical and sensitive
 names, aliases/DOS names, nested paths, dangling targets, dot/trailing components,
 path/component/shared-scan bounds, junctions, fragmented and attribute-list
 storage, root escapes, foreign/UNC/device paths, intermediate reparse objects,
-cycles, hard-link limits and malformed/opaque packets.
+cycles, hard-link limits and malformed/opaque packets. Chain cases also cover
+destination-directory case/aliases, root/parent transitions, dangling suffixes,
+terminal directory requirements, finite reuse and exact/one-below snapshot,
+aggregate component and shared raw-entry limits.
 
 The component checks real legacy callbacks, requested-size and names-only pages,
 wire-byte equality, cached reads, raw-data rejection, remount/revocation, failure
@@ -115,6 +142,7 @@ Synthetic component passes do not establish Windows compatibility, installed
 path walking, native loop limits, normalization/cache behavior or authorization.
 
 Primary format/policy references are Microsoft's [reparse buffer fields](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_reparse_data_buffer),
+[reparse restrictions](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-points),
 [symbolic-link paths](https://learn.microsoft.com/en-us/windows/win32/fileio/creating-symbolic-links),
 [path namespaces](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file)
 and [volume naming](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-volume).

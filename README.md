@@ -26,9 +26,10 @@ Implemented reading includes MFT/attribute lists, resident and fragmented data,
 sparse and uninitialized ranges, alternate data streams, LZNT1, indexed directory
 enumeration, $UpCase lookup and bounded reparse metadata decoding. Symlink and
 junction targets are available as lossless UTF-16. FSKit now projects a bounded
-single-edge subset with explicit Windows root bindings and reversible target
-aliases; see [native link policy](docs/LINK-POLICY.md). Intermediate reparse chains,
-cross-volume targets and cloud content remain open. WOF file-provider streams
+within-owner subset with explicit Windows root bindings, checked intermediate
+symlink/junction chains and reversible target aliases; see
+[native link policy](docs/LINK-POLICY.md). Cross-volume targets, context-dependent
+reparse hard links and cloud content remain open. WOF file-provider streams
 read XPRESS4K/8K/16K and LZX32K with bounded storage/table validation. The FSKit app and extension
 build unsigned from current source; a prior personally signed Release passed strict
 signature verification. Direct adapter tests and independent NTFS-3G image

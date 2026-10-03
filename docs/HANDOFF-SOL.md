@@ -17,7 +17,36 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current stored-access masks and diagnostic processes
+## Current within-owner intermediate links
+
+The adapter now resolves checked intermediate symlink/junction destinations to
+translate subsequent components with their actual directory's case/alias policy.
+Native targets retain intermediate link components. Core snapshots remain
+lossless and target content is never read. Every nested expansion retains the
+same owner/root policy and shares component/raw-entry/core/physical credits.
+The active full-reference stack detects recursion but permits finite reuse;
+at most 63 snapshots expand, including the initial source. Active cycles or the
+ceiling return the appended TOO_MANY_LINKS/ELOOP result. Existing API 2 result
+values remain stable. LINK-POLICY.md defines dangling, directory, unique-edge and
+native stack/allocation scope.
+
+Current source passes 67 sanitized suites, both 2-KiB freestanding targets,
+format/style, 42 FSKit groups/ten genuine modern-runtime SKIPs and the clean
+arm64/x86_64 Release app. Components qualify 76 authored path/storage forms,
+including 29 chain cases, 28 exact/one-below ancestor boundaries, 205 allocation
+positions and 44 physical-read positions with partial/full failed transfers.
+Required failures, actual quota dimensions, retry, once-only callbacks, original
+bytes and cleanup pass. Main checks actual generated geometries/packets/edges,
+suite results, changed compilation and bundle binaries in
+`artifacts/link-chains-review.json`. Accepted logs use
+`artifacts/plan-link-chains-*-contracts.log`; ACCEPTANCE.md preserves initial
+fixture/pagination and scope-closure/allocation-errno test errors.
+CODE_SIGNING_ALLOWED=NO retains linker ad hoc signatures, not a distribution team
+or authority. Native/Windows path walking, loop/memory stress, cross-volume and
+reparse hard-link contracts, identity/authorization and commercial release remain
+open. Preceding fuzz and workload reports retain their exact source scopes.
+
+## Preceding stored-access masks and diagnostic processes
 
 Generic mappings belong to access requests. Applicable stored generic/mixed ACE
 masks now return UNSUPPORTED, including entries after a sufficient grant,
@@ -29,7 +58,7 @@ supported controls. ACCESS.md records the policy and primary format source.
 This is a deliberately limited DACL contract; FSKit still does not authenticate
 Windows principals or enforce this evaluator as native authorization.
 
-Current local evidence is 67 sanitized core suites, 197,201 access decisions
+That checkpoint's local evidence is 67 sanitized core suites, 197,201 access decisions
 (196,608 independent per-right oracles and 392 stored-mask verdicts), 425 transport
 checks, both 2-KiB freestanding targets, format/style, 36 FSKit component groups
 with ten runtime SKIPs and the clean unsigned arm64/x86_64 Release app. The app
@@ -40,7 +69,7 @@ proves recovering-control versus fatal exits and actual diagnostic-wrapper
 rejection using disposable injected faults. Its first missing-SDK compile failure
 is retained separately from the corrected complete run.
 
-The current 60-second access campaign replays all 52 seeds, completes 8,751,208
+Its 60-second access campaign replays all 52 seeds, completes 8,751,208
 executions in 61 seconds and observes a 519-MiB libFuzzer process peak under the
 unchanged 1-GiB ceiling. No crash, timeout, OOM or sanitizer finding is reported.
 Current logs use `artifacts/plan-stored-mask-*`, matched packets use
@@ -48,7 +77,7 @@ Current logs use `artifacts/plan-stored-mask-*`, matched packets use
 `artifacts/fuzz-stored-mask-fatal/`. Main review is
 `artifacts/stored-mask-review.json`. Preserve preceding campaign/environment and
 cache/maintenance evidence with their exact source scopes.
-Current committed-source portable Release/O3 reproducibility matches all eight
+That checkpoint's committed-source portable Release/O3 reproducibility matches all eight
 full products under `artifacts/reproducibility-stored-mask/`, independently read
 by main. The two builds use one checkout/toolchain and distinct directories;
 relocated-source/native app reproducibility and distribution remain unqualified.
@@ -1335,8 +1364,8 @@ and diagnostic bad-cluster handling, not blanket orphan or overlap exclusions.
    directory's stored flag; qualify positive/negative caching in mixed trees.
    The complete WSL/POSIX namespace and normalization contracts remain open.
 6. Qualify the core reparse reader and implemented LINK-POLICY.md projection with
-   Windows-authored links and installed mounts. Extend intermediate resolution,
-   hard-linked reparse identity and cross-volume ownership through explicit
+   Windows-authored links and installed mounts, including the implemented bounded
+   intermediate chains. Extend hard-linked reparse identity and cross-volume ownership through explicit
    contracts. WIM-backed WOF, cloud placeholders, third-party GUID owners and WSL tags still
    require separate content/resolution contracts. Do not expose encoded data as
    ordinary file content or turn every tag into a symlink.

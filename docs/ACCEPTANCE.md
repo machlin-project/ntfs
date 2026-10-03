@@ -7,21 +7,57 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current discretionary-access correction maps generic requests only. Stored
+The current within-owner intermediate-link continuation resolves checked symlink/
+junction destinations for subsequent case/alias translation while retaining
+intermediate native components in emitted targets. An active full-reference stack
+detects recursion; cumulative snapshot, component and raw-entry credits cover the
+whole translation. Finite reuse is allowed, and active cycles or the 63-snapshot
+ceiling return ELOOP. The initial snapshot consumes one credit. The core still
+never follows a target or reads ordinary target content. LINK-POLICY.md defines
+root, dangling, unique-edge, native stack/memory and installed limits.
+
+All 67 current ASan/UBSan suites, both 2-KiB freestanding targets, format/style,
+42 FSKit component groups and the clean arm64/x86_64 Release app pass. Ten genuine
+modern-runtime SKIPs remain. The component checks all 76 original path/storage
+verdicts, including 29 new chain forms, 28 exact/one-below ancestor boundaries,
+205 allocation positions and 44 physical-read positions with partial/full failed
+transfers. Exact retries, original source bytes, once-only replies and complete
+core-allocation cleanup pass. The app compiles changed Links, Volume, Resource
+and support sources for both architectures; two benign App Intents warnings
+remain. CODE_SIGNING_ALLOWED=NO produces linker ad hoc signatures with no team or
+distribution authority, not a distribution-signed product.
+
+Preserve the initial fixture-capacity failure in
+`artifacts/plan-link-chains-build-initial.log` and the authored pagination-limit
+failure in `artifacts/plan-link-chains-component-bounded.log`. The `*-pages.log`
+test incorrectly expected exhausted scopes to fail closure; `*-closure.log` and
+`*-diagnostic.log` incorrectly expected read/work errno for allocation quotas.
+Corrected tests observe active quota results and the specific exhausted dimension
+before successful LIFO closure; allocation limits retain ENOMEM. These retained
+failures are test-contract errors, not repaired product findings. The complete
+accepted sequence uses `artifacts/plan-link-chains-*-contracts.log`. Main checks
+actual suite results, all original chain image geometries/packets/edges, compiled
+architectures and bundle binaries in `artifacts/link-chains-review.json`.
+Preceding access-fuzz and workload measurements retain their exact source scopes;
+this change claims no new general performance or Windows observation. Native
+path walking/loop policy, aggregate memory, cross-volume ownership, reparse hard
+links, identity/authorization and commercial qualification remain open.
+
+The preceding discretionary-access correction maps generic requests only. Stored
 applicable generic/mixed ACE masks return UNSUPPORTED before any grant, including
 late entries, unmatched trustees, ordinary owners, restricting contexts and zero
 requests. The original snapshot remains unchanged. Six retained identical local
 pre/post packets demonstrate four corrected refusals and two unchanged supported
 controls; this does not claim Windows or native authorization qualification.
 
-All 67 current ASan/UBSan core suites pass, including the new sanitizer-process
+That checkpoint passes all 67 ASan/UBSan core suites, including the new sanitizer-process
 contract; the access suite has 197,201 decisions, 196,608 independent per-right
 oracles and 392 stored-mask policy verdicts. The transport contract passes 425
 checks. Both 2-KiB freestanding targets, format/style, 36 FSKit component groups
 and the clean unsigned arm64/x86_64 Release app pass. Ten genuine modern-runtime
 SKIPs remain. The app log confirms access.c compilation for both architectures
-and two benign App Intents metadata warnings. No product source changed after
-that app build. The later environment/test additions pass the complete suite and
+and two benign App Intents metadata warnings. The later environment/test additions
+leave that checkpoint's product source unchanged and pass the complete suite and
 component again with explicit fatal sanitizer options.
 
 The first process-contract compile lacked a macOS SDK and failed to find

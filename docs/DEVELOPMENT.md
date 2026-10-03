@@ -42,10 +42,15 @@ EOF have explicit ownership checks. The
 content component additionally exercises six encoded-stream metadata variants and
 ten explicit corruption/unsupported rejections, requested-size pages, independent
 ADS, zero-byte read errors, remount and revocation without default-content I/O.
-The link component authors 47 native path/storage verdicts and checks root option
-binding, single-edge identity, requested metadata/names-only pages, aliases,
-original-wire xattrs, remount/revocation and all 79 allocation/17 read fault
-positions across listed/reserved lookup and reopened snapshots. Core reparse tests
+The link component authors 76 native path/storage verdicts and checks root option
+binding, unique-edge identity, intermediate within-owner chains, requested
+metadata/names-only pages, aliases, original-wire xattrs, remount/revocation and
+all 205 allocation/44 read fault positions across listed/reserved and chain lookup
+and reopened snapshots. Every read position receives partial and full failed
+transfers. Two chain profiles additionally exercise 28 exact/one-below core and
+rounded-physical ancestor boundaries, checking the specific exhausted dimension,
+allocation versus read/work errors, successful scope closure and fresh retry.
+Core reparse tests
 also check copy guards, physical allocation and node-independent lifetime. See
 LINK-POLICY.md for the supported subset and remaining resolution contracts.
 The current component has ten explicit macOS-27 runtime SKIPs: lifecycle,

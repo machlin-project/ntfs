@@ -1159,8 +1159,9 @@ item_id(uint64_t reference)
 				/* Only readlink projection depends on a unique owning edge. */
 				result = stat.links != 1
 				    ? NTFS_UNSUPPORTED
-				    : ntfs_native_link_target(_core, snapshot, containingPath,
-					  _linkPolicy, _maximumDirectoryEntries, &target);
+				    : ntfs_native_link_target(_core, snapshot, stat.reference,
+					  containingPath, _linkPolicy, _maximumDirectoryEntries,
+					  &target);
 			}
 		}
 		if (result == NTFS_OK && !wof) {
@@ -2092,7 +2093,7 @@ item_id(uint64_t reference)
 								result = stat.links != 1
 								    ? NTFS_UNSUPPORTED
 								    : ntfs_native_link_target(_core,
-									  snapshot,
+									  snapshot, stat.reference,
 									  item->directoryPath,
 									  _linkPolicy,
 									  _maximumDirectoryEntries,

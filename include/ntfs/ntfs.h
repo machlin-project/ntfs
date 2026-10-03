@@ -78,7 +78,9 @@ enum ntfs_result {
 	NTFS_READ_ONLY,
 	NTFS_DIRTY,
 	NTFS_END,
-	NTFS_BUSY
+	NTFS_BUSY,
+	/* Appended: existing result values remain stable. */
+	NTFS_TOO_MANY_LINKS
 };
 
 struct ntfs_volume;

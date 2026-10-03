@@ -8,9 +8,12 @@ through. Stored per-directory policy now selects exact UTF-16 or $UpCase-folded
 lookup; ambiguous collisions in an insensitive directory remain rejected. See
 CASE-POLICY.md for format evidence and required Windows/native qualification.
 
-Supported single-edge symlink and junction targets now use this same stored-name
+Supported symlink and junction targets now use this same stored-name
 and alias policy. Explicit Windows roots bind only to the current mounted owner;
-unbound/cross-volume paths and intermediate reparse resolution remain rejected.
+unbound/cross-volume paths remain rejected. Checked intermediate links resolve
+within that owner under shared credits so subsequent components use the actual
+destination directory's case and alias policy. Emitted targets retain the
+intermediate native link components.
 LINK-POLICY.md defines native size/type, inode-context limits, bounded target
 translation and the original-wire `org.machlin.ntfs.reparse` xattr. Ordinary inode
 hard links and reparse hard-link qualification are separate contracts.

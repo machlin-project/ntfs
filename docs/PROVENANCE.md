@@ -144,6 +144,14 @@ attribute may be resident or nonresident. No NTFS-3G reparse implementation was
 used or copied. The ownership, validation and copying code is original; synthetic
 buffers and storage layouts do not establish Windows-authored reparse acceptance.
 
+The FSKit intermediate-link resolver is original adapter code. Microsoft reparse
+restrictions provide format and path-walk context; the cumulative 63-snapshot
+ceiling, full-reference active stack, shared budgets and relative native emission
+are this repository's policy. Independent fixtures specify original packets,
+stored directory names and expected native bytes without invoking the resolver.
+Local components do not establish Windows or installed native equivalence, and
+the portable core still does not follow reparse targets.
+
 WOF.md records the provider storage/table/lifetime and XPRESS contract. The observed
 stored payload and stream arrangement use original libfsntfs format research;
 the original NTFS-3G system-compression layout comment supplies independent chunk

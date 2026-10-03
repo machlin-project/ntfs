@@ -244,9 +244,53 @@ target_entry_name(struct ntfs_node *parent, const struct ntfs_dirent *target, ui
 	return result == NTFS_END ? NTFS_UNSUPPORTED : result;
 }
 
-enum ntfs_result
-ntfs_native_link_target(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
-    NTFSDirectoryPath *source, NTFSLinkPolicy *policy, uint32_t maximum, FSFileName **out)
+struct link_resolution {
+	uint64_t active[NTFS_FSKIT_LINK_RESOLUTION_LIMIT];
+	NSUInteger activeCount, expansions, components;
+	uint32_t remaining;
+};
+
+static enum ntfs_result translate_link(struct ntfs_volume *, const struct ntfs_reparse *,
+    NTFSDirectoryPath *, NTFSLinkPolicy *, struct link_resolution *, FSFileName **,
+    NTFSDirectoryPath **, NSUInteger *, BOOL *);
+
+static enum ntfs_result
+resolve_link_directory(struct ntfs_volume *volume, struct ntfs_node *node, uint64_t reference,
+    NTFSDirectoryPath *source, NTFSLinkPolicy *policy, struct link_resolution *resolution,
+    NTFSDirectoryPath **path, NSUInteger *depth, BOOL *dangling)
+{
+	struct ntfs_reparse *snapshot = NULL;
+	FSFileName *projection = nil;
+	NSUInteger i;
+	enum ntfs_result result;
+
+	/* An active stack detects recursion, not finite reuse of a junction. The
+	 * cumulative expansion count never refunds credit when a frame returns. */
+	if (resolution->expansions == NTFS_FSKIT_LINK_RESOLUTION_LIMIT) {
+		return NTFS_TOO_MANY_LINKS;
+	}
+	for (i = 0; i < resolution->activeCount; i++) {
+		if (resolution->active[i] == reference) {
+			return NTFS_TOO_MANY_LINKS;
+		}
+	}
+	resolution->active[resolution->activeCount++] = reference;
+	resolution->expansions++;
+	result = ntfs_reparse_open(node, &snapshot);
+	if (result == NTFS_OK) {
+		result = translate_link(volume, snapshot, source, policy, resolution, &projection,
+		    path, depth, dangling);
+	}
+	ntfs_reparse_close(snapshot);
+	resolution->activeCount--;
+	return result;
+}
+
+static enum ntfs_result
+translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
+    NTFSDirectoryPath *source, NTFSLinkPolicy *policy, struct link_resolution *resolution,
+    FSFileName **out, NTFSDirectoryPath **resolvedPath, NSUInteger *resolvedDepth,
+    BOOL *resolvedDangling)
 {
 	struct ntfs_reparse_info info;
 	struct ntfs_info volumeInfo;
@@ -259,19 +303,11 @@ ntfs_native_link_target(struct ntfs_volume *volume, const struct ntfs_reparse *s
 	FSFileName *name;
 	NSString *windowsRoot;
 	size_t count, position = 0, start, length, i;
-	NSUInteger depth, components = 0;
-	uint32_t remaining = maximum;
+	NSUInteger depth;
 	BOOL fromRoot = NO, dangling = NO, last, relative;
 	enum ntfs_result result;
 
-	if (out == NULL) {
-		return NTFS_INVALID;
-	}
 	*out = nil;
-	if (volume == NULL || snapshot == NULL || source == nil || source.volume != volume ||
-	    policy == nil || maximum == 0 || maximum > NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
-		return NTFS_INVALID;
-	}
 	ntfs_get_info(volume, &volumeInfo);
 	if (policy.volumeSerial != volumeInfo.serial) {
 		return NTFS_INVALID;
@@ -341,7 +377,7 @@ ntfs_native_link_target(struct ntfs_volume *volume, const struct ntfs_reparse *s
 		if (position == count) {
 			break;
 		}
-		if (++components > NTFS_FSKIT_LINK_COMPONENT_LIMIT) {
+		if (++resolution->components > NTFS_FSKIT_LINK_COMPONENT_LIMIT) {
 			result = NTFS_RANGE;
 			break;
 		}
@@ -392,14 +428,26 @@ ntfs_native_link_target(struct ntfs_volume *volume, const struct ntfs_reparse *s
 				dangling = YES;
 				depth++;
 			} else if (result == NTFS_OK) {
-				result = target_entry_name(parent, &entry, &remaining, &name);
-				if (result == NTFS_OK && !last) {
+				result = target_entry_name(
+				    parent, &entry, &resolution->remaining, &name);
+				if (result == NTFS_OK && (!last || resolvedPath != NULL)) {
 					result = ntfs_node_metadata(child, &stat);
 					if (result == NTFS_OK && stat.reparse) {
-						/* Translating beyond a filter-owned intermediary
-						 * requires a separate checked reparse-resolution
-						 * operation. */
-						result = NTFS_UNSUPPORTED;
+						NTFSDirectoryPath *destination = nil;
+						NSUInteger destinationDepth = 0;
+						BOOL destinationDangling = NO;
+
+						result = stat.links != 1
+						    ? NTFS_UNSUPPORTED
+						    : resolve_link_directory(volume, child,
+							  stat.reference, path, policy, resolution,
+							  &destination, &destinationDepth,
+							  &destinationDangling);
+						if (result == NTFS_OK) {
+							path = destination;
+							depth = destinationDepth;
+							dangling = destinationDangling;
+						}
 					} else if (result == NTFS_OK && !stat.directory) {
 						result = NTFS_NOT_DIRECTORY;
 					} else if (result == NTFS_OK &&
@@ -442,6 +490,11 @@ finish:
 		}
 	}
 	if (result == NTFS_OK) {
+		if (resolvedPath != NULL) {
+			*resolvedPath = path;
+			*resolvedDepth = depth;
+			*resolvedDangling = dangling;
+		}
 		if (output.length == 0) {
 			*out = [FSFileName nameWithString:@"."];
 		} else {
@@ -449,4 +502,25 @@ finish:
 		}
 	}
 	return result;
+}
+
+enum ntfs_result
+ntfs_native_link_target(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
+    uint64_t reference, NTFSDirectoryPath *source, NTFSLinkPolicy *policy, uint32_t maximum,
+    FSFileName **out)
+{
+	struct link_resolution resolution = {
+	    .activeCount = 1, .expansions = 1, .remaining = maximum};
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	*out = nil;
+	if (volume == NULL || snapshot == NULL || reference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0 ||
+	    source == nil || source.volume != volume || policy == nil || maximum == 0 ||
+	    maximum > NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
+		return NTFS_INVALID;
+	}
+	resolution.active[0] = reference;
+	return translate_link(volume, snapshot, source, policy, &resolution, out, NULL, NULL, NULL);
 }

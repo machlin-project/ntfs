@@ -14,7 +14,12 @@ enum {
 	TEST_LINK_READ_BYTES = 32,
 	TEST_LINK_BUFFER_FILL = 0xa6,
 	TEST_LINK_PAGE_CAPACITY = 1,
-	TEST_LINK_PAGE_LIMIT = 16
+	TEST_LINK_CHAIN_RECORDS = 63,
+	TEST_LINK_ROOT_BASE_ENTRIES = 3,
+	TEST_LINK_ROOT_DOT_ENTRIES = 2,
+	/* One page per authored edge/prefix entry, then an empty EOF page. */
+	TEST_LINK_PAGE_LIMIT =
+	    TEST_LINK_CHAIN_RECORDS + TEST_LINK_ROOT_BASE_ENTRIES + TEST_LINK_ROOT_DOT_ENTRIES + 1
 };
 
 static NSString *const reparseXattr = @"org.machlin.ntfs.reparse";
@@ -27,6 +32,8 @@ static NSString *const reparseXattr = @"org.machlin.ntfs.reparse";
 @end
 
 @interface LinkReader : TestReader
+@property BOOL fullReadFailure;
+@property uint64_t physicalBytes;
 @end
 
 @implementation LinkReader
@@ -39,9 +46,17 @@ static NSString *const reparseXattr = @"org.machlin.ntfs.reparse";
 	uint64_t first = (uint64_t)TEST_LINK_DATA_FIRST_LCN * TEST_CLUSTER_BYTES;
 	uint64_t end = (uint64_t)TEST_LINK_DATA_END_LCN * TEST_CLUSTER_BYTES;
 
+	self.physicalBytes += length;
 	assert(offset >= 0 &&
 	    (length == 0 || (uint64_t)offset >= end ||
 		((uint64_t)offset < first && length <= first - (uint64_t)offset)));
+	if (self.failReadAt != 0 && self.reads + 1 == self.failReadAt) {
+		size_t copied = self.fullReadFailure ? length : length / 2;
+
+		assert((uint64_t)offset <= self.image.length &&
+		    copied <= self.image.length - (uint64_t)offset);
+		memcpy(buffer, (const uint8_t *)self.image.bytes + offset, copied);
+	}
 	return [super readInto:buffer startingAt:offset length:length error:error];
 }
 
@@ -104,7 +119,8 @@ link_code(NSString *name)
 		@"unsupported" : @(ENOTSUP),
 		@"range" : @(EOVERFLOW),
 		@"corrupt" : @(EIO),
-		@"not-directory" : @(ENOTDIR)
+		@"not-directory" : @(ENOTDIR),
+		@"loop" : @(ELOOP)
 	};
 	NSNumber *value = codes[name];
 
@@ -168,7 +184,7 @@ link_activate(NTFSVolume *volume, FSTaskOptions *options, BOOL modern, NSInteger
 
 static NTFSVolume *
 link_owner(NSData *image, NSDictionary *test, BOOL modern, TestReader **readerOut,
-    FaultResource **resourceOut, FSItem **rootOut)
+    FaultResource **resourceOut, FSItem **rootOut, struct ntfs_volume **coreOut)
 {
 	LinkReader *reader = [[LinkReader alloc] init];
 	FaultResource *resource;
@@ -204,6 +220,9 @@ link_owner(NSData *image, NSDictionary *test, BOOL modern, TestReader **readerOu
 	*rootOut = link_activate(volume, link_options(test[@"roots"]), modern, 0);
 	*readerOut = reader;
 	*resourceOut = resource;
+	if (coreOut != NULL) {
+		*coreOut = core;
+	}
 	return volume;
 }
 
@@ -243,6 +262,12 @@ link_lookup(NTFSVolume *volume, FSItem *parent, NSString *name, BOOL modern, NSI
 		    lookupItemNamed:spelling
 			inDirectory:parent
 		       replyHandler:^(FSItem *found, FSFileName *stored, NSError *error) {
+			 if (!link_error(error, code) || ((found != nil) != (code == 0))) {
+				 fprintf(stderr,
+				     "link lookup mismatch: expected=%ld actual=%ld item=%s\n",
+				     (long)code, (long)error.code,
+				     found != nil ? "present" : "nil");
+			 }
 			 assert(link_error(error, code) && ((found != nil) == (code == 0)));
 			 assert(
 			     code == 0 ? [stored.data isEqualToData:spelling.data] : stored == nil);
@@ -365,7 +390,7 @@ link_case(NSString *fixtures, NSDictionary *test, BOOL modern)
 	TestReader *reader;
 	FaultResource *resource;
 	FSItem *root, *parent, *item;
-	NTFSVolume *volume = link_owner(image, test, modern, &reader, &resource, &root);
+	NTFSVolume *volume = link_owner(image, test, modern, &reader, &resource, &root, NULL);
 	NSArray<NSDictionary *> *rows;
 	NSDictionary *row;
 	NSError *error = nil;
@@ -480,7 +505,7 @@ link_raw(NTFSLegacyVolume *volume, FSItem *item, NSInteger code)
 
 static void
 link_fault(NSString *fixtures, NSDictionary *test, BOOL metadata, NSUInteger allocation,
-    NSUInteger read, NSUInteger *allocations, NSUInteger *reads)
+    NSUInteger read, BOOL fullFailure, NSUInteger *allocations, NSUInteger *reads)
 {
 	@autoreleasepool {
 		NSData *image = [NSData
@@ -489,7 +514,7 @@ link_fault(NSString *fixtures, NSDictionary *test, BOOL metadata, NSUInteger all
 		TestReader *reader;
 		FaultResource *resource;
 		FSItem *root, *item;
-		NTFSVolume *volume = link_owner(image, test, NO, &reader, &resource, &root);
+		NTFSVolume *volume = link_owner(image, test, NO, &reader, &resource, &root, NULL);
 		NSInteger code = allocation != 0 ? ENOMEM : (read != 0 ? EIO : 0);
 		NSData *raw, *expected;
 
@@ -507,6 +532,7 @@ link_fault(NSString *fixtures, NSDictionary *test, BOOL metadata, NSUInteger all
 		reader.reads = 0;
 		resource.failAllocationAt = allocation;
 		reader.failReadAt = read;
+		((LinkReader *)reader).fullReadFailure = fullFailure;
 		if (metadata) {
 			raw = link_raw((NTFSLegacyVolume *)volume, item, code);
 		} else {
@@ -541,7 +567,7 @@ link_configuration(NSString *fixtures, NSDictionary *test, BOOL modern)
 	TestReader *reader;
 	FaultResource *resource;
 	FSItem *root;
-	NTFSVolume *volume = link_owner(image, test, modern, &reader, &resource, &root);
+	NTFSVolume *volume = link_owner(image, test, modern, &reader, &resource, &root, NULL);
 	NTFSLinkPolicy *policy;
 
 	assert(link_activate(volume, link_options(@[ @"D:" ]), modern, EINVAL) == nil);
@@ -555,11 +581,169 @@ link_configuration(NSString *fixtures, NSDictionary *test, BOOL modern)
 	assert(resource.liveAllocations == 0);
 }
 
+struct link_budget_usage {
+	struct ntfs_operation_usage core;
+	uint64_t physicalCalls, physicalBytes;
+};
+
+enum {
+	TEST_LINK_LOGICAL_READ_CALLS,
+	TEST_LINK_LOGICAL_READ_BYTES,
+	TEST_LINK_ALLOCATION_CALLS,
+	TEST_LINK_ALLOCATION_BYTES,
+	TEST_LINK_WORK,
+	TEST_LINK_PHYSICAL_READ_CALLS,
+	TEST_LINK_PHYSICAL_READ_BYTES,
+	TEST_LINK_BUDGET_DIMENSIONS,
+	TEST_LINK_CORE_BUDGETS = TEST_LINK_PHYSICAL_READ_CALLS,
+	TEST_LINK_PHYSICAL_BUDGETS = TEST_LINK_BUDGET_DIMENSIONS - TEST_LINK_CORE_BUDGETS
+};
+
+static void
+link_budget_run(NSString *fixtures, NSDictionary *test,
+    const struct ntfs_operation_limits *coreLimits,
+    const struct ntfs_operation_limits *physicalLimits, NSInteger code,
+    enum ntfs_operation_limit refused, struct link_budget_usage *observation)
+{
+	@autoreleasepool {
+		NSData *image = [NSData
+		    dataWithContentsOfFile:[fixtures
+					       stringByAppendingPathComponent:test[@"image"]]];
+		TestReader *reader;
+		FaultResource *resource;
+		FSItem *root, *item;
+		struct ntfs_volume *core;
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget physical = {0};
+		struct ntfs_operation_limits defaults;
+		struct ntfs_operation_usage usage;
+		NTFSVolume *volume = link_owner(image, test, NO, &reader, &resource, &root, &core);
+		enum ntfs_result coreResult, physicalResult;
+
+		ntfs_operation_default_limits(&defaults);
+		reader.reads = 0;
+		((LinkReader *)reader).physicalBytes = 0;
+		resource.allocations = 0;
+		assert(ntfs_operation_begin(core, coreLimits, &operation) == NTFS_OK);
+		assert([resource beginReadBudget:&physical
+					  limits:physicalLimits != NULL ? physicalLimits
+									: &defaults] == NTFS_OK);
+		item = link_lookup(volume, root, @"hello.txt", NO, code);
+		coreResult = ntfs_operation_result(&operation);
+		physicalResult = [resource readBudgetResult];
+		assert([resource endReadBudget:&physical] == NTFS_OK);
+		assert(ntfs_operation_end(&operation, &usage) == NTFS_OK);
+		assert(physical.calls == reader.reads &&
+		    physical.bytes == ((LinkReader *)reader).physicalBytes);
+		assert(usage.allocation_calls == resource.allocations);
+		if (code == 0) {
+			assert(coreResult == NTFS_OK && physicalResult == NTFS_OK &&
+			    usage.exhausted == NTFS_OPERATION_LIMIT_NONE &&
+			    physical.exhausted == NTFS_OPERATION_LIMIT_NONE);
+		} else {
+			assert((code == EOVERFLOW || code == ENOMEM) && item == nil);
+			assert(coreLimits != NULL
+				? coreResult == (code == ENOMEM ? NTFS_NO_MEMORY : NTFS_RANGE) &&
+				    usage.exhausted == refused
+				: code == EOVERFLOW && physicalResult == NTFS_RANGE &&
+				    physical.exhausted == refused);
+		}
+		if (observation != NULL) {
+			*observation =
+			    (struct link_budget_usage){usage, physical.calls, physical.bytes};
+		}
+		/* Sealing either ancestor must leave ordinary retry and cleanup usable. */
+		if (code != 0) {
+			item = link_lookup(volume, root, @"hello.txt", NO, 0);
+		}
+		link_read(volume, item, test[@"target"], NO, 0);
+		[volume invalidate];
+		assert(resource.liveAllocations == 0 && [reader.image isEqualToData:image]);
+	}
+}
+
+static void
+link_budgets(NSString *fixtures, NSDictionary *test)
+{
+	struct link_budget_usage observed;
+	struct ntfs_operation_limits limits;
+	uint64_t *selected;
+	NSUInteger dimension;
+	BOOL below;
+	NSInteger code;
+	enum ntfs_operation_limit refused;
+
+	link_budget_run(fixtures, test, NULL, NULL, 0, NTFS_OPERATION_LIMIT_NONE, &observed);
+	for (dimension = 0; dimension < TEST_LINK_CORE_BUDGETS + TEST_LINK_PHYSICAL_BUDGETS;
+	    dimension++) {
+		for (below = NO;; below = YES) {
+			ntfs_operation_default_limits(&limits);
+			switch (dimension) {
+			case TEST_LINK_LOGICAL_READ_CALLS:
+				selected = &limits.read_calls;
+				*selected = observed.core.read_calls;
+				refused = NTFS_OPERATION_LIMIT_READ_CALLS;
+				break;
+			case TEST_LINK_LOGICAL_READ_BYTES:
+				selected = &limits.read_bytes;
+				*selected = observed.core.read_bytes;
+				refused = NTFS_OPERATION_LIMIT_READ_BYTES;
+				break;
+			case TEST_LINK_ALLOCATION_CALLS:
+				selected = &limits.allocation_calls;
+				*selected = observed.core.allocation_calls;
+				refused = NTFS_OPERATION_LIMIT_ALLOCATION_CALLS;
+				break;
+			case TEST_LINK_ALLOCATION_BYTES:
+				selected = &limits.allocation_bytes;
+				*selected = observed.core.allocation_bytes;
+				refused = NTFS_OPERATION_LIMIT_ALLOCATION_BYTES;
+				break;
+			case TEST_LINK_WORK:
+				selected = &limits.work;
+				*selected = observed.core.work;
+				refused = NTFS_OPERATION_LIMIT_WORK;
+				break;
+			case TEST_LINK_PHYSICAL_READ_CALLS:
+				selected = &limits.read_calls;
+				*selected = observed.physicalCalls;
+				refused = NTFS_OPERATION_LIMIT_READ_CALLS;
+				break;
+			default:
+				selected = &limits.read_bytes;
+				*selected = observed.physicalBytes;
+				refused = NTFS_OPERATION_LIMIT_READ_BYTES;
+				break;
+			}
+			assert(*selected > 1);
+			*selected -= below ? 1 : 0;
+			code = refused == NTFS_OPERATION_LIMIT_ALLOCATION_CALLS ||
+				refused == NTFS_OPERATION_LIMIT_ALLOCATION_BYTES
+			    ? ENOMEM
+			    : EOVERFLOW;
+			fprintf(stderr, "link budget: %s dimension=%lu below=%u credits=%llu\n",
+			    [test[@"image"] UTF8String], (unsigned long)dimension, (unsigned)below,
+			    (unsigned long long)*selected);
+			link_budget_run(fixtures, test,
+			    dimension < TEST_LINK_CORE_BUDGETS ? &limits : NULL,
+			    dimension < TEST_LINK_CORE_BUDGETS ? NULL : &limits, below ? code : 0,
+			    below ? refused : NTFS_OPERATION_LIMIT_NONE, NULL);
+			if (below) {
+				break;
+			}
+		}
+	}
+	printf("PASS: native link %s, %u core/physical exact-one-below boundaries, fresh retry "
+	       "and exact cleanup\n",
+	    [test[@"image"] UTF8String], (TEST_LINK_CORE_BUDGETS + TEST_LINK_PHYSICAL_BUDGETS) * 2);
+}
+
 void
 ntfs_test_fskit_links(NSString *fixtures, BOOL modern)
 {
 	NSArray<NSDictionary *> *tests;
-	NSDictionary *test, *listed = nil, *drive = nil, *alias = nil;
+	NSDictionary *test, *listed = nil, *drive = nil, *alias = nil, *chain = nil,
+			    *chainAlias = nil;
 	NSArray<NSDictionary *> *faultTests;
 	BOOL metadata;
 	NSUInteger allocations, reads, fault;
@@ -589,22 +773,36 @@ ntfs_test_fskit_links(NSString *fixtures, BOOL modern)
 		if ([test[@"image"] isEqualToString:@"native-link-reserved.img"]) {
 			alias = test;
 		}
+		if ([test[@"image"] isEqualToString:@"native-link-chain-listed.img"]) {
+			chain = test;
+		}
+		if ([test[@"image"] isEqualToString:@"native-link-chain-alias.img"]) {
+			chainAlias = test;
+		}
 	}
-	assert(drive != nil && listed != nil && alias != nil);
+	assert(drive != nil && listed != nil && alias != nil && chain != nil && chainAlias != nil);
 	link_configuration(fixtures, drive, modern);
 	if (!modern) {
-		faultTests = @[ listed, alias ];
+		link_budgets(fixtures, chain);
+		link_budgets(fixtures, chainAlias);
+		faultTests = @[ listed, alias, chain, chainAlias ];
 		for (test in faultTests) {
 			for (metadata = NO;; metadata = YES) {
-				link_fault(fixtures, test, metadata, 0, 0, &allocations, &reads);
+				link_fault(
+				    fixtures, test, metadata, 0, 0, NO, &allocations, &reads);
 				for (fault = 1; fault <= allocations; fault++) {
-					link_fault(fixtures, test, metadata, fault, 0, NULL, NULL);
+					link_fault(
+					    fixtures, test, metadata, fault, 0, NO, NULL, NULL);
 				}
 				for (fault = 1; fault <= reads; fault++) {
-					link_fault(fixtures, test, metadata, 0, fault, NULL, NULL);
+					link_fault(
+					    fixtures, test, metadata, 0, fault, NO, NULL, NULL);
+					link_fault(
+					    fixtures, test, metadata, 0, fault, YES, NULL, NULL);
 				}
 				printf("PASS: native link %s %s, %lu allocation/%lu read fault "
-				       "positions, retry, exact replies and cleanup\n",
+				       "partial/full read positions, retry, exact replies and "
+				       "cleanup\n",
 				    [test[@"image"] UTF8String], metadata ? "metadata" : "lookup",
 				    (unsigned long)allocations, (unsigned long)reads);
 				if (metadata) {

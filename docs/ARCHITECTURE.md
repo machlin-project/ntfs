@@ -169,14 +169,17 @@ corrupt. Presence checks scan
 both the base record and the complete attribute-list envelope, regardless of name;
 an omitted base attribute or invalid named reparse attribute cannot evade the guard.
 Checking absence can read an attribute list even for an ordinary file. FSKit
-projects supported single-edge symlink/junction objects under LINK-POLICY.md's
+projects supported symlink/junction objects under LINK-POLICY.md's
 explicit current-volume binding and filename policy. Numeric ancestry carries
 directory provenance without retaining parent FSItems. Cached immutable native
 targets are separate from counted wire snapshots, which unmount closes and raw
 xattr access reopens. Names-only pages classify checked metadata without resolving
-targets; requested attributes require truthful projected sizes. Intermediate
-reparse chains, context-dependent hard links, cross-volume ownership and full
-native authorization remain open.
+targets; requested attributes require truthful projected sizes. The adapter's
+intermediate-directory resolver retains emitted native link components while
+checking their within-owner destinations to translate subsequent names. A full-
+reference active stack detects cycles; cumulative snapshot, component and alias
+credits span every nested expansion. Context-dependent hard links, cross-volume
+ownership, installed path walking and full native authorization remain open.
 
 An MFT record cache contains only validated immutable records and has an explicit
 entry budget. Metadata copies prevent eviction from invalidating a node. Run

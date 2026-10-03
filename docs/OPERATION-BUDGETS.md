@@ -189,7 +189,13 @@ bitmap, fragmented/listed MFT, fragmented/sparse/LZNT1 content, ADS, reparse,
 Secure/DACL, XPRESS/LZX and fragmented/listed journal pages. Additional tests cover
 mount, ABI refusal, nested/LIFO/depth/cross-owner scopes, callback reentry, detached
 end, sibling live storage, failed attempts, optional cache omission and cold/cache
-decoder retry. Images remain unchanged and required cleanup remains available.
+decoder retry. A full-depth test denies each of the 32 ancestors, checks all
+1,024 propagated sticky flags and zero failed work credits, rejects new children
+during unwind and permits fresh successful operations with reused storage.
+Images remain unchanged and required cleanup remains available.
+The accounting source's bounded image campaign replays all 282 unique authored
+seeds and passes 52,898 executions/70 seconds with no OOM, timeout or crash events;
+ACCEPTANCE.md retains exact report/log and configured-limit scope.
 
 `tests/fskit_operation.m` checks physical rounding/fragments, nested credits,
 guards, callback scope refusal, backend retries, logical versus physical bytes,
@@ -200,6 +206,8 @@ complete qualification and retained failure logs are in ACCEPTANCE.md.
 
 Windows-authored large/fragmented/hostile workloads, longer scheduled campaigns,
 native aggregate allocation/RSS stress, installed buffer/scheduling behavior and
-measured accounting overhead remain required. Native synchronous-I/O deadlines
-and cancellation remain separate ownership work in LIFECYCLE.md. This checkpoint
+broader native/device accounting measurements remain required. PERFORMANCE.md
+records paired portable guard cost and the targeted cached resident-read gain;
+neither qualifies broader native or installed performance. Native synchronous-I/O
+deadlines and cancellation remain separate ownership work in LIFECYCLE.md. This checkpoint
 does not complete the full continuation scope in CORE-QUALIFICATION.md.

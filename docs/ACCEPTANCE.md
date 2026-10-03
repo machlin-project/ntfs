@@ -67,7 +67,7 @@ semantic results and input/binary integrity pass. PERFORMANCE.md preserves
 hardware/cache/matrix scope and selected overhead; this is no installed or
 independent-driver performance claim.
 
-A candidate governor simplification uses the uniformly propagated head result
+The governor simplification uses the uniformly propagated head result
 and clears only usage before explicitly assigning scope fields. Its 32-level
 test denies each ancestor in turn, checks all 1,024 scope flags/zero work credits,
 rejects new children during unwind and reuses storage after a fresh success.
@@ -75,9 +75,44 @@ The existing 12 profiles/144 boundaries remain unchanged. All 61 sanitized
 suites, style, both freestanding 2-KiB-frame targets, 22 component groups/eight
 modern-runtime SKIPs and the actual unsigned Release operation source compiled
 for both architectures pass under `artifacts/plan-accounting-*-candidate.log`.
-The candidate's performance acceptance remains pending a matched comparison
-against the guarded reader. Core/native resource limits and full qualification
-gaps remain unchanged.
+Its matched comparison passes 2,880 runs/160 paired configurations under
+`artifacts/measure-accounting-optimized-*/`. Broad wall ranges overlap and mixed
+medians establish no general improvement. Two longer confirmation reports add
+120 runs/four paired configurations, one million operations and 15 repetitions
+per variant: cached resident sequential/random wall medians improve 2.18%/1.55%,
+with matching CPU direction in all 15 pairs of each profile. Open profiles are
+mixed and read p99 remains clock-quantized at 42 ns. PERFORMANCE.md scopes
+acceptance to those resident reads. Actual paired results, I/O/allocation/cache
+counts, peak core bytes, inputs/originals and retained binaries pass independent
+review. Core/native resource limits and full qualification gaps remain unchanged.
+
+The committed accounting source passes two isolated ordinary Release/O3 builds
+and all eight portable archive/CLI byte comparisons under
+`artifacts/reproducibility-accounting/`, with its bounded launcher log at
+`artifacts/plan-accounting-reproducibility-candidate.log`. Review re-read actual
+full products and checked lengths/digests/equality. This same-checkout/toolchain,
+separate-build-directory evidence does not qualify relocated sources, native
+app/signing or remote CI.
+
+Fresh current-source legacy directory baselines pass 54 runs/six summaries in
+`artifacts/fskit-directory-accounting-{large,small}/report.json`, with bounded
+launch logs at `artifacts/plan-accounting-native-{large,small}-baseline.log`.
+The actual owner uses core/physical compound scopes, the verified Release
+archive and current native/header sources. Complete independent inventories,
+order, sizes, EOF and request checks pass. Review checked actual inputs,
+source/archive/binary digests and retained summary medians. PERFORMANCE.md
+records current-only wall/CPU/percentile/memory scope; no paired guard-cost,
+earlier-adapter gain, modern-runtime or installed/device conclusion follows.
+
+The current image campaign passes all 282 unique authored image/journal-volume
+fixed-file replays and 52,898 executions in 70 seconds, with OOM/timeout/crash
+counters 0/0/0 and exit zero. Evidence remains in
+`artifacts/fuzz-accounting-image/report.json`, its retained campaign/replay logs
+and `artifacts/plan-accounting-image-fuzz-candidate.log`. Review checked every
+unique Executed line, final counters and the actual retained fuzzer digest.
+One-MiB input, five-second per-input timeout and 1,024-MiB RSS are configured
+ceilings; RSS is not a measured campaign peak. This bounded local campaign
+does not replace Windows seeds or longer scheduled fuzzing.
 
 The ordinary directory allocation diagnostic now scans the complete `$I30`
 bitmap after checked traversal and rejects used unreachable slots, out-of-span

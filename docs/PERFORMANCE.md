@@ -3,9 +3,11 @@
 The core operation-accounting guards now have a paired retained-Release comparison
 across ordinary/fragmented/resident/sparse/LZNT1/WOF reading and metadata. It
 measures complete reader versions with the same workload, compiler, SDK, inputs
-and arguments; the new accounting simplification still needs its own comparison.
+and arguments. A separate matched comparison qualifies the accounting
+simplification for small cached resident reads; repeated opens remain mixed.
 Earlier optimization percentages below cannot be assigned to the guarded product.
-Compound native pages, installed I/O and broader workloads remain separate.
+Compound native pages have a current-source baseline below; installed I/O and
+broader workloads remain separate.
 Existing directory references
 require an identical core archive, so an older pre-accounting archive is not a
 valid matched reference for that runner. Keep its check intact and establish a
@@ -188,9 +190,61 @@ regression. Random WOF/table-open timings are mixed with overlapping ranges,
 so their lower guarded medians establish no throughput win. All selected rows
 retain identical I/O/allocation counts and add 248 peak core bytes for the new
 volume accounting state. Process RSS and native pool/window memory are separate.
-The later head-result/usage-initialization simplification is not measured by
-these reports. Native/Windows/device, larger independent directory/file sets,
-matched independent drivers and the complete optimization program remain open.
+These reports precede the head-result/usage-initialization change described below.
+Native/Windows/device, larger independent directory/file sets, matched independent
+drivers and the complete optimization program remain open.
+
+### Accounting simplification
+
+Required refusal propagates the same sticky result to all active scopes, and
+begin refuses an exhausted parent. The head therefore supplies that result
+without scanning older flags. Admission still preflights and charges every
+ancestor. Begin clears usage before assigning every remaining scope field;
+selected limits are copied first, preserving aliasing and reused storage.
+The 32-level test denies every ancestor in turn, verifies all 1,024 propagated
+flags and zero failed work credits, checks unwind admission and reuses scope
+storage after fresh successful calls. API version, limits and object sizes stay
+unchanged.
+
+Two isolated ordinary Release/O3 builds retain eight byte-identical products in
+`artifacts/reproducibility-accounting/`. Review checked the actual full bytes,
+lengths and digests. This qualifies portable products in separate build
+directories on the same checkout/toolchain; relocated sources, native app/signing
+and remote CI still require separate evidence.
+
+The candidate-versus-guarded reports in
+`artifacts/measure-accounting-optimized-{large,metadata,resident,fragmented,sparse,lznt1,wof-4k,wof-lzx-packed,wof-pages,wof-lzx-pages}/`
+pass the same 2,880-run/160-paired-configuration matrix. Every configuration has
+overlapping wall ranges; mixed small medians do not establish a broad speedup.
+Every actual pair preserves bytes, entries, sampled sums, allocation/I/O/cache
+counts and peak core bytes. Review also verified actual images, original files
+and retained binaries against their reports and release evidence.
+
+Unresolved small gains prompted two longer targeted comparisons:
+`artifacts/measure-accounting-optimized-{resident,metadata}-confirm/`.
+They pass 120 runs/four paired configurations, with one million operations and
+15 repetitions per variant, memory backend, one reader, cache 64 and 2,000 warmup
+operations. Both execution orders occur. All pairs retain identical semantic,
+allocation/I/O/cache and core-peak results; full before/after byte oracles and
+actual source/binary integrity pass.
+
+| Profile | Guarded/candidate wall median, ms | Change | Candidate faster pairs |
+| --- | ---: | ---: | ---: |
+| Resident sequential, 17-byte request | 42.390 / 41.466 | -2.18% | 15/15 |
+| Resident random, 17-byte request | 42.266 / 41.612 | -1.55% | 15/15 |
+| Resident repeated open | 124.485 / 125.215 | +0.59% | 5/15 |
+| Attribute-list repeated open | 372.657 / 372.205 | -0.12% | 8/15 |
+
+CPU medians improve by 2.14%/1.53% for the two read profiles, with matching paired
+signs. Wall ranges still overlap: sequential guarded/candidate ranges are
+41.808–46.813/41.095–41.851 ms, and random ranges are
+41.718–43.147/41.101–41.862 ms. Acceptance uses the consistent paired read result
+and CPU confirmation, with no gain claimed for opens or broader workloads.
+Resident-read per-run p99 medians remain 42 ns at the host clock's resolution;
+this establishes no tail-latency improvement. The same workload includes its
+prefix-sampling loop in wall/CPU, so this is complete reader cost rather than an
+isolated instruction measurement. Native aggregate memory, scheduling and
+installed/device performance remain separate qualification.
 
 ## Validated live-node metadata reuse
 
@@ -224,6 +278,42 @@ specific metadata reuse; they do not establish FSKit performance, a broad driver
 advantage or completion of the remaining optimization program.
 
 ## FSKit directory continuation measurements
+
+The current API 2 accounting source has a fresh baseline in
+`artifacts/fskit-directory-accounting-{large,small}/report.json`, using the
+verified ordinary Release archive from `artifacts/reproducibility-accounting/`.
+Both current-only reports pass 27 runs/three profiles, nine repetitions each,
+with the same large/small inventories and page/round/warmup settings below.
+Actual source/header/archive/binary and input hashes were independently checked;
+every complete inventory and EOF check passes. The real legacy owner includes
+compound core scopes and rounded physical read scopes. Adapter/workload is O2,
+core is Release/O3, and no sanitizer or installed extension is involved.
+
+| Input/profile | Current wall median, ms | Reader calls | Peak charged pool bytes |
+| --- | ---: | ---: | ---: |
+| Large sequential | 66.630 | 32,720 | 196,232 |
+| Large interleaved | 128.400 | 64,190 | 248,096 |
+| Large separate views | 117.594 | 64,200 | 248,096 |
+| Small sequential | 5.547 | 2,800 | 151,561 |
+| Small interleaved | 9.884 | 5,000 | 166,946 |
+| Small separate views | 9.215 | 5,100 | 166,946 |
+
+The pool includes core and charged continuation storage, excluding Foundation
+objects and the resource window. Process RSS medians are approximately
+24.5 MB/15.5 MB for large/small runs and include workload/input/native storage.
+Small sequential wall ranges are 5.457–9.946 ms; its isolated slow run remains
+retained rather than discarded. The reports retain all CPU/percentile/RSS ranges.
+These are current-only memory-reader baselines, with no guard-cost comparison,
+attribution of earlier adapter gains, modern-runtime or installed/device claim.
+The runner's identical-core-archive requirement for paired references remains
+unchanged; pre-accounting binaries cannot serve as its matched reference.
+
+```sh
+python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --build artifacts/reproducibility-accounting/first --output artifacts/directory-accounting-next --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace.img .build/fixtures/namespace.json --build artifacts/reproducibility-accounting/first --output artifacts/directory-accounting-small-next --pages 1 2 --rounds 100 --warmup-rounds 10 --repetitions 9
+```
+
+The earlier adapter comparison follows and remains scoped to its earlier source.
 
 `tools/fskit_directory_workload.m` calls the actual legacy directory handler with
 an immutable aligned memory reader and external serialization. Independently

@@ -35,9 +35,23 @@ clears usage before assigning the remaining fields, with unchanged ancestor
 credit preflight. All 61 suites, both freestanding targets, style, component
 22 PASS/eight SKIP and unsigned Release operation source on both architectures
 pass. The 32-level test exercises every denying ancestor, all propagated flags,
-unwind and reuse. Its separate performance acceptance is pending. Preserve the
-complete continuation in CORE-QUALIFICATION.md; this checkpoint enables neither
-native authorization nor writes/recovery or a commercial release.
+unwind and reuse. A matched 2,880-run matrix has overlapping wall ranges and mixed
+medians; 120 longer confirmation runs qualify only the cached resident read
+profiles (2.18%/1.55% wall, 15/15 faster pairs each with CPU confirmation).
+Opens remain mixed and read p99 is unchanged at clock resolution. Both isolated
+ordinary Release/O3 builds and all eight actual portable product byte comparisons
+pass under `artifacts/reproducibility-accounting/`. Current-only legacy directory
+baselines also pass 54 runs/six summaries with complete independent inventories
+under `artifacts/fskit-directory-accounting-{large,small}/`. The real handler
+includes compound core/physical scopes; its older matched-reference archive gate
+remains intact. PERFORMANCE.md records scope, ranges and actual input/product
+review. The current image campaign also replays all 282 unique authored seeds
+and passes 52,898 executions/70 seconds with zero OOM, timeout or crash events
+under `artifacts/fuzz-accounting-image/`. Configured RSS is a ceiling, not an
+observed peak; longer campaigns and Windows seeds remain required.
+Preserve the complete continuation in
+CORE-QUALIFICATION.md; this checkpoint enables neither native authorization nor
+writes/recovery or a commercial release.
 
 ## Ordinary directory inventory checkpoint
 
@@ -78,8 +92,9 @@ poisoning a required read. Read OPERATION-BUDGETS.md before changing boundaries,
 units, retry or ownership. The public API is now version 2: rebuild all callers
 and use `ntfs_default_limits` before overriding policy fields.
 
-Current local evidence passes 60 sanitized core suites, both freestanding
-2-KiB-frame targets, style, 22 component PASS groups/eight explicit modern-runtime
+At the operation-budget checkpoint, local evidence passed 60 sanitized core
+suites, both freestanding 2-KiB-frame targets, style, 22 component PASS groups/
+eight explicit modern-runtime
 SKIPs and the unsigned Release app compiled for arm64/x86_64. The operation suite
 includes 12 storage/operation profiles and 144 exact/one-below boundaries, plus
 mount/nesting/callback/live-storage/cache/codec retries. Image/validation campaigns

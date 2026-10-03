@@ -21,7 +21,12 @@ implemented without admitting dirty mounts. Physical wrapped-record assembly now
 has bounded exact-byte/read/fault checks, but does not establish written/current
 history or qualify continuation provenance. Native journal admission/drain,
 tail/fast-page routing, active circular history, native client checkpoints,
-transaction analysis and the crash/durability simulator remain required.
+transaction analysis and native crash/durability qualification remain required.
+An executable in-memory reference model now exercises serialized ownership,
+WAL/commit/home/checkpoint ordering, partial writes and interrupted replay; see
+[RECOVERY-MODEL.md](RECOVERY-MODEL.md). Its typed history is not an NTFS journal
+format. Native transaction/recovery integration and broader crash/durability
+qualification remain required.
 The independent client restart decoder observes only the 64-byte common prefix
 for client formats 0.0/1.0. Its raw analysis/table LSNs and byte counts authorize
 no table reads, transaction state or recovery; containing-record ownership,
@@ -32,7 +37,7 @@ type, active index/sequence, exact NTFS client name and stored restart LSN befor
 prefix interpretation. This cached snapshot match establishes no native page
 provenance or current written history and cannot advance writable qualification.
 
-The future transaction module owns private snapshots, MFT/$Bitmap reservations,
+The future product transaction module owns private snapshots, MFT/$Bitmap reservations,
 attribute-list growth, directory B-tree changes, $Secure references and rollback.
 Define lock ordering and credits before allocation. All referenced data must be
 initialized before metadata publication. FILE/INDX sector fixups must be generated

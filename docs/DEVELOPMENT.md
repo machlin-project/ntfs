@@ -152,6 +152,19 @@ explicit geometry skips for larger layouts; source/component suites retain them.
 All 22 independent sources fit the fuzz envelope, including three 1-MiB files;
 default core memory/I/O caps remain unchanged. LOGFILE.md defines commands and the
 remaining complete-journal, LCN-less, Windows and recovery requirements.
+The `recovery-model` suite executes the original in-memory transaction/durability
+reference model with separately authored native NTFS endpoints. It neither writes
+a device nor mounts media. To retain all representative regular-file images,
+native diagnostic reports and a bounded exploration report in a new directory:
+
+```sh
+python3 tests/recovery_model.py .build/ntfs-inspect .build/ntfs-validate --output artifacts/recovery-model-next
+```
+
+The ordinary suite uses a temporary directory; the retained run preserves failed
+attempts. Child diagnostics have output/deadline limits and the explorer has a
+hard state ceiling. See RECOVERY-MODEL.md for typed history, persistence subsets,
+logical reservation credits and unqualified native recovery/Windows contracts.
 The `access` target independently mutates a descriptor/token envelope, including
 group attributes, user/restricting SIDs, requested rights and comparison limits.
 It asserts deterministic decisions, exact grants and zero error outputs. See

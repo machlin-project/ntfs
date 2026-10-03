@@ -87,6 +87,15 @@ are repository-owned implementations. Synthetic vectors use independently
 authored named fields and expected bytes; Windows corpus qualification remains
 separate from both those vectors and the external NTFS-3G utility comparisons.
 
+The transaction/durability reference model is original repository work over
+typed in-memory cells. Its WAL/commit/home/checkpoint protocol, ownership and
+crash exploration import no external filesystem/recovery implementation. The
+independent NTFS endpoint author uses existing named-wire fixture helpers and
+does not import the model. It authors complete FILE/INDX records with new fixup
+sequences; abstract fragment identities and credit sizes are not an NTFS log
+layout. Native log interpretation and Windows recovery remain unqualified; see
+RECOVERY-MODEL.md and WRITES.md.
+
 The ordinary directory inventory diagnostic uses only the original Linux-NTFS
 format facts that an index bitmap bit identifies one allocation record, allocation
 stores the tree's subnodes and subcluster index VCNs use sectors. Its reachability

@@ -17,7 +17,34 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current accounting measurement checkpoint
+## Current transaction reference-model checkpoint
+
+Read RECOVERY-MODEL.md before treating any model replay as native recovery.
+`tests/transaction_model.py` supplies an exclusive serialized in-memory owner,
+complete immutable snapshots, reservation/private/log credits, WAL/commit/home/
+checkpoint ordering, sticky uncertain I/O and cleanup without writes. The simulator
+injects partial/full sector transfers, arbitrary pending-cell persistence and
+interrupted recovery/retirement. It uses typed observations, not serialized journal
+bytes; the public core and FSKit remain read-only.
+
+The final model passes 49,855 crash/fault states across deferred commit, steal
+commit and steal abort, 22 ownership contracts, 14 history refusals, 1,205 recovery
+interruptions and four unsafe-order witnesses. Forty-seven actual reconstructed
+8-MiB images pass complete read-only native diagnostics and exact content reads.
+Review checks both authored endpoints, actual tool/image digests, all native JSON
+reports, complete metadata bytes and unchanged unowned image spans. Evidence is
+under `artifacts/recovery-model-retirement-fixed/`. All 62 sanitized-build suites,
+build and style pass under `artifacts/plan-recovery-model-{build,suite,style}.log`.
+ACCEPTANCE.md retains the two initial harness failures and first successful run.
+
+Preserve the reference model's single-history scope. Extend its foundation with
+qualified native journal ownership/current history, checkpoint tables/opcodes/CLRs,
+interleaved transactions and broader allocation/security/concurrency failures.
+Real device barriers, native Windows replay/chkdsk, installed FSKit and full
+WRITES.md acceptance remain required. This checkpoint changes no product source
+and qualifies no writable operation or commercial release.
+
+## Accounting measurement checkpoint
 
 The benchmark runner now retains binaries, validates ordinary release evidence,
 requires matching toolchain/workload/POSIX sources for paired variants, alternates

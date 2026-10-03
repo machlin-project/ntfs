@@ -93,6 +93,7 @@ test('fuzz-logfile-restart-record', logfile_fuzz, args: [meson.current_build_dir
 test('corpus-contract', python, args: [files('tests/corpus_contract.py'), inspector.full_path()], timeout: 120)
 test('workload-contract', python, args: [files('tests/workload_contract.py'), workload.full_path(), inspector.full_path()], timeout: 120)
 test('benchmark-contract', python, args: [files('tests/benchmark_contract.py')], timeout: 120)
+test('recovery-model', python, args: [files('tests/recovery_model.py'), inspector.full_path(), validator.full_path()], timeout: 180)
 metadata_cache = executable('ntfs-metadata-cache-tests', ['tests/metadata_cache.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('metadata-cache', metadata_cache, args: [meson.current_build_dir() / 'fixtures/metadata-presence-list.img'], depends: fixture, timeout: 120)
 metadata_stat = executable('ntfs-stat-tests', ['tests/stat.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])

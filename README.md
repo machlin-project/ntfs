@@ -138,6 +138,12 @@ Cached active-client index/sequence lookup now distinguishes raw/free metadata
 from selected active membership without I/O or allocation. Independent chain,
 sequence-boundary and full UTF-16-name checks pass locally; record liveness and
 native checkpoint interpretation remain separate work.
+An executable [transaction/durability reference model](docs/RECOVERY-MODEL.md)
+now exercises bounded serialized ownership, WAL/commit/home/checkpoint ordering,
+partial writes and interrupted replay against independently authored native NTFS
+metadata/content endpoints. It operates only on in-memory typed cells and adds
+no device writer or native journal recovery. The full native recovery/Windows
+acceptance contract remains in WRITES.md and CORE-QUALIFICATION.md.
 The separate NTFS client restart decoder now retains the 64-byte common prefix
 for client formats 0.0/1.0, raw analysis/table LSNs and byte counts, and an opaque
 extension span. Its `client-restart` packet diagnostic makes no table-presence,

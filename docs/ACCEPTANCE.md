@@ -38,7 +38,8 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |
 | NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds passed; complete extensions/tables, containing-record ownership, selected current history and native Windows qualification remain open |
 | Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
-| Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Not implemented; standalone read-only primitives do not provide recovery or permit writes/dirty mounts |
+| Transaction/durability reference model | Exclusive serialized owner, complete private/log credits, data/WAL/commit/home/checkpoint ordering, arbitrary pending-sector eviction, partial/full I/O failures and interrupted abstract replay against independently authored NTFS endpoints | 49,855 modeled states, 22 ownership contracts, 14 history refusals, 1,205 interrupted-recovery states, 47 complete native-byte diagnostics/content checks and four unsafe-order witnesses passed; typed in-memory evidence, no native journal or product write API; see RECOVERY-MODEL.md |
+| Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Product implementation remains open; read-only primitives and abstract reference-model replay do not provide native recovery or permit writes/dirty mounts |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 local contracts and four independent image geometries passed; whole-store/Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
@@ -48,6 +49,29 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource and nine-repetition directory comparisons with independent exact inventories | Specific allocation/metadata, aligned resource and interleaved-directory memory-reader improvement measured; installed/device and independent-driver performance unmeasured |
+
+The executable transaction reference model passes all three deferred/steal/abort
+profiles, every operation's five sector-prefix fault variants, bounded home/control
+persistence powersets and interrupted replay/retirement. The retained report and
+independent review are `artifacts/recovery-model-retirement-fixed/{report,review}.json`;
+its bounded launch log is `artifacts/plan-recovery-model-retirement-fixed.log`.
+All 47 actual images select exact authored metadata endpoints, preserve unowned
+bytes and pass complete native consistency/content checks. Actual reader/validator
+digests and every image/diagnostic report pass review. The native torn-WAL witness
+fails with corrupt metadata. No Windows replay or native log qualification follows.
+
+Build, all 62 sanitized-build suites and selected style pass in
+`artifacts/plan-recovery-model-{build,suite,style}.log`. This changes test/model
+sources and Meson registration only; core, public API and adapters are unchanged.
+Earlier app/component/freestanding and ordinary Release evidence remains scoped
+to its unchanged compiled product sources, not newly executed native acceptance.
+The initial author failure unpacked two of three fixture return values; the next
+native predicate incorrectly expected `ok` instead of the diagnostic's `success`.
+Both failed attempts remain under `artifacts/recovery-model-{initial,author-fixed}/`
+and their corresponding `plan-recovery-model-*.log` files. The first successful
+contract run remains separate under `artifacts/recovery-model-contract-fixed/`;
+the final run adds torn/full retirement failures and sequential owner reuse without
+weakening endpoint or corruption oracles. RECOVERY-MODEL.md records exact scope.
 
 The paired portable reader measurement adds 58 independent benchmark contracts:
 canonical retained-build paths, actual release product/digest agreement, failed/

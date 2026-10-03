@@ -355,6 +355,32 @@ ntfs_run_find(const struct ntfs_stream *s, uint64_t vcn)
 	return NULL;
 }
 
+static const struct ntfs_run *
+read_run(struct ntfs_stream *stream, uint64_t vcn)
+{
+	const struct ntfs_run *run;
+	uint32_t position = stream->read_run;
+
+	if (position < stream->run_count) {
+		run = &stream->runs[position];
+		if (vcn >= run->vcn && vcn - run->vcn < run->length) {
+			return run;
+		}
+		if (position + 1 < stream->run_count) {
+			run++;
+			if (vcn >= run->vcn && vcn - run->vcn < run->length) {
+				stream->read_run = position + 1;
+				return run;
+			}
+		}
+	}
+	run = ntfs_run_find(stream, vcn);
+	if (run != NULL) {
+		stream->read_run = (uint32_t)(run - stream->runs);
+	}
+	return run;
+}
+
 enum ntfs_result
 ntfs_stream_raw(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t length)
 {
@@ -375,7 +401,7 @@ ntfs_stream_raw(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t len
 	while (length != 0) {
 		vcn = offset / cluster;
 		within = (size_t)(offset % cluster);
-		r = ntfs_run_find(s, vcn);
+		r = read_run(s, vcn);
 		if (r == NULL) {
 			return NTFS_CORRUPT;
 		}
@@ -433,7 +459,7 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 	    : NTFS_COMPRESSION_CLUSTERS;
 	for (i = 0; i < count; i += span) {
 		vcn = unit * NTFS_COMPRESSION_CLUSTERS + i;
-		r = ntfs_run_find(s, vcn);
+		r = read_run(s, vcn);
 		if (r == NULL) {
 			return NTFS_CORRUPT;
 		}

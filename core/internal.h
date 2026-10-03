@@ -69,6 +69,8 @@ struct ntfs_stream {
 	size_t value_allocation;
 	struct ntfs_run *runs;
 	uint32_t run_count, run_capacity;
+	/* Verified mapping index; read locality survives bootstrap array growth. */
+	uint32_t read_run;
 	uint8_t *compression_buffer;
 	struct ntfs_unit_cache decoded;
 	struct ntfs_wof_stream *wof;

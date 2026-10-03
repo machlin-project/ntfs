@@ -26,6 +26,26 @@ struct secure_choice {
 	bool found, child;
 };
 
+struct secure_frame {
+	uint8_t *bytes;
+	size_t allocation, position, end;
+	struct secure_bounds bounds;
+	struct secure_key previous;
+	bool has_previous, descended, owned;
+};
+
+struct secure_cursor {
+	struct ntfs_volume *volume;
+	struct ntfs_stream *root, *allocation, *bitmap;
+	struct secure_frame frames[NTFS_SECURITY_INDEX_DEPTH];
+	struct ntfs_index_visited visited;
+	uint64_t store_size;
+	uint32_t block_size, depth;
+	bool by_hash;
+	enum ntfs_result (*charge)(void *, uint64_t);
+	void *context;
+};
+
 static const uint16_t sii_name[] = {'$', 'S', 'I', 'I'};
 static const uint16_t sdh_name[] = {'$', 'S', 'D', 'H'};
 static const uint16_t sds_name[] = {'$', 'S', 'D', 'S'};
@@ -164,12 +184,34 @@ choose_entry(const uint8_t *bytes, size_t size, size_t header_offset, bool by_ha
 }
 
 static enum ntfs_result
+root_geometry(struct ntfs_stream *root, bool by_hash, uint32_t *block_size)
+{
+	const struct ntfs_disk_index_root *header;
+
+	if (!root->resident || root->flags != 0 ||
+	    root->size < sizeof(*header) + sizeof(struct ntfs_disk_index_header)) {
+		return NTFS_CORRUPT;
+	}
+	header = (const void *)root->value;
+	if (ntfs_u32(header->type) != NTFS_INDEX_VIEW_TYPE ||
+	    ntfs_u32(header->collation) !=
+		(by_hash ? NTFS_COLLATION_SECURITY_HASH : NTFS_COLLATION_ULONG)) {
+		return NTFS_UNSUPPORTED;
+	}
+	*block_size = ntfs_u32(header->block_size);
+	if (*block_size < root->volume->info.sector_size || *block_size > NTFS_MAX_INDEX_BYTES ||
+	    (*block_size & (*block_size - 1u)) != 0) {
+		return NTFS_CORRUPT;
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
 index_seek(struct ntfs_node *node, bool by_hash, struct secure_key target, uint64_t store_size,
     struct ntfs_disk_security_locator *out)
 {
 	struct ntfs_volume *v = node->volume;
 	struct ntfs_stream *root = NULL, *allocation = NULL, *bitmap = NULL;
-	const struct ntfs_disk_index_root *header;
 	const struct ntfs_disk_index_block *block;
 	const uint16_t *name = by_hash ? sdh_name : sii_name;
 	const uint8_t *bytes;
@@ -187,28 +229,14 @@ index_seek(struct ntfs_node *node, bool by_hash, struct secure_key target, uint6
 		result = result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
 		goto finish;
 	}
-	if (!root->resident || root->flags != 0 ||
-	    root->size < sizeof(*header) + sizeof(struct ntfs_disk_index_header)) {
-		result = NTFS_CORRUPT;
-		goto finish;
-	}
-	header = (const void *)root->value;
-	block_size = ntfs_u32(header->block_size);
-	if (ntfs_u32(header->type) != NTFS_INDEX_VIEW_TYPE ||
-	    ntfs_u32(header->collation) !=
-		(by_hash ? NTFS_COLLATION_SECURITY_HASH : NTFS_COLLATION_ULONG)) {
-		result = NTFS_UNSUPPORTED;
-		goto finish;
-	}
-	if (block_size < v->info.sector_size || block_size > NTFS_MAX_INDEX_BYTES ||
-	    (block_size & (block_size - 1u)) != 0) {
-		result = NTFS_CORRUPT;
+	result = root_geometry(root, by_hash, &block_size);
+	if (result != NTFS_OK) {
 		goto finish;
 	}
 	unit = v->info.cluster_size <= block_size ? v->info.cluster_size : v->info.sector_size;
 	bytes = root->value;
 	size = (size_t)root->size;
-	header_offset = sizeof(*header);
+	header_offset = sizeof(struct ntfs_disk_index_root);
 	for (;;) {
 		result = ntfs_work(v, size);
 		if (result != NTFS_OK) {
@@ -318,6 +346,258 @@ finish:
 	return result;
 }
 
+static enum ntfs_result
+cursor_frame(struct secure_cursor *cursor, struct secure_frame *frame, size_t header_offset)
+{
+	const struct ntfs_disk_index_header *header;
+	struct secure_choice choice;
+	struct secure_key target = {0};
+	enum ntfs_result result;
+
+	result =
+	    ntfs_index_work(cursor->volume, cursor->charge, cursor->context, frame->allocation);
+	if (result == NTFS_OK) {
+		result = choose_entry(frame->bytes, frame->allocation, header_offset,
+		    cursor->by_hash, target, &frame->bounds, cursor->store_size, &choice);
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	header = (const void *)(frame->bytes + header_offset);
+	frame->position = header_offset + ntfs_u32(header->entries_offset);
+	frame->end = header_offset + ntfs_u32(header->used);
+	return NTFS_OK;
+}
+
+static void
+cursor_close(struct secure_cursor *cursor)
+{
+	struct ntfs_volume *volume;
+	struct secure_frame *frame;
+
+	if (cursor == NULL) {
+		return;
+	}
+	volume = cursor->volume;
+	while (cursor->depth != 0) {
+		frame = &cursor->frames[--cursor->depth];
+		if (frame->owned) {
+			ntfs_free(volume, frame->bytes, frame->allocation);
+		}
+	}
+	ntfs_free(volume, cursor->visited.values,
+	    (size_t)cursor->visited.capacity * sizeof(*cursor->visited.values));
+	ntfs_stream_close(cursor->bitmap);
+	ntfs_stream_close(cursor->allocation);
+	ntfs_stream_close(cursor->root);
+	ntfs_free(volume, cursor, sizeof(*cursor));
+}
+
+static enum ntfs_result
+cursor_open(struct ntfs_node *node, bool by_hash, uint64_t store_size,
+    enum ntfs_result (*charge)(void *, uint64_t), void *context, struct secure_cursor **out)
+{
+	struct secure_cursor *cursor;
+	const uint16_t *name = by_hash ? sdh_name : sii_name;
+	const struct ntfs_disk_index_root *header;
+	const struct ntfs_disk_index_header *node_header;
+	struct secure_frame *frame;
+	enum ntfs_result result;
+
+	*out = NULL;
+	cursor = ntfs_alloc(node->volume, sizeof(*cursor));
+	if (cursor == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	cursor->volume = node->volume;
+	cursor->by_hash = by_hash;
+	cursor->store_size = store_size;
+	cursor->charge = charge;
+	cursor->context = context;
+	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ROOT, name,
+	    sizeof(sii_name) / sizeof(sii_name[0]), &cursor->root);
+	if (result == NTFS_OK) {
+		result = root_geometry(cursor->root, by_hash, &cursor->block_size);
+	}
+	if (result != NTFS_OK) {
+		result = result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
+		goto finish;
+	}
+	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION, name,
+	    sizeof(sii_name) / sizeof(sii_name[0]), &cursor->allocation);
+	if (result == NTFS_NOT_FOUND) {
+		result = NTFS_OK;
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_attribute_open(node, NTFS_ATTR_BITMAP, name,
+		    sizeof(sii_name) / sizeof(sii_name[0]), &cursor->bitmap);
+		if (result == NTFS_NOT_FOUND) {
+			result = NTFS_OK;
+		}
+	}
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	header = (const void *)cursor->root->value;
+	node_header = (const void *)(cursor->root->value + sizeof(*header));
+	if ((cursor->allocation != NULL &&
+		(cursor->allocation->resident || cursor->allocation->flags != 0 ||
+		    cursor->allocation->initialized != cursor->allocation->size ||
+		    (cursor->allocation->size != 0 && cursor->bitmap == NULL))) ||
+	    (cursor->bitmap != NULL &&
+		(cursor->bitmap->flags != 0 ||
+		    cursor->bitmap->initialized != cursor->bitmap->size)) ||
+	    ((node_header->flags & NTFS_INDEX_LARGE) != 0 &&
+		(cursor->allocation == NULL || cursor->bitmap == NULL))) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	frame = &cursor->frames[0];
+	frame->bytes = cursor->root->value;
+	frame->allocation = (size_t)cursor->root->size;
+	cursor->depth = 1;
+	result = cursor_frame(cursor, frame, sizeof(*header));
+finish:
+	if (result != NTFS_OK) {
+		cursor_close(cursor);
+		return result;
+	}
+	*out = cursor;
+	return NTFS_OK;
+}
+
+static struct secure_key
+entry_key(const struct ntfs_disk_view_entry *entry, bool by_hash)
+{
+	const struct ntfs_disk_security_hash_key *key =
+	    (const void *)((const uint8_t *)entry + sizeof(*entry));
+	struct secure_key value = {0};
+
+	value.id = by_hash ? ntfs_u32(key->security_id) : ntfs_u32(key);
+	value.hash = by_hash ? ntfs_u32(key->hash) : 0;
+	return value;
+}
+
+static enum ntfs_result
+cursor_descend(struct secure_cursor *cursor, const struct ntfs_disk_view_entry *entry)
+{
+	struct ntfs_volume *volume = cursor->volume;
+	const struct secure_frame *parent = &cursor->frames[cursor->depth - 1];
+	struct secure_frame *frame;
+	const struct ntfs_disk_index_block *block;
+	uint64_t vcn, offset, bit;
+	uint32_t unit;
+	uint8_t allocated;
+	enum ntfs_result result;
+
+	if (cursor->depth == NTFS_SECURITY_INDEX_DEPTH) {
+		return NTFS_RANGE;
+	}
+	unit = volume->info.cluster_size <= cursor->block_size ? volume->info.cluster_size
+							       : volume->info.sector_size;
+	vcn = ntfs_u64((const uint8_t *)entry + ntfs_u16(entry->length) - sizeof(vcn));
+	if (vcn > (uint64_t)INT64_MAX / unit) {
+		return NTFS_CORRUPT;
+	}
+	offset = vcn * unit;
+	if (cursor->allocation == NULL || cursor->bitmap == NULL ||
+	    offset % cursor->block_size != 0 ||
+	    !ntfs_bounds(offset, cursor->block_size, cursor->allocation->size)) {
+		return NTFS_CORRUPT;
+	}
+	bit = offset / cursor->block_size;
+	if (!ntfs_bounds(bit / NTFS_BITS_PER_BYTE, sizeof(allocated), cursor->bitmap->size)) {
+		return NTFS_CORRUPT;
+	}
+	result = ntfs_stream_exact(
+	    cursor->bitmap, bit / NTFS_BITS_PER_BYTE, &allocated, sizeof(allocated));
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if ((allocated & (1u << (bit % NTFS_BITS_PER_BYTE))) == 0) {
+		return NTFS_CORRUPT;
+	}
+	result = ntfs_index_visit(volume, &cursor->visited, vcn, cursor->charge, cursor->context);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	frame = &cursor->frames[cursor->depth];
+	ntfs_zero(frame, sizeof(*frame));
+	frame->allocation = cursor->block_size;
+	frame->bytes = ntfs_alloc(volume, frame->allocation);
+	if (frame->bytes == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	frame->owned = true;
+	frame->bounds = parent->bounds;
+	if (parent->has_previous) {
+		frame->bounds.lower = parent->previous;
+		frame->bounds.has_lower = true;
+	}
+	if ((ntfs_u16(entry->flags) & NTFS_INDEX_END) == 0) {
+		frame->bounds.upper = entry_key(entry, cursor->by_hash);
+		frame->bounds.has_upper = true;
+	}
+	cursor->depth++;
+	result = ntfs_stream_exact(cursor->allocation, offset, frame->bytes, frame->allocation);
+	if (result == NTFS_OK) {
+		result = ntfs_fixup(frame->bytes, frame->allocation, "INDX");
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	block = (const void *)frame->bytes;
+	if (ntfs_u64(block->vcn) != vcn || ntfs_u16(block->mst.usa_offset) < sizeof(*block) ||
+	    ntfs_u16(block->mst.usa_offset) +
+		    (size_t)ntfs_u16(block->mst.usa_count) * NTFS_MST_WORD_BYTES >
+		offsetof(struct ntfs_disk_index_block, header) +
+		    (uint64_t)ntfs_u32(block->header.entries_offset)) {
+		return NTFS_CORRUPT;
+	}
+	return cursor_frame(cursor, frame, offsetof(struct ntfs_disk_index_block, header));
+}
+
+static enum ntfs_result
+cursor_next(struct secure_cursor *cursor, struct ntfs_disk_security_locator *out)
+{
+	struct secure_frame *frame;
+	const struct ntfs_disk_view_entry *entry;
+	uint16_t flags;
+	enum ntfs_result result;
+
+	while (cursor->depth != 0) {
+		result = ntfs_index_work(cursor->volume, cursor->charge, cursor->context, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		frame = &cursor->frames[cursor->depth - 1];
+		entry = (const void *)(frame->bytes + frame->position);
+		flags = ntfs_u16(entry->flags);
+		if ((flags & NTFS_INDEX_CHILD) != 0 && !frame->descended) {
+			frame->descended = true;
+			result = cursor_descend(cursor, entry);
+			if (result != NTFS_OK) {
+				return result;
+			}
+			continue;
+		}
+		if ((flags & NTFS_INDEX_END) != 0) {
+			if (frame->owned) {
+				ntfs_free(cursor->volume, frame->bytes, frame->allocation);
+			}
+			cursor->depth--;
+			continue;
+		}
+		ntfs_copy(out, (const uint8_t *)entry + ntfs_u16(entry->data_offset), sizeof(*out));
+		frame->previous = entry_key(entry, cursor->by_hash);
+		frame->has_previous = true;
+		frame->descended = false;
+		frame->position += ntfs_u16(entry->length);
+		return NTFS_OK;
+	}
+	return NTFS_END;
+}
+
 static uint32_t
 descriptor_hash(const uint8_t *bytes, size_t size)
 {
@@ -337,7 +617,7 @@ descriptor_hash(const uint8_t *bytes, size_t size)
 
 static enum ntfs_result
 read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locator *locator,
-    struct ntfs_security *snapshot)
+    struct ntfs_security *snapshot, enum ntfs_result (*charge)(void *, uint64_t), void *context)
 {
 	struct ntfs_volume *v = store->volume;
 	struct ntfs_disk_security_locator primary, duplicate;
@@ -347,6 +627,10 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 	enum ntfs_result result;
 
 	result = ntfs_stream_exact(store, offset, &primary, sizeof(primary));
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_index_work(v, charge, context, sizeof(primary));
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -363,14 +647,14 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_work(v, snapshot->size);
+	result = ntfs_index_work(v, charge, context, snapshot->size);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	if (descriptor_hash(snapshot->bytes, snapshot->size) != ntfs_u32(primary.hash)) {
 		return NTFS_CORRUPT;
 	}
-	result = ntfs_work(v, snapshot->size);
+	result = ntfs_index_work(v, charge, context, snapshot->size);
 	if (result == NTFS_OK) {
 		result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
 	}
@@ -379,6 +663,10 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 	}
 	offset += NTFS_SDS_BLOCK_BYTES;
 	result = ntfs_stream_exact(store, offset, &duplicate, sizeof(duplicate));
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_index_work(v, charge, context, sizeof(primary));
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -394,8 +682,11 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 		if (length > NTFS_SECURITY_COMPARE_BYTES) {
 			length = NTFS_SECURITY_COMPARE_BYTES;
 		}
-		result = ntfs_stream_exact(
-		    store, offset + sizeof(duplicate) + position, compare, length);
+		result = ntfs_index_work(v, charge, context, length);
+		if (result == NTFS_OK) {
+			result = ntfs_stream_exact(
+			    store, offset + sizeof(duplicate) + position, compare, length);
+		}
 		if (result != NTFS_OK) {
 			break;
 		}
@@ -405,6 +696,307 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 		}
 	}
 	ntfs_free(v, compare, NTFS_SECURITY_COMPARE_BYTES);
+	return result;
+}
+
+void
+ntfs_security_store_default_limits(struct ntfs_security_store_limits *limits)
+{
+	if (limits != NULL) {
+		limits->max_descriptors = NTFS_SECURITY_STORE_DEFAULT_DESCRIPTORS;
+	}
+}
+
+static void
+store_subject(
+    struct ntfs_security_store_report *report, const struct ntfs_disk_security_locator *locator)
+{
+	report->security_id = ntfs_u32(locator->security_id);
+	report->hash = ntfs_u32(locator->hash);
+	report->offset = ntfs_u64(locator->offset);
+	report->cluster = 0;
+}
+
+static enum ntfs_result
+find_locator(struct ntfs_volume *volume, const struct ntfs_disk_security_locator *locators,
+    uint32_t count, uint32_t id, enum ntfs_result (*charge)(void *, uint64_t), void *context,
+    const struct ntfs_disk_security_locator **out)
+{
+	uint32_t first = 0, end = count, middle, found;
+	enum ntfs_result result;
+
+	*out = NULL;
+	while (first < end) {
+		result = ntfs_index_work(volume, charge, context, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		middle = first + (end - first) / NTFS_VECTOR_GROWTH;
+		found = ntfs_u32(locators[middle].security_id);
+		if (found == id) {
+			*out = &locators[middle];
+			return NTFS_OK;
+		}
+		if (found < id) {
+			first = middle + 1;
+		} else {
+			end = middle;
+		}
+	}
+	return NTFS_NOT_FOUND;
+}
+
+static void
+swap_locators(struct ntfs_disk_security_locator *left, struct ntfs_disk_security_locator *right)
+{
+	struct ntfs_disk_security_locator temporary = *left;
+
+	*left = *right;
+	*right = temporary;
+}
+
+static enum ntfs_result
+sift_offsets(struct ntfs_volume *volume, struct ntfs_disk_security_locator *locators, uint32_t root,
+    uint32_t count, enum ntfs_result (*charge)(void *, uint64_t), void *context)
+{
+	uint32_t child;
+	enum ntfs_result result;
+
+	while (root < count / NTFS_VECTOR_GROWTH) {
+		result = ntfs_index_work(volume, charge, context, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		child = root * NTFS_VECTOR_GROWTH + 1;
+		if (child + 1 < count &&
+		    ntfs_u64(locators[child].offset) < ntfs_u64(locators[child + 1].offset)) {
+			child++;
+		}
+		if (ntfs_u64(locators[root].offset) >= ntfs_u64(locators[child].offset)) {
+			break;
+		}
+		swap_locators(&locators[root], &locators[child]);
+		root = child;
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+sort_offsets(struct ntfs_volume *volume, struct ntfs_disk_security_locator *locators,
+    uint32_t count, enum ntfs_result (*charge)(void *, uint64_t), void *context)
+{
+	uint32_t index;
+	enum ntfs_result result;
+
+	for (index = count / NTFS_VECTOR_GROWTH; index != 0; index--) {
+		result = sift_offsets(volume, locators, index - 1, count, charge, context);
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
+	for (index = count; index > 1; index--) {
+		result = ntfs_index_work(volume, charge, context, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		swap_locators(&locators[0], &locators[index - 1]);
+		result = sift_offsets(volume, locators, 0, index - 1, charge, context);
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_security_store_validate_impl(struct ntfs_volume *volume,
+    const struct ntfs_security_store_limits *limits, struct ntfs_security_store_report *report,
+    enum ntfs_result (*charge)(void *, uint64_t), void *context,
+    enum ntfs_result (*references)(void *, const struct ntfs_disk_security_locator *, uint32_t))
+{
+	struct ntfs_security_store_limits selected = {NTFS_SECURITY_STORE_DEFAULT_DESCRIPTORS};
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *store = NULL;
+	struct secure_cursor *cursor = NULL;
+	struct ntfs_disk_security_locator *locators = NULL, *replacement;
+	const struct ntfs_disk_security_locator *found;
+	struct ntfs_disk_security_locator locator;
+	struct ntfs_security snapshot;
+	struct ntfs_stat stat;
+	uint32_t count = 0, capacity = 0, grown, index;
+	uint64_t previous_end = 0;
+	enum ntfs_result result;
+
+	if (report == NULL) {
+		return NTFS_INVALID;
+	}
+	if (limits != NULL) {
+		selected = *limits;
+	}
+	ntfs_zero(report, sizeof(*report));
+	report->result = NTFS_INVALID;
+	if (volume == NULL || selected.max_descriptors == 0 ||
+	    selected.max_descriptors > NTFS_SECURITY_STORE_MAX_DESCRIPTORS) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_node_by_number(volume, NTFS_SECURE_RECORD, &node);
+	if (result == NTFS_OK) {
+		report->reference = node->reference;
+		result = ntfs_node_metadata(node, &stat);
+	}
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	if (stat.directory || stat.reparse) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	result = ntfs_attribute_open(
+	    node, NTFS_ATTRIBUTE_DATA, sds_name, sizeof(sds_name) / sizeof(sds_name[0]), &store);
+	if (result != NTFS_OK) {
+		result = result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
+		goto finish;
+	}
+	if (store->resident || store->flags != 0 || store->initialized != store->size) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	report->stage = NTFS_SECURITY_STORE_SII;
+	result = cursor_open(node, false, store->size, charge, context, &cursor);
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	while ((result = cursor_next(cursor, &locator)) == NTFS_OK) {
+		store_subject(report, &locator);
+		if (count == selected.max_descriptors) {
+			report->descriptor_limit = true;
+			result = NTFS_RANGE;
+			goto finish;
+		}
+		if (count == capacity) {
+			grown = capacity == 0 ? NTFS_CATALOG_INITIAL_CAPACITY
+					      : capacity * NTFS_VECTOR_GROWTH;
+			if (grown > selected.max_descriptors) {
+				grown = selected.max_descriptors;
+			}
+			result = ntfs_index_work(
+			    volume, charge, context, (uint64_t)count * sizeof(*locators));
+			if (result != NTFS_OK) {
+				goto finish;
+			}
+			replacement = ntfs_alloc(volume, (size_t)grown * sizeof(*replacement));
+			if (replacement == NULL) {
+				result = NTFS_NO_MEMORY;
+				goto finish;
+			}
+			ntfs_copy(replacement, locators, (size_t)count * sizeof(*locators));
+			ntfs_free(volume, locators, (size_t)capacity * sizeof(*locators));
+			locators = replacement;
+			capacity = grown;
+		}
+		locators[count++] = locator;
+		report->sii_entries++;
+	}
+	if (result != NTFS_END) {
+		goto finish;
+	}
+	report->sii_blocks = cursor->visited.count;
+	report->stage = NTFS_SECURITY_STORE_SII_ALLOCATION;
+	result = ntfs_index_check_allocation(volume, cursor->allocation, cursor->bitmap,
+	    &cursor->visited, cursor->block_size, charge, context, &report->cluster);
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	cursor_close(cursor);
+	cursor = NULL;
+	report->stage = NTFS_SECURITY_STORE_SDH;
+	report->security_id = 0;
+	report->hash = 0;
+	report->offset = 0;
+	result = cursor_open(node, true, store->size, charge, context, &cursor);
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	while ((result = cursor_next(cursor, &locator)) == NTFS_OK) {
+		store_subject(report, &locator);
+		result = find_locator(volume, locators, count, ntfs_u32(locator.security_id),
+		    charge, context, &found);
+		if (result == NTFS_NOT_FOUND ||
+		    (result == NTFS_OK && !ntfs_equal(found, &locator, sizeof(locator)))) {
+			result = NTFS_CORRUPT;
+		}
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		report->sdh_entries++;
+	}
+	if (result != NTFS_END || report->sdh_entries != count) {
+		result = result == NTFS_END ? NTFS_CORRUPT : result;
+		goto finish;
+	}
+	report->sdh_blocks = cursor->visited.count;
+	report->stage = NTFS_SECURITY_STORE_SDH_ALLOCATION;
+	result = ntfs_index_check_allocation(volume, cursor->allocation, cursor->bitmap,
+	    &cursor->visited, cursor->block_size, charge, context, &report->cluster);
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	cursor_close(cursor);
+	cursor = NULL;
+	if (references != NULL) {
+		result = references(context, locators, count);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+	}
+	report->stage = NTFS_SECURITY_STORE_DESCRIPTORS;
+	result = sort_offsets(volume, locators, count, charge, context);
+	if (result != NTFS_OK) {
+		goto finish;
+	}
+	for (index = 0; index < count; index++) {
+		store_subject(report, &locators[index]);
+		result = ntfs_index_work(volume, charge, context, sizeof(locator));
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		if (ntfs_u64(locators[index].offset) < previous_end) {
+			result = NTFS_CORRUPT;
+			goto finish;
+		}
+		previous_end = ntfs_u64(locators[index].offset) + ntfs_u32(locators[index].length);
+	}
+	for (index = 0; index < count; index++) {
+		store_subject(report, &locators[index]);
+		ntfs_zero(&snapshot, sizeof(snapshot));
+		result = read_descriptor(store, &locators[index], &snapshot, charge, context);
+		ntfs_free(volume, snapshot.bytes, snapshot.size);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		report->descriptors++;
+		report->descriptor_bytes += snapshot.size;
+	}
+	report->complete = true;
+	report->stage = NTFS_SECURITY_STORE_FINISHED;
+	report->security_id = 0;
+	report->hash = 0;
+	report->offset = 0;
+	report->cluster = 0;
+	result = NTFS_OK;
+finish:
+	if (cursor != NULL) {
+		if (cursor->by_hash) {
+			report->sdh_blocks = cursor->visited.count;
+		} else {
+			report->sii_blocks = cursor->visited.count;
+		}
+	}
+	cursor_close(cursor);
+	ntfs_free(volume, locators, (size_t)capacity * sizeof(*locators));
+	ntfs_stream_close(store);
+	ntfs_node_close(node);
+	report->result = result;
 	return result;
 }
 
@@ -477,7 +1069,7 @@ ntfs_security_resolve_impl(struct ntfs_volume *v, uint32_t id, struct ntfs_secur
 	snapshot->volume = v;
 	snapshot->id = id;
 	v->children++;
-	result = read_descriptor(store, &sii, snapshot);
+	result = read_descriptor(store, &sii, snapshot, NULL, NULL);
 finish:
 	ntfs_stream_close(store);
 	ntfs_node_close(node);

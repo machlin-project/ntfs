@@ -154,3 +154,9 @@ snapshot's type, active index/sequence, exact NTFS name and stored restart LSN
 before prefix decoding. Cached binding uses no I/O/allocation and preserves zero
 error outputs. Page provenance and current written history remain separate from
 this snapshot match; see the `client-restart-record` diagnostic and LOGFILE.md.
+The separate indexed `$Secure` diagnostic now walks both complete supported view
+trees and used allocation inventories, checks exact SII/SDH membership and
+nonoverlapping SDS intervals, and validates every indexed descriptor/hash/copy.
+The general consistency diagnostic also rejects missing nonzero FILE security
+IDs. Unindexed gaps, zero-ID per-file semantics, Windows/native identity and
+authorization remain separate contracts; SECURITY.md defines the exact scope.

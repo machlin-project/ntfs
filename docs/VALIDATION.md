@@ -148,9 +148,19 @@ is UNSUPPORTED, naming the first affected record. A combined Win32/DOS namespace
 entry is one primary name. Reparse directories, encrypted mappings and other
 unsupported ordinary stream formats also retain incomplete verdicts.
 
-The diagnostic does not parse arbitrary resident payload semantics, validate
-all `$Secure`/quota/object-ID/reparse view-index relations or their complete
-allocation inventories, qualify Windows-dependent extended mirror tails, verify boot replicas,
+After physical ownership succeeds, a separate SECURITY pass fully walks the
+supported `$Secure` SII/SDH indexes, inventories both allocation bitmaps, checks
+their exact locator membership and nonoverlapping logical SDS intervals, and
+validates every indexed checksum/descriptor/duplicate. Every allocated base
+FILE's nonzero standard-information security ID must exist in that inventory.
+Missing references/store are CORRUPT; FILE references identify their own
+standard-information subject. SECURITY is appended to the public stage enum,
+preserving earlier numeric values and report layout. See SECURITY.md for the
+bounded vector/cursor contract, partial counts and Windows-dependent inferences.
+
+The diagnostic does not parse arbitrary resident payload semantics, zero-ID
+per-file descriptor bodies, unindexed SDS gaps, quota/object-ID/reparse view-index
+relations or their complete allocation inventories, qualify Windows-dependent extended mirror tails, verify boot replicas,
 read all file content, decompress every compression unit or replay `$LogFile`.
 Those checks remain separate qualification work. Mount's existing mirror check
 still covers only bootstrap record zero; the diagnostic compares the required

@@ -102,8 +102,14 @@ stores the tree's subnodes and subcluster index VCNs use sectors. Its reachabili
 policy is an explicit consistency inference, implemented through the repository's
 existing bounded visited set, paged bitmap scan and independent fixture author.
 No external inventory implementation was examined or imported. Free records stay
-opaque; Windows-authored layouts and non-directory view indexes require separate
-qualification.
+opaque; Windows-authored layouts and other non-directory view indexes require
+separate qualification. The indexed `$Secure` diagnostic now applies these same
+repository mechanisms to supported SII/SDH views. Its cross-index bijection,
+SDS interval ordering/nonoverlap and FILE-ID consistency are explicit repository
+inferences from the existing named layouts and external byte observations. It
+does not assume SDS physical order follows IDs; older research text is not an
+ordering oracle. The cursors, bounded locator heapsort and fixture authors are
+original work, with no foreign traversal/recovery implementation imported.
 
 The mirror diagnostic's mandatory four-record prefix uses the
 [MS-FSCC glossary](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/8ac44452-328c-4d7b-a784-d72afd19bd9f).

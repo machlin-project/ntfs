@@ -12,11 +12,50 @@ enum {
 	INSPECT_READ_BUFFER_BYTES = 1048576,
 	HEX_RADIX = 16,
 	HEX_DECIMAL_DIGITS = 10,
+	DECIMAL_RADIX = 10,
 	HEX_NIBBLE_BITS = 4,
 	HEX_DIGITS_PER_BYTE = 2,
 	HEX_U16_DIGITS = sizeof(uint16_t) * HEX_DIGITS_PER_BYTE,
 	HEX_REFERENCE_DIGITS = sizeof(uint64_t) * HEX_DIGITS_PER_BYTE
 };
+
+static enum ntfs_result
+parse_descriptor_limit(const char *text, uint32_t *value)
+{
+	uint32_t digit;
+
+	*value = 0;
+	if (*text == '\0') {
+		return NTFS_INVALID;
+	}
+	while (*text != '\0') {
+		if (*text < '0' || *text > '9') {
+			return NTFS_INVALID;
+		}
+		digit = (uint32_t)(*text++ - '0');
+		if (*value > (NTFS_SECURITY_STORE_MAX_DESCRIPTORS - digit) / DECIMAL_RADIX) {
+			return NTFS_INVALID;
+		}
+		*value = *value * DECIMAL_RADIX + digit;
+	}
+	return *value == 0 ? NTFS_INVALID : NTFS_OK;
+}
+
+static void
+json_security_store(const struct ntfs_security_store_report *report)
+{
+	printf("{\"result\":\"%s\",\"stage\":%u,\"complete\":%s,\"descriptor_limit\":%s,"
+	       "\"reference\":\"%016" PRIx64 "\",\"security_id\":%" PRIu32 ",\"hash\":%" PRIu32
+	       ",\"offset\":\"%" PRIu64 "\",\"cluster\":\"%" PRIu64 "\",\"sii_entries\":\"%" PRIu64
+	       "\",\"sdh_entries\":\"%" PRIu64 "\",\"sii_blocks\":\"%" PRIu64
+	       "\",\"sdh_blocks\":\"%" PRIu64 "\",\"descriptors\":\"%" PRIu64
+	       "\",\"descriptor_bytes\":\"%" PRIu64
+	       "\",\"authorization\":false,\"unused_sds_gaps\":\"opaque\"}\n",
+	    ntfs_result_string(report->result), report->stage, report->complete ? "true" : "false",
+	    report->descriptor_limit ? "true" : "false", report->reference, report->security_id,
+	    report->hash, report->offset, report->cluster, report->sii_entries, report->sdh_entries,
+	    report->sii_blocks, report->sdh_blocks, report->descriptors, report->descriptor_bytes);
+}
 
 static int
 hex_digit(char byte)
@@ -361,6 +400,8 @@ main(int argc, char **argv)
 	struct ntfs_directory *directory = NULL;
 	struct ntfs_reparse *reparse = NULL;
 	struct ntfs_info info;
+	struct ntfs_security_store_limits store_limits;
+	struct ntfs_security_store_report store_report;
 	struct ntfs_stat st;
 	struct ntfs_dirent entry;
 	uint16_t stream_name[NTFS_NAME_MAX];
@@ -369,12 +410,14 @@ main(int argc, char **argv)
 	uint64_t free_clusters;
 	enum ntfs_result result;
 	int error;
+	bool store_reported = false;
 
 	if (argc < 3) {
 		fprintf(stderr,
 		    "usage: ntfs-inspect IMAGE info|ls|stat|cat|reparse [PATH] [STREAM]\n"
 		    "       ntfs-inspect IMAGE info-json\n"
 		    "       ntfs-inspect IMAGE security-id HEX_SECURITY_ID\n"
+		    "       ntfs-inspect IMAGE security-store [MAX_DESCRIPTORS]\n"
 		    "       ntfs-inspect IMAGE "
 		    "stat-ref|ls-ref|reparse-ref|streams-ref|security-ref "
 		    "HEX_REFERENCE\n"
@@ -388,6 +431,20 @@ main(int argc, char **argv)
 	}
 	result = ntfs_mount(&image.environment, NULL, &v);
 	if (result != NTFS_OK) {
+		goto finish;
+	}
+	if (strcmp(argv[2], "security-store") == 0) {
+		ntfs_security_store_default_limits(&store_limits);
+		if (argc > 4) {
+			result = NTFS_INVALID;
+		} else if (argc == 4) {
+			result = parse_descriptor_limit(argv[3], &store_limits.max_descriptors);
+		}
+		if (result == NTFS_OK) {
+			result = ntfs_security_store_validate(v, &store_limits, &store_report);
+			json_security_store(&store_report);
+			store_reported = true;
+		}
 		goto finish;
 	}
 	if (strcmp(argv[2], "info-json") == 0 && argc == 3) {
@@ -486,7 +543,9 @@ finish:
 	}
 	ntfs_image_close(&image);
 	if (result != NTFS_OK) {
-		fprintf(stderr, "%s\n", ntfs_result_string(result));
+		if (!store_reported) {
+			fprintf(stderr, "%s\n", ntfs_result_string(result));
+		}
 		return 1;
 	}
 	return 0;

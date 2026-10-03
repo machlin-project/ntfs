@@ -235,6 +235,14 @@ self-relative descriptor bytes, without opening file content.
 `security-id HEX_SECURITY_ID` resolves an indexed ID directly. These are
 read-only diagnostic APIs, not access decisions. See SECURITY.md.
 
+The separate `secure-store`/`secure-store-cli` suites exercise complete indexed
+storage, both allocation inventories, off-path corruption and FILE references.
+`ntfs-inspect IMAGE security-store [MAX_DESCRIPTORS]` emits a bounded JSON report;
+the optional cap is positive decimal. Whole-store work runs in one mounted
+operation and can share an explicit caller scope. Ordinary FSKit lookup does
+not implicitly scan the store. SECURITY.md defines free/unindexed/zero-ID scope
+and the separate native authorization requirement.
+
 The `access-oracle-contract` suite tests the independent Windows access collector,
 SDK buffer framing, diagnostic transport and truthful offline reports with a
 synthetic provider. The `ntfs-dacl-evaluate` executable accepts bounded original

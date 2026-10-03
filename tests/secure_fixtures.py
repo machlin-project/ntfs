@@ -119,14 +119,14 @@ def view_root(content, by_hash=False, large=False, **changes):
                               INDEX_HEADER.size + len(content), INDEX_LARGE if large else 0) + content)
 
 
-def view_block(vcn, content, large=False):
-    out = bytearray(CLUSTER)
+def view_block(vcn, content, large=False, block_size=CLUSTER):
+    out = bytearray(block_size)
     usa_offset = INDEX_BLOCK_HEADER.size + INDEX_HEADER.size
-    first = align(usa_offset + (CLUSTER // SECTOR + 1) * U16_BYTES)
-    INDEX_BLOCK_HEADER.pack_into(out, 0, b'INDX', usa_offset, CLUSTER // SECTOR + 1, 0, vcn)
+    first = align(usa_offset + (block_size // SECTOR + 1) * U16_BYTES)
+    INDEX_BLOCK_HEADER.pack_into(out, 0, b'INDX', usa_offset, block_size // SECTOR + 1, 0, vcn)
     INDEX_HEADER.pack_into(out, INDEX_BLOCK_HEADER.size, first - INDEX_BLOCK_HEADER.size,
                            first + len(content) - INDEX_BLOCK_HEADER.size,
-                           CLUSTER - INDEX_BLOCK_HEADER.size, INDEX_LARGE if large else 0)
+                           block_size - INDEX_BLOCK_HEADER.size, INDEX_LARGE if large else 0)
     out[first:first + len(content)] = content
     protect(out, usa_offset)
     return out
@@ -142,27 +142,30 @@ def author(output, image, contents):
     def save(label, bodies=None, locator_changes=None, sii=None, sdh=None,
              store_changes=None, copies=None, file_id=SECURITY_ID, node_attrs=None,
              tree=None, deep=None, listed=None, record_flags=None, bitmaps=None,
-             start_offset=0, legacy=False, node_extension=None, node_data=None):
+             start_offset=0, legacy=False, node_extension=None, node_data=None,
+             index_sizes=None, index_lcns=None, body_order=None):
         bodies = bodies or descriptors
         locators, offset = {}, start_offset
         store = bytearray(start_offset + SDS_BLOCK_BYTES)
-        for security_id, payload in sorted(bodies.items()):
+        ordered_bodies = (sorted(bodies.items()) if body_order is None else
+                          [(security_id, bodies[security_id]) for security_id in body_order])
+        for security_id, payload in ordered_bodies:
             value = dict(hash=checksum(payload), id=security_id, offset=offset,
                          length=LOCATOR.size + len(payload))
             locators[security_id] = value
             record = locator_bytes(value) + payload
             store[offset:offset + len(record)] = record
             offset = (offset + len(record) + SDS_ALIGNMENT - 1) // SDS_ALIGNMENT * SDS_ALIGNMENT
-        last_id = max(bodies)
+        last_id = ordered_bodies[-1][0]
         used = locators[last_id]['offset'] + locators[last_id]['length']
         store += store[start_offset:used]
         if SDS_LCN * CLUSTER + len(store) > len(image):
-            return
+            return False
         for where, replacement in copies or ():
             store[where:where + len(replacement)] = replacement
         for security_id, fields in (locator_changes or {}).items():
             locators[security_id].update(fields)
-        ordered = list(locators.values())
+        ordered = sorted(locators.values(), key=lambda value: value['id'])
         hashed = sorted(ordered, key=lambda value: (value['hash'], value['id']))
         sii_root = view_root(b''.join(view_entry(value) for value in ordered) + view_entry())
         sdh_root = view_root(b''.join(view_entry(value, True) for value in hashed) + view_entry(), True)
@@ -180,19 +183,27 @@ def author(output, image, contents):
         if tree:
             for by_hash, plan in tree.items():
                 index_name = '$SDH' if by_hash else '$SII'
-                index_lcn = SDH_LCN if by_hash else SII_LCN
+                index_lcn = (index_lcns or {}).get(by_hash, SDH_LCN if by_hash else SII_LCN)
                 blocks = plan(locators)
-                for block_index, block in enumerate(blocks):
-                    put_data(changed, index_lcn + block_index, block)
+                index_bytes = b''.join(blocks)
+                if index_lcn * CLUSTER + len(index_bytes) > len(image):
+                    return False
+                put_data(changed, index_lcn, index_bytes)
                 allocation_instance = SDH_ALLOCATION_INSTANCE if by_hash else INDEX_ALLOCATION_INSTANCE
                 bitmap_instance = SDH_BITMAP_INSTANCE if by_hash else INDEX_BITMAP_INSTANCE
-                attrs += [nonresident(INDEX_ALLOC, [(len(blocks), index_lcn)], len(blocks) * CLUSTER,
+                index_length = (index_sizes or {}).get(by_hash, len(index_bytes))
+                index_clusters = (len(index_bytes) + CLUSTER - 1) // CLUSTER
+                bitmap_payload = (bitmaps or {}).get(by_hash)
+                if bitmap_payload is None:
+                    bitmap_payload = ((1 << len(blocks)) - 1).to_bytes(
+                        (len(blocks) + BYTE_BITS - 1) // BYTE_BITS, 'little')
+                attrs += [nonresident(INDEX_ALLOC, [(index_clusters, index_lcn)], index_length,
                                       allocation_instance, index_name),
-                          resident(BITMAP, (bitmaps or {}).get(by_hash, bytes([(1 << len(blocks)) - 1])), bitmap_instance, index_name)]
+                          resident(BITMAP, bitmap_payload, bitmap_instance, index_name)]
         if deep:
             count, cycle = deep
             if (DEEP_INDEX_LCN + count) * CLUSTER > len(image):
-                return
+                return False
             # Base attribute order is SI, SDS, SII, SDH, independent of instances.
             attrs[2] = resident(INDEX_ROOT, view_root(view_entry(child=0), large=True), SII_INSTANCE, '$SII')
             attrs[3] = resident(INDEX_ROOT, sdh_root, SDH_INSTANCE, '$SDH')
@@ -234,6 +245,7 @@ def author(output, image, contents):
         for lcn, payload in node_data or ():
             put_data(changed, lcn, payload)
         (output / f'secure-{label}.img').write_bytes(changed)
+        return True
 
     save('resident')
     save('listed', listed='valid')
@@ -372,3 +384,5 @@ def author(output, image, contents):
     save('depth-limit', deep=(32, False))
     save('depth-valid', deep=(31, False))
     save('cycle', deep=(2, True))
+    from secure_store_fixtures import author as store_fixtures
+    store_fixtures(output, save, descriptors)

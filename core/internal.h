@@ -41,6 +41,11 @@ struct ntfs_run {
 	uint64_t vcn, length, lcn;
 };
 
+struct ntfs_index_visited {
+	uint64_t *values;
+	uint32_t count, capacity;
+};
+
 struct ntfs_wof_stream;
 
 struct ntfs_stream {
@@ -117,6 +122,14 @@ enum ntfs_result ntfs_operation_read(struct ntfs_volume *, size_t);
 bool ntfs_operation_allocate(struct ntfs_volume *, size_t, bool);
 void ntfs_operation_allocated(struct ntfs_volume *, size_t);
 enum ntfs_result ntfs_work(struct ntfs_volume *, uint64_t);
+enum ntfs_result ntfs_index_work(
+    struct ntfs_volume *, enum ntfs_result (*charge)(void *, uint64_t), void *, uint64_t);
+enum ntfs_result ntfs_index_visit(struct ntfs_volume *, struct ntfs_index_visited *, uint64_t,
+    enum ntfs_result (*charge)(void *, uint64_t), void *);
+/* Complete diagnostic inventory after traversal; no free block content read. */
+enum ntfs_result ntfs_index_check_allocation(struct ntfs_volume *, struct ntfs_stream *,
+    struct ntfs_stream *, const struct ntfs_index_visited *, uint32_t,
+    enum ntfs_result (*charge)(void *, uint64_t), void *, uint64_t *cluster);
 enum ntfs_result ntfs_dacl_evaluate_volume(struct ntfs_volume *, const void *, size_t,
     const struct ntfs_access_token *, uint32_t, const struct ntfs_dacl_limits *,
     struct ntfs_dacl_decision *);
@@ -160,6 +173,10 @@ enum ntfs_result ntfs_reparse_name_impl(const struct ntfs_reparse *snapshot,
 enum ntfs_result ntfs_security_resolve_impl(
     struct ntfs_volume *volume, uint32_t id, struct ntfs_security **out);
 enum ntfs_result ntfs_security_open_impl(struct ntfs_node *node, struct ntfs_security **out);
+enum ntfs_result ntfs_security_store_validate_impl(struct ntfs_volume *,
+    const struct ntfs_security_store_limits *, struct ntfs_security_store_report *,
+    enum ntfs_result (*charge)(void *, uint64_t), void *,
+    enum ntfs_result (*references)(void *, const struct ntfs_disk_security_locator *, uint32_t));
 enum ntfs_result ntfs_security_copy_impl(
     const struct ntfs_security *snapshot, void *bytes, size_t capacity, size_t *out);
 enum ntfs_result ntfs_security_evaluate_dacl_impl(const struct ntfs_security *snapshot,

@@ -17,7 +17,37 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current transaction reference-model checkpoint
+## Current indexed security-store checkpoint
+
+`ntfs_security_store_validate` now completely traverses supported SII/SDH trees,
+inventories both used allocation bitmaps, checks exact cross-index membership
+and nonoverlapping SDS intervals, then validates every indexed hash/descriptor/
+copy. General `ntfs_validate` additionally rejects missing nonzero base-FILE
+security references. SECURITY.md and VALIDATION.md define partial subjects,
+operation/storage caps and the scope of `complete`; free/unindexed SDS and
+zero-ID per-file payload semantics remain opaque to the general diagnostic.
+
+The current source passes 64 sanitized-build suites, both freestanding targets
+within 2 KiB, style, 22 legacy component groups/eight explicit modern-runtime
+SKIPs and an unsigned arm64/x86_64 Release app. Both independent four-geometry
+oracles pass unchanged, including complete leaf-view membership/store counters.
+Current logs are `artifacts/plan-secure-store-*-reviewed.log`; SECURITY.md records
+the 46 store/seven complete-volume verdicts and exact fault/budget evidence.
+Image/validation fuzz replay all 323/125 authored seeds and pass 53,736/57,077
+executions with zero OOM/timeout/crash. Five store layouts outside the compact
+1-MiB envelope retain full direct-suite coverage; actual replay/binary/descriptor
+evidence is reviewed in `artifacts/secure-store-review.json`.
+The 64-KiB external geometry still compares only four mirror records and reports
+60 declared tail records as unchecked. No native mount, Windows access decision,
+identity mapping, recovery or commercial qualification was performed.
+
+Preserve the bounded immutable-media and serialized-owner contracts. Next security
+work includes native Windows full-view/fragmented-store observations, zero-ID
+payload qualification, other metadata views, complete Windows/native identities
+and owning authorization. Do not treat diagnostics or DACL evaluation as an
+access grant. Historical checkpoints below retain their source-specific scope.
+
+## Transaction reference-model checkpoint
 
 Read RECOVERY-MODEL.md before treating any model replay as native recovery.
 `tests/transaction_model.py` supplies an exclusive serialized in-memory owner,

@@ -418,6 +418,33 @@ ntfs_security_copy(const struct ntfs_security *snapshot, void *bytes, size_t cap
 }
 
 enum ntfs_result
+ntfs_security_store_validate(struct ntfs_volume *volume,
+    const struct ntfs_security_store_limits *limits, struct ntfs_security_store_report *report)
+{
+	enum ntfs_result result;
+
+	if (report == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(report, sizeof(*report));
+	report->result = NTFS_INVALID;
+	if (volume == NULL ||
+	    (limits != NULL &&
+		(limits->max_descriptors == 0 ||
+		    limits->max_descriptors > NTFS_SECURITY_STORE_MAX_DESCRIPTORS))) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_operation_enter(volume);
+	if (result != NTFS_OK) {
+		report->result = result;
+		return result;
+	}
+	result = ntfs_security_store_validate_impl(volume, limits, report, NULL, NULL, NULL);
+	ntfs_operation_leave(volume);
+	return result;
+}
+
+enum ntfs_result
 ntfs_security_evaluate_dacl(const struct ntfs_security *snapshot,
     const struct ntfs_access_token *token, uint32_t desired, const struct ntfs_dacl_limits *limits,
     struct ntfs_dacl_decision *out)

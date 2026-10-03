@@ -806,6 +806,49 @@ check_index_interruptions(const char *directory)
 	     "pre-callback budget refusals, fresh retry and exact cleanup");
 }
 
+static void
+check_security(const char *directory)
+{
+	struct fuzz_device device = {0};
+	struct ntfs_validation_report baseline, report;
+	struct ntfs_validation_limits limits;
+	enum ntfs_validation_limit dimension;
+	unsigned below;
+
+	load_image(directory, "validation-secure-valid.img", &device);
+	check_faults(&device);
+	assert(validate(&device, NULL, &baseline, 0) == NTFS_OK);
+	for (dimension = NTFS_VALIDATION_LIMIT_MEMORY; dimension <= NTFS_VALIDATION_LIMIT_WORK;
+	    dimension++) {
+		for (below = 0; below < 2; below++) {
+			ntfs_validation_default_limits(&limits);
+			switch (dimension) {
+			case NTFS_VALIDATION_LIMIT_MEMORY:
+				limits.max_memory_bytes = baseline.peak_memory_bytes - below;
+				break;
+			case NTFS_VALIDATION_LIMIT_READ_CALLS:
+				limits.max_read_calls = baseline.read_calls - below;
+				break;
+			case NTFS_VALIDATION_LIMIT_READ_BYTES:
+				limits.max_read_bytes = baseline.read_bytes - below;
+				break;
+			default:
+				limits.max_work_units = baseline.work_units - below;
+			}
+			assert(validate(&device, &limits, &report, 0) ==
+			    (below == 0 ? NTFS_OK : NTFS_RANGE));
+			assert(report.exhausted ==
+			    (below == 0 ? NTFS_VALIDATION_LIMIT_NONE : dimension));
+			if (below != 0 && dimension != NTFS_VALIDATION_LIMIT_MEMORY) {
+				assert(report.stage == NTFS_VALIDATION_SECURITY);
+			}
+		}
+	}
+	free((void *)device.data);
+	puts("PASS: complete-volume security fault retry and four exact/one-below diagnostic "
+	     "boundaries");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -835,5 +878,6 @@ main(int argc, char **argv)
 	check_mirror_cases(argv[1]);
 	check_index_cases(argv[1]);
 	check_index_interruptions(argv[1]);
+	check_security(argv[1]);
 	return 0;
 }

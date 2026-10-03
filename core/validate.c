@@ -24,7 +24,7 @@ enum {
 
 struct validation_record {
 	uint64_t reference, base, parent;
-	uint32_t primary_names;
+	uint32_t primary_names, security_id;
 	uint16_t flags, links;
 	uint8_t directory_state;
 	bool dos_names;
@@ -57,12 +57,14 @@ struct validation {
 	uint32_t name_count, name_capacity;
 	size_t memory;
 	uint64_t deferred_dos_reference;
+	bool has_security_ids;
 	enum ntfs_result failure;
 };
 
 static enum ntfs_result remember_link(
     struct validation *, uint64_t, uint64_t, const uint16_t *, uint16_t, uint8_t, uint8_t);
 static enum ntfs_result scan_attributes(struct validation *);
+static enum ntfs_result scan_security(struct validation *);
 
 void
 ntfs_validation_default_limits(struct ntfs_validation_limits *limits)
@@ -960,6 +962,9 @@ ntfs_validate(const struct ntfs_environment *environment, const struct ntfs_limi
 	if (result == NTFS_OK) {
 		result = scan_allocation(&v);
 	}
+	if (result == NTFS_OK) {
+		result = scan_security(&v);
+	}
 	if (result == NTFS_OK && report->deferred_dos_link_counts != 0) {
 		result = NTFS_UNSUPPORTED;
 		report->stage = NTFS_VALIDATION_NAMESPACE;
@@ -1257,6 +1262,12 @@ scan_attributes(struct validation *v)
 		if (result != NTFS_OK) {
 			break;
 		}
+		if (v->records[i].base == 0) {
+			v->records[i].security_id = stat.security_id;
+			if (stat.security_id != 0) {
+				v->has_security_ids = true;
+			}
+		}
 		list_size = 0;
 		result = ntfs_attribute_list_read(owner, &list, &list_size);
 		if (result == NTFS_NOT_FOUND) {
@@ -1353,5 +1364,119 @@ scan_attributes(struct validation *v)
 	}
 	ntfs_free(v->volume, list, list_size);
 	ntfs_node_close(owner);
+	return result;
+}
+
+static enum ntfs_result
+security_references(
+    void *context, const struct ntfs_disk_security_locator *locators, uint32_t count)
+{
+	struct validation *validation = context;
+	struct validation_record *record;
+	uint64_t index;
+	uint32_t first, end, middle, id;
+	bool found;
+	enum ntfs_result result;
+
+	for (index = 0; index < validation->report->record_slots; index++) {
+		result = ntfs_index_work(validation->volume, index_inventory_work, validation, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		record = &validation->records[index];
+		if (record->reference == 0 || record->base != 0 || record->security_id == 0) {
+			continue;
+		}
+		validation->report->record_number = index;
+		validation->report->reference = record->reference;
+		validation->report->related_reference =
+		    validation->records[NTFS_SECURE_RECORD].reference;
+		validation->report->attribute_type = NTFS_ATTR_STANDARD;
+		first = 0;
+		end = count;
+		found = false;
+		while (first < end) {
+			result = ntfs_index_work(
+			    validation->volume, index_inventory_work, validation, 1);
+			if (result != NTFS_OK) {
+				return result;
+			}
+			middle = first + (end - first) / VALIDATION_VECTOR_GROWTH;
+			id = ntfs_u32(locators[middle].security_id);
+			if (record->security_id == id) {
+				found = true;
+				break;
+			}
+			if (id < record->security_id) {
+				first = middle + 1;
+			} else {
+				end = middle;
+			}
+		}
+		if (!found) {
+			return NTFS_CORRUPT;
+		}
+	}
+	validation->report->record_number = NTFS_SECURE_RECORD;
+	validation->report->reference = validation->records[NTFS_SECURE_RECORD].reference;
+	validation->report->related_reference = 0;
+	validation->report->attribute_type = NTFS_ATTRIBUTE_DATA;
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+scan_security(struct validation *validation)
+{
+	struct ntfs_security_store_report report;
+	struct ntfs_security_store_limits limits = {NTFS_SECURITY_STORE_MAX_DESCRIPTORS};
+	uint64_t index;
+	enum ntfs_result result;
+
+	if (validation->report->record_slots <= NTFS_SECURE_RECORD ||
+	    validation->records[NTFS_SECURE_RECORD].reference == 0) {
+		if (!validation->has_security_ids) {
+			return NTFS_OK;
+		}
+		validation->report->stage = NTFS_VALIDATION_SECURITY;
+		for (index = 0; index < validation->report->record_slots; index++) {
+			result = work(validation, 1);
+			if (result != NTFS_OK) {
+				return result;
+			}
+			if (validation->records[index].base == 0 &&
+			    validation->records[index].security_id != 0) {
+				validation->report->record_number = index;
+				validation->report->reference =
+				    validation->records[index].reference;
+				validation->report->related_reference = 0;
+				validation->report->attribute_type = NTFS_ATTR_STANDARD;
+				validation->report->cluster = 0;
+				return NTFS_CORRUPT;
+			}
+		}
+		return NTFS_CORRUPT;
+	}
+	validation->report->stage = NTFS_VALIDATION_SECURITY;
+	validation->report->record_number = NTFS_SECURE_RECORD;
+	validation->report->reference = validation->records[NTFS_SECURE_RECORD].reference;
+	validation->report->related_reference = 0;
+	validation->report->attribute_type = NTFS_ATTR_INDEX_ROOT;
+	validation->report->cluster = 0;
+	result = ntfs_operation_enter(validation->volume);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_security_store_validate_impl(validation->volume, &limits, &report,
+	    index_inventory_work, validation, security_references);
+	ntfs_operation_leave(validation->volume);
+	validation->report->cluster = report.cluster;
+	if (validation->report->record_number == NTFS_SECURE_RECORD) {
+		if (report.stage == NTFS_SECURITY_STORE_SII_ALLOCATION ||
+		    report.stage == NTFS_SECURITY_STORE_SDH_ALLOCATION) {
+			validation->report->attribute_type = NTFS_ATTR_BITMAP;
+		} else if (report.stage == NTFS_SECURITY_STORE_DESCRIPTORS) {
+			validation->report->attribute_type = NTFS_ATTRIBUTE_DATA;
+		}
+	}
 	return result;
 }

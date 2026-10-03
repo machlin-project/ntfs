@@ -126,6 +126,50 @@ void ntfs_security_get_info(const struct ntfs_security *, struct ntfs_security_i
  * perform no I/O/allocation. A NULL snapshot is INVALID. */
 enum ntfs_result ntfs_security_copy(const struct ntfs_security *, void *, size_t, size_t *);
 
+/* Diagnostic policy, independent of SID/ACL and index wire limits. */
+enum {
+	NTFS_SECURITY_STORE_DEFAULT_DESCRIPTORS = 65536,
+	NTFS_SECURITY_STORE_MAX_DESCRIPTORS = 1048576
+};
+
+enum ntfs_security_store_stage {
+	NTFS_SECURITY_STORE_SETUP,
+	NTFS_SECURITY_STORE_SII,
+	NTFS_SECURITY_STORE_SII_ALLOCATION,
+	NTFS_SECURITY_STORE_SDH,
+	NTFS_SECURITY_STORE_SDH_ALLOCATION,
+	NTFS_SECURITY_STORE_DESCRIPTORS,
+	NTFS_SECURITY_STORE_FINISHED
+};
+
+struct ntfs_security_store_limits {
+	uint32_t max_descriptors;
+};
+
+struct ntfs_security_store_report {
+	enum ntfs_result result;
+	enum ntfs_security_store_stage stage;
+	bool complete, descriptor_limit;
+	uint64_t reference;
+	uint32_t security_id, hash;
+	uint64_t offset, cluster;
+	uint64_t sii_entries, sdh_entries, sii_blocks, sdh_blocks;
+	uint64_t descriptors, descriptor_bytes;
+};
+
+void ntfs_security_store_default_limits(struct ntfs_security_store_limits *);
+/* Complete bounded traversal of both supported $Secure view indexes, their
+ * allocation bitmaps and every indexed descriptor/hash/copy. Requires immutable
+ * media and the ordinary serialized mounted owner. NULL limits select defaults.
+ * It does not interpret unused SDS gaps, inspect every FILE security reference,
+ * repair media or enforce authorization. Failure retains partial counters and
+ * subject fields; complete is false. Subjects identify the current/last examined
+ * object; block counts include admitted VCNs even if a later read fails. Input
+ * limits and output storage must not overlap. Invalid arguments do no callback work.
+ * Mounted operation/live-storage limits apply in addition to this catalog cap. */
+enum ntfs_result ntfs_security_store_validate(struct ntfs_volume *,
+    const struct ntfs_security_store_limits *, struct ntfs_security_store_report *);
+
 #ifdef __cplusplus
 }
 #endif

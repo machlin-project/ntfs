@@ -44,6 +44,12 @@ HELLO_DATA = b'validation resident data'
 FRAGMENTED_DATA = f.pattern(f.FRAGMENTED_BYTES)
 
 
+def standard(attributes=0, **fields):
+    # These focused inventories omit $Secure. Indexed references are authored
+    # separately by secure_store_fixtures; zero-ID inline security stays opaque.
+    return f.standard(attributes, security_id=0, **fields)
+
+
 @dataclass(frozen=True)
 class Link:
     name: str
@@ -195,7 +201,7 @@ def build(source, case, *, mirror=None, index=None):
 
     def attrs(number, extras=()):
         names = links[number]
-        return [f.standard(f.FILE_ATTRIBUTE_DIRECTORY if number in directories else 0),
+        return [standard(f.FILE_ATTRIBUTE_DIRECTORY if number in directories else 0),
                 *(filename(link, FILENAME_INSTANCE if i == 0 else EXTRA_FILENAME_INSTANCE,
                            number in directories) for i, link in enumerate(names)), *extras]
 
@@ -378,7 +384,7 @@ def build(source, case, *, mirror=None, index=None):
                               ROOT_ALLOCATION_INSTANCE, INDEX_STREAM_NAME),
                 bitmap_attribute])
             if case == 'sensitive':
-                records[number][SI_INSTANCE] = f.standard(f.FILE_ATTRIBUTE_DIRECTORY, version=1)
+                records[number][SI_INSTANCE] = standard(f.FILE_ATTRIBUTE_DIRECTORY, version=1)
         else:
             records[number] = attrs(number, [f.resident(
                 f.INDEX_ROOT, root_value(b''.join(entries) + f.entry(),
@@ -400,7 +406,7 @@ def build(source, case, *, mirror=None, index=None):
                    if case != 'unexpected-empty' else (EXTRA_RECORD,))
         for number in numbers:
             records[number] = ([] if case in ('reserved-empty', 'unexpected-empty') else
-                               [f.standard(common_only=True),
+                               [standard(common_only=True),
                                 f.resident(f.DATA, b'payload' if case == 'reserved-with-data' else b'',
                                            DATA_INSTANCE)])
 

@@ -36,7 +36,13 @@ ATTRIBUTE_STANDARD, ATTRIBUTE_SECURITY_DESCRIPTOR = '0x10', '0x50'
 STANDARD_LEGACY_BYTES = struct.calcsize('<QQQQIIII')
 INDEX_END, INDEX_CHILD = 2, 1
 COLLATION_ULONG = 16
+COLLATION_SECURITY_HASH = 18
 WIRE_ALIGNMENT = 8
+HASH_ROTATION = 3
+HASH_WORD_BITS = 32
+HASH_WORD = struct.Struct('<I')
+HASH_WORD_MAX = (1 << HASH_WORD_BITS) - 1
+STORE_FINISHED = 6
 SecurityLocator = namedtuple('SecurityLocator', ('hash', 'security_id', 'offset', 'length'))
 
 
@@ -87,15 +93,15 @@ def capture(argv, log):
     return bytes(output)
 
 
-def exported_locators(root):
+def exported_locators(root, by_hash=False):
     kind, collation, _, _ = INDEX_ROOT.unpack_from(root)
     start, used, allocated, flags = INDEX_HEADER.unpack_from(root, INDEX_ROOT.size)
-    if kind != 0 or collation != COLLATION_ULONG or flags != 0:
-        raise ValueError('This independent oracle requires a resident leaf SII root')
+    if kind != 0 or collation != (COLLATION_SECURITY_HASH if by_hash else COLLATION_ULONG) or flags != 0:
+        raise ValueError('This independent oracle requires supported resident leaf security roots')
     if not INDEX_HEADER.size <= start <= used <= allocated <= len(root) - INDEX_ROOT.size:
         raise ValueError('Malformed exported SII header')
     position, end = INDEX_ROOT.size + start, INDEX_ROOT.size + used
-    result = {}
+    result, previous = {}, None
     while position < end:
         data_offset, data_length, _, length, key_length, flags, _ = VIEW_ENTRY.unpack_from(root, position)
         if length < VIEW_ENTRY.size or length % WIRE_ALIGNMENT or length > end - position or flags & INDEX_CHILD:
@@ -104,15 +110,18 @@ def exported_locators(root):
             if position + length != end or key_length != 0 or data_length != 0:
                 raise ValueError('Malformed exported SII terminal entry')
             return result
-        if key_length != struct.calcsize('<I') or data_length != LOCATOR.size:
+        if key_length != struct.calcsize('<II' if by_hash else '<I') or data_length != LOCATOR.size:
             raise ValueError('Unexpected exported SII key/data framing')
         if data_offset < VIEW_ENTRY.size + key_length or data_offset + data_length > length:
             raise ValueError('Exported SII data overlaps its key or exceeds its entry')
-        (security_id,) = struct.unpack_from('<I', root, position + VIEW_ENTRY.size)
+        key = struct.unpack_from('<II' if by_hash else '<I', root, position + VIEW_ENTRY.size)
+        security_id = key[-1]
         locator = SecurityLocator(*LOCATOR.unpack_from(root, position + data_offset))
-        if locator.security_id != security_id or security_id in result:
+        if (locator.security_id != security_id or security_id in result
+                or (by_hash and locator.hash != key[0]) or (previous is not None and previous >= key)):
             raise ValueError('Exported SII IDs disagree or repeat')
         result[security_id] = locator
+        previous = key
         position += length
     raise ValueError('Exported SII is missing its terminal entry')
 
@@ -124,7 +133,13 @@ def indexed_bytes(sds, locator):
     duplicate = sds[locator.offset + SDS_DUPLICATE_BYTES:locator.offset + SDS_DUPLICATE_BYTES + locator.length]
     if first != duplicate or LOCATOR.unpack_from(first) != locator:
         raise ValueError('Oracle SDS copies or headers disagree')
-    return first[LOCATOR.size:]
+    payload = first[LOCATOR.size:]
+    checksum = 0
+    for (word,) in struct.iter_unpack('<I', payload[:len(payload) // HASH_WORD.size * HASH_WORD.size]):
+        checksum = (((checksum << HASH_ROTATION) | (checksum >> (HASH_WORD_BITS - HASH_ROTATION))) + word) & HASH_WORD_MAX
+    if checksum != locator.hash:
+        raise ValueError('Exported descriptor checksum disagrees with its locator')
+    return payload
 
 
 def main():
@@ -139,7 +154,7 @@ def main():
         if path.is_symlink() or not stat.S_ISREG(path.stat().st_mode):
             parser.error(f'A regular file is required: {path}')
     args.output.mkdir(parents=True, exist_ok=False)
-    report = {'status': 'running', 'scope': 'original descriptor bytes and indexed IDs',
+    report = {'status': 'running', 'scope': 'original descriptor bytes, complete leaf-view membership and indexed-store counters',
               'windows_acceptance': 'not run', 'authorization': 'not implemented', 'profiles': []}
     report_path = args.output / 'report.json'
     report_path.write_text(json.dumps(report, indent=2) + '\n')
@@ -151,10 +166,29 @@ def main():
                 report['profiles'].append(profile)
                 try:
                     sii = capture([args.tools / 'ntfscat', '-i', SECURE_RECORD, '-a', ATTRIBUTE_INDEX_ROOT, '-n', '$SII', image], log)
+                    sdh = capture([args.tools / 'ntfscat', '-i', SECURE_RECORD, '-a', ATTRIBUTE_INDEX_ROOT, '-n', '$SDH', image], log)
                     sds = capture([args.tools / 'ntfscat', '-i', SECURE_RECORD, '-a', ATTRIBUTE_DATA, '-n', '$SDS', image], log)
                     (args.output / f'sii-s{sector}-c{cluster}.bin').write_bytes(sii)
+                    (args.output / f'sdh-s{sector}-c{cluster}.bin').write_bytes(sdh)
                     (args.output / f'sds-s{sector}-c{cluster}.bin').write_bytes(sds)
                     locators = exported_locators(sii)
+                    if exported_locators(sdh, True) != locators:
+                        raise ValueError('Independent SII/SDH locator membership differs')
+                    previous_end = 0
+                    for locator in sorted(locators.values(), key=lambda entry: entry.offset):
+                        if locator.offset < previous_end:
+                            raise ValueError('Independent indexed SDS intervals overlap')
+                        previous_end = locator.offset + locator.length
+                    store = json.loads(capture([args.reader, image, 'security-store'], log))
+                    expected_counts = {'sii_entries': len(locators), 'sdh_entries': len(locators),
+                                       'sii_blocks': 0, 'sdh_blocks': 0, 'descriptors': len(locators),
+                                       'descriptor_bytes': sum(len(indexed_bytes(sds, value)) for value in locators.values())}
+                    if (not store['complete'] or store['result'] != 'success' or store['stage'] != STORE_FINISHED
+                            or store['authorization'] or store['unused_sds_gaps'] != 'opaque'
+                            or any(store[field] != str(value) for field, value in expected_counts.items())):
+                        raise ValueError('Whole-store report differs from independently exported leaf inventories')
+                    profile['security_store'] = store
+                    profile['independent_store_counts'] = expected_counts
                     info = json.loads(capture([args.reader, image, 'info-json'], log))
                     references = {'/': info['root_reference']}
                     for name in ('small.txt', 'large.bin', 'café-Ω.txt'):

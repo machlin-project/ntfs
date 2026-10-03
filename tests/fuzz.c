@@ -17,6 +17,7 @@ enum {
 	FUZZ_REPARSE_NAME_UNITS = 128,
 	FUZZ_DIRECTORY_ENTRIES = 64,
 	FUZZ_STREAM_NAMES = 32,
+	FUZZ_SECURITY_DESCRIPTORS = 32,
 	FUZZ_JOURNAL_CLIENTS = 32,
 	FUZZ_JOURNAL_PAGE_POSITIONS = 2,
 	FUZZ_JOURNAL_GUARD_BYTES = 16,
@@ -174,6 +175,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	struct ntfs_reparse *reparse = NULL;
 	struct ntfs_stream_catalog *catalog = NULL;
 	struct ntfs_security *security = NULL;
+	struct ntfs_security_store_limits store_limits = {FUZZ_SECURITY_DESCRIPTORS};
+	struct ntfs_security_store_report store_report;
 	struct ntfs_stream_name stream_name;
 	struct ntfs_reparse_info reparse_info;
 	struct ntfs_reparse_info copied_reparse_info;
@@ -191,6 +194,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	limits.record_cache_entries = FUZZ_CACHE_ENTRIES;
 	limits.max_directory_nodes = FUZZ_MAX_DIRECTORY_NODES;
 	if (ntfs_mount(&env, &limits, &v) == NTFS_OK) {
+		result = ntfs_security_store_validate(v, &store_limits, &store_report);
+		assert(
+		    result == store_report.result && store_report.complete == (result == NTFS_OK));
+		assert(store_report.sii_entries <= FUZZ_SECURITY_DESCRIPTORS &&
+		    store_report.sdh_entries <= store_report.sii_entries &&
+		    store_report.descriptors <= store_report.sii_entries);
 		fuzz_journal(v, &d);
 	}
 	if (v != NULL && ntfs_root(v, &root) == NTFS_OK &&

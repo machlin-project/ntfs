@@ -94,7 +94,13 @@ truncation. Native case/normalization and installed behavior remain unqualified.
 Names-only directory enumeration has a virtual current/parent prefix and a
 separate cookie view tag; disk-visible ordinals still identify projected names.
 Directories keep the checked owning edge's numeric parent reference without
-retaining a parent FSItem. Wrong-view/stale/out-of-range cookies use the native
+retaining a parent FSItem. Exact native `.` and `..` lookup uses the same checked
+ancestry; both root components select the root. A live canonical parent needs no
+core allocation or I/O. If its FSItem was released, the adapter reopens the full
+sequence-bearing reference and checks ordinary-directory metadata before
+adoption. Admission, compound budgets and item publication still own this path;
+stored dot names remain separately addressable through aliases.
+Wrong-view/stale/out-of-range cookies use the native
 directory-cookie error. See LIFECYCLE.md for local parent/replay/fault evidence
 and the remaining unsupported-object and installed contracts.
 Each enumerated directory lazily allocates a two-position continuation table

@@ -232,8 +232,9 @@ storage alone does not qualify omission of requested attributes. Native link
 projection uses LINK-POLICY.md's bounded single-edge target/metadata policy;
 complete reparse resolution and provider content remain separate work.
 The component does not qualify native buffer lifetime, framework reclaim counts,
-or installed interpretation of cookies and virtual entries. Backend dot-name
-lookup and parent resolution are also not covered by the virtual-entry change.
+or installed interpretation of cookies and virtual entries. The preceding
+virtual-entry change did not cover backend dot-name lookup; the separate
+continuation below supplies that shared adapter path.
 Broader checkpoint/index-block reuse, more than two interleaved positions and
 installed scheduling/buffer performance remain open.
 
@@ -300,3 +301,48 @@ allocation/13 read positions. All 32 core suites, both freestanding targets,
 component, style and the unsigned current app pass under `artifacts/plan-links-*.log`.
 Six macOS-27 checks explicitly SKIP, adding link projection to the previous five.
 Neither installed path walking nor modern runtime/native-count acceptance ran.
+
+## Exact native dot lookup
+
+The shared adapter now recognizes only exact UTF-8 `.` and `..` components after
+normal owner/admission/directory checks. They select the current or checked
+parent ancestry, with the root clamped to itself. No filename conversion,
+index scan or visible-link ordinal is involved; stored literal dot names retain
+their original alias contract. Canonical native spelling stays `.` or `..`.
+
+A live canonical item is reused without core allocation or I/O. A child retains
+numeric ancestry after parent/root FSItems are released, so parent lookup can
+reopen the full sequence-bearing reference without inventing an indexed name.
+Checked metadata must still describe an ordinary directory before adoption.
+It shares the request's core/rounded-physical credits, final admission and native
+publication lock; it creates no new core API, retained parent FSItem or cursor.
+Unmount/remount retains this immutable ancestry, while terminal invalidation and
+permanent resource revocation keep their existing refusal/cleanup contracts.
+
+`tests/fskit_lookup.m` checks root/nested identities, no-callback cached access
+with next-read/allocation failures armed, both released ancestors, drained
+unmount/remount, file/foreign/impostor rejection, exact `...` distinction,
+stored-dot alias access beside virtual dots in both authored case modes,
+permanent cached revocation and revocation during a cold parent read. The cold
+legacy path covers both required allocation positions and both partial/full
+errors at its one physical read, with unchanged live storage and fresh retry.
+Twelve exact/one-below boundaries cover all five core dimensions and both
+physical dimensions; a one-below zero limit is excluded where the public API
+requires a positive limit. Every native reply is checked exactly once.
+
+The accepted ASan/UBSan component passes 25 groups with nine explicit macOS-27
+runtime SKIPs, and selected-toolchain style passes. Logs are
+`artifacts/plan-dot-lookup-component-named-final.log` and
+`artifacts/plan-dot-lookup-style-named-final.log`. The unsigned Release app passes
+under `artifacts/plan-dot-lookup-app.log`, with actual changed owner compilation for
+arm64 and x86_64. Two preceding test attempts retained their
+parent-release assertion failures in `*-component-initial.log` and
+`*-component-owner-fixed.log`; the final helper uses separate weak declarations
+and retains its child across the inner autorelease pool before assigning its
+output. The selected compiler AST confirms that the second variable in the
+original shared `__weak` declaration was strong; diagnostic output is
+`artifacts/plan-dot-lookup-arc-declarations.log`. Parent/root release assertions
+remain mandatory. Modern protocol source compilation does not execute its opaque
+results or native framework counts.
+Installed path walking, normalization, actual reclaim/scheduling, native
+authorization and synchronous cancellation/deadlines remain separate acceptance.

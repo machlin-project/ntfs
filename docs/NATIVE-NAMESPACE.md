@@ -29,6 +29,16 @@ canonical lowercase spelling in sensitive directories and returns canonical
 spelling in insensitive directories. Malformed aliases never fall back to a
 stored literal name.
 
+Exact native `.` and `..` select the current directory and its checked parent;
+the root selects itself for both. These components are virtual and do not scan
+the stored index. A stored literal dot name keeps its projected alias and raw
+manifest entry. The checked numeric ancestry survives release of parent FSItems;
+an absent native parent reopens its complete sequence-bearing reference under
+the ordinary compound core/physical budgets. It must still be an ordinary
+directory, and admission is checked before returning either cached or reopened
+identity. Files, foreign items, unmounted owners and revoked resources cannot use
+this shortcut. LIFECYCLE.md records local checks and installed-runtime gaps.
+
 Resolution opens an independent bounded directory cursor, selects that link,
 checks the full reference and confirms that its name requires projection before
 opening the sequence-checked node. Ordinary indexed lookup retains the stored

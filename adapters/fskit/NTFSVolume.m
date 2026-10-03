@@ -54,6 +54,22 @@ directory_cookie(uint64_t position, BOOL attributes)
 			  : namesOnlyCookieTag | (position + NTFS_DIRECTORY_VIRTUAL_ENTRIES);
 }
 
+static BOOL
+directory_lookup_name(FSFileName *name, BOOL *parent)
+{
+	NSData *data = name.data;
+
+	if (data.length == sizeof(".") - 1 && memcmp(data.bytes, ".", sizeof(".") - 1) == 0) {
+		*parent = NO;
+		return YES;
+	}
+	if (data.length == sizeof("..") - 1 && memcmp(data.bytes, "..", sizeof("..") - 1) == 0) {
+		*parent = YES;
+		return YES;
+	}
+	return NO;
+}
+
 /* Native xattrs have a bounded name; the immutable catalog supplies the reverse
  * mapping. These byte-array records preserve original UTF-16 without NSString. */
 struct stream_manifest_header {
@@ -1137,6 +1153,49 @@ item_id(uint64_t reference)
 	return item;
 }
 
+- (NTFSItem *)directoryItemAtPath:(NTFSDirectoryPath *)path error:(NSError **)error
+{
+	struct ntfs_node *node = NULL;
+	struct ntfs_stat stat;
+	enum ntfs_result result;
+	NTFSItem *item;
+
+	if (path == nil || path.volume != _core) {
+		*error = ntfs_error(NTFS_CORRUPT);
+		return nil;
+	}
+	item = [_items objectForKey:@(path.reference)];
+	if (item != nil) {
+		if ([self checkedItem:item] != item || item->directoryPath != path) {
+			*error = ntfs_error(NTFS_CORRUPT);
+			return nil;
+		}
+		return item;
+	}
+	/* A child retains numeric ancestry after its parent's FSItem is released.
+	 * Reopen the complete sequence-bearing reference, never an inferred name
+	 * or a record number stripped of its sequence. */
+	result = ntfs_node_open(_core, path.reference, &node);
+	if (result == NTFS_OK) {
+		result = ntfs_node_metadata(node, &stat);
+	}
+	if (result == NTFS_OK && (!stat.directory || stat.reparse)) {
+		result = NTFS_CORRUPT;
+	}
+	if (result == NTFS_OK) {
+		result = [self admissionResult];
+	}
+	if (result != NTFS_OK) {
+		ntfs_node_close(node);
+		*error = ntfs_error(result);
+		return nil;
+	}
+	return [self adoptNode:node
+	       parentReference:path.parent == nil ? path.reference : path.parent.reference
+		containingPath:path.parent
+			 error:error];
+}
+
 - (FSItem *)activate:(NSError **)error
 {
 	return [self activateWithOptions:nil error:error];
@@ -1212,9 +1271,10 @@ item_id(uint64_t reference)
 	struct ntfs_dirent entry;
 	uint64_t reference;
 	uint32_t ordinal;
-	BOOL projected;
+	BOOL projected, virtualParent;
 	enum ntfs_result result;
-	NTFSItem *parent;
+	NTFSItem *parent, *item;
+	NTFSDirectoryPath *path;
 
 	*error = nil;
 	*stored = nil;
@@ -1238,6 +1298,29 @@ item_id(uint64_t reference)
 						     code:ENAMETOOLONG
 						 userInfo:nil];
 			return nil;
+		}
+		if (directory_lookup_name(name, &virtualParent)) {
+			path = parent->directoryPath;
+			if (virtualParent && path.parent != nil) {
+				path = path.parent;
+			}
+			item = path == parent->directoryPath
+			    ? parent
+			    : [self directoryItemAtPath:path error:error];
+			if (item != nil) {
+				result = [self admissionResult];
+				if (result == NTFS_OK) {
+					*stored = [FSFileName
+					    nameWithString:virtualParent ? @".." : @"."];
+					result = *stored == nil ? NTFS_NO_MEMORY : NTFS_OK;
+				}
+				if (result != NTFS_OK) {
+					*stored = nil;
+					*error = ntfs_error(result);
+					item = nil;
+				}
+			}
+			return item;
 		}
 		if (ntfs_native_name_reserved(name)) {
 			result = NTFS_NOT_FOUND;

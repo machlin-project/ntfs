@@ -107,6 +107,11 @@ checks pass. Names-only enumeration now includes virtual current/parent entries
 with stable stored-name aliases, checked parent identity and native cookie errors.
 Local replay/fault/budget checks pass; native reclaim counts and installed
 enumeration still require acceptance. See the lifecycle document.
+Exact native dot lookup now shares that checked ancestry, including root clamping
+and reopening a released parent by full sequence-bearing reference. Cached
+identities require no core I/O/allocation; admission and compound budgets remain
+mandatory. Component fault/quota checks pass, with installed path walking and
+macOS 27 runtime still unqualified.
 Ordinary-file sizes now validate the complete unnamed-stream mapping separately
 from content decoding. EFS-flagged and unsupported-compression files can retain
 truthful FSKit attributes and independent readable ADS while default reads return

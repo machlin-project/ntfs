@@ -16,6 +16,7 @@
 #import "fskit_pressure.h"
 #import "fskit_read_path.h"
 #import "fskit_operation.h"
+#import "fskit_lookup.h"
 
 @implementation TestReader
 
@@ -1298,6 +1299,8 @@ main(int argc, char **argv)
 		ntfs_test_fskit_pressure(fixtures, YES);
 		ntfs_test_fskit_enumeration(image, fixtures, NO);
 		ntfs_test_fskit_enumeration(image, fixtures, YES);
+		ntfs_test_fskit_lookup(image, fixtures, NO);
+		ntfs_test_fskit_lookup(image, fixtures, YES);
 		ntfs_test_fskit_content(fixtures, NO);
 		ntfs_test_fskit_content(fixtures, YES);
 		ntfs_test_fskit_links(fixtures, NO);

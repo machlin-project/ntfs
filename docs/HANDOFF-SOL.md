@@ -17,7 +17,39 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current complete bad-cluster list checkpoint
+## Current exact native dot lookup
+
+The shared FSKit adapter resolves exact `.` and `..` from the same checked
+numeric ancestry used by names-only enumeration. Both root components select
+the root. Live canonical items require no core allocation/I/O; a released parent
+reopens the full sequence-bearing reference and must still be an ordinary
+directory before adoption. Admission, native publication and compound core/
+rounded-physical budgets remain mandatory. Stored dot names retain aliases in
+both authored case modes, and no parent FSItem is retained for the ancestry.
+
+ASan/UBSan components and style pass: 25 PASS groups/nine explicit macOS-27
+runtime SKIPs, two required allocation/two partial-full read faults and 12
+core/physical exact/one-below boundaries. Identity, both released ancestors,
+drained remount, wrong owner/type and cached/cold permanent revocation have
+separate checks. The unsigned Release app compiles the changed owner for arm64
+and x86_64 and passes. Logs are `artifacts/plan-dot-lookup-{component,style}-named-final.log`
+and `artifacts/plan-dot-lookup-app.log`.
+Actual log/architecture/compiler-diagnostic review passes under
+`artifacts/dot-lookup-review.json`.
+
+Preserve two failed new-test attempts in `*-component-initial.log` and
+`*-component-owner-fixed.log`. The compiler AST confirms that the original shared
+weak declaration accidentally made the second reference strong. Separate weak
+declarations and explicit child lifetime across the inner autorelease pool
+correct the helper; both parent-release assertions remain mandatory. See
+`artifacts/plan-dot-lookup-arc-declarations.log` and LIFECYCLE.md for exact scope.
+No core/portable-product source changed; the preceding 65-suite, external-image,
+fuzz and portable Release evidence below retains its exact source scope.
+Installed dot/path/case behavior, modern runtime/native counts, authorization,
+full Windows qualification and the complete measured optimization plan remain
+open. This checkpoint does not establish a native mount or performance gain.
+
+## Preceding complete bad-cluster list checkpoint
 
 Fixed `$BadClus::$Bad` now uses the original complete attribute-list reader with
 an internal metadata-only description policy. First-in-extension, multiple and
@@ -429,9 +461,10 @@ all 47 regenerated images and their expectation manifest remained byte-identical
 Continue complete reparse resolution, provider content and explicit unknown/
 malformed metadata behavior. The packer's nullable argument is not evidence that requested
 attributes may be omitted. Preserve truthful metadata and stable continuation,
-without hiding objects or inventing ordinary-file sizes. Backend dot lookup and
-parent resolution remain separate from virtual enumeration. Broader checkpoint/
-index reuse, native scheduling and buffer lifetime also remain open.
+without hiding objects or inventing ordinary-file sizes. Backend exact dot lookup
+now shares checked ancestry; installed path semantics remain unqualified.
+Broader checkpoint/index reuse, native scheduling and buffer lifetime also remain
+open.
 
 ## Bounded native directory continuations
 

@@ -68,6 +68,15 @@ an event during blocked I/O, sweeps cold LZX allocation/read faults and checks
 copied ADS/reparse data, identities, interleaved pending entries and remount.
 See READ-CACHE-POLICY.md for exact measurements and native delivery/stress gaps.
 
+`tests/fskit_lookup.m` additionally checks exact native dot lookup, root clamping,
+canonical reuse without callbacks, released-parent reconstruction, stored-dot
+aliases, remount/revocation and every required cold-parent allocation/partial/
+full read fault. Explicit enclosing core/physical scopes exercise exact and
+one-below credits without replacing zero limits with invalid API inputs. Separate
+weak declarations keep parent-release assertions independent of ARC declaration
+binding; LIFECYCLE.md records the compiler diagnostic and acceptance scope.
+Modern result checks explicitly SKIP without the macOS 27 runtime.
+
 The native directory workload checks every name, identity and requested size
 against independently authored namespace inventories. It measures the actual
 legacy protocol handler on an immutable memory reader, with no MFT record cache

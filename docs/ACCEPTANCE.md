@@ -7,7 +7,37 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current bad-cluster continuation passes all 65 sanitized-build suites, both
+The current shared FSKit lookup recognizes exact native `.` and `..` through
+checked numeric ancestry. Root lookup clamps both to the root; a live canonical
+parent needs no core I/O/allocation, while a released parent reopens its full
+sequence-bearing reference and must still describe an ordinary directory.
+Admission, native publication and compound core/physical budgets remain active.
+Stored dot names remain accessible by their aliases in both authored case modes.
+
+The ASan/UBSan component passes 25 groups/nine explicit macOS-27 runtime SKIPs;
+style and the unsigned arm64/x86_64 Release app pass. The cold parent path covers
+two required allocation faults, two partial/full read faults and 12 exact/
+one-below core/physical boundaries, with exact replies, retry and zero leaked
+core storage. Both released ancestors, remount, file/foreign/impostor rejection,
+cached permanent revocation and cold-read revocation have separate checks.
+Current logs are `artifacts/plan-dot-lookup-{component,style}-named-final.log` and
+`artifacts/plan-dot-lookup-app.log`; actual changed owner compilation is present
+for both architectures. The core/portable products are unchanged and retain
+the preceding bad-cluster suite/oracle/fuzz/reproducibility evidence below.
+No installed mount, modern runtime, native authorization or performance gain is
+established by this continuation.
+Main review re-reads actual PASS/SKIP groups, both protocol architectures and
+the compiler diagnostic in `artifacts/dot-lookup-review.json`.
+
+Two initial test attempts failed the parent-release assertion in
+`artifacts/plan-dot-lookup-component-{initial,owner-fixed}.log`. The selected
+compiler AST diagnostic confirms that the second variable in the original shared
+`__weak` declaration was strong (`artifacts/plan-dot-lookup-arc-declarations.log`).
+The final helper declares each weak reference separately and retains the child
+across its inner autorelease pool; both parent-release assertions remain required.
+No product checks or budgets were relaxed to make those attempts pass.
+
+The preceding bad-cluster continuation passes all 65 sanitized-build suites, both
 2-KiB freestanding targets, style, 22 legacy component groups/eight explicit
 modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. The private
 metadata-only system description now follows complete unflagged attribute lists,
@@ -156,7 +186,7 @@ claimed.
 | WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 376 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 22 legacy in-process PASS groups; eight modern lifecycle/operation/pressure/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries and exact dot lookup/released-parent reconstruction, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 25 in-process PASS groups; nine modern lifecycle/operation/pressure/enumeration/lookup/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
 | FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed again with operation scopes; earlier paired large/small legacy memory-reader benefit had increased bounded pool peak; current guard overhead and installed/native/device qualification remain open |
 | FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
@@ -1316,8 +1346,9 @@ provider/link objects, unknown flag families and malformed metadata, without con
 entry or reporting invented sizes.
 Names-only virtual dot/parent entries and native invalid-cookie errors now pass
 component checks, with view-specific cookies and stable stored alias ordinals.
-Backend dot lookup/parent resolution and installed interpretation remain separate
-acceptance work; LIFECYCLE.md records the SDK contracts and remaining gaps.
+Exact native dot lookup now uses checked ancestry and can reconstruct released
+parents by full reference. Installed interpretation remains separate acceptance
+work; LIFECYCLE.md records the SDK contracts and remaining gaps.
 Named streams now have a bounded read-only xattr projection and reverse manifest
 in both FSKit protocol paths, qualified only by component/build tests. Reparse and
 unknown/malformed metadata can still prevent item adoption; installed projection

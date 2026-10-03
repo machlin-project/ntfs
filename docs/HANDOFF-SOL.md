@@ -47,6 +47,25 @@ Windows-authored chains, installed behavior, flagged forms and the complete
 continuation/optimization plan remain open. Earlier source comparisons and
 performance reports retain their recorded scope.
 
+Fresh sequential image/validation campaigns uniquely fixed-replay all 363/205
+compact inputs, including 40 bad-cluster forms/32 new chains in both walkers.
+Both exit zero with all periodic OOM/timeout/crash counters zero; their last
+reported counts are 51,938/45,153 at 70/69 seconds, with no exact terminal total
+or observed RSS. Reports are
+`artifacts/fuzz-bad-clusters-{image,validation}-isolated/`; unchanged limits remain
+1-MiB input/five-second timeout/1-GiB per-process RSS ceiling. The initial
+duplicate interrupted validation wrapper remains unqualified in
+`artifacts/fuzz-bad-clusters-validation-reviewed/run-m4pdapfu/`. Its report still
+says running, but actual log interruption and no matching live task process were
+verified before the sequential reruns; preserve its original files.
+
+Both committed-source Release/O3 builds produce eight equal full portable products
+under `artifacts/reproducibility-bad-clusters/`. Main independently re-reads every
+pair, actual fuzz binary, unique replay path/counter and all 32 re-authored images
+in `artifacts/bad-clusters-review.json`. Reproducibility remains local same-
+checkout/toolchain/macOS arm64. Native/relocated/signing/CI and the full measured
+optimization program still require their own evidence.
+
 ## Preceding per-file security checkpoint
 
 General `ntfs_validate` now checks selected unnamed zero-ID descriptor bodies

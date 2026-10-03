@@ -27,6 +27,20 @@ contracts and actual changed-core compilation on both architectures. Logs use
 unflagged list/extension implementation; native/flagged qualification and the
 full Windows/security/recovery/optimization program remain open.
 
+Both fresh sequential compact campaigns pass: image/validation uniquely replay
+all 363/205 files, including 40 bad-cluster forms/32 new chains in each, then
+report no OOM/timeout/crash and exit zero. Their last reported exploration counts
+are 51,938/45,153 at 70/69 seconds; exact terminal totals and observed RSS are
+unavailable. The 1-MiB/five-second/1-GiB per-process policies remain unchanged.
+Reports use `artifacts/fuzz-bad-clusters-{image,validation}-isolated/`. The initial
+duplicate interrupted wrapper remains unqualified under the preceding reviewed
+directory; ACCEPTANCE.md records that execution fault and retained evidence.
+Committed-source ordinary Release/O3 reproducibility matches all eight full
+actual products under `artifacts/reproducibility-bad-clusters/`. Independent
+actual-file, replay/counter and product review is
+`artifacts/bad-clusters-review.json`. Neither comparison adds native/relocated/
+signing/remote CI or current performance qualification.
+
 The preceding per-file continuation adds selected zero-ID descriptor framing,
 bounded per-file staging and both-plane parser precharge without changing
 ordinary mounts, API 2 or the read-only boundary. All 64 suites, both freestanding

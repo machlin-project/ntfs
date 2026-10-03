@@ -30,6 +30,30 @@ supported flags/size/list policies. Windows-authored chains, flagged storage,
 installed behavior and the complete continuation/optimization plan remain open.
 Earlier reproducibility/performance reports retain their earlier source scope.
 
+Fresh sequential image/validation campaigns replay every 363/205 compact input
+once, including all 40 bad-cluster images and 32 new chains in both walkers.
+Both exit zero with all periodic OOM/timeout/crash counters zero. The last reported
+exploration counts are 51,938/45,153 at 70/69 seconds, not exact terminal totals;
+fork mode provides no final execution total. Input/time/RSS policies remain
+1 MiB/five seconds/1 GiB per process, and RSS is configured, not observed.
+The two maximum/over-limit per-file descriptor images retain direct tests outside
+the compact envelope. Current reports are
+`artifacts/fuzz-bad-clusters-{image,validation}-isolated/`, with launcher logs
+`artifacts/plan-bad-clusters-fuzz-{image,validation}-isolated.log`.
+
+An initial worker launched a duplicate validation wrapper against shared corpus
+storage and stopped it. Its original `running` report and interrupted log remain
+under `artifacts/fuzz-bad-clusters-validation-reviewed/run-m4pdapfu/`; it is not
+qualified evidence. Main verified no remaining matching task process before
+the fresh sequential campaigns. The other initial reports remain history.
+Committed-source Release/O3 reproducibility now matches all eight actual full
+portable products under `artifacts/reproducibility-bad-clusters/`, with unchanged
+source during both builds. Main independently re-reads every pair, actual fuzz
+binary, unique fixed replay path and periodic event counter in
+`artifacts/bad-clusters-review.json`. Reproducibility remains same-checkout/
+toolchain/macOS arm64; native/relocated/signing/remote CI remain separate, and
+no current performance improvement is inferred from earlier measurements.
+
 The preceding per-file security continuation passes all 64 sanitized-build suites,
 both 2-KiB freestanding targets, style, 22 legacy component groups/eight explicit
 modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. The complete

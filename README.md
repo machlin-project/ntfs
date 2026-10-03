@@ -86,6 +86,10 @@ required mirror-prefix/boot-anchor consistency, directory reachability and physi
 extents through a private read-only mount. Complete ordinary directory bitmaps
 also reject used unreachable index blocks while leaving free storage unread;
 this check adds no whole-bitmap scan to normal FSKit enumeration.
+Complete unflagged `$BadClus::$Bad` mappings now support attribute-list
+continuations through the shared checked reader. The private description is
+metadata-only and public content opening is refused; diagnostics never read bad
+clusters. Flagged storage and Windows-authored chains retain explicit gaps.
 Declared extended mirror tails retain
 explicit unchecked counts; prefix agreement selects no repair source.
 Synthetic fault/budget checks and four independent bitmap geometries pass;

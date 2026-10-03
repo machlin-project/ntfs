@@ -17,7 +17,37 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current per-file security checkpoint
+## Current complete bad-cluster list checkpoint
+
+Fixed `$BadClus::$Bad` now uses the original complete attribute-list reader with
+an internal metadata-only description policy. First-in-extension, multiple and
+base-owned continuations share sequence/base/list/VCN checks, complete
+volume-sized coverage and VCN == LCN physical identity. Descriptions never read
+bad storage, including zero/full VDL; public content opening is refused. An
+ordinary file's ADS with the same spelling remains readable. Flagged first
+extents remain unsupported and mismatched continuation flags/units are corrupt.
+
+All 65 sanitized-build suites, both 2-KiB freestanding targets, style, 22 component
+groups/eight explicit runtime SKIPs and the unsigned arm64/x86_64 Release app pass.
+All four independent bitmap/mirror-prefix geometries pass with unchanged media.
+There are 32 new complete-image verdicts, eight positive, and 207 combined
+diagnostic cases. Nine storage/admission profiles include 25 private-open
+allocation/12 partial/full read failures and 38 exact/one-below cumulative
+operation boundaries with independently counted callbacks/bytes. Four diagnostic
+profiles add 935 allocation/890 partial/full read failures beside the earlier
+17 profiles' 3,328 allocation/1,803 read failures. Forbidden-range callbacks cover
+two distant bad runs; every failure closes owned storage and fresh retry passes.
+
+Current logs use `artifacts/plan-bad-clusters-*-reviewed.log` and the external
+report is `artifacts/interoperability-bad-clusters-reviewed/`. Main review
+independently re-authors all 32 actual new images and checks the complete
+manifest/test results and actual changed-core compilation for both architectures.
+VALIDATION.md defines exact flags, resource and content-admission contracts.
+Windows-authored chains, installed behavior, flagged forms and the complete
+continuation/optimization plan remain open. Earlier source comparisons and
+performance reports retain their recorded scope.
+
+## Preceding per-file security checkpoint
 
 General `ntfs_validate` now checks selected unnamed zero-ID descriptor bodies
 after indexed-store/reference validation. It reuses the original bounded

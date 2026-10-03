@@ -237,6 +237,13 @@ and traversal explicit. It never mutates an existing mounted owner or reads bad
 sectors. Its complete flag applies only to those defined passes; unsupported
 features, faults and budget exhaustion retain partial reports. VALIDATION.md
 defines system-file interpretation, evidence and remaining store/recovery gaps.
+The fixed bad-cluster stream now uses an internal metadata-only description
+through the shared complete attribute-list/extension reader. Its volume-sized
+implicit holes and VCN-equal physical runs retain their special size contract;
+ordinary sparse/content decoding is unchanged. Public access to that system
+stream is explicitly unsupported, and no diagnostic path can read bad storage.
+Flagged storage and native Windows chains retain separate qualification under
+VALIDATION.md.
 Dirty/recovery-flagged volumes are refused without replay. MFT bootstrap supports
 resident/nonresident attribute lists. The first data extent belongs to record
 zero; each extension must be reachable through the already decoded MFT prefix.

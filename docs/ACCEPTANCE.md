@@ -7,7 +7,30 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current per-file security continuation passes all 64 sanitized-build suites,
+The current bad-cluster continuation passes all 65 sanitized-build suites, both
+2-KiB freestanding targets, style, 22 legacy component groups/eight explicit
+modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. The private
+metadata-only system description now follows complete unflagged attribute lists,
+including first-in-extension, multiple and base-owned continuations. Public
+opening of fixed `$BadClus::$Bad` content is refused; ordinary ADS with that
+spelling still reads. Forbidden-range callbacks cover both distant bad runs.
+There are 32 new complete-volume cases (eight positive), bringing the combined
+diagnostic total to 207. Nine storage/admission profiles include 25 private-open
+allocation failures, 12 partial/full open-read failures and 38 exact/one-below
+core operation boundaries. Four added diagnostic profiles cover 935 allocation
+failures and 890 partial/full read failures with exact cleanup/retry/accounting.
+The earlier 17 diagnostic profiles still cover 3,328 allocation/1,803 read faults.
+
+Current logs are `artifacts/plan-bad-clusters-*-reviewed.log`; all four independent
+bitmap/mirror-prefix geometries pass unchanged under
+`artifacts/interoperability-bad-clusters-reviewed/`. Main review independently
+re-authors all 32 actual new images, checks exact current manifest/test results
+and actual changed core compilation for both architectures. VALIDATION.md defines
+supported flags/size/list policies. Windows-authored chains, flagged storage,
+installed behavior and the complete continuation/optimization plan remain open.
+Earlier reproducibility/performance reports retain their earlier source scope.
+
+The preceding per-file security continuation passes all 64 sanitized-build suites,
 both 2-KiB freestanding targets, style, 22 legacy component groups/eight explicit
 modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. The complete
 diagnostic now checks selected unnamed zero-ID descriptors with bounded
@@ -95,7 +118,7 @@ claimed.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
-| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 175 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 3,328 allocation/1,803 read faults, 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, listed/flagged bad-cluster storage, other view-index semantics and Windows qualification remain open |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, complete unflagged bad-cluster lists with metadata-only/content guards, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 207 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 3,328 allocation/1,803 read faults plus 935 allocation/890 partial/full bad-chain failures, 25 private-open allocation/12 partial/full read failures and 38 operation boundaries; 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, flagged/native-Windows bad-cluster storage, other view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |

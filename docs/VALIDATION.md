@@ -135,11 +135,26 @@ remain rejected. Accepting its header framing does not validate quota indexes.
 `$BadClus::$Bad` describes bad cluster positions rather than ordinary readable
 content. Its implicit holes need no ordinary sparse flag; declared allocation
 and size span the volume, while each physical run must map VCN to the same LCN.
-The internal diagnostic decoder shares the checked mapping-pair parser and never
-reads bad sectors. Ordinary unflagged-hole streams remain rejected. These facts
+The internal diagnostic description shares the checked mapping-pair parser and
+complete attribute-list reader. Resident/nonresident lists can locate the first
+extent in an extension, later extents in the base or multiple sequence-checked
+extensions. Complete physical membership, base ownership, duplicates, VCN order
+and coverage are required before publication. Each physical run must retain
+VCN == LCN across the complete volume-sized mapping; continuations contribute
+one logical stream and no duplicate physical ownership.
+
+The description is metadata-only, including when its initialized size is zero
+or volume-sized. Its raw/exact/public read paths cannot read bad sectors or
+present synthetic zero content. Public stream opening also refuses the fixed
+record's exact `$Bad` name; an ordinary file's ADS with that spelling remains
+readable. Ordinary unflagged-hole streams remain rejected. These facts
 come from [original bad-cluster research](https://flatcap.github.io/linux-ntfs/ntfs/files/badclus.html)
-and independent raw metadata. Listed or flagged bad-cluster storage currently
-returns UNSUPPORTED, preserving an incomplete verdict.
+and independent raw metadata; the complete listed-storage implementation remains
+synthetically qualified pending Windows-authored chains. Flagged first extents
+remain UNSUPPORTED; inconsistent flags/units in continuations are CORRUPT.
+All owned descriptions/list buffers close on failure. A complete bad-cluster
+open shares one mounted operation, including nested list reads and extension
+allocations, in addition to the diagnostic's existing budgets.
 
 Separate DOS aliases have exact filename/index pairing checks, but their header
 link-count convention is deferred pending native observations. They increment
@@ -234,6 +249,15 @@ duplicate root anchors, duplicate empty bad-cluster streams and explicit
 unsupported cases. Fault sweeps verify exact release sizes, unchanged source
 bytes, complete retry and private ownership beside an existing live mount.
 The physical bad-cluster test refuses any callback read of its bad sector range.
+The separate `bad-clusters` suite checks nine complete storage/admission profiles,
+25 private-open allocation failures, 12 partial/full open-read failures and
+38 exact/one-below cumulative operation boundaries with independently counted
+callbacks/bytes. Four complete diagnostic sweeps add 935 allocation failures and
+890 partial/full read failures, exact release, unchanged media and fresh retry.
+The 32 new complete-volume cases include eight positive inventories and exact
+negative subjects for gaps/overlaps, missing/duplicate/reordered lists, stale
+references/owners, malformed mappings/size/units, unsupported first flags and
+free bad clusters. Forbidden-range callbacks also cover two distant bad runs.
 Twenty-two additional index images cover used unreachable slots, out-of-span
 padding, fragmented and multi-block trees, resident/nonresident paged bitmaps,
 small roots and index sizes below/equal/above cluster size. Forbidden-range

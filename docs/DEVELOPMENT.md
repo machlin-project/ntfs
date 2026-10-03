@@ -229,6 +229,14 @@ lossless name reversal, response/scan exhaustion and complete required-allocatio
 and read-failure sweeps. Their formats and limits appear in NATIVE-NAMESPACE.md.
 See CORE-QUALIFICATION.md for Windows-only acquisition and offline verification.
 
+The separate `bad-clusters` suite checks complete unflagged system-stream
+lists, metadata-only/public-content guards, forbidden bad-range reads, exact
+callback accounting, required allocation/partial/full read faults and cumulative
+operation boundaries. `validation-cli` checks all 32 additional complete-image
+inventories/failure subjects; the image/validation campaigns retain compact
+bad-cluster seeds for both public admission and private diagnostic paths. See
+VALIDATION.md for counts, limits and native Windows gaps.
+
 The `secure` suite checks descriptor storage as well as standalone MS-DTYP
 framing. `ntfs-inspect IMAGE security-ref HEX_REFERENCE` emits the original
 self-relative descriptor bytes, without opening file content.

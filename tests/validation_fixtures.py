@@ -495,7 +495,7 @@ def author(output, source):
         ('bad-clusters-empty', 'ok'), ('bad-clusters-owned', 'ok'),
         ('bad-clusters-wrong-target', 'corrupt'), ('bad-clusters-free', 'corrupt'),
         ('bad-clusters-short', 'corrupt'), ('bad-clusters-invalid-size', 'corrupt'),
-        ('bad-clusters-listed', 'unsupported'), ('ordinary-unflagged-hole', 'corrupt'),
+        ('bad-clusters-listed', 'ok'), ('ordinary-unflagged-hole', 'corrupt'),
         ('bad-clusters-duplicate', 'corrupt'), ('missing-root-anchor', 'corrupt'),
         ('duplicate-root-anchor', 'corrupt'), ('invalid-root-anchor', 'corrupt'),
         ('root-header-link-count', 'corrupt'),
@@ -528,4 +528,6 @@ def author(output, source):
     manifest.extend(index_inventory_fixtures(output, source))
     from security_validation_fixtures import author as security_validation_fixtures
     manifest.extend(security_validation_fixtures(output, source))
+    from bad_clusters_fixtures import author as bad_clusters_fixtures
+    manifest.extend(bad_clusters_fixtures(output, source))
     (output / 'validation-cases.json').write_text(json.dumps(manifest, indent=2) + '\n')

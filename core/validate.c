@@ -1233,7 +1233,7 @@ scan_attributes(struct validation *v)
 	struct ntfs_stat stat;
 	const struct ntfs_disk_record *header;
 	const struct ntfs_disk_nonresident *extent;
-	struct ntfs_attr_view attr, unique;
+	struct ntfs_attr_view attr;
 	uint8_t *record = NULL, *list = NULL;
 	uint16_t name[NTFS_NAME_MAX];
 	uint64_t i, owner_reference, lowest;
@@ -1318,18 +1318,11 @@ scan_attributes(struct validation *v)
 					    ntfs_u16(attr.bytes + ntfs_u16(attr.disk->name_offset) +
 						unit * NTFS_UTF16_UNIT_BYTES);
 				}
-				result = ntfs_bad_clusters_from_attr(owner, &attr, &stream);
+				result = ntfs_bad_clusters_open(
+				    owner, attr.type, name, attr.disk->name_length, &stream);
 				if (result == NTFS_NOT_FOUND) {
 					result = ntfs_attribute_open(owner, attr.type, name,
 					    attr.disk->name_length, &stream);
-				} else if (result == NTFS_OK && list != NULL) {
-					/* Listed bad-cluster continuations need their own complete
-					 * inventory contract; never omit them from the verdict. */
-					result = NTFS_UNSUPPORTED;
-				} else if (result == NTFS_OK) {
-					result = ntfs_attr_find(owner->record,
-					    v->volume->info.record_size, attr.type, name,
-					    attr.disk->name_length, UINT16_MAX, &unique);
 				}
 				if (result == NTFS_OK) {
 					if (!stream->resident) {

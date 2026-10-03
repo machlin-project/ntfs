@@ -306,5 +306,15 @@ storage, and `$BadClus::$Bad` exports confirm implicit holes and volume-sized
 virtual allocation. The original bounded mapping parser is reused for diagnostic
 bad-cluster intervals. It never reads bad sectors and imports no external
 filesystem algorithm. VALIDATION.md separates observed facts, original graph/sort/ownership
-algorithms and unsupported DOS/listed-bad-cluster/store/recovery work. The oracle
+algorithms and unqualified DOS/flagged-bad-cluster/other-store/recovery work. The oracle
 compares standalone raw bitmap exports, never links NTFS-3G into the product.
+
+The complete listed bad-cluster description combines those original interval
+facts with Microsoft's ordinary attribute-list/extension ownership contract.
+An internal description policy reuses our original list/mapping algorithms,
+requires complete volume coverage and VCN == LCN, and forbids content reading.
+Original independent fixtures author first-in-extension, multiple and base-owned
+continuations, nonresident list storage and malformed/failing counterparts.
+No GPL implementation or default allocation policy was copied. Independent
+mkntfs empty-stream inventories remain separate from unacquired Windows-authored
+bad-cluster chains and flagged forms.

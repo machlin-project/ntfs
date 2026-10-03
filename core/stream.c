@@ -146,7 +146,6 @@ ntfs_bad_clusters_from_attr(
 	struct ntfs_stream *stream;
 	uint64_t bytes;
 	size_t unit;
-	uint32_t i;
 	enum ntfs_result result;
 
 	*out = NULL;
@@ -184,21 +183,46 @@ ntfs_bad_clusters_from_attr(
 	stream->allocated = bytes;
 	stream->initialized = ntfs_u64(disk->initialized);
 	stream->cached_unit = UINT64_MAX;
+	stream->metadata_only = true;
 	result = append_mapping(stream, attr, true);
-	if (result == NTFS_OK && stream->clusters != volume->info.cluster_count) {
-		result = NTFS_CORRUPT;
-	}
-	for (i = 0; result == NTFS_OK && i < stream->run_count; i++) {
-		if (stream->runs[i].lcn != NTFS_HOLE &&
-		    stream->runs[i].lcn != stream->runs[i].vcn) {
-			result = NTFS_CORRUPT;
-		}
-	}
 	if (result != NTFS_OK) {
 		ntfs_stream_close(stream);
 		return result;
 	}
 	*out = stream;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_bad_clusters_append(struct ntfs_stream *stream, const struct ntfs_attr_view *attr)
+{
+	return append_mapping(stream, attr, true);
+}
+
+enum ntfs_result
+ntfs_bad_clusters_validate(struct ntfs_stream *stream)
+{
+	uint64_t mapped = 0;
+	uint32_t i;
+	enum ntfs_result result;
+
+	if (stream->clusters != stream->volume->info.cluster_count) {
+		return NTFS_CORRUPT;
+	}
+	result = ntfs_work(stream->volume, stream->run_count);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	for (i = 0; i < stream->run_count; i++) {
+		if (stream->runs[i].lcn == NTFS_HOLE) {
+			continue;
+		}
+		if (stream->runs[i].lcn != stream->runs[i].vcn) {
+			return NTFS_CORRUPT;
+		}
+		mapped += stream->runs[i].length;
+	}
+	stream->physical_size = mapped * stream->volume->info.cluster_size;
 	return NTFS_OK;
 }
 

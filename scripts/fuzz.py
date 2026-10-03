@@ -75,6 +75,9 @@ try:
             paths = sorted(seeds.glob('validation-*.img')) if target == 'validation' else sorted(
                 path for path in seeds.glob('*.img') if not path.name.startswith('validation-'))
             if target == 'image':
+                # Public stream admission must reject the fixed bad-cluster
+                # stream, while preserving ordinary ADS with the same name.
+                paths.extend(sorted(seeds.glob('validation-bad-*.img')))
                 paths.extend(journal_volume_images(seeds, maximum))
             sources = [root / ('tests/fuzz_validation.c' if target == 'validation' else 'tests/fuzz.c'), root / 'tests/fuzz_mutator.c']
             flags = []

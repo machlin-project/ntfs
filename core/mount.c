@@ -167,16 +167,30 @@ load_information(struct ntfs_volume *v)
 	return result;
 }
 
+static enum ntfs_result
+mount_boot_read(void *context, uint64_t offset, void *bytes, size_t size)
+{
+	struct ntfs_volume *volume = context;
+	enum ntfs_result result;
+
+	result = ntfs_operation_read(volume, size);
+	return result == NTFS_OK ? volume->env.read(volume->env.context, offset, bytes, size)
+				 : result;
+}
+
 enum ntfs_result
 ntfs_mount(
     const struct ntfs_environment *env, const struct ntfs_limits *limits, struct ntfs_volume **out)
 {
 	struct ntfs_volume *v;
+	struct ntfs_limits configured;
+	struct ntfs_environment boot_environment;
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *upcase = NULL;
 	struct ntfs_directory *directory = NULL;
 	uint8_t *record = NULL, *mirror = NULL;
 	uint32_t i;
+	bool entered = false;
 	enum ntfs_result result;
 
 	if (out == NULL) {
@@ -187,26 +201,46 @@ ntfs_mount(
 	    env->allocate == NULL || env->release == NULL) {
 		return NTFS_INVALID;
 	}
+	ntfs_default_limits(&configured);
+	if (limits != NULL) {
+		configured = *limits;
+	}
+	if (configured.max_runs == 0 || configured.max_runs > NTFS_MAX_CONFIGURED_RUNS ||
+	    configured.max_attribute_list == 0 ||
+	    configured.max_attribute_list > NTFS_MAX_CONFIGURED_ATTRIBUTE_LIST ||
+	    configured.record_cache_entries > NTFS_MAX_CONFIGURED_RECORD_CACHE ||
+	    configured.max_directory_nodes == 0 ||
+	    configured.max_directory_nodes > NTFS_MAX_CONFIGURED_DIRECTORY_NODES ||
+	    configured.max_live_bytes == 0 || !ntfs_operation_limits_valid(&configured.operation)) {
+		return NTFS_INVALID;
+	}
+	if (sizeof(*v) > configured.max_live_bytes ||
+	    sizeof(*v) > configured.operation.allocation_bytes) {
+		return NTFS_NO_MEMORY;
+	}
 	v = env->allocate(env->context, sizeof(*v));
 	if (v == NULL) {
 		return NTFS_NO_MEMORY;
 	}
 	ntfs_zero(v, sizeof(*v));
 	v->env = *env;
-	ntfs_default_limits(&v->limits);
-	if (limits != NULL) {
-		v->limits = *limits;
-	}
-	if (v->limits.max_runs == 0 || v->limits.max_runs > NTFS_MAX_CONFIGURED_RUNS ||
-	    v->limits.max_attribute_list == 0 ||
-	    v->limits.max_attribute_list > NTFS_MAX_CONFIGURED_ATTRIBUTE_LIST ||
-	    v->limits.record_cache_entries > NTFS_MAX_CONFIGURED_RECORD_CACHE ||
-	    v->limits.max_directory_nodes == 0 ||
-	    v->limits.max_directory_nodes > NTFS_MAX_CONFIGURED_DIRECTORY_NODES) {
-		result = NTFS_INVALID;
+	v->limits = configured;
+	v->live_bytes = sizeof(*v);
+	result = ntfs_operation_enter(v);
+	if (result != NTFS_OK) {
 		goto finish;
 	}
-	result = ntfs_boot(env, &v->info, &v->mft_lcn, &v->mirror_lcn);
+	entered = true;
+	/* The sole bootstrap allocation preceded storage for its accounting. */
+	v->operation->usage.allocation_calls = 1;
+	v->operation->usage.allocation_bytes = sizeof(*v);
+	boot_environment = *env;
+	boot_environment.context = v;
+	boot_environment.read = mount_boot_read;
+	result = ntfs_work(v, sizeof(struct ntfs_disk_boot));
+	if (result == NTFS_OK) {
+		result = ntfs_boot(&boot_environment, &v->info, &v->mft_lcn, &v->mirror_lcn);
+	}
 	if (result != NTFS_OK) {
 		goto finish;
 	}
@@ -218,11 +252,17 @@ ntfs_mount(
 	}
 	result = ntfs_io(v, v->mft_lcn * v->info.cluster_size, record, v->info.record_size);
 	if (result == NTFS_OK) {
+		result = ntfs_work(v, v->info.record_size);
+	}
+	if (result == NTFS_OK) {
 		result = ntfs_record_validate(record, v->info.record_size);
 	}
 	if (result == NTFS_OK) {
 		result =
 		    ntfs_io(v, v->mirror_lcn * v->info.cluster_size, mirror, v->info.record_size);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_work(v, v->info.record_size);
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_record_validate(mirror, v->info.record_size);
@@ -277,6 +317,10 @@ ntfs_mount(
 	if (result != NTFS_OK) {
 		goto finish;
 	}
+	result = ntfs_work(v, NTFS_UTF16_CODE_UNITS);
+	if (result != NTFS_OK) {
+		goto finish;
+	}
 	for (i = 0; i < NTFS_UTF16_CODE_UNITS; i++) {
 		if (ntfs_u16(v->upcase +
 			(size_t)ntfs_u16(v->upcase + i * NTFS_UTF16_UNIT_BYTES) *
@@ -304,6 +348,9 @@ finish:
 	ntfs_stream_close(upcase);
 	ntfs_free(v, record, v->info.record_size);
 	ntfs_free(v, mirror, v->info.record_size);
+	if (entered) {
+		ntfs_operation_leave(v);
+	}
 	if (result != NTFS_OK) {
 		(void)ntfs_unmount(v);
 		return result;
@@ -321,9 +368,10 @@ ntfs_unmount(struct ntfs_volume *v)
 	if (v == NULL) {
 		return NTFS_OK;
 	}
-	if (v->children != 0) {
+	if (v->children != 0 || v->operation_calls != 0) {
 		return NTFS_BUSY;
 	}
+	ntfs_operation_detach(v);
 	env = v->env;
 	ntfs_stream_close(v->mft);
 	ntfs_free(v, v->upcase, NTFS_UPCASE_BYTES);
@@ -350,7 +398,7 @@ ntfs_get_io_statistics(const struct ntfs_volume *v, struct ntfs_io_statistics *o
 }
 
 enum ntfs_result
-ntfs_count_free_clusters(struct ntfs_volume *v, uint64_t *free_clusters)
+ntfs_count_free_clusters_impl(struct ntfs_volume *v, uint64_t *free_clusters)
 {
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *bitmap = NULL;
@@ -385,6 +433,11 @@ ntfs_count_free_clusters(struct ntfs_volume *v, uint64_t *free_clusters)
 		take = bytes - offset < NTFS_BITMAP_SCAN_BYTES ? (size_t)(bytes - offset)
 							       : NTFS_BITMAP_SCAN_BYTES;
 		result = ntfs_stream_exact(bitmap, offset, buffer, take);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		/* One byte has a fixed NTFS_BITS_PER_BYTE bit-count loop. */
+		result = ntfs_work(v, take);
 		if (result != NTFS_OK) {
 			goto finish;
 		}

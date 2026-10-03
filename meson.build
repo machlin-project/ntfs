@@ -1,7 +1,7 @@
 project('machlin-ntfs', 'c', version: '0.1.0', default_options: ['c_std=c11', 'warning_level=3', 'werror=true', 'buildtype=debugoptimized'])
 cc = meson.get_compiler('c')
 inc = include_directories('include', 'adapters/posix')
-core_sources = files('core/support.c', 'core/record.c', 'core/logfile.c', 'core/logfile_source.c', 'core/stream.c', 'core/lznt1.c', 'core/lzx.c', 'core/wof.c', 'core/wof_stream.c', 'core/xpress.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c', 'core/security.c', 'core/secure.c', 'core/access.c', 'core/validate.c')
+core_sources = files('core/support.c', 'core/operation.c', 'core/api.c', 'core/record.c', 'core/logfile.c', 'core/logfile_source.c', 'core/stream.c', 'core/lznt1.c', 'core/lzx.c', 'core/wof.c', 'core/wof_stream.c', 'core/xpress.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/reparse.c', 'core/security.c', 'core/secure.c', 'core/access.c', 'core/validate.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
 posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directories: inc, c_args: ['-D_POSIX_C_SOURCE=200809L'], install: false)
@@ -39,6 +39,8 @@ logfile_volume_fixture = custom_target('logfile-volume-fixtures', output: 'logfi
 logfile_volume = executable('ntfs-logfile-volume-tests', ['tests/logfile_volume.c', 'tests/fuzz_device.c'], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('logfile-volume', logfile_volume, args: [meson.current_build_dir() / 'logfile-volume-fixtures', meson.current_build_dir() / 'logfile-source-fixtures'], depends: logfile_volume_fixture, timeout: 120)
 test('logfile-volume-cli', python, args: [files('tests/logfile_volume_cli.py'), logfile_inspector.full_path(), meson.current_build_dir() / 'logfile-volume-fixtures'], depends: logfile_volume_fixture, timeout: 120)
+operation = executable('ntfs-operation-tests', ['tests/operation.c', 'tests/fuzz_device.c'], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('operation', operation, args: [meson.current_build_dir() / 'fixtures', meson.current_build_dir() / 'logfile-volume-fixtures', meson.current_build_dir() / 'logfile-source-fixtures'], depends: [fixture, logfile_volume_fixture], timeout: 120)
 logfile_record_fixture = custom_target('logfile-record-fixtures', output: 'logfile-record-fixtures.stamp', command: [python, files('tests/logfile_record_fixtures.py'), meson.current_build_dir() / 'logfile-record-fixtures', '@OUTPUT@'], depend_files: files('tests/logfile_fixtures.py', 'tests/logfile_source_fixtures.py'), build_by_default: true)
 logfile_records = executable('ntfs-logfile-record-tests', ['tests/logfile_records.c', 'tests/fuzz_device.c'], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('logfile-records', logfile_records, args: [meson.current_build_dir() / 'logfile-record-fixtures'], depends: logfile_record_fixture, timeout: 120)

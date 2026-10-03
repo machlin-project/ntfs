@@ -6,6 +6,7 @@ validate_stream(struct ntfs_stream *s)
 {
 	uint64_t required, mapped = 0;
 	uint32_t i, cluster = s->volume->info.cluster_size;
+	enum ntfs_result result;
 
 	if (s->resident) {
 		return NTFS_OK;
@@ -13,6 +14,10 @@ validate_stream(struct ntfs_stream *s)
 	required = s->size / cluster + (s->size % cluster != 0);
 	if (s->clusters < required || s->clusters > (uint64_t)INT64_MAX / cluster) {
 		return NTFS_CORRUPT;
+	}
+	result = ntfs_work(s->volume, s->run_count);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	for (i = 0; i < s->run_count; i++) {
 		if (s->runs[i].lcn != NTFS_HOLE) {
@@ -165,6 +170,10 @@ ntfs_attribute_type_present(struct ntfs_node *node, uint32_t type, bool *out)
 	enum ntfs_result result;
 
 	*out = false;
+	result = ntfs_work(v, v->info.record_size);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	while ((result = ntfs_attr_at(node->record, ntfs_u32(header->used), &position, &attr)) ==
 	    NTFS_OK) {
 		if (attr.type == type) {
@@ -180,6 +189,11 @@ ntfs_attribute_type_present(struct ntfs_node *node, uint32_t type, bool *out)
 		return NTFS_OK;
 	}
 	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_work(v, size);
+	if (result != NTFS_OK) {
+		ntfs_free(v, bytes, size);
 		return result;
 	}
 	while ((result = ntfs_list_entry_at(bytes, size, &offset, &entry)) == NTFS_OK) {
@@ -212,6 +226,11 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 	if (name_length > NTFS_NAME_MAX || (name_length != 0 && name == NULL)) {
 		return NTFS_INVALID;
 	}
+	/* The base performs at most the list-presence and requested-attribute scans. */
+	result = ntfs_work(v, (uint64_t)v->info.record_size * 2);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	result = ntfs_attr_find(
 	    node->record, v->info.record_size, NTFS_ATTR_LIST, NULL, 0, UINT16_MAX, &list_attr);
 	if (result == NTFS_NOT_FOUND || type == NTFS_ATTR_LIST) {
@@ -234,6 +253,10 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 		goto finish;
 	}
 	while ((result = ntfs_list_entry_at(bytes, list_size, &offset, &entry)) == NTFS_OK) {
+		result = ntfs_work(v, ntfs_u16(entry->length));
+		if (result != NTFS_OK) {
+			goto finish;
+		}
 		if (ntfs_u32(entry->type) != type || entry->name_length != name_length) {
 			continue;
 		}
@@ -290,8 +313,11 @@ attribute_open(struct ntfs_node *node, uint32_t type, const uint16_t *name, size
 				goto finish;
 			}
 		}
-		result = ntfs_listed_attribute(
-		    record, type, name, name_length, ntfs_u16(entry->instance), lowest, &a);
+		result = ntfs_work(v, v->info.record_size);
+		if (result == NTFS_OK) {
+			result = ntfs_listed_attribute(
+			    record, type, name, name_length, ntfs_u16(entry->instance), lowest, &a);
+		}
 		if (result == NTFS_NOT_FOUND) {
 			result = NTFS_CORRUPT;
 		}
@@ -393,7 +419,7 @@ ntfs_mft_open(struct ntfs_volume *v, uint8_t *record, struct ntfs_stream **out)
 }
 
 enum ntfs_result
-ntfs_stream_open(
+ntfs_stream_open_impl(
     struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_stream **out)
 {
 	struct ntfs_stat st;

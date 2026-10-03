@@ -28,6 +28,10 @@ enum {
 	FUZZ_COPY_GUARD = 0xa6
 };
 
+struct operation_credit_seed {
+	uint8_t dimension, credit;
+};
+
 /* Fixed Numerical Recipes LCG parameters make smoke mutations reproducible. */
 #define FUZZ_RANDOM_SEED UINT32_C(0x85a7f12d)
 #define FUZZ_RANDOM_MULTIPLIER UINT32_C(1664525)
@@ -81,13 +85,88 @@ fuzz_journal(struct ntfs_volume *volume, struct fuzz_device *device)
 	ntfs_logfile_close(source);
 }
 
+static void
+fuzz_budgeted(
+    struct ntfs_volume *volume, struct fuzz_device *device, const uint8_t *data, size_t size)
+{
+	struct operation_credit_seed seed;
+	struct ntfs_operation_limits limits;
+	struct ntfs_operation operation = {0};
+	struct ntfs_operation_usage usage;
+	struct ntfs_node *root = NULL, *node = NULL;
+	struct ntfs_directory *directory = NULL;
+	struct ntfs_stream *stream = NULL;
+	struct ntfs_stat stat;
+	struct ntfs_dirent entry;
+	uint8_t buffer[FUZZ_READ_BUFFER_BYTES];
+	uint64_t credit;
+	size_t i, done, reads = device->reads, allocations = device->allocations;
+	enum ntfs_operation_limit dimension;
+
+	if (size < sizeof(seed)) {
+		return;
+	}
+	/* An additional budgeted walk retains the existing unrestricted parser walk.
+	 * The unused image tail supplies fuzz policy bytes, never NTFS field offsets. */
+	memcpy(&seed, data + size - sizeof(seed), sizeof(seed));
+	dimension = NTFS_OPERATION_LIMIT_READ_CALLS +
+	    seed.dimension % (NTFS_OPERATION_LIMIT_WORK - NTFS_OPERATION_LIMIT_READ_CALLS + 1);
+	credit = (uint64_t)seed.credit + 1;
+	ntfs_get_operation_limits(volume, &limits);
+	switch (dimension) {
+	case NTFS_OPERATION_LIMIT_READ_CALLS:
+		limits.read_calls = credit;
+		break;
+	case NTFS_OPERATION_LIMIT_READ_BYTES:
+		limits.read_bytes = credit * FUZZ_READ_BUFFER_BYTES;
+		break;
+	case NTFS_OPERATION_LIMIT_ALLOCATION_CALLS:
+		limits.allocation_calls = credit;
+		break;
+	case NTFS_OPERATION_LIMIT_ALLOCATION_BYTES:
+		limits.allocation_bytes = credit * FUZZ_READ_BUFFER_BYTES;
+		break;
+	case NTFS_OPERATION_LIMIT_WORK:
+		limits.work = credit * FUZZ_READ_BUFFER_BYTES;
+		break;
+	default:
+		assert(false);
+	}
+	assert(ntfs_operation_begin(volume, &limits, &operation) == NTFS_OK);
+	if (ntfs_root(volume, &root) == NTFS_OK &&
+	    ntfs_directory_open(root, &directory) == NTFS_OK) {
+		for (i = 0;
+		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;
+		    i++) {
+			if (ntfs_node_open(volume, entry.reference, &node) == NTFS_OK) {
+				(void)ntfs_node_stat(node, &stat);
+				if (ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK) {
+					(void)ntfs_stream_read(
+					    stream, 0, buffer, sizeof(buffer), &done);
+					ntfs_stream_close(stream);
+					stream = NULL;
+				}
+				ntfs_node_close(node);
+				node = NULL;
+			}
+		}
+	}
+	ntfs_directory_close(directory);
+	ntfs_node_close(root);
+	assert(ntfs_operation_end(&operation, &usage) == NTFS_OK);
+	assert(usage.read_calls == device->reads - reads &&
+	    usage.allocation_calls == device->allocations - allocations);
+	assert(usage.read_calls <= limits.read_calls && usage.read_bytes <= limits.read_bytes &&
+	    usage.allocation_calls <= limits.allocation_calls &&
+	    usage.allocation_bytes <= limits.allocation_bytes && usage.work <= limits.work);
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
 	struct fuzz_device d = {.data = data, .size = size};
 	struct ntfs_environment env = fuzz_environment(&d);
-	struct ntfs_limits limits = {
-	    FUZZ_MAX_RUNS, FUZZ_MAX_ATTRIBUTE_LIST, FUZZ_CACHE_ENTRIES, FUZZ_MAX_DIRECTORY_NODES};
+	struct ntfs_limits limits;
 	struct ntfs_volume *v = NULL;
 	struct ntfs_node *root = NULL, *node = NULL;
 	struct ntfs_directory *directory = NULL;
@@ -106,6 +185,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	enum ntfs_result result;
 
 	(void)ntfs_reparse_decode(data, size, &reparse_info);
+	ntfs_default_limits(&limits);
+	limits.max_runs = FUZZ_MAX_RUNS;
+	limits.max_attribute_list = FUZZ_MAX_ATTRIBUTE_LIST;
+	limits.record_cache_entries = FUZZ_CACHE_ENTRIES;
+	limits.max_directory_nodes = FUZZ_MAX_DIRECTORY_NODES;
 	if (ntfs_mount(&env, &limits, &v) == NTFS_OK) {
 		fuzz_journal(v, &d);
 	}
@@ -189,6 +273,9 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	}
 	ntfs_directory_close(directory);
 	ntfs_node_close(root);
+	if (v != NULL) {
+		fuzz_budgeted(v, &d, data, size);
+	}
 	assert(ntfs_unmount(v) == NTFS_OK && d.memory == 0);
 	return 0;
 }

@@ -20,12 +20,13 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Per-directory case policy | Stored standard-information policy, exact UTF-16 lookup retaining folded/raw index order, mixed parent flags and alias spelling; legacy/unknown policy handling and fault retry | 17 synthetic images with 47 allocation/eight I/O faults and legacy adapter components passed; Windows flags, installed cache/capability interpretation and macOS 27 runtime unqualified |
 | Reparse metadata and native link projection | Microsoft framing, immutable original-wire copies/physical sizes and lossless names; bounded single-edge symlink/junction projection, checked ancestry, explicit Windows root bindings and target aliases; opaque provider classification and raw-data rejection | Core checks and 47 legacy path/storage verdicts passed; 79 allocation/17 read fault positions across native lookup/reopened metadata passed; intermediate/multiply linked/cross-volume resolution, Windows links and installed path walking remain open |
 | Resource safety | Allocation/read failure sweeps on five layouts and reparse snapshots, exact release accounting, BUSY lifetime, 2,000 deterministic image mutations under ASan/UBSan | Local tests passed; counts below |
+| Operation budgets | API 2 cumulative exact-read/allocation/work credits, aggregate volume-owned live storage, nested scopes and pre-callback refusal; cleanup/detach/retry and optional cache omission; compound FSKit scopes with separate rounded physical transfers | 12 profiles/144 exact/one-below boundaries plus mount/ABI/nesting/callback/live-storage/cache/codec/native reply checks pass; Windows stress, native aggregate/RSS, installed scheduling and measured overhead remain open; work units do not provide deadlines |
 | WOF standalone primitives | Observed file-provider metadata, bounded cumulative chunk tables/4-GiB widths and caller-scratch XPRESS-Huffman/LZX decoding; exact output and hostile-input guards | 87 content/11 invalid XPRESS and 140 content/31 invalid LZX vectors passed; bidirectional wimlib comparison passed for 192 external packets and 139 nonempty synthetic packets; bounded provider/table/codec fuzz passed; Windows codec observations remain open |
 | WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 376 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | Legacy in-process checks passed; seven modern lifecycle/pressure/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
-| FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed; full current component has 20 PASS groups/seven modern-runtime SKIPs; paired large/small legacy memory-reader benefit measured with increased bounded pool peak; installed/native/device qualification remains open |
+| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 22 legacy in-process PASS groups; eight modern lifecycle/operation/pressure/enumeration/content/link/case checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, complete link/provider resolution and installed lifetime remain open |
+| FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed again with operation scopes; earlier paired large/small legacy memory-reader benefit had increased bounded pool peak; current guard overhead and installed/native/device qualification remain open |
 | FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
 | FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
 | Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
@@ -48,7 +49,57 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource and nine-repetition directory comparisons with independent exact inventories | Specific allocation/metadata, aligned resource and interleaved-directory memory-reader improvement measured; installed/device and independent-driver performance unmeasured |
 
-The current directory continuation component passes 20 groups with seven explicit
+The operation-budget continuation passes all 60 sanitized core suites in
+`artifacts/plan-operation-suite-complete.log`, both freestanding 2-KiB-frame
+targets in `artifacts/plan-operation-freestanding-complete.log` and selected
+formatting in `artifacts/plan-operation-style-complete.log`. The focused core
+log `artifacts/plan-operation-core-focused-scans.log` records 12 profiles/144
+exact/one-below boundaries with independent callback/byte/live-peak accounting
+and original byte oracles, plus mount/ABI, nesting/LIFO/depth/detach, callback
+reentry, failed attempts, optional cache omission, sibling storage and cold/cache
+LZNT1/XPRESS/LZX retry. Refused requests do not reach the backend; required
+cleanup remains possible and media is unchanged.
+
+The complete component passes 22 groups/eight explicit modern-runtime SKIPs in
+`artifacts/plan-operation-component-focused-scans.log`. New checks include physical
+rounding/fragments, failed attempts, nested credits, callback scope refusal,
+logical-versus-physical read accounting, cached work, publication/packing errors,
+provider classification, packer reentry and terminal detach. The unsigned Release
+app passes in `artifacts/plan-operation-app-release-reviewed.log`: actual CompileC
+evidence covers core API/accounting and Resource/Volume/FileSystem on both arm64
+and x86_64. The preceding `artifacts/plan-operation-app-complete.log` is a successful
+Debug build, not Release. Neither build installs or signs the extension.
+
+The first core test attempt in
+`artifacts/plan-operation-core-focused-initial.log` passed four groups before an
+incorrect expected journal-page assertion. The fixture manifest independently
+identified its `system-4096` source; correcting only the oracle made the test pass.
+The initial component compile in
+`artifacts/plan-operation-component-focused-reviewed.log` missed the modern
+lookup selector's context argument. The test was corrected to the selected SDK;
+no product fix was inferred from either failed test attempt. Retained intermediate
+build/focused logs do not replace the complete qualification above.
+
+`artifacts/fuzz-operation-image/report.json` and
+`artifacts/fuzz-operation-validation/report.json` retain passing complete fixed
+replays of 282/96 authored seeds and separate exploration of 51,427 executions/
+70 seconds and 57,672/68 seconds. The final logs report OOM/timeout/crash counts
+of zero, with unchanged 1-MiB input, 1024-MiB per-process RSS ceiling and five-second
+input timeout. Campaign peak RSS is not recorded; the ceiling is not an observed
+peak. Review independently counted replay execution lines and verified both
+retained binaries against their reported digests. The image walk additionally
+checks tightened shared credits against actual callback attempts.
+
+`artifacts/interoperability-operation-reviewed/report.json` again passes all four
+external mkntfs geometries, 100 files each, exact ordinary/large/Unicode/ADS bytes,
+stored names/stream inventory and case-folded lookup. Review rehashed every image
+against its retained report. This run does not compare bitmap or mirror exports;
+their preceding independent evidence remains separate below. No Windows corpus,
+VM, installed mount, native authorization or recovery ran. Current guard overhead
+and native aggregate allocation/RSS stress remain open; OPERATION-BUDGETS.md
+defines the accounting and ABI migration contract.
+
+The preceding directory continuation component passes 20 groups with seven explicit
 macOS-27 runtime SKIPs in `artifacts/plan-directory-component-complete.log`.
 Names-only and interleaved fault sweeps cover all 34/13 and 151/41 allocation/read
 positions, exact prefixes, one native reply, fresh-scan retry, unchanged media and

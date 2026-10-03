@@ -10,7 +10,7 @@
 extern "C" {
 #endif
 
-#define NTFS_API_VERSION 1u
+#define NTFS_API_VERSION 2u
 #define NTFS_NAME_MAX 255u
 #define NTFS_UTF8_NAME_MAX (NTFS_NAME_MAX * 3u)
 #define NTFS_ROOT_RECORD 5u
@@ -88,6 +88,52 @@ struct ntfs_directory;
 struct ntfs_reparse;
 struct ntfs_stream_catalog;
 
+/* Execution policies, independent of NTFS wire sizes. Byte budgets bound one
+ * externally serialized operation, including its nested owning calls. */
+#define NTFS_POLICY_MIB UINT64_C(1048576)
+#define NTFS_DEFAULT_MAX_LIVE_BYTES (UINT64_C(64) * NTFS_POLICY_MIB)
+#define NTFS_DEFAULT_OPERATION_READ_BYTES (UINT64_C(1024) * NTFS_POLICY_MIB)
+#define NTFS_DEFAULT_OPERATION_ALLOCATION_BYTES (UINT64_C(64) * NTFS_POLICY_MIB)
+#define NTFS_DEFAULT_OPERATION_WORK (UINT64_C(4096) * NTFS_POLICY_MIB)
+
+enum {
+	NTFS_DEFAULT_OPERATION_READ_CALLS = 1048576,
+	NTFS_DEFAULT_OPERATION_ALLOCATION_CALLS = 65536,
+	NTFS_OPERATION_MAX_DEPTH = 32
+};
+
+enum ntfs_operation_limit {
+	NTFS_OPERATION_LIMIT_NONE,
+	NTFS_OPERATION_LIMIT_READ_CALLS,
+	NTFS_OPERATION_LIMIT_READ_BYTES,
+	NTFS_OPERATION_LIMIT_ALLOCATION_CALLS,
+	NTFS_OPERATION_LIMIT_ALLOCATION_BYTES,
+	NTFS_OPERATION_LIMIT_WORK,
+	NTFS_OPERATION_LIMIT_LIVE_BYTES
+};
+
+struct ntfs_operation_limits {
+	uint64_t read_calls, read_bytes, allocation_calls, allocation_bytes, work;
+};
+
+struct ntfs_operation_usage {
+	/* Admitted callback attempts include failures. Refused attempts are excluded. */
+	uint64_t read_calls, read_bytes, allocation_calls, allocation_bytes, work;
+	/* All volume-owned allocation bytes, including previously retained objects. */
+	uint64_t peak_live_bytes;
+	enum ntfs_operation_limit exhausted;
+};
+
+struct ntfs_operation {
+	/* Caller storage starts zeroed and outlives begin/end. Do not copy or mutate
+	 * an active scope. Native teardown may detach it before end releases it. */
+	struct ntfs_operation_limits limits;
+	struct ntfs_operation_usage usage;
+	struct ntfs_volume *_volume;
+	struct ntfs_operation *_previous;
+	bool _active;
+};
+
 /* The caller serializes a volume and all its children. The resource must remain
  * immutable and exclusively owned for their lifetime. There is no write callback.
  * Reads are exact, bounded, synchronous; partial backend reads return NTFS_IO.
@@ -102,10 +148,12 @@ struct ntfs_environment {
 };
 
 struct ntfs_limits {
-	uint32_t max_runs;	       /* Per stream. */
-	uint32_t max_attribute_list;   /* Bytes. */
-	uint32_t record_cache_entries; /* Zero disables the cache. */
-	uint32_t max_directory_nodes;  /* Per directory iterator or security index seek. */
+	uint32_t max_runs;			/* Per stream. */
+	uint32_t max_attribute_list;		/* Bytes. */
+	uint32_t record_cache_entries;		/* Zero disables the cache. */
+	uint32_t max_directory_nodes;		/* Per directory iterator or security index seek. */
+	uint64_t max_live_bytes;		/* All volume-owned core storage. */
+	struct ntfs_operation_limits operation; /* One call, including nested calls. */
 };
 
 struct ntfs_info {
@@ -162,6 +210,24 @@ struct ntfs_io_statistics {
 };
 
 void ntfs_default_limits(struct ntfs_limits *);
+void ntfs_operation_default_limits(struct ntfs_operation_limits *);
+void ntfs_get_operation_limits(const struct ntfs_volume *, struct ntfs_operation_limits *);
+/* A scope aggregates multiple public calls; nested scopes charge every ancestor
+ * and cannot exceed the configured volume ceilings. NULL limits select those
+ * ceilings. Exhaustion is sticky until end; close functions remain available.
+ * End uses reverse begin order while the owner is alive. Successful unmount
+ * detaches caller scopes, preserving their usage and safe later end. Without a
+ * scope, each public owning operation receives an implicit budget. */
+enum ntfs_result ntfs_operation_begin(
+    struct ntfs_volume *, const struct ntfs_operation_limits *, struct ntfs_operation *);
+enum ntfs_result ntfs_operation_end(struct ntfs_operation *, struct ntfs_operation_usage *);
+/* Quota-plane result, independent of an operation's backend/format result. End
+ * preserves this usage; a failed end changes neither scope nor report. */
+enum ntfs_result ntfs_operation_result(const struct ntfs_operation *);
+/* Current scope admission, including every enclosing scope; no new resources. */
+enum ntfs_result ntfs_operation_check(const struct ntfs_volume *);
+/* Last completed implicit call or ended explicit scope; no I/O/allocation. */
+void ntfs_get_operation_usage(const struct ntfs_volume *, struct ntfs_operation_usage *);
 const char *ntfs_result_string(enum ntfs_result);
 /* Probe decodes only the boot sector; successful probe is not mount acceptance. */
 enum ntfs_result ntfs_probe(const struct ntfs_environment *, struct ntfs_info *);

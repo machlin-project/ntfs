@@ -33,8 +33,7 @@ LLVMFuzzerTestOneInput(const uint8_t *bytes, size_t size)
 {
 	struct fuzz_device device = {.data = bytes, .size = size};
 	struct ntfs_environment environment = fuzz_environment(&device);
-	struct ntfs_limits core_limits = {
-	    VALIDATION_FUZZ_RUNS, VALIDATION_FUZZ_LIST_BYTES, 0, VALIDATION_FUZZ_DIRECTORY_NODES};
+	struct ntfs_limits core_limits;
 	struct ntfs_validation_limits limits = {VALIDATION_FUZZ_RECORDS, VALIDATION_FUZZ_RUNS,
 	    VALIDATION_FUZZ_LINKS, VALIDATION_FUZZ_MEMORY, VALIDATION_FUZZ_READS,
 	    VALIDATION_FUZZ_READ_BYTES, VALIDATION_FUZZ_WORK};
@@ -42,6 +41,11 @@ LLVMFuzzerTestOneInput(const uint8_t *bytes, size_t size)
 	enum ntfs_result result;
 	unsigned i;
 
+	ntfs_default_limits(&core_limits);
+	core_limits.max_runs = VALIDATION_FUZZ_RUNS;
+	core_limits.max_attribute_list = VALIDATION_FUZZ_LIST_BYTES;
+	core_limits.record_cache_entries = 0;
+	core_limits.max_directory_nodes = VALIDATION_FUZZ_DIRECTORY_NODES;
 	for (i = 0; i < VALIDATION_FUZZ_REPETITIONS; i++) {
 		device.reads = 0;
 		device.allocations = 0;

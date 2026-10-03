@@ -48,6 +48,10 @@ append_mapping(struct ntfs_stream *s, const struct ntfs_attr_view *a, bool impli
 	unsigned count_bytes, offset_bytes, i;
 	enum ntfs_result result;
 
+	result = ntfs_work(s->volume, a->length);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	if (!a->disk->nonresident || a->flags != s->flags) {
 		return NTFS_CORRUPT;
 	}
@@ -340,6 +344,10 @@ ntfs_stream_raw(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t len
 	if (s->metadata_only || s->wof != NULL) {
 		return NTFS_UNSUPPORTED;
 	}
+	result = ntfs_work(s->volume, length);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	while (length != 0) {
 		vcn = offset / cluster;
 		within = (size_t)(offset % cluster);
@@ -421,6 +429,11 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 		}
 		packed += (size_t)span * cluster;
 	}
+	/* Private decode/copy work is additional to delivered and encoded bytes. */
+	result = ntfs_work(s->volume, size);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	if (!hole) {
 		ntfs_copy(s->compression_buffer, source, packed);
 		ntfs_zero(s->compression_buffer + packed, size - packed);
@@ -445,7 +458,8 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 }
 
 enum ntfs_result
-ntfs_stream_read(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t length, size_t *done)
+ntfs_stream_read_impl(
+    struct ntfs_stream *s, uint64_t offset, void *buffer, size_t length, size_t *done)
 {
 	uint8_t *bytes = buffer;
 	size_t take, unit_size, within;
@@ -467,6 +481,10 @@ ntfs_stream_read(struct ntfs_stream *s, uint64_t offset, void *buffer, size_t le
 	}
 	if (length > s->size - offset) {
 		length = (size_t)(s->size - offset);
+	}
+	result = ntfs_work(s->volume, length);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	if (s->wof != NULL) {
 		return ntfs_wof_read(s, offset, buffer, length, done);

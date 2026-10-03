@@ -47,6 +47,16 @@ lifetimes. Aggregate budgets still apply; elevated pressure is not a promise to
 release every allocated byte or reclaim a native vnode. Retained invalid owners
 cannot become available through a NORMAL event.
 
+Core required allocation, cumulative attempts and aggregate live bytes now have
+the separate execution policies in [OPERATION-BUDGETS.md](OPERATION-BUDGETS.md).
+Optional validated-record cache retention can be omitted before an allocator
+callback when credits are insufficient, without failing the required read.
+Pressure cleanup and scope exhaustion both permit unconditional release. The
+resource pool also charges continuation tables; the aligned window, Foundation
+objects and native response memory remain outside the core ledger. The measured
+byte scenarios below predate the added volume accounting fields and retain their
+original evidence scope; current aggregate native/RSS stress remains open.
+
 ## Component evidence
 
 `tests/fskit_pressure.m` substitutes a Dispatch DATA_OR source for notification

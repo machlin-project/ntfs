@@ -70,25 +70,39 @@ ntfs_bounds(uint64_t offset, uint64_t length, uint64_t size)
 	return offset <= size && length <= size - offset;
 }
 
-void *
-ntfs_alloc(struct ntfs_volume *v, size_t n)
+static void *
+allocate(struct ntfs_volume *v, size_t n, bool optional)
 {
 	void *p;
 
-	if (n == 0) {
+	if (n == 0 || !ntfs_operation_allocate(v, n, optional)) {
 		return NULL;
 	}
 	p = v->env.allocate(v->env.context, n);
 	if (p != NULL) {
+		ntfs_operation_allocated(v, n);
 		ntfs_zero(p, n);
 	}
 	return p;
+}
+
+void *
+ntfs_alloc(struct ntfs_volume *v, size_t n)
+{
+	return allocate(v, n, false);
+}
+
+void *
+ntfs_alloc_optional(struct ntfs_volume *v, size_t n)
+{
+	return allocate(v, n, true);
 }
 
 void
 ntfs_free(struct ntfs_volume *v, void *p, size_t n)
 {
 	if (p != NULL) {
+		v->live_bytes -= n;
 		v->env.release(v->env.context, p, n);
 	}
 }
@@ -96,11 +110,17 @@ ntfs_free(struct ntfs_volume *v, void *p, size_t n)
 enum ntfs_result
 ntfs_io(struct ntfs_volume *v, uint64_t offset, void *buffer, size_t size)
 {
+	enum ntfs_result result;
+
 	if (!ntfs_bounds(offset, size, v->info.size_bytes)) {
 		return NTFS_CORRUPT;
 	}
 	if (size == 0) {
 		return NTFS_OK;
+	}
+	result = ntfs_operation_read(v, size);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	v->stats.read_calls++;
 	v->stats.read_bytes += size;
@@ -114,6 +134,8 @@ ntfs_default_limits(struct ntfs_limits *l)
 	l->max_attribute_list = NTFS_DEFAULT_MAX_ATTRIBUTE_LIST;
 	l->record_cache_entries = NTFS_DEFAULT_RECORD_CACHE_ENTRIES;
 	l->max_directory_nodes = NTFS_DEFAULT_MAX_DIRECTORY_NODES;
+	l->max_live_bytes = NTFS_DEFAULT_MAX_LIVE_BYTES;
+	ntfs_operation_default_limits(&l->operation);
 }
 
 const char *

@@ -15,6 +15,7 @@
 #import "fskit_resource.h"
 #import "fskit_pressure.h"
 #import "fskit_read_path.h"
+#import "fskit_operation.h"
 
 @implementation TestReader
 
@@ -1291,6 +1292,8 @@ main(int argc, char **argv)
 		test_ads(image, @"streamed.txt", notes, sizeof(notes) / sizeof(notes[0]), 1,
 		    [@"alternate payload" dataUsingEncoding:NSUTF8StringEncoding], NO);
 		fixtures = [@(argv[1]) stringByDeletingLastPathComponent];
+		ntfs_test_fskit_operation(fixtures, NO);
+		ntfs_test_fskit_operation(fixtures, YES);
 		ntfs_test_fskit_pressure(fixtures, NO);
 		ntfs_test_fskit_pressure(fixtures, YES);
 		ntfs_test_fskit_enumeration(image, fixtures, NO);

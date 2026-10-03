@@ -223,6 +223,29 @@ item_id(uint64_t reference)
 									    : (FSItemID)reference;
 }
 
+@interface NTFSVolume (OperationBodies)
+- (FSItem *)performLookup:(FSFileName *)name
+	      inDirectory:(FSItem *)directory
+	       storedName:(FSFileName **)stored
+		    error:(NSError **)error;
+- (FSItemAttributes *)performAttributes:(FSItem *)item error:(NSError **)error;
+- (FSFileName *)performSymbolicLink:(FSItem *)item error:(NSError **)error;
+- (NSArray<FSFileName *> *)performXattrsForItem:(FSItem *)item error:(NSError **)error;
+- (NSData *)performXattrNamed:(FSFileName *)name ofItem:(FSItem *)item error:(NSError **)error;
+- (NSError *)performEnumeration:(FSItem *)directory
+			 cookie:(FSDirectoryCookie)cookie
+		       verifier:(FSDirectoryVerifier)verifier
+		     attributes:(BOOL)attributes
+			 packer:(FSDirectoryEntryPacker *)packer;
+- (enum ntfs_result)performReadItem:(FSItem *)item
+			     offset:(off_t)offset
+			      bytes:(void *)bytes
+			     length:(size_t)length
+			  completed:(size_t *)completed;
+- (FSItem *)performActivation:(FSTaskOptions *)options error:(NSError **)error;
+- (enum ntfs_result)operationBudgetResult;
+@end
+
 @implementation NTFSVolume {
 	struct ntfs_volume *_core;
 	struct ntfs_info _info;
@@ -264,10 +287,15 @@ item_id(uint64_t reference)
 		  linkPolicy:(NTFSLinkPolicy *)policy
 {
 	struct ntfs_info info;
+	struct ntfs_operation operation = {0};
+	struct ntfs_resource_read_budget budget = {0};
+	struct ntfs_operation_limits limits;
 	uint64_t freeClusters;
 	NSString *label;
+	enum ntfs_result result;
 
-	if (maximum == 0 || maximum > NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
+	if (core == NULL || resource == nil || maximum == 0 ||
+	    maximum > NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
 		return nil;
 	}
 	ntfs_get_info(core, &info);
@@ -277,7 +305,26 @@ item_id(uint64_t reference)
 	if (policy == nil || policy.volumeSerial != info.serial) {
 		return nil;
 	}
-	if (ntfs_count_free_clusters(core, &freeClusters) != NTFS_OK) {
+	ntfs_get_operation_limits(core, &limits);
+	result = ntfs_operation_begin(core, &limits, &operation);
+	if (result != NTFS_OK) {
+		return nil;
+	}
+	result = [resource beginReadBudget:&budget limits:&limits];
+	if (result != NTFS_OK) {
+		(void)ntfs_operation_end(&operation, NULL);
+		return nil;
+	}
+	@try {
+		result = ntfs_count_free_clusters(core, &freeClusters);
+		if (result == NTFS_OK) {
+			result = [resource readBudgetResult];
+		}
+	} @finally {
+		(void)[resource endReadBudget:&budget];
+		(void)ntfs_operation_end(&operation, NULL);
+	}
+	if (result != NTFS_OK) {
 		return nil;
 	}
 	label = [NSString stringWithUTF8String:info.label];
@@ -301,6 +348,382 @@ item_id(uint64_t reference)
 		    ((uint64_t)arc4random() << (sizeof(uint32_t) * CHAR_BIT)) | arc4random() | 1;
 	}
 	return self;
+}
+
+- (struct ntfs_operation_limits)operationLimits
+{
+	struct ntfs_operation_limits limits;
+
+	ntfs_get_operation_limits(_core, &limits);
+	return limits;
+}
+
+- (enum ntfs_result)beginOperation:(struct ntfs_operation *)operation
+			readBudget:(struct ntfs_resource_read_budget *)budget
+		  retainedResource:(NTFSResource *__strong *)resource
+			activating:(BOOL)activating
+{
+	struct ntfs_operation_limits limits;
+	enum ntfs_result result;
+	NTFSVolumeLifecycle state;
+
+	*resource = nil;
+	if (activating) {
+		state = self.lifecycle;
+		result = _core == NULL || (state != NTFSVolumeLoaded && state != NTFSVolumeActive)
+		    ? NTFS_STALE
+		    : _resource.isAvailable ? NTFS_OK
+					    : NTFS_IO;
+	} else {
+		result = [self admissionResult];
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	limits = [self operationLimits];
+	result = ntfs_operation_begin(_core, &limits, operation);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	*resource = _resource;
+	result = [(*resource) beginReadBudget:budget limits:&limits];
+	if (result != NTFS_OK) {
+		(void)ntfs_operation_end(operation, NULL);
+		*resource = nil;
+	}
+	return result;
+}
+
+- (FSItem *)lookup:(FSFileName *)name
+       inDirectory:(FSItem *)directory
+	storedName:(FSFileName **)stored
+	     error:(NSError **)error
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		FSItem *value;
+
+		*error = nil;
+		*stored = nil;
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			*error = ntfs_error(status);
+			return nil;
+		}
+		@try {
+			value = [self performLookup:name
+					inDirectory:directory
+					 storedName:stored
+					      error:error];
+			if (*error == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = nil;
+					*error = ntfs_error(status);
+					*stored = nil;
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (FSItemAttributes *)attributes:(FSItem *)item error:(NSError **)error
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		FSItemAttributes *value;
+
+		*error = nil;
+
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			*error = ntfs_error(status);
+			return nil;
+		}
+		@try {
+			value = [self performAttributes:item error:error];
+			if (*error == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = nil;
+					*error = ntfs_error(status);
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (FSFileName *)symbolicLink:(FSItem *)item error:(NSError **)error
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		FSFileName *value;
+
+		*error = nil;
+
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			*error = ntfs_error(status);
+			return nil;
+		}
+		@try {
+			value = [self performSymbolicLink:item error:error];
+			if (*error == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = nil;
+					*error = ntfs_error(status);
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (NSArray<FSFileName *> *)xattrsForItem:(FSItem *)item error:(NSError **)error
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		NSArray<FSFileName *> *value;
+
+		*error = nil;
+
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			*error = ntfs_error(status);
+			return nil;
+		}
+		@try {
+			value = [self performXattrsForItem:item error:error];
+			if (*error == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = nil;
+					*error = ntfs_error(status);
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (NSData *)xattrNamed:(FSFileName *)name ofItem:(FSItem *)item error:(NSError **)error
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		NSData *value;
+
+		*error = nil;
+
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			*error = ntfs_error(status);
+			return nil;
+		}
+		@try {
+			value = [self performXattrNamed:name ofItem:item error:error];
+			if (*error == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = nil;
+					*error = ntfs_error(status);
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (NSError *)enumerate:(FSItem *)directory
+		cookie:(FSDirectoryCookie)cookie
+	      verifier:(FSDirectoryVerifier)verifier
+	    attributes:(BOOL)attributes
+		packer:(FSDirectoryEntryPacker *)packer
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		NSError *value;
+
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			return ntfs_error(status);
+		}
+		@try {
+			value = [self performEnumeration:directory
+						  cookie:cookie
+						verifier:verifier
+					      attributes:attributes
+						  packer:packer];
+			if (value == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = ntfs_error(status);
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (enum ntfs_result)readItem:(FSItem *)item
+		      offset:(off_t)offset
+		       bytes:(void *)bytes
+		      length:(size_t)length
+		   completed:(size_t *)completed
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		enum ntfs_result value;
+
+		if (completed == NULL) {
+			return NTFS_INVALID;
+		}
+		*completed = 0;
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:NO];
+		if (status != NTFS_OK) {
+			return status;
+		}
+		@try {
+			value = [self performReadItem:item
+					       offset:offset
+						bytes:bytes
+					       length:length
+					    completed:completed];
+			if (value == NTFS_OK) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = status;
+					*completed = 0;
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
+}
+
+- (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error
+{
+	@synchronized(self) {
+		struct ntfs_operation operation = {0};
+		struct ntfs_resource_read_budget budget = {0};
+		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+		enum ntfs_result status;
+		FSItem *value;
+
+		*error = nil;
+
+		status = [self beginOperation:&operation
+				   readBudget:&budget
+			     retainedResource:&resource
+				   activating:YES];
+		if (status != NTFS_OK) {
+			*error = ntfs_error(status);
+			return nil;
+		}
+		@try {
+			value = [self performActivation:options error:error];
+			if (*error == nil) {
+				status = ntfs_operation_result(&operation);
+				if (status == NTFS_OK) {
+					status = [resource readBudgetResult];
+				}
+				if (status != NTFS_OK) {
+					value = nil;
+					*error = ntfs_error(status);
+				}
+			}
+			return value;
+		} @finally {
+			(void)[resource endReadBudget:&budget];
+			(void)ntfs_operation_end(&operation, NULL);
+		}
+	}
 }
 
 - (void)dealloc
@@ -561,7 +984,15 @@ item_id(uint64_t reference)
 	if (_core == NULL || !_active || self.lifecycle != NTFSVolumeActive) {
 		return NTFS_STALE;
 	}
-	return _resource.isAvailable ? NTFS_OK : NTFS_IO;
+	return _resource.isAvailable ? [self operationBudgetResult] : NTFS_IO;
+}
+
+- (enum ntfs_result)operationBudgetResult
+{
+	enum ntfs_result result;
+
+	result = ntfs_operation_check(_core);
+	return result == NTFS_OK ? [_resource readBudgetResult] : result;
 }
 
 - (NTFSItem *)adoptNode:(struct ntfs_node *)node
@@ -711,7 +1142,7 @@ item_id(uint64_t reference)
 	return [self activateWithOptions:nil error:error];
 }
 
-- (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error
+- (FSItem *)performActivation:(FSTaskOptions *)options error:(NSError **)error
 {
 	struct ntfs_node *root = NULL;
 	struct ntfs_info info;
@@ -770,10 +1201,10 @@ item_id(uint64_t reference)
 	}
 }
 
-- (FSItem *)lookup:(FSFileName *)name
-       inDirectory:(FSItem *)directory
-	storedName:(FSFileName **)stored
-	     error:(NSError **)error
+- (FSItem *)performLookup:(FSFileName *)name
+	      inDirectory:(FSItem *)directory
+	       storedName:(FSFileName **)stored
+		    error:(NSError **)error
 {
 	uint16_t units[NTFS_NAME_MAX];
 	size_t length;
@@ -868,7 +1299,7 @@ item_id(uint64_t reference)
 	}
 }
 
-- (FSItemAttributes *)attributes:(FSItem *)item error:(NSError **)error
+- (FSItemAttributes *)performAttributes:(FSItem *)item error:(NSError **)error
 {
 	NTFSItem *value;
 	enum ntfs_result result;
@@ -913,7 +1344,7 @@ item_id(uint64_t reference)
 	return attrs;
 }
 
-- (FSFileName *)symbolicLink:(FSItem *)item error:(NSError **)error
+- (FSFileName *)performSymbolicLink:(FSItem *)item error:(NSError **)error
 {
 	NTFSItem *value;
 	enum ntfs_result result;
@@ -938,11 +1369,11 @@ item_id(uint64_t reference)
 	}
 }
 
-- (enum ntfs_result)readItem:(FSItem *)item
-		      offset:(off_t)offset
-		       bytes:(void *)bytes
-		      length:(size_t)length
-		   completed:(size_t *)completed
+- (enum ntfs_result)performReadItem:(FSItem *)item
+			     offset:(off_t)offset
+			      bytes:(void *)bytes
+			     length:(size_t)length
+			  completed:(size_t *)completed
 {
 	NTFSItem *value;
 	enum ntfs_result result = NTFS_OK;
@@ -1004,7 +1435,7 @@ item_id(uint64_t reference)
 	return item->catalog;
 }
 
-- (NSArray<FSFileName *> *)xattrsForItem:(FSItem *)item error:(NSError **)error
+- (NSArray<FSFileName *> *)performXattrsForItem:(FSItem *)item error:(NSError **)error
 {
 	NTFSItem *value;
 	NSMutableArray<FSFileName *> *names;
@@ -1122,7 +1553,7 @@ item_id(uint64_t reference)
 	return data;
 }
 
-- (NSData *)xattrNamed:(FSFileName *)name ofItem:(FSItem *)item error:(NSError **)error
+- (NSData *)performXattrNamed:(FSFileName *)name ofItem:(FSItem *)item error:(NSError **)error
 {
 	NTFSItem *value;
 	struct ntfs_stream_catalog *catalog;
@@ -1279,11 +1710,11 @@ item_id(uint64_t reference)
 	}
 }
 
-- (NSError *)enumerate:(FSItem *)directory
-		cookie:(FSDirectoryCookie)cookie
-	      verifier:(FSDirectoryVerifier)verifier
-	    attributes:(BOOL)attributes
-		packer:(FSDirectoryEntryPacker *)packer
+- (NSError *)performEnumeration:(FSItem *)directory
+			 cookie:(FSDirectoryCookie)cookie
+		       verifier:(FSDirectoryVerifier)verifier
+		     attributes:(BOOL)attributes
+			 packer:(FSDirectoryEntryPacker *)packer
 {
 	NTFSItem *item;
 	__attribute__((objc_precise_lifetime)) NTFSDirectoryContinuations *continuations = nil;

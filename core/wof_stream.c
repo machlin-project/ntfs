@@ -289,6 +289,10 @@ decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 		return result;
 	}
 	if (!span.uncompressed) {
+		result = ntfs_work(wof->backing->volume, unit);
+		if (result != NTFS_OK) {
+			return result;
+		}
 		workspace = wof->buffers + unit * NTFS_COMPRESSION_BUFFERS;
 		result = wof->layout.algorithm == NTFS_WOF_LZX_32K
 		    ? ntfs_lzx_decode(input, span.stored_size, wof->buffers, span.logical_size,

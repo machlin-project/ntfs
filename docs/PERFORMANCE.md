@@ -1,5 +1,17 @@
 # Performance contracts
 
+The new operation-accounting guards in core and FSKit have not yet undergone a
+matched performance comparison. The retained measurements below qualify their
+earlier source configurations; their percentages cannot be assigned to the
+current guarded product. Measure accounting cost on small cached operations,
+large/fragmented scans, cold/warm compression and compound native pages using
+the same original bytes, policies and counters. Existing directory references
+require an identical core archive, so an older pre-accounting archive is not a
+valid matched reference for that runner. Keep its check intact and establish a
+new current-source baseline. OPERATION-BUDGETS.md distinguishes work units,
+cumulative allocation attempts, live core/pool bytes and excluded native/RSS
+memory. Broader and installed optimization acceptance remains separate.
+
 Current optimizations are structural: binary-search run lookup, adjacent-run
 coalescing, geometrically grown bounded vectors, a 64-entry MFT LRU, whole-run
 data reads capped at 1 MiB, a persistent in-order directory cursor, direct B-tree

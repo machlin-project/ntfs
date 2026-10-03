@@ -15,6 +15,7 @@ enum { OWNER_RIGHTS_AUTHORITY = 3, OWNER_RIGHTS_RID = 4 };
 
 struct dacl_work {
 	const struct ntfs_access_token *token;
+	struct ntfs_volume *volume;
 	uint32_t comparisons, maximum;
 };
 
@@ -100,10 +101,17 @@ static enum ntfs_result
 compare_sid(struct dacl_work *work, const struct ntfs_sid *a, const struct ntfs_sid *b, bool *same)
 {
 	size_t i;
+	enum ntfs_result result;
 
 	*same = false;
 	if (work->comparisons == work->maximum) {
 		return NTFS_RANGE;
+	}
+	if (work->volume != NULL) {
+		result = ntfs_work(work->volume, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
 	}
 	work->comparisons++;
 	if (a->authority != b->authority || a->count != b->count) {
@@ -251,12 +259,13 @@ evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, struct dacl
 }
 
 enum ntfs_result
-ntfs_dacl_evaluate(const void *buffer, size_t size, const struct ntfs_access_token *token,
-    uint32_t desired, const struct ntfs_dacl_limits *limits, struct ntfs_dacl_decision *out)
+ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t size,
+    const struct ntfs_access_token *token, uint32_t desired, const struct ntfs_dacl_limits *limits,
+    struct ntfs_dacl_decision *out)
 {
 	struct ntfs_security_info info;
 	struct ntfs_dacl_limits defaults;
-	struct dacl_work work = {.token = token};
+	struct dacl_work work = {.token = token, .volume = volume};
 	struct ntfs_dacl_decision decision = {0};
 	uint32_t remaining;
 	bool owner, owner_rights;
@@ -282,6 +291,14 @@ ntfs_dacl_evaluate(const void *buffer, size_t size, const struct ntfs_access_tok
 	decision.requested = ntfs_file_map_rights(desired);
 	if ((decision.requested & ~NTFS_FILE_ALL_ACCESS) != 0) {
 		return NTFS_UNSUPPORTED;
+	}
+	if (volume != NULL) {
+		/* Descriptor scans are byte-bounded; SID comparisons share this scope
+		 * independently of the evaluator's own comparison ceiling. */
+		result = ntfs_work(volume, size + token->group_count + token->restricting_count);
+		if (result != NTFS_OK) {
+			return result;
+		}
 	}
 	result = ntfs_security_decode(buffer, size, &info);
 	if (result != NTFS_OK) {
@@ -322,4 +339,11 @@ ntfs_dacl_evaluate(const void *buffer, size_t size, const struct ntfs_access_tok
 	decision.sid_comparisons = work.comparisons;
 	*out = decision;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_dacl_evaluate(const void *buffer, size_t size, const struct ntfs_access_token *token,
+    uint32_t desired, const struct ntfs_dacl_limits *limits, struct ntfs_dacl_decision *out)
+{
+	return ntfs_dacl_evaluate_volume(NULL, buffer, size, token, desired, limits, out);
 }

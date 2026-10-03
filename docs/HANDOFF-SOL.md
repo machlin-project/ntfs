@@ -17,6 +17,34 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
+## Current operation-budget checkpoint
+
+The mounted reader now has cumulative read/allocation/work ceilings plus one
+aggregate core live-storage cap. Public owning calls have implicit scopes;
+compound FSKit requests use explicit core scopes and separate rounded-physical
+read scopes. Nested calls charge every ancestor, refusal precedes callbacks and
+cleanup remains available. Terminal native teardown detaches caller scope storage
+before core release. Optional validated-record retention may be omitted without
+poisoning a required read. Read OPERATION-BUDGETS.md before changing boundaries,
+units, retry or ownership. The public API is now version 2: rebuild all callers
+and use `ntfs_default_limits` before overriding policy fields.
+
+Current local evidence passes 60 sanitized core suites, both freestanding
+2-KiB-frame targets, style, 22 component PASS groups/eight explicit modern-runtime
+SKIPs and the unsigned Release app compiled for arm64/x86_64. The operation suite
+includes 12 storage/operation profiles and 144 exact/one-below boundaries, plus
+mount/nesting/callback/live-storage/cache/codec retries. Image/validation campaigns
+fixed-replay all 282/96 authored seeds and pass 51,427/57,672 executions. Four
+independent NTFS-3G image geometries still agree on exact files/ADS/names and remain
+unchanged. Exact logs and earlier failed test attempts remain in ACCEPTANCE.md.
+
+This is a resource-contract checkpoint. Windows acquisition, installed behavior,
+full owning authorization, journal history/recovery, crash/durability simulation
+and commercial distribution remain open under the full CORE-QUALIFICATION.md
+scope. Native Foundation/response/window/kernel memory and synchronous-I/O
+deadlines are separate from the core budget. Prior retained performance results
+predate these guards; current accounting overhead remains unmeasured.
+
 ## What to preserve
 
 - Freestanding core with explicit allocation/read callbacks and a separate
@@ -63,7 +91,7 @@ remaining effort. Use the acceptance matrix rather than a line-count percentage.
 make test
 make check-style
 python3 scripts/check_core.py
-make fskit
+python3 scripts/build_fskit.py --configuration Release
 python3 scripts/test_fskit.py
 python3 scripts/bootstrap_test_tools.py
 python3 tests/interoperability.py --output artifacts/interoperability-next

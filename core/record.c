@@ -205,6 +205,10 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 	if (!ntfs_bounds(offset, v->info.record_size, v->mft->size)) {
 		return NTFS_CORRUPT;
 	}
+	result = ntfs_work(v, v->info.record_size);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	record = ntfs_alloc(v, v->info.record_size);
 	if (record == NULL) {
 		return NTFS_NO_MEMORY;
@@ -233,7 +237,7 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 	}
 	if (v->cache != NULL) {
 		if (v->cache[victim].bytes == NULL) {
-			v->cache[victim].bytes = ntfs_alloc(v, v->info.record_size);
+			v->cache[victim].bytes = ntfs_alloc_optional(v, v->info.record_size);
 		}
 		if (v->cache[victim].bytes != NULL) {
 			ntfs_copy(v->cache[victim].bytes, record, v->info.record_size);

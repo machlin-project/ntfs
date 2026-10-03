@@ -8,7 +8,8 @@ boundaries when updating ACCEPTANCE.md and HANDOFF-SOL.md.
 | Required outcome | Current implementation and evidence | Work remaining |
 | --- | --- | --- |
 | Independent corpus and sustained fuzzing | Windows-only read-only collector; local manifest verifier and synthetic acquisition/UTF-16/hard-link regressions; separate image, full diagnostic, mapping-pair, attribute-list, index-root/block, LZNT1, reparse, security, DACL/token, WOF/XPRESS/LZX and LFS/NTFS-log fuzz targets; FILE/INDX fixup-preserving image mutations and USA-preserving log-page mutations; bidirectional external LZX codec observations | Execute acquisition on a Windows machine; extend expected-operation observations; use Windows seeds and longer scheduled campaigns; reduce every found defect to a retained regression |
-| Metadata consistency and corruption diagnosis | Private read-only validator for MFT/cluster bitmaps, extension/list references, required mirror prefix/boot-anchor mapping, exact namespace pairing/link graph and physical ownership; seven budgets, 96 image verdicts, 1,068 allocation/772 I/O faults, 80 partial/full mirror-stage failures and 48 prefix budgets; four independent bitmap/mirror-export geometries and bounded diagnostic fuzz; cached metadata validates before publication | Windows/DOS and listed/flagged bad-cluster qualification; view-store and unreferenced index-block consistency, Windows-dependent extended mirror tails, boot replicas and native journal checks; per-operation budgets outside the diagnostic; real fragmented and large-directory corpus |
+| Metadata consistency and corruption diagnosis | Private read-only validator for MFT/cluster bitmaps, extension/list references, required mirror prefix/boot-anchor mapping, exact namespace pairing/link graph and physical ownership; seven budgets, 96 image verdicts, 1,068 allocation/772 I/O faults, 80 partial/full mirror-stage failures and 48 prefix budgets; four independent bitmap/mirror-export geometries and bounded diagnostic fuzz; cached metadata validates before publication | Windows/DOS and listed/flagged bad-cluster qualification; view-store and unreferenced index-block consistency, Windows-dependent extended mirror tails, boot replicas and native journal checks; real fragmented and large-directory corpus |
+| Owning-operation resource bounds | API 2 implicit/explicit scopes, cumulative read/allocation/work limits and aggregate core live storage; nested ancestor charging, pre-callback refusal, sticky admission, unconditional cleanup and detached scope lifetime; FSKit compound scopes plus rounded physical fragments; 12 profiles/144 exact boundaries, failed-attempt/cache/codec/reentry checks and budgeted image fuzz pass | Windows-authored large/fragmented/hostile workloads, longer scheduled campaigns, installed scheduling/buffer behavior, complete native aggregate allocation/RSS stress and accounting overhead; work units are not elapsed deadlines; see OPERATION-BUDGETS.md |
 | Names, hard links, streams | Reference-addressed inspector preserves UTF-16 code units; bounded ADS catalog/xattrs; reversible bounded FSKit filename aliases and raw per-link manifests; per-directory exact/folded lookup retaining B-tree collation, 17 policy images and 47 allocation/eight I/O faults; mixed parents and sensitive aliases pass components; complete encoded-stream size metadata, strict content rejection and independent ADS with 18 core verdicts, 29 allocation/four I/O faults and six native component variants | Windows/native case-policy and volume-capability/cache qualification; installed filename/ADS and encoded-object flows; native normalization and Windows-authored EFS/compression metadata |
 | Links and special data | Immutable lossless core reparse snapshots, original-wire copies/physical sizes; bounded single-edge FSKit symlink/junction projection with explicit current-owner roots, numeric ancestry and filename aliases; 47 component verdicts and 79 allocation/17 read faults; ordinary EFS metadata and independent plaintext ADS; WOF XPRESS4K/8K/16K and LZX32K storage/table/content with 37 verdicts, 376 allocation/101 read faults, 23 legacy provider scenarios and bounded image fuzz; 87 content/11 invalid XPRESS and 140 content/31 invalid LZX vectors; 192 external LZX streams and 139 external synthetic decodes | Windows/installed link semantics, intermediate chains, context-dependent reparse hard links and cross-volume ownership; provider-specific native fault/interleaving and hard-link qualification, Windows codec/format observations; WIM/cloud/unknown policies and EFS decryption/key ownership |
 | Security | Original descriptor/SID/ACL/ACE parser and bounded immutable resolver for `$Secure` and per-file attributes; distinct absent/NULL/empty ACLs, checked index paths/hash/copies and four external image geometries; bounded ordered DACL evaluator with exact generic mappings, ordinary ownership and deny-only/restricting contexts, 196,608 independent per-right oracles | Whole-store/Windows qualification; native AccessCheck comparisons, restricted ownership, advanced ACE/SACL/privilege/maximum-access policy and Windows-to-native identities; integrate owning authorization |
@@ -21,6 +22,17 @@ arm64 archives/CLI products without normalization. It retains compiler/SDK,
 Git revision, selected options and bounded diagnostics in generated reports.
 Prepared macOS/Linux CI, relocated sources and native app/signing still require
 their own execution. See DEVELOPMENT.md and ACCEPTANCE.md.
+
+The operation-budget continuation passes all 60 sanitized core suites, both
+freestanding 2-KiB-frame targets, selected style, 22 component PASS groups/eight
+explicit macOS-27 runtime SKIPs and an unsigned Release app for arm64/x86_64.
+Image/validation campaigns fixed-replay all 282/96 seeds and explore 51,427/57,672
+executions with unchanged input/RSS/timeout policies and no reported OOM/timeout/
+crash. Four external image geometries again agree on ordinary/ADS bytes and names.
+This closes implementation of the general core/native accounting model, with
+the qualification gaps retained in its row above. Prior portable reproducibility
+and performance reports predate the changed core ABI; current-source release
+comparison and accounting-overhead measurement remain separate.
 
 The current mirror diagnostic passes both ordinary Release/O3 builds and all
 eight full product byte comparisons under `artifacts/reproducibility-mirror/`.
@@ -51,6 +63,10 @@ comparisons under `artifacts/reproducibility-logrestart-record/`. Relocated/nati
 app and remote CI acceptance remains open.
 
 Optimization is a separate acceptance stream:
+
+All retained throughput comparisons below predate operation-accounting guards.
+Their earlier-source scope remains recorded; current-source overhead and baseline
+measurements are required before assigning the same gains to the guarded product.
 
 Adaptive FSKit retention has measured component core-allocation release and warm
 unit I/O preservation; READ-CACHE-POLICY.md distinguishes that evidence from

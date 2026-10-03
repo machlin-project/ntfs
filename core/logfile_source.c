@@ -210,7 +210,7 @@ volume_allocate(void *context, size_t size)
 {
 	struct ntfs_stream *stream = context;
 
-	return stream->volume->env.allocate(stream->volume->env.context, size);
+	return ntfs_alloc(stream->volume, size);
 }
 
 static void
@@ -218,11 +218,11 @@ volume_release(void *context, void *bytes, size_t size)
 {
 	struct ntfs_stream *stream = context;
 
-	stream->volume->env.release(stream->volume->env.context, bytes, size);
+	ntfs_free(stream->volume, bytes, size);
 }
 
 enum ntfs_result
-ntfs_logfile_open_volume(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
+ntfs_logfile_open_volume_impl(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
     struct ntfs_logfile_report *report, struct ntfs_logfile **out)
 {
 	struct ntfs_node *node = NULL;

@@ -210,6 +210,10 @@ index_seek(struct ntfs_node *node, bool by_hash, struct secure_key target, uint6
 	size = (size_t)root->size;
 	header_offset = sizeof(*header);
 	for (;;) {
+		result = ntfs_work(v, size);
+		if (result != NTFS_OK) {
+			goto finish;
+		}
 		result = choose_entry(
 		    bytes, size, header_offset, by_hash, target, &bounds, store_size, &choice);
 		if (result != NTFS_OK) {
@@ -359,10 +363,17 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 	if (result != NTFS_OK) {
 		return result;
 	}
+	result = ntfs_work(v, snapshot->size);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	if (descriptor_hash(snapshot->bytes, snapshot->size) != ntfs_u32(primary.hash)) {
 		return NTFS_CORRUPT;
 	}
-	result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
+	result = ntfs_work(v, snapshot->size);
+	if (result == NTFS_OK) {
+		result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
+	}
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -398,7 +409,7 @@ read_descriptor(struct ntfs_stream *store, const struct ntfs_disk_security_locat
 }
 
 enum ntfs_result
-ntfs_security_resolve(struct ntfs_volume *v, uint32_t id, struct ntfs_security **out)
+ntfs_security_resolve_impl(struct ntfs_volume *v, uint32_t id, struct ntfs_security **out)
 {
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *store = NULL;
@@ -525,7 +536,10 @@ open_file_descriptor(struct ntfs_node *node, struct ntfs_security **out)
 			goto finish;
 		}
 	}
-	result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
+	result = ntfs_work(v, snapshot->size);
+	if (result == NTFS_OK) {
+		result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
+	}
 finish:
 	ntfs_stream_close(stream);
 	if (result != NTFS_OK) {
@@ -537,7 +551,7 @@ finish:
 }
 
 enum ntfs_result
-ntfs_security_open(struct ntfs_node *node, struct ntfs_security **out)
+ntfs_security_open_impl(struct ntfs_node *node, struct ntfs_security **out)
 {
 	struct ntfs_stat stat;
 	enum ntfs_result result;
@@ -595,9 +609,11 @@ ntfs_security_get_info(const struct ntfs_security *snapshot, struct ntfs_securit
 }
 
 enum ntfs_result
-ntfs_security_copy(
+ntfs_security_copy_impl(
     const struct ntfs_security *snapshot, void *buffer, size_t capacity, size_t *size)
 {
+	enum ntfs_result result;
+
 	if (size == NULL) {
 		return NTFS_INVALID;
 	}
@@ -612,12 +628,17 @@ ntfs_security_copy(
 	if (capacity < snapshot->size) {
 		return NTFS_RANGE;
 	}
+	result = ntfs_work(snapshot->volume, snapshot->size);
+	if (result != NTFS_OK) {
+		*size = 0;
+		return result;
+	}
 	ntfs_copy(buffer, snapshot->bytes, snapshot->size);
 	return NTFS_OK;
 }
 
 enum ntfs_result
-ntfs_security_evaluate_dacl(const struct ntfs_security *snapshot,
+ntfs_security_evaluate_dacl_impl(const struct ntfs_security *snapshot,
     const struct ntfs_access_token *token, uint32_t desired, const struct ntfs_dacl_limits *limits,
     struct ntfs_dacl_decision *out)
 {
@@ -627,5 +648,12 @@ ntfs_security_evaluate_dacl(const struct ntfs_security *snapshot,
 		}
 		return NTFS_INVALID;
 	}
-	return ntfs_dacl_evaluate(snapshot->bytes, snapshot->size, token, desired, limits, out);
+	return ntfs_dacl_evaluate_volume(
+	    snapshot->volume, snapshot->bytes, snapshot->size, token, desired, limits, out);
+}
+
+struct ntfs_volume *
+ntfs_security_volume(const struct ntfs_security *object)
+{
+	return object == NULL ? NULL : object->volume;
 }

@@ -100,6 +100,10 @@ validate_frame(struct ntfs_directory *d, struct index_frame *f, size_t header_of
 	enum ntfs_result result;
 	bool terminal = false;
 
+	result = ntfs_work(d->volume, f->allocation);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	if (!ntfs_bounds(header_offset, sizeof(*header), f->allocation)) {
 		return NTFS_CORRUPT;
 	}
@@ -155,6 +159,7 @@ visit(struct ntfs_directory *d, uint64_t vcn)
 	uint64_t *table;
 	uint32_t capacity, i;
 	size_t position;
+	enum ntfs_result result;
 
 	if (vcn == UINT64_MAX) {
 		return NTFS_CORRUPT;
@@ -170,11 +175,22 @@ visit(struct ntfs_directory *d, uint64_t vcn)
 			return NTFS_NO_MEMORY;
 		}
 		for (i = 0; i < d->visited_capacity; i++) {
+			result = ntfs_work(d->volume, 1);
+			if (result != NTFS_OK) {
+				ntfs_free(d->volume, table, (size_t)capacity * sizeof(*table));
+				return result;
+			}
 			if (d->visited[i] == 0) {
 				continue;
 			}
 			position = hash_vcn(d->visited[i] - 1, capacity);
 			while (table[position] != 0) {
+				result = ntfs_work(d->volume, 1);
+				if (result != NTFS_OK) {
+					ntfs_free(
+					    d->volume, table, (size_t)capacity * sizeof(*table));
+					return result;
+				}
 				position = (position + 1) & (capacity - 1u);
 			}
 			table[position] = d->visited[i];
@@ -185,6 +201,10 @@ visit(struct ntfs_directory *d, uint64_t vcn)
 	}
 	position = hash_vcn(vcn, d->visited_capacity);
 	while (d->visited[position] != 0) {
+		result = ntfs_work(d->volume, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
 		if (d->visited[position] == vcn + 1) {
 			return NTFS_CORRUPT;
 		}
@@ -270,7 +290,7 @@ descend(struct ntfs_directory *d, const struct ntfs_disk_index_entry *entry)
 }
 
 enum ntfs_result
-ntfs_directory_open(struct ntfs_node *node, struct ntfs_directory **out)
+ntfs_directory_open_impl(struct ntfs_node *node, struct ntfs_directory **out)
 {
 	struct ntfs_directory *d;
 	struct ntfs_stream *root = NULL;
@@ -393,6 +413,11 @@ next_entry(struct ntfs_directory *d, const struct ntfs_disk_index_entry **out)
 		return d->failure;
 	}
 	while (d->depth != 0) {
+		result = ntfs_work(d->volume, 1);
+		if (result != NTFS_OK) {
+			d->failure = result;
+			return result;
+		}
 		f = &d->stack[d->depth - 1];
 		result = entry_at(f, &entry);
 		if (result != NTFS_OK) {
@@ -445,7 +470,7 @@ copy_entry(const struct ntfs_disk_index_entry *entry, struct ntfs_dirent *out)
 }
 
 enum ntfs_result
-ntfs_directory_next(struct ntfs_directory *d, struct ntfs_dirent *out)
+ntfs_directory_next_impl(struct ntfs_directory *d, struct ntfs_dirent *out)
 {
 	const struct ntfs_disk_index_entry *entry;
 	enum ntfs_result result;
@@ -495,6 +520,10 @@ seek_name(struct ntfs_directory *d, const uint16_t *name, size_t length)
 
 	for (;;) {
 		f = &d->stack[d->depth - 1];
+		result = ntfs_work(d->volume, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
 		result = entry_at(f, &entry);
 		if (result != NTFS_OK) {
 			return result;
@@ -522,7 +551,7 @@ seek_name(struct ntfs_directory *d, const uint16_t *name, size_t length)
 }
 
 enum ntfs_result
-ntfs_lookup_entry(struct ntfs_node *parent, const uint16_t *name, size_t length,
+ntfs_lookup_entry_impl(struct ntfs_node *parent, const uint16_t *name, size_t length,
     struct ntfs_node **out, struct ntfs_dirent *found)
 {
 	struct ntfs_directory *d = NULL;
@@ -594,7 +623,14 @@ ntfs_lookup_entry(struct ntfs_node *parent, const uint16_t *name, size_t length,
 }
 
 enum ntfs_result
-ntfs_lookup(struct ntfs_node *parent, const uint16_t *name, size_t length, struct ntfs_node **out)
+ntfs_lookup_impl(
+    struct ntfs_node *parent, const uint16_t *name, size_t length, struct ntfs_node **out)
 {
 	return ntfs_lookup_entry(parent, name, length, out, NULL);
+}
+
+struct ntfs_volume *
+ntfs_directory_volume(const struct ntfs_directory *object)
+{
+	return object == NULL ? NULL : object->volume;
 }

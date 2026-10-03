@@ -82,6 +82,25 @@ the stream/core or releasing the resource's window.
 
 ## Cancellation boundary
 
+Each compound read/lookup/attribute/readlink/xattr/enumeration/activation owns a
+caller-stored core operation scope and a resource physical-read scope under the
+operation monitor. Native packer reentry charges every enclosing scope, and
+admission checks sticky exhaustion before packing and after callbacks. No refused
+physical fragment reaches the reader. The exact-read monitor rejects recursive
+reads or scope mutation during its synchronous reader callback. A precisely
+retained resource permits both scopes to end after terminal invalidation detaches
+the core owner. Cleanup remains available without new I/O. Constructor free-space
+scanning and probe/load have their corresponding scope boundaries; see
+[OPERATION-BUDGETS.md](OPERATION-BUDGETS.md) for physical/logical accounting and
+the separate live/cumulative memory planes.
+
+`tests/fskit_operation.m` executes these legacy reply paths, including partial
+physical-credit refusal, exact error counts, fresh retry, lookup publication,
+names-only provider classification, nested packer credits and terminal detach.
+The complete component passes 22 groups with eight explicit macOS-27 runtime
+SKIPs, including the new modern operation group. SDK compilation does not qualify
+modern runtime scheduling. The budgets add no synchronous-read timeout.
+
 The adapter uses the synchronous FSBlockDeviceResource read method. Its ordinary
 read handlers receive no FSTask cancellation object. FSContext carries initiator
 identity information; it is not a cancellation token. FSTask cancellation applies

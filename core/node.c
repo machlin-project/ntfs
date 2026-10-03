@@ -36,7 +36,7 @@ ntfs_node_by_number(struct ntfs_volume *v, uint64_t number, struct ntfs_node **o
 }
 
 enum ntfs_result
-ntfs_node_open(struct ntfs_volume *v, uint64_t reference, struct ntfs_node **out)
+ntfs_node_open_impl(struct ntfs_volume *v, uint64_t reference, struct ntfs_node **out)
 {
 	enum ntfs_result result;
 
@@ -57,7 +57,7 @@ ntfs_node_open(struct ntfs_volume *v, uint64_t reference, struct ntfs_node **out
 }
 
 enum ntfs_result
-ntfs_root(struct ntfs_volume *v, struct ntfs_node **out)
+ntfs_root_impl(struct ntfs_volume *v, struct ntfs_node **out)
 {
 	if (v == NULL || out == NULL) {
 		return NTFS_INVALID;
@@ -80,7 +80,7 @@ ntfs_node_close(struct ntfs_node *node)
 }
 
 enum ntfs_result
-ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
+ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 {
 	const struct ntfs_disk_record *r;
 	const struct ntfs_disk_standard *si;
@@ -94,6 +94,11 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 
 	if (node == NULL || st == NULL) {
 		return NTFS_INVALID;
+	}
+	result = ntfs_work(
+	    node->volume, node->metadata_verified ? sizeof(*st) : node->volume->info.record_size);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	if (node->metadata_verified) {
 		*st = node->metadata;
@@ -155,7 +160,7 @@ ntfs_node_metadata(struct ntfs_node *node, struct ntfs_stat *st)
 }
 
 enum ntfs_result
-ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *st)
+ntfs_node_stat_impl(struct ntfs_node *node, struct ntfs_stat *st)
 {
 	enum ntfs_result result;
 

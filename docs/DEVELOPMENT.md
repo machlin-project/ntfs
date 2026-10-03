@@ -48,9 +48,20 @@ original-wire xattrs, remount/revocation and all 79 allocation/17 read fault
 positions across listed/reserved lookup and reopened snapshots. Core reparse tests
 also check copy guards, physical allocation and node-independent lifetime. See
 LINK-POLICY.md for the supported subset and remaining resolution contracts.
-The current component has seven explicit macOS-27 runtime SKIPs: lifecycle,
-pressure, enumeration, content metadata, link projection and two case-policy checks. These in-process
-results do not mount the filesystem.
+The current component has eight explicit macOS-27 runtime SKIPs: lifecycle,
+operation budgets, pressure, enumeration, content metadata, link projection and
+two case-policy checks. These in-process results do not mount the filesystem.
+
+The separate `operation` suite checks 12 storage/operation profiles and 144
+exact/one-below thresholds across cumulative read/allocation/work and aggregate
+live storage. Mount/ABI admission, nested scopes, callback reentry, failed
+attempts, optional-cache omission, sibling storage and decoder retry have separate
+checks. The native operation component executes physical rounding/fragment,
+compound/nested quota, publication/packing and terminal detach paths. Public API
+version 2 requires rebuilt callers and complete default-initialized limits; see
+OPERATION-BUDGETS.md for policy units, output and lifetime contracts. Existing
+diagnostic/journal and native namespace/response caps remain separate.
+
 The pressure component injects Dispatch data-source notifications without host
 pressure changes. It measures disposable core bytes for LZNT1/XPRESS/LZX, delivers
 an event during blocked I/O, sweeps cold LZX allocation/read faults and checks
@@ -86,6 +97,10 @@ subset selection alone is not seed-coverage evidence. OOM/timeout/crash remain
 fatal, with unchanged sanitizers and per-process RSS/input limits. The configured
 RSS ceiling is not actual or aggregate memory usage. The observed earlier image
 corpus OOM and its fixed replay remain separately recorded in ACCEPTANCE.md.
+The image target additionally selects one tightened operation dimension from a
+named control seed, walks public owning calls under shared credits and compares
+usage with independent allocator/read attempts. This complements its original
+full walk; it does not replace successful content exploration with quota refusal.
 The `logfile` target uses a 2-MiB envelope for restart/client/page/logical-record/
 NTFS-update/LSN primitives and complete exported logical sources. Its custom
 mutator restores and reseals USA pages or either restart copy, reaching checked

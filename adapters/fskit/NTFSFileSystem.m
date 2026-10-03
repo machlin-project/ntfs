@@ -13,6 +13,8 @@
 	__attribute__((objc_precise_lifetime)) NTFSResource *owner;
 	struct ntfs_environment env;
 	struct ntfs_info info;
+	struct ntfs_operation_limits limits;
+	struct ntfs_resource_read_budget budget = {0};
 	enum ntfs_result result;
 
 	if (![resource isKindOfClass:FSBlockDeviceResource.class]) {
@@ -25,7 +27,15 @@
 		return;
 	}
 	env = [owner environment];
-	result = ntfs_probe(&env, &info);
+	ntfs_operation_default_limits(&limits);
+	result = [owner beginReadBudget:&budget limits:&limits];
+	if (result == NTFS_OK) {
+		@try {
+			result = ntfs_probe(&env, &info);
+		} @finally {
+			(void)[owner endReadBudget:&budget];
+		}
+	}
 	if (result == NTFS_NOT_NTFS) {
 		reply(FSProbeResult.notRecognizedProbeResult, nil);
 	} else if (result != NTFS_OK) {
@@ -48,6 +58,8 @@
 	struct ntfs_environment env;
 	struct ntfs_volume *core = NULL;
 	struct ntfs_info info;
+	struct ntfs_operation_limits limits;
+	struct ntfs_resource_read_budget budget = {0};
 	NTFSLinkPolicy *policy;
 	enum ntfs_result result = NTFS_OK;
 
@@ -62,23 +74,41 @@
 				result = NTFS_INVALID;
 			} else {
 				env = [owner environment];
-				result = ntfs_mount(&env, NULL, &core);
+				ntfs_operation_default_limits(&limits);
+				result = [owner beginReadBudget:&budget limits:&limits];
 				if (result == NTFS_OK) {
-					ntfs_get_info(core, &info);
-					result = ntfs_native_link_policy(
-					    info.serial, options.taskOptions, &policy);
-					if (result == NTFS_OK) {
-						loaded = ntfs_volume_create_with_policy(
-						    core, owner, policy);
-					}
-					if (loaded == nil) {
-						(void)ntfs_unmount(core);
+					@try {
+						result = ntfs_mount(&env, NULL, &core);
 						if (result == NTFS_OK) {
-							result = NTFS_IO;
+							ntfs_get_info(core, &info);
+							result =
+							    ntfs_native_link_policy(info.serial,
+								options.taskOptions, &policy);
+							if (result == NTFS_OK) {
+								loaded =
+								    ntfs_volume_create_with_policy(
+									core, owner, policy);
+							}
+							if (result == NTFS_OK) {
+								result = [owner readBudgetResult];
+							}
+							if (loaded == nil || result != NTFS_OK) {
+								if (loaded != nil) {
+									[loaded invalidate];
+									loaded = nil;
+								} else {
+									(void)ntfs_unmount(core);
+								}
+								if (result == NTFS_OK) {
+									result = NTFS_IO;
+								}
+							} else {
+								_volume = loaded;
+								_resource = resource;
+							}
 						}
-					} else {
-						_volume = loaded;
-						_resource = resource;
+					} @finally {
+						(void)[owner endReadBudget:&budget];
 					}
 				}
 			}

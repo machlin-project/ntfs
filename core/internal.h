@@ -2,6 +2,9 @@
 #ifndef NTFS_INTERNAL_H
 #define NTFS_INTERNAL_H
 #include <ntfs/ntfs.h>
+#include <ntfs/security.h>
+#include <ntfs/access.h>
+#include <ntfs/logfile.h>
 #include "disk.h"
 
 /* Implementation budgets are distinct from disk-format fields. */
@@ -69,6 +72,11 @@ struct ntfs_volume {
 	struct ntfs_record_cache *cache;
 	uint32_t children;
 	struct ntfs_io_statistics stats;
+	uint64_t live_bytes;
+	uint32_t operation_calls, operation_scopes;
+	struct ntfs_operation *operation;
+	struct ntfs_operation implicit_operation;
+	struct ntfs_operation_usage last_operation;
 };
 
 struct ntfs_node {
@@ -96,7 +104,62 @@ void ntfs_zero(void *, size_t);
 bool ntfs_equal(const void *, const void *, size_t);
 bool ntfs_bounds(uint64_t, uint64_t, uint64_t);
 void *ntfs_alloc(struct ntfs_volume *, size_t);
+/* Optional metadata retention may be omitted without exhausting a call. */
+void *ntfs_alloc_optional(struct ntfs_volume *, size_t);
 void ntfs_free(struct ntfs_volume *, void *, size_t);
+bool ntfs_operation_limits_valid(const struct ntfs_operation_limits *);
+enum ntfs_result ntfs_operation_enter(struct ntfs_volume *);
+void ntfs_operation_leave(struct ntfs_volume *);
+void ntfs_operation_detach(struct ntfs_volume *);
+enum ntfs_result ntfs_operation_read(struct ntfs_volume *, size_t);
+bool ntfs_operation_allocate(struct ntfs_volume *, size_t, bool);
+void ntfs_operation_allocated(struct ntfs_volume *, size_t);
+enum ntfs_result ntfs_work(struct ntfs_volume *, uint64_t);
+enum ntfs_result ntfs_dacl_evaluate_volume(struct ntfs_volume *, const void *, size_t,
+    const struct ntfs_access_token *, uint32_t, const struct ntfs_dacl_limits *,
+    struct ntfs_dacl_decision *);
+struct ntfs_volume *ntfs_directory_volume(const struct ntfs_directory *);
+struct ntfs_volume *ntfs_catalog_volume(const struct ntfs_stream_catalog *);
+struct ntfs_volume *ntfs_reparse_volume(const struct ntfs_reparse *);
+struct ntfs_volume *ntfs_security_volume(const struct ntfs_security *);
+
+enum ntfs_result ntfs_count_free_clusters_impl(struct ntfs_volume *volume, uint64_t *out);
+enum ntfs_result ntfs_node_open_impl(
+    struct ntfs_volume *volume, uint64_t reference, struct ntfs_node **out);
+enum ntfs_result ntfs_root_impl(struct ntfs_volume *volume, struct ntfs_node **out);
+enum ntfs_result ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *out);
+enum ntfs_result ntfs_node_stat_impl(struct ntfs_node *node, struct ntfs_stat *out);
+enum ntfs_result ntfs_stream_open_impl(
+    struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_stream **out);
+enum ntfs_result ntfs_stream_read_impl(
+    struct ntfs_stream *stream, uint64_t offset, void *bytes, size_t length, size_t *out);
+enum ntfs_result ntfs_directory_open_impl(struct ntfs_node *node, struct ntfs_directory **out);
+enum ntfs_result ntfs_directory_next_impl(
+    struct ntfs_directory *directory, struct ntfs_dirent *out);
+enum ntfs_result ntfs_lookup_entry_impl(struct ntfs_node *node, const uint16_t *name, size_t length,
+    struct ntfs_node **out, struct ntfs_dirent *entry);
+enum ntfs_result ntfs_lookup_impl(
+    struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_node **out);
+enum ntfs_result ntfs_stream_catalog_open_impl(
+    struct ntfs_node *node, uint32_t maximum, struct ntfs_stream_catalog **out);
+enum ntfs_result ntfs_stream_catalog_entry_impl(
+    const struct ntfs_stream_catalog *catalog, uint32_t index, struct ntfs_stream_name *out);
+enum ntfs_result ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out);
+enum ntfs_result ntfs_reparse_bytes_impl(
+    const struct ntfs_reparse *snapshot, void *bytes, size_t capacity, size_t *out);
+enum ntfs_result ntfs_reparse_name_impl(const struct ntfs_reparse *snapshot,
+    enum ntfs_reparse_name_type type, uint16_t *units, size_t capacity, size_t *out);
+enum ntfs_result ntfs_security_resolve_impl(
+    struct ntfs_volume *volume, uint32_t id, struct ntfs_security **out);
+enum ntfs_result ntfs_security_open_impl(struct ntfs_node *node, struct ntfs_security **out);
+enum ntfs_result ntfs_security_copy_impl(
+    const struct ntfs_security *snapshot, void *bytes, size_t capacity, size_t *out);
+enum ntfs_result ntfs_security_evaluate_dacl_impl(const struct ntfs_security *snapshot,
+    const struct ntfs_access_token *token, uint32_t desired, const struct ntfs_dacl_limits *limits,
+    struct ntfs_dacl_decision *out);
+enum ntfs_result ntfs_logfile_open_volume_impl(struct ntfs_volume *volume,
+    const struct ntfs_logfile_limits *limits, struct ntfs_logfile_report *report,
+    struct ntfs_logfile **out);
 enum ntfs_result ntfs_io(struct ntfs_volume *, uint64_t, void *, size_t);
 enum ntfs_result ntfs_boot(
     const struct ntfs_environment *, struct ntfs_info *, uint64_t *, uint64_t *);

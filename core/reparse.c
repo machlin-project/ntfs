@@ -134,7 +134,7 @@ ntfs_reparse_decode(const void *buffer, size_t size, struct ntfs_reparse_info *i
 }
 
 enum ntfs_result
-ntfs_reparse_open(struct ntfs_node *node, struct ntfs_reparse **out)
+ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out)
 {
 	struct ntfs_volume *v;
 	struct ntfs_stream *stream = NULL;
@@ -256,8 +256,11 @@ ntfs_reparse_allocated_size(const struct ntfs_reparse *reparse)
 }
 
 enum ntfs_result
-ntfs_reparse_bytes(const struct ntfs_reparse *reparse, void *buffer, size_t capacity, size_t *size)
+ntfs_reparse_bytes_impl(
+    const struct ntfs_reparse *reparse, void *buffer, size_t capacity, size_t *size)
 {
+	enum ntfs_result result;
+
 	if (size == NULL) {
 		return NTFS_INVALID;
 	}
@@ -269,15 +272,21 @@ ntfs_reparse_bytes(const struct ntfs_reparse *reparse, void *buffer, size_t capa
 	if (capacity < reparse->size) {
 		return NTFS_RANGE;
 	}
+	result = ntfs_work(reparse->volume, reparse->size);
+	if (result != NTFS_OK) {
+		*size = 0;
+		return result;
+	}
 	ntfs_copy(buffer, reparse->bytes, reparse->size);
 	return NTFS_OK;
 }
 
 enum ntfs_result
-ntfs_reparse_name(const struct ntfs_reparse *reparse, enum ntfs_reparse_name_type which,
+ntfs_reparse_name_impl(const struct ntfs_reparse *reparse, enum ntfs_reparse_name_type which,
     uint16_t *buffer, size_t capacity, size_t *length)
 {
 	size_t offset, count, i;
+	enum ntfs_result result;
 
 	if (length == NULL) {
 		return NTFS_INVALID;
@@ -302,8 +311,19 @@ ntfs_reparse_name(const struct ntfs_reparse *reparse, enum ntfs_reparse_name_typ
 	if (capacity < count) {
 		return NTFS_RANGE;
 	}
+	result = ntfs_work(reparse->volume, count);
+	if (result != NTFS_OK) {
+		*length = 0;
+		return result;
+	}
 	for (i = 0; i < count; i++) {
 		buffer[i] = ntfs_u16(reparse->bytes + offset + i * NTFS_UTF16_UNIT_BYTES);
 	}
 	return NTFS_OK;
+}
+
+struct ntfs_volume *
+ntfs_reparse_volume(const struct ntfs_reparse *object)
+{
+	return object == NULL ? NULL : object->volume;
 }

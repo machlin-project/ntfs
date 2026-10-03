@@ -22,6 +22,10 @@ resource_release(void *context, void *buffer, size_t size)
 	[(__bridge NTFSResource *)context releaseBytes:buffer size:size];
 }
 
+@interface NTFSResource ()
+- (enum ntfs_result)chargeRead:(size_t)size;
+@end
+
 @implementation NTFSResource {
 	id<NTFSBlockReader> _reader;
 	uint64_t _size;
@@ -29,6 +33,9 @@ resource_release(void *context, void *buffer, size_t size)
 	void *_window;
 	size_t _allocatedBytes;
 	BOOL _revoked;
+	BOOL _reading;
+	struct ntfs_resource_read_budget *_readBudget;
+	NSUInteger _readBudgetDepth;
 }
 
 - (instancetype)initWithReader:(id<NTFSBlockReader>)reader
@@ -112,42 +119,146 @@ resource_release(void *context, void *buffer, size_t size)
 	void *destination;
 	NSError *error;
 	BOOL direct;
+	enum ntfs_result result;
 
 	@synchronized(self) {
 		if (!self.isAvailable || offset > _size || length > _size - offset ||
 		    (length != 0 && buffer == NULL)) {
 			return NTFS_IO;
 		}
-		while (length != 0) {
-			if (!self.isAvailable) {
-				return NTFS_IO;
-			}
-			start = offset - offset % _alignment;
-			prefix = (size_t)(offset - start);
-			take = MIN(length, NTFS_RESOURCE_WINDOW - prefix);
-			total = (prefix + take + _alignment - 1) / _alignment * _alignment;
-			if (total > _size - start) {
-				return NTFS_IO;
-			}
-			/* Transfer only the requested caller span. Unaligned addresses, disk
-			 * offsets and partial final sectors keep the bounded private window. */
-			direct = prefix == 0 && take == total && (uintptr_t)bytes % _alignment == 0;
-			destination = direct ? bytes : _window;
-			error = nil;
-			completed = [_reader readInto:destination
-					   startingAt:(off_t)start
-					       length:total
-						error:&error];
-			if (error != nil || completed != total || !self.isAvailable) {
-				return NTFS_IO;
-			}
-			if (!direct) {
-				memcpy(bytes, (uint8_t *)_window + prefix, take);
-			}
-			bytes += take;
-			offset += take;
-			length -= take;
+		if (_reading) {
+			return NTFS_BUSY;
 		}
+		_reading = YES;
+		@try {
+			while (length != 0) {
+				if (!self.isAvailable) {
+					return NTFS_IO;
+				}
+				start = offset - offset % _alignment;
+				prefix = (size_t)(offset - start);
+				take = MIN(length, NTFS_RESOURCE_WINDOW - prefix);
+				total = (prefix + take + _alignment - 1) / _alignment * _alignment;
+				if (total > _size - start) {
+					return NTFS_IO;
+				}
+				/* Transfer only the requested caller span. Unaligned addresses,
+				 * disk offsets and partial final sectors keep the bounded private
+				 * window. */
+				direct = prefix == 0 && take == total &&
+				    (uintptr_t)bytes % _alignment == 0;
+				destination = direct ? bytes : _window;
+				result = [self chargeRead:total];
+				if (result != NTFS_OK) {
+					return result;
+				}
+				error = nil;
+				completed = [_reader readInto:destination
+						   startingAt:(off_t)start
+						       length:total
+							error:&error];
+				if (error != nil || completed != total || !self.isAvailable) {
+					return NTFS_IO;
+				}
+				if (!direct) {
+					memcpy(bytes, (uint8_t *)_window + prefix, take);
+				}
+				bytes += take;
+				offset += take;
+				length -= take;
+			}
+		} @finally {
+			_reading = NO;
+		}
+	}
+	return NTFS_OK;
+}
+
+- (enum ntfs_result)beginReadBudget:(struct ntfs_resource_read_budget *)budget
+			     limits:(const struct ntfs_operation_limits *)limits
+{
+	@synchronized(self) {
+		if (budget == NULL || limits == NULL || limits->read_calls == 0 ||
+		    limits->read_bytes == 0) {
+			return NTFS_INVALID;
+		}
+		if (_reading || budget->active || _readBudgetDepth == NTFS_OPERATION_MAX_DEPTH) {
+			return NTFS_BUSY;
+		}
+		if ([self readBudgetResult] != NTFS_OK) {
+			return NTFS_RANGE;
+		}
+		memset(budget, 0, sizeof(*budget));
+		budget->max_calls = limits->read_calls;
+		budget->max_bytes = limits->read_bytes;
+		budget->previous = _readBudget;
+		budget->active = YES;
+		_readBudget = budget;
+		_readBudgetDepth++;
+		return NTFS_OK;
+	}
+}
+
+- (enum ntfs_result)endReadBudget:(struct ntfs_resource_read_budget *)budget
+{
+	@synchronized(self) {
+		if (budget == NULL || !budget->active) {
+			return NTFS_INVALID;
+		}
+		if (_reading || _readBudget != budget) {
+			return NTFS_BUSY;
+		}
+		_readBudget = budget->previous;
+		_readBudgetDepth--;
+		budget->previous = NULL;
+		budget->active = NO;
+		return NTFS_OK;
+	}
+}
+
+- (enum ntfs_result)readBudgetResult
+{
+	struct ntfs_resource_read_budget *budget;
+
+	@synchronized(self) {
+		for (budget = _readBudget; budget != NULL; budget = budget->previous) {
+			if (budget->exhausted != NTFS_OPERATION_LIMIT_NONE) {
+				return NTFS_RANGE;
+			}
+		}
+		return NTFS_OK;
+	}
+}
+
+- (enum ntfs_result)chargeRead:(size_t)size
+{
+	struct ntfs_resource_read_budget *budget;
+	enum ntfs_operation_limit exhausted = NTFS_OPERATION_LIMIT_NONE;
+
+	/* The exact-read monitor owns this short accounting step and remains held
+	 * through the synchronous callback. No refused fragment reaches the reader. */
+	if ([self readBudgetResult] != NTFS_OK) {
+		return NTFS_RANGE;
+	}
+	for (budget = _readBudget; budget != NULL; budget = budget->previous) {
+		if (budget->calls == budget->max_calls) {
+			exhausted = NTFS_OPERATION_LIMIT_READ_CALLS;
+			break;
+		}
+		if (size > budget->max_bytes - budget->bytes) {
+			exhausted = NTFS_OPERATION_LIMIT_READ_BYTES;
+			break;
+		}
+	}
+	if (exhausted != NTFS_OPERATION_LIMIT_NONE) {
+		for (budget = _readBudget; budget != NULL; budget = budget->previous) {
+			budget->exhausted = exhausted;
+		}
+		return NTFS_RANGE;
+	}
+	for (budget = _readBudget; budget != NULL; budget = budget->previous) {
+		budget->calls++;
+		budget->bytes += size;
 	}
 	return NTFS_OK;
 }

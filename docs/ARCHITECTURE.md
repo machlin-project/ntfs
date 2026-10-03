@@ -15,6 +15,16 @@ Format values live in `core/disk.h`; implementation budgets live in
 `sizeof`/`offsetof`. Tests author their own named wire fields and geometry so
 expected values do not simply mirror parser expressions.
 
+Public owning boundaries in `core/api.c` create an implicit execution scope or
+share the caller's explicit scope. Core reads, allocation attempts and defined
+work charges check every ancestor before admission; all volume-owned storage
+shares one live cap. Optional record-cache storage may be omitted without
+poisoning a successful required read. FSKit wraps compound requests and separately
+charges rounded physical fragments. Caller scope storage survives native teardown
+through explicit detach/end. [OPERATION-BUDGETS.md](OPERATION-BUDGETS.md) defines
+API version 2, accounting/error/lifetime contracts and excluded native memory.
+These policies do not supply a synchronous-I/O deadline or full RSS bound.
+
 All calls on one volume and its children require external serialization. Objects
 hold a counted volume lifetime; unmount returns BUSY while nodes, public streams,
 reparse snapshots or iterators remain open. Streams own decoded metadata

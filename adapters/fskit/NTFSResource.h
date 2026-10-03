@@ -20,6 +20,15 @@ enum {
 	     error:(NSError **)error;
 @end
 
+/* Physical transport accounting includes alignment rounding and window fragments.
+ * Zeroed caller storage stays alive until end; the caller retains the resource. */
+struct ntfs_resource_read_budget {
+	uint64_t max_calls, max_bytes, calls, bytes;
+	enum ntfs_operation_limit exhausted;
+	struct ntfs_resource_read_budget *previous;
+	BOOL active;
+};
+
 @interface NTFSResource : NSObject
 - (instancetype)initWithReader:(id<NTFSBlockReader>)reader;
 - (struct ntfs_environment)environment;
@@ -28,6 +37,10 @@ enum {
 /* Synchronous exact read. Failed reads may alter bytes inside the requested span;
  * callers must discard them. No bytes outside that span are transferred there. */
 - (enum ntfs_result)readAt:(uint64_t)offset bytes:(void *)buffer length:(size_t)length;
+- (enum ntfs_result)beginReadBudget:(struct ntfs_resource_read_budget *)budget
+			     limits:(const struct ntfs_operation_limits *)limits;
+- (enum ntfs_result)endReadBudget:(struct ntfs_resource_read_budget *)budget;
+- (enum ntfs_result)readBudgetResult;
 /* Revocation permanently fails this owner; cleanup remains valid. */
 @property(readonly, getter=isAvailable) BOOL available;
 @end

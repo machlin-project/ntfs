@@ -35,6 +35,9 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
  * does not authorize I/O. This observer is exclusively owned by the volume. */
 @property(readonly) NTFSReadCachePolicy *readCachePolicy;
 - (NTFSReadCachePolicy *)newReadCachePolicy;
+/* Request policy may tighten the immutable core ceilings. The same read limits
+ * also bound physical resource fragments, including alignment rounding. */
+- (struct ntfs_operation_limits)operationLimits;
 /* Serialize publication of native item results against reclaim and teardown.
  * Replies still run outside the core operation monitor. */
 - (void)performItemPublication:(void (^)(void))publication;

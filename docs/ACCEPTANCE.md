@@ -99,6 +99,16 @@ VM, installed mount, native authorization or recovery ran. Current guard overhea
 and native aggregate allocation/RSS stress remain open; OPERATION-BUDGETS.md
 defines the accounting and ABI migration contract.
 
+The committed operation source passes both isolated ordinary Release/O3 builds
+and all eight full archive/CLI byte comparisons in
+`artifacts/reproducibility-operation/report.json`, with bounded logs beside it
+and launcher evidence in `artifacts/plan-operation-reproducibility.log`. Review
+independently re-read both copies of every product and checked full byte equality,
+reported lengths and digests. Apple clang/SDK, unchanged source revision and
+selected options remain in the generated report. This is same-checkout local
+arm64 portable evidence; relocated sources, native app/signing and remote CI
+remain unqualified.
+
 The preceding directory continuation component passes 20 groups with seven explicit
 macOS-27 runtime SKIPs in `artifacts/plan-directory-component-complete.log`.
 Names-only and interleaved fault sweeps cover all 34/13 and 151/41 allocation/read

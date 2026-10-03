@@ -38,6 +38,13 @@ fixed-replay all 282/96 authored seeds and pass 51,427/57,672 executions. Four
 independent NTFS-3G image geometries still agree on exact files/ADS/names and remain
 unchanged. Exact logs and earlier failed test attempts remain in ACCEPTANCE.md.
 
+The committed operation source also passes two isolated ordinary Release/O3
+builds and all eight full archive/CLI byte comparisons under
+`artifacts/reproducibility-operation/`. Review independently re-read every product
+and checked equality, lengths and reported digests. Compiler/SDK, source revision
+and selected options remain in its generated report. Relocated sources, native
+app/signing and remote CI still need separate execution.
+
 This is a resource-contract checkpoint. Windows acquisition, installed behavior,
 full owning authorization, journal history/recovery, crash/durability simulation
 and commercial distribution remain open under the full CORE-QUALIFICATION.md

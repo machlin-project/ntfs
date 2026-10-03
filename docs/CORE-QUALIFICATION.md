@@ -31,8 +31,12 @@ executions with unchanged input/RSS/timeout policies and no reported OOM/timeout
 crash. Four external image geometries again agree on ordinary/ADS bytes and names.
 This closes implementation of the general core/native accounting model, with
 the qualification gaps retained in its row above. Prior portable reproducibility
-and performance reports predate the changed core ABI; current-source release
-comparison and accounting-overhead measurement remain separate.
+and performance reports predate the changed core ABI. A subsequent current-source
+comparison now passes both ordinary Release/O3 builds and all eight full archive/
+CLI byte comparisons under `artifacts/reproducibility-operation/`. Review re-read
+both actual products and checked equality, lengths and reported digests. Its
+same-checkout/toolchain scope remains unchanged; relocated/native app/remote CI
+acceptance and accounting-overhead measurement remain separate.
 
 The current mirror diagnostic passes both ordinary Release/O3 builds and all
 eight full product byte comparisons under `artifacts/reproducibility-mirror/`.

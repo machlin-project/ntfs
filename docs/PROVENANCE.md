@@ -11,6 +11,12 @@ NTFS observer/completion cleanup follows selected Dispatch SDK guidance;
 FSKIT-EXT4-LESSONS.md maps inspected subjects and
 remaining NTFS evidence. It is not an NTFS implementation dependency.
 
+The checked extent-position algorithm is original code over this core's existing
+validated mapping arrays. The six extent workloads use the original wire author,
+SHAKE-derived per-extent bytes and explicit sparse/VDL oracles. Their manifests
+describe synthetic storage and grant no Windows qualification. No foreign
+filesystem/cache algorithm or product dependency was imported for this change.
+
 Primary references:
 
 - [Microsoft MFT overview](https://learn.microsoft.com/en-us/windows/win32/devnotes/master-file-table)

@@ -15,7 +15,7 @@ new current-source baseline. OPERATION-BUDGETS.md distinguishes work units,
 cumulative allocation attempts, live core/pool bytes and excluded native/RSS
 memory. Broader and installed optimization acceptance remains separate.
 
-The current indexed-store source has fresh ordinary Release/O3 byte comparisons
+The preceding indexed-store source has ordinary Release/O3 byte comparisons
 and legacy directory baselines. Both isolated builds match all eight portable
 products under `artifacts/reproducibility-secure-store/`. The native workloads
 use that verified archive with O2 adapter/workload sources, no sanitizer and no
@@ -42,7 +42,8 @@ runtime performance is inferred. The complete security diagnostic is explicit
 and is not part of ordinary native enumeration. Earlier percentages retain
 their original source/workload scope.
 
-Current optimizations are structural: binary-search run lookup, adjacent-run
+Current optimizations include checked current/successor extent reuse with a
+binary-search fallback, adjacent-run
 coalescing, geometrically grown bounded vectors, a 64-entry MFT LRU, whole-run
 data reads capped at 1 MiB, a persistent in-order directory cursor, direct B-tree
 lookup and at most two decoded LZNT1 units per stream. Sparse and uninitialized ranges
@@ -568,6 +569,80 @@ installed native buffer scheduling, physical media, diverse independent files,
 Windows-authored fragmentation, more than two active positions and performance
 under real pressure remain open. Broader bounded checkpoints and checked index/
 alias reuse need their own profiles; no independent-driver advantage is claimed.
+
+## Checked stream extent positions
+
+One stream-owned mapping index reuses the current or immediate successor extent.
+Every hit checks its array bound and VCN span; a miss keeps the binary search.
+The position survives bootstrap mapping-array growth and failed data I/O while
+the ordinary exact-read/work/admission contract still owns every request. It
+allocates no read storage. The private object costs eight additional bytes on
+arm64/x86_64; the measured mount plus stream raises peak accounted core storage
+by sixteen bytes. Independent streams retain independent positions. This change
+does not introduce concurrent calls on a volume.
+
+`tests/extent_fixtures.py` authors six original 16-MiB images with independent
+4-MiB content: one, sixteen, 256 or 1,024 deliberately unmerged extents, plus
+1,024-entry sparse and VDL-tail variants. Attribute lists span up to eleven FILE
+records. SHAKE-derived bytes distinguish each stored extent; holes and bytes past
+VDL have explicit zero oracles. Main independently reconstructs actual protected
+records, extension ownership, mappings and all data. The images are focused
+synthetic workloads, not Windows or complete-volume diagnostic qualification.
+
+The initial baseline has 168 runs/24 summaries under
+`artifacts/extent-baseline-{contiguous,runs-16,runs-256,runs-1024}/`. The matched
+candidate has six reports with nine repetitions and 300,000 operations; four
+longer confirmations have thirteen repetitions and one million operations.
+Together they contain 1,272 alternating pairs/2,544 measured runs. Inputs,
+workload/POSIX sources, compiler, SDK, optimized build options and independently
+verified Release products match. Both retained binaries check complete original
+content before/after; every measured pair has equal delivered/sample bytes,
+resource calls/bytes and zero read allocations. Main verifies actual retained
+binaries and every pair in `artifacts/extents-review.json`.
+
+Profiles use one externally serialized reader, no MFT cache, 128 warmup requests,
+sequential/random offsets, requests of one/64/4,096 bytes and memory/POSIX
+callbacks. Setup and complete image/data checks warm host storage; these are
+algorithm and warm-file observations, not cold-device or installed FSKit tests.
+The runner records wall/CPU, throughput, p50/p95/p99, allocation/I/O/cache counters,
+peak accounted core bytes and process RSS. RSS includes the image/oracle/workload,
+so the sixteen-byte accounted change implies no measured RSS improvement.
+
+The table uses the median of thirteen paired candidate/reference ratios, rather
+than a ratio of aggregate timing medians. Positive reduction means faster.
+
+| Random 4-KiB profile | Callback | Paired wall reduction | Paired CPU reduction | All paired wall ratios |
+| --- | --- | ---: | ---: | ---: |
+| 1,024 extents | Memory | 16.6% | 16.6% | 0.777–0.895 |
+| Sparse, 1,024 extents | Memory | 17.7% | 17.7% | 0.804–0.895 |
+| VDL tail, 1,024 extents | Memory | 16.6% | 16.6% | 0.741–0.895 |
+| 1,024 extents | POSIX | 3.8% | 3.8% | 0.851–0.995 |
+| Sparse, 1,024 extents | POSIX | 7.3% | 7.3% | 0.844–1.058 |
+| VDL tail, 1,024 extents | POSIX | 4.4% | 4.4% | 0.902–0.989 |
+
+Every long random-4-KiB memory pair improves on the three fragmented profiles.
+Those reads usually cross an extent boundary, making the second lookup local.
+Sequential 4-KiB memory paired reductions are 2.2%, 5.2% and 10.7% respectively,
+with overlapping/noisy ranges; the largest sequential figure is not universal.
+Contiguous and small-request controls remain mixed. Long random one-byte memory
+paired medians regress 2.7% for ordinary fragmentation, 2.4% for sparse and 3.9%
+for the VDL profile; 64-byte controls range from 1.3% slower to 1.7% faster.
+POSIX and tail-percentile controls also retain jitter. The thirteen-pair contiguous
+random-4-KiB POSIX wall range is 0.679–3.748 while its CPU median ratio is 0.998;
+do not infer a broad storage improvement from that wall series.
+
+This accepts a targeted split-read optimization with a fixed small storage cost,
+unchanged resource calls and explicit small random-read tradeoffs. Reports retain
+all controls under `artifacts/extent-paired-candidate-{PROFILE}/` and
+`artifacts/extent-paired-confirmation-{PROFILE}/`; launcher logs use
+`artifacts/plan-extents-paired-{candidate,confirmation}-{PROFILE}.log`.
+The six-profile suite checks 17,420 byte results, two independent stream lifetimes,
+34 partial/full failures and 36 exact/one-below compound limits without read
+allocations. Current 68-suite, freestanding, component, universal Release and
+fresh image/diagnostic fuzz evidence is in ACCEPTANCE.md. Windows-authored
+fragmentation, broader/competing readers, native/device profiles, copy coalescing,
+buffer reuse and the rest of the optimization program remain open. This is not
+an independent-driver comparison.
 
 ## Native link and type metadata measurements
 

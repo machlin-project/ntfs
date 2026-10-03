@@ -139,6 +139,15 @@ content success at the tighter boundary and no exhausted scope.
 Work is a deterministic policy model, not an instruction counter. Fixed bounded
 helpers can perform several primitive operations per charged byte or step.
 Existing format/run/depth/token/response limits continue to bound their spans.
+Stream extent positions are retained in the required stream object and included
+in its allocation/live credits. They allocate no read-path storage. A current or
+successor mapping hit keeps the same delivered/raw work charges and exact I/O
+admission as the binary-search fallback. Retaining a position after failed I/O
+does not retain successful content; retry requires a new admitted exact read.
+Six original fragmented/sparse/VDL profiles exercise 34 partial/full I/O failures
+and 36 exact/one-below compound read-call/read-byte/work limits, including sticky
+refusal and fresh retry with two independently owned streams.
+
 The accounting deliberately includes cached and memory-only paths:
 
 | Path | Charges |

@@ -17,7 +17,41 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current boot consistency
+## Current extent-read qualification
+
+Nonresident reads retain one checked mapping index per stream. Current and
+successor hits precede the binary fallback; indexes survive bootstrap array
+growth, while every I/O/retry still passes ordinary admission. Independent
+streams own independent positions and require external volume serialization.
+The field costs eight bytes per stream on tested targets with no read allocation.
+
+Current checks pass all 68 sanitized suites, both 2-KiB freestanding targets,
+style, 42 component PASS groups/ten runtime SKIPs and the clean universal Release
+app. Six original profiles check up to 1,024 runs through eleven attribute records,
+independent contents/streams, sparse/VDL semantics, 34 partial/full read failures,
+36 compound budgets and cleanup. Main actual-file review is
+`artifacts/extents-review.json`; eight full portable Release/O3 products match
+under `artifacts/reproducibility-extents-candidate/`. Accepted logs use
+`artifacts/plan-extents-*-candidate.log` and `artifacts/plan-extents-app-release.log`.
+The first app command used default Debug; the later explicit Release evidence is
+separate. Both are unsigned for distribution. Main accepts the targeted extent
+lookup change after 1,272 actual alternating pairs/2,544 runs: long random-4-KiB
+memory reductions are 16.6–17.7%, warm POSIX reductions 3.8–7.3% and the measured
+mount plus public stream costs sixteen extra core bytes. Small random memory
+controls include 1.2–3.9% regressions. Retain every control/range and the original
+synthetic input/callback scope in PERFORMANCE.md; no broad/native benefit follows.
+
+Fresh image/validation fuzz fixed-replays 392/242 actual unique files and exits
+zero with every periodic crash/timeout/OOM counter zero under
+`artifacts/fuzz-extents-{image,validation}-reviewed/`. Main checks actual binaries
+and executed entries. Last periodic executions are 53,673/47,137 at 71/69 seconds;
+neither terminal totals nor RSS are observed. Data/resource/deadline/RSS policies
+remain 1 MiB plus 4 KiB/five seconds/1 GiB. The separate 16-MiB workload images
+are covered by the extent suite, not these bounded fuzz campaigns.
+Windows, installed FSKit, identity/authorization, recovery and the full
+optimization/release program remain open.
+
+## Preceding boot consistency
 
 Full diagnostics now resolve fixed `$Boot` slot 7's ordinary nonresident/listed
 LCN-zero storage and compare one complete logical sector with its reserved copy

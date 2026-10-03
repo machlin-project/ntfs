@@ -38,6 +38,15 @@ are still required. Core and FSKit tests
 run with `make test` and `python3 scripts/test_fskit.py`; build the app with
 `make fskit`. See development prerequisites and exact evidence below.
 
+Validated nonresident stream reads now retain one checked extent index, reusing
+the current or immediately following run before the binary-search fallback.
+Six original workloads include up to 1,024 runs through eleven attribute records,
+sparse storage and uninitialized tails. Exact bytes, independent streams,
+partial/full I/O failures and compound quota checks pass. Current source passes
+68 sanitized suites and builds the universal Release app. Matched portable
+measurements and their tradeoffs are tracked in PERFORMANCE.md; Windows/native
+and the complete optimization program remain open.
+
 The resource now reads fully aligned fragments into caller storage and keeps a
 bounded window for unaligned requests. Separate retained-binary memory-reader
 measurements show a targeted improvement; [PERFORMANCE.md](docs/PERFORMANCE.md)

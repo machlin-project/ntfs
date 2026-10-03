@@ -25,6 +25,16 @@ through explicit detach/end. [OPERATION-BUDGETS.md](OPERATION-BUDGETS.md) define
 API version 2, accounting/error/lifetime contracts and excluded native memory.
 These policies do not supply a synchronous-I/O deadline or full RSS bound.
 
+Each nonresident stream retains one mapping-array index for read locality.
+Raw storage and cold LZNT1 unit fills recheck the current run and its immediate
+successor before the binary-search fallback. Bounds and VCN membership are
+checked on every hit; an index remains valid across bootstrap run-array growth.
+The position describes verified geometry, so an I/O failure can retain it while
+a later read still requires full callback admission and successful data transfer.
+Independent streams own independent positions. Diagnostic pure lookups retain
+their binary-search contract. The private field adds eight bytes per stream on
+the tested architectures and allocates no separate storage.
+
 All calls on one volume and its children require external serialization. Objects
 hold a counted volume lifetime; unmount returns BUSY while nodes, public streams,
 reparse snapshots or iterators remain open. Streams own decoded metadata

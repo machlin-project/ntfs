@@ -7,7 +7,49 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current boot-consistency continuation validates fixed `$Boot` ownership,
+The current extent-read continuation retains one checked run index per stream.
+Current/successor hits and the binary fallback preserve all I/O, work and
+ownership contracts; failed reads retain geometry without publishing content.
+Six original 16-MiB images contain independent 4-MiB data, up to 1,024 extents
+through eleven attribute records, sparse holes and an uninitialized tail.
+
+All 68 sanitized suites, both 2-KiB freestanding targets, style, 42 component PASS
+groups/ten runtime SKIPs and the clean universal Release app pass. The new suite
+performs 17,420 byte checks, 34 partial/full read failures and 36 exact/one-below
+compound credit cases. It also checks independent stream ownership, allocation-
+free reads, unchanged source bytes and complete cleanup. Accepted logs use
+`artifacts/plan-extents-*-candidate.log`; the explicit clean Release app is
+`artifacts/plan-extents-app-release.log`. The initial default app command produced
+a valid Debug build and remains separately recorded. Release has linker ad hoc
+signatures without distribution authority and compiles changed stream code on
+both architectures.
+
+Main reconstructs actual mappings, protected records, extension ownership and
+complete data independently in `artifacts/extents-review.json`. Eight actual full
+portable Release/O3 products match under `artifacts/reproducibility-extents-candidate/`;
+the scope is one arm64 checkout/toolchain in distinct directories. Native-app and
+relocated-source reproducibility remain unqualified. Ten matched workload reports
+contain 1,272 alternating pairs/2,544 runs with identical delivered samples,
+physical calls/bytes and zero read allocations. Thirteen-pair long random-4-KiB
+memory reductions are 16.6–17.7% on fragmented/sparse/VDL profiles; each targeted
+memory pair improves. Warm POSIX reductions are 3.8–7.3% with noisier ranges.
+The mount plus public stream costs sixteen extra accounted bytes. Small random
+memory controls include 1.2–3.9% regressions; accept this as a targeted tradeoff,
+with all controls/ranges retained in PERFORMANCE.md and the actual-file review.
+Reports use `artifacts/extent-paired-{candidate,confirmation}-{PROFILE}/`.
+
+Fresh sequential image/validation campaigns replay all 392/242 actual unique
+inputs and exit zero with all periodic crash/timeout/OOM counters zero. Main
+checks retained binaries and actual executed entries. Last periodic counts are
+53,673/47,137 at 71/69 seconds, not exact terminal totals. Reports use
+`artifacts/fuzz-extents-{image,validation}-reviewed/`. The same one-process
+1-MiB data/4-KiB resource allowance, five-second deadline, fatal sanitizers and
+configured 1-GiB RSS ceiling remain; RSS is not observed. These corpora exclude
+the separate 16-MiB extent workloads, which have the explicit suite above.
+Windows/installed behavior, owning authorization, recovery, broader/competing
+workloads and the full optimization/commercial program remain open.
+
+The preceding boot-consistency continuation validates fixed `$Boot` ownership,
 complete nonresident/listed mappings, initialized LCN-zero storage and a complete
 logical-sector replica at the declared data-span end. Larger backing resources
 do not relocate that copy. The pass retains diagnostic memory/read/work and

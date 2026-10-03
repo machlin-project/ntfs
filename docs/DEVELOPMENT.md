@@ -97,6 +97,18 @@ weak declarations keep parent-release assertions independent of ARC declaration
 binding; LIFECYCLE.md records the compiler diagnostic and acceptance scope.
 Modern result checks explicitly SKIP without the macOS 27 runtime.
 
+`tests/extent_fixtures.py` separately authors six 16-MiB immutable images and
+independent 4-MiB content oracles under `.build/extent-fixtures`. The default
+Meson build tracks that author and its canonical wire helper. Profiles contain
+one, sixteen, 256 or 1,024 unmerged runs, up to eleven attribute records, sparse
+holes and a VDL tail. The `extents` suite checks every run edge, full contents,
+random/reverse/interleaved independent streams, guarded EOF/zero reads, unchanged
+images and exact allocation cleanup. It forbids read-path allocations and
+exercises 34 partial/full I/O failures plus 36 compound credit boundaries.
+Use those `.data` files as `--expected-data` for `scripts/benchmark.py` and retain
+both ordinary Release reports for alternating paired measurements. PERFORMANCE.md
+records the actual input/callback scope and workload-specific tradeoffs.
+
 The native directory workload checks every name, identity and requested size
 against independently authored namespace inventories. It measures the actual
 legacy protocol handler on an immutable memory reader, with no MFT record cache

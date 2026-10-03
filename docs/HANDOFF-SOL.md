@@ -17,7 +17,43 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current indexed security-store checkpoint
+## Current per-file security checkpoint
+
+General `ntfs_validate` now checks selected unnamed zero-ID descriptor bodies
+after indexed-store/reference validation. It reuses the original bounded
+snapshot/decoder, shares one core operation across each node/descriptor and
+charges descriptor work before decoding to both diagnostic and core budgets.
+Each temporary owner releases before the next file. Missing ordinary storage,
+invalid packets and limits retain precise partial reports without new API fields.
+
+The initial external oracle rejected zero-ID `$MFT` without a descriptor.
+Original metadata inventories and 48 retained `ntfsinfo` exports establish the
+fixed-internal exception; explicit synthetic omissions/present damage and
+ordinary system-flag cases guard it. Every present selected packet and all
+nonzero IDs remain checked. Empty/inert reserved records retain their earlier
+absence contract. SECURITY.md and PROVENANCE.md define exact scope; this is not
+an ACL/default identity or authorization rule. The failed oracle remains retained.
+
+Current source passes 64 sanitized-build suites, both 2-KiB freestanding targets,
+style, 22 component groups/eight explicit runtime SKIPs and the unsigned
+arm64/x86_64 Release app. Both fresh four-geometry oracles pass unchanged,
+including 24 original descriptor comparisons. There are 175 diagnostic verdicts,
+3,328 allocation/1,803 read faults across 17 profiles, 68 partial/full per-file
+SECURITY errors, 18 pre-callback refusals/three parser precharges and the compound
+core maximum-descriptor boundary. Validation fuzz fixed-replays all 173 compact
+seeds with no OOM/timeout/crash, with a last reported exploration count of 43,828
+at 63 seconds; no exact terminal total/observed RSS is available. The two largest
+per-file cases remain direct full-image tests.
+
+Logs are `artifacts/plan-file-security-*-owner-fixed.log`; current external
+reports are `artifacts/interoperability-file-security-{owner-fixed,descriptors-owner-fixed}/`;
+system observations are `artifacts/file-security-system-inventory/`; fuzz is
+`artifacts/fuzz-file-security-validation-owner-fixed/`. Do not promote preceding
+directory timings to a new source comparison. Native Windows, installed FSKit,
+identity/owning authorization, recovery and the full measured optimization
+program remain required under CORE-QUALIFICATION.md.
+
+## Preceding indexed security-store checkpoint
 
 `ntfs_security_store_validate` now completely traverses supported SII/SDH trees,
 inventories both used allocation bitmaps, checks exact cross-index membership

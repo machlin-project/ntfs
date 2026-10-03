@@ -105,9 +105,34 @@ all FILE references, other metadata stores and authorization are outside this
 standalone API. The general `ntfs_validate` diagnostic additionally checks every
 allocated base FILE's nonzero security ID against the SII inventory, after its
 namespace and physical-ownership passes. Missing indexed references/store are
-CORRUPT. Zero-ID per-file payload semantics remain outside that general pass;
-the independent resolver still validates those when requested. No descriptor
-or diagnostic result maps an identity or grants native access.
+CORRUPT. A subsequent per-file pass checks every selected unnamed zero-ID
+descriptor using the same bounded snapshot/decoder as the independent resolver.
+Resident, nonresident and attribute-list storage retain complete mapping and
+physical ownership checks from the earlier attribute pass. Missing ordinary-file
+storage, uninitialized/encoded attributes and invalid descriptor framing fail.
+Known unsupported framing and size/resource limits retain partial verdicts.
+Named or legacy storage beside a nonzero selected ID is not a fallback source.
+
+Fixed internal `$MFT`, `$MFTMirr`, `$LogFile`, `$Bitmap`, `$BadClus` and `$UpCase`
+records may omit per-file security storage. This follows their published
+attribute inventories and the external zero-ID/no-descriptor `$MFT` observation,
+not a blanket system-attribute or low-record-number exemption; PROVENANCE.md
+records the qualification boundary. Every present selected packet is checked,
+and every nonzero ID still requires the indexed store. `$Volume`, `$AttrDef`,
+`$Boot`, the root and ordinary files retain the required-source contract.
+Explicit resolver requests still reject missing storage; the diagnostic supplies
+no default or synthesized descriptor for an allowed internal omission.
+
+The already recognized empty/inert reserved MFT slots 12 through 15 have no
+active namespace edge. Empty records have no payload to interpret; inert records
+may lack a descriptor, but every present unnamed descriptor is checked. This
+exception does not admit descriptor-free ordinary files. Each file's node and
+temporary snapshot share one mounted operation, then release before the next
+file. Descriptor-byte work is charged to both diagnostic and core budgets before
+decoding, including resident packets that require no device read. A failure
+reports the owning FILE and `$SECURITY_DESCRIPTOR` attribute at SECURITY; an
+earlier structural/mapping failure retains its earlier stage. No descriptor or
+diagnostic result maps an identity or grants native access.
 
 The all-used-slots reachability, exact cross-index membership and nonoverlap
 rules are repository consistency inferences from the published layout and
@@ -141,12 +166,22 @@ required-allocation failure positions and both partial/full transfer modes at
 release accounting. All five operation dimensions pass exact/one-below credits;
 the maximum descriptor additionally passes exact/one-below aggregate storage.
 Forbidden-read spans prove unused SDS gaps and free index blocks remain unread.
-Seven complete-volume cases check valid storage, missing IDs/store and unrelated
-descriptor damage. Its valid image additionally passes 149 allocation/111 read
-failures and four exact/one-below diagnostic boundaries. Existing focused
-inventories now explicitly use zero IDs because they omit `$Secure`; the separate
-nonzero missing-store case rejects that invalid reference rather than bypassing
-the new check. Zero-ID payload interpretation remains an explicit scope limit.
+Nine complete-volume cases check valid indexed/zero-ID storage, missing IDs/store,
+unrelated indexed descriptor damage and an invalid per-file packet beside a valid
+store. The valid indexed image has allocation/read failure sweeps and four
+exact/one-below diagnostic boundaries. Focused inventories use zero IDs with
+independently authored valid per-file descriptors; their complete attribute lists
+include those descriptors. Separate missing-store and missing-descriptor cases
+still reject invalid active objects. The per-file diagnostic adds 48 image
+verdicts for absent/NULL/empty/present ACLs, legacy standard information, hard
+links, named-only/duplicate/missing storage, SID/ACL damage, opaque ACEs, inert
+records, fixed internal omissions/present damage, ordinary system-flag rejection,
+fragmented/listed descriptors and the exact 1-MiB size cap. Six retained layouts
+add required-allocation/read failure sweeps. Three nonresident layouts pass 68
+partial/full SECURITY-stage read failures, 18 pre-callback I/O/work refusals and
+three descriptor-parser precharge refusals, with exact cleanup and fresh retry.
+The maximum descriptor also passes exact/one-below compound core read credits
+including its MFT node read. ACCEPTANCE.md records current aggregate counts.
 
 `tests/secure_oracle.py` compares original descriptor bytes and independently
 reported security IDs against external NTFS-3G exports in existing regular

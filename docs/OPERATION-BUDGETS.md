@@ -139,7 +139,7 @@ The accounting deliberately includes cached and memory-only paths:
 | Directory indexes | Checked frame spans, seek/traversal transitions, visited-table scans, collision probes and rehash steps; diagnostic-only complete bitmap bit scans and visited-block membership probes |
 | ADS catalogs | Record/list spans, each name comparison including its minimum UTF-16 span, sort/uniqueness/base lookup and copied entry size |
 | Metadata and reparse | Cold record or cached stat size; actual original-byte and UTF-16 copies |
-| Security | Index-frame spans, descriptor hash/validation/copy/duplicate comparison spans, bounded token group scans and each owned DACL SID comparison; whole-store cursor transitions, visited/bitmap membership, locator growth/heap sorting, interval checks and FILE-ID binary probes |
+| Security | Index-frame spans, descriptor hash/validation/copy/duplicate comparison spans, bounded token group scans and each owned DACL SID comparison; whole-store cursor transitions, visited/bitmap membership, locator growth/heap sorting, interval checks and FILE-ID binary probes; per-file diagnostic decoding precharges descriptor bytes to both work planes and shares one operation with the owning node open |
 | Free clusters | Bitmap byte scans, with the fixed bits-per-byte loop |
 
 Delivery, backing reads and private decoding are separate work and I/O costs.

@@ -223,12 +223,15 @@ def author_validation(output):
     nonresident_fields = ('lowest', 'highest', 'runs_offset', 'compression',
                           'allocated', 'size', 'initialized')
 
-    def save(label, variant='leaf', file_id=s.SECURITY_ID, absent=False):
+    def save(label, variant='leaf', file_id=s.SECURITY_ID, absent=False, file_payload=None):
         image = v.build(source, 'standard')
         secure_source = (output / ('secure-store-' + variant + '.img')).read_bytes()
         secure_attributes = attributes(secure_source, s.SECURE_RECORD)
         hello = attributes(image, v.HELLO_RECORD)
         hello = [f.standard(security_id=file_id) if kind(attr) == f.SI else attr for attr in hello]
+        if file_payload is not None:
+            hello = [f.resident(v.SECURITY_ATTRIBUTE, file_payload, v.SECURITY_INSTANCE)
+                     if kind(attr) == v.SECURITY_ATTRIBUTE else attr for attr in hello]
         f.put_record(image, v.HELLO_RECORD, f.file_record(v.HELLO_RECORD, hello))
         if not absent:
             secure_attributes.append(v.filename(v.Link('$Secure'), secure_filename_instance))
@@ -261,12 +264,17 @@ def author_validation(output):
             f.put_data(image, f.MIRROR_LCN, image[first:first + v.MIRROR_RECORDS * f.RECORD])
         name = 'validation-secure-' + label + '.img'
         (output / name).write_bytes(image)
-        success = label == 'valid'
+        success = label in ('valid', 'inline-valid')
         manifest.append({'image': name, 'result': 'success' if success else 'corrupt metadata',
                          'complete': success, 'stage': 6 if success else 9,
-                         'record_number': 0 if success else v.HELLO_RECORD if absent or label == 'missing-id' else s.SECURE_RECORD})
+                         'record_number': 0 if success else v.HELLO_RECORD
+                                          if absent or label in ('missing-id', 'inline-invalid')
+                                          else s.SECURE_RECORD})
 
     save('valid')
+    save('inline-valid', file_id=0, file_payload=s.sd('empty'))
+    save('inline-invalid', file_id=0, file_payload=v.SECURITY_HEADER.pack(
+        0, 0, v.SECURITY_SELF_RELATIVE, 0, 0, 0, 0))
     save('missing-id', file_id=s.SECURITY_ID + 4)
     save('missing-store', absent=True)
     for variant in ('off-path-primary', 'off-path-copy-header', 'off-path-copy-body', 'off-path-descriptor'):

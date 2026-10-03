@@ -240,7 +240,10 @@ storage, both allocation inventories, off-path corruption and FILE references.
 `ntfs-inspect IMAGE security-store [MAX_DESCRIPTORS]` emits a bounded JSON report;
 the optional cap is positive decimal. Whole-store work runs in one mounted
 operation and can share an explicit caller scope. Ordinary FSKit lookup does
-not implicitly scan the store. SECURITY.md defines free/unindexed/zero-ID scope
+not implicitly scan the store. The general `validation`/`validation-cli` suites
+also check selected zero-ID per-file bodies with complete authored inventories,
+partial/full I/O faults, parser precharge and compound operation limits.
+SECURITY.md defines free/unindexed/reserved-record scope
 and the separate native authorization requirement.
 
 The `access-oracle-contract` suite tests the independent Windows access collector,

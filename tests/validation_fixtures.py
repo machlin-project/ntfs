@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import fixtures as f
 
 MIRROR_RECORD = 1
+LOGFILE_RECORD = 2
 BOOT_RECORD = 7
 BAD_CLUSTERS_RECORD = 8
 HELLO_RECORD = 24
@@ -26,6 +27,11 @@ DATA_INSTANCE = 2
 LIST_INSTANCE = 3
 EXTRA_FILENAME_INSTANCE = 4
 ADS_INSTANCE = 5
+SECURITY_INSTANCE = 6
+SECURITY_ATTRIBUTE = 0x50
+SECURITY_REVISION = 1
+SECURITY_SELF_RELATIVE = 0x8000
+SECURITY_HEADER = struct.Struct('<BBHIIII')
 ROOT_INDEX_INSTANCE = 2
 ROOT_ALLOCATION_INSTANCE = 3
 ROOT_BITMAP_INSTANCE = 4
@@ -46,8 +52,16 @@ FRAGMENTED_DATA = f.pattern(f.FRAGMENTED_BYTES)
 
 def standard(attributes=0, **fields):
     # These focused inventories omit $Secure. Indexed references are authored
-    # separately by secure_store_fixtures; zero-ID inline security stays opaque.
+    # separately by secure_store_fixtures; active files have per-file descriptors.
     return f.standard(attributes, security_id=0, **fields)
+
+
+def security():
+    # A self-relative descriptor with absent owner/group/ACLs is valid metadata;
+    # these inventories make no access decision from that descriptor.
+    payload = SECURITY_HEADER.pack(SECURITY_REVISION, 0, SECURITY_SELF_RELATIVE,
+                                   0, 0, 0, 0)
+    return f.resident(SECURITY_ATTRIBUTE, payload, SECURITY_INSTANCE)
 
 
 @dataclass(frozen=True)
@@ -134,6 +148,8 @@ def build(source, case, *, mirror=None, index=None):
         FRAGMENTED_RECORD: [Link('fragmented.bin')],
     }
     directories = {f.ROOT_RECORD}
+    if case == 'logfile-empty':
+        links[LOGFILE_RECORD] = [Link('$LogFile')]
     if index is not None:
         image[f.BOOT_FIELDS['index_code']] = -(index.block_bytes.bit_length() - 1) % f.BYTE_VALUES
         if index.leaf_bitmap is not None:
@@ -203,7 +219,8 @@ def build(source, case, *, mirror=None, index=None):
         names = links[number]
         return [standard(f.FILE_ATTRIBUTE_DIRECTORY if number in directories else 0),
                 *(filename(link, FILENAME_INSTANCE if i == 0 else EXTRA_FILENAME_INSTANCE,
-                           number in directories) for i, link in enumerate(names)), *extras]
+                           number in directories) for i, link in enumerate(names)),
+                security(), *extras]
 
     mirror_data = (f.resident(f.DATA, b'', DATA_INSTANCE) if mirror.resident else
                    f.nonresident(f.DATA, mirror.runs[:1] if mirror.listed else mirror.runs,
@@ -216,6 +233,7 @@ def build(source, case, *, mirror=None, index=None):
         first_clusters = mirror.runs[0][0]
         listing = (f.list_entry(owner, SI_INSTANCE, 0, f.SI)
                    + f.list_entry(owner, FILENAME_INSTANCE, 0, f.FILENAME)
+                   + f.list_entry(owner, SECURITY_INSTANCE, 0, SECURITY_ATTRIBUTE)
                    + f.list_entry(owner, DATA_INSTANCE, 0)
                    + f.list_entry(extension, SI_INSTANCE, first_clusters))
         list_attribute = (f.resident(f.ATTR_LIST, listing, LIST_INSTANCE)
@@ -237,6 +255,8 @@ def build(source, case, *, mirror=None, index=None):
         f.DATA, [(UPCASE_UNITS * f.U16_BYTES // f.CLUSTER, f.UPCASE_LCN)],
         UPCASE_UNITS * f.U16_BYTES, DATA_INSTANCE)])
     records[HELLO_RECORD] = attrs(HELLO_RECORD, [f.resident(f.DATA, HELLO_DATA, DATA_INSTANCE)])
+    if case == 'logfile-empty':
+        records[LOGFILE_RECORD] = attrs(LOGFILE_RECORD, [f.resident(f.DATA, b'', DATA_INSTANCE)])
     if case.startswith('bad-clusters-'):
         cluster_count = f.IMAGE_SIZE // f.CLUSTER
         volume_bytes = cluster_count * f.CLUSTER
@@ -253,6 +273,7 @@ def build(source, case, *, mirror=None, index=None):
             owner = f.file_reference(BAD_CLUSTERS_RECORD)
             descriptors = (f.list_entry(owner, SI_INSTANCE, 0, f.SI)
                            + f.list_entry(owner, FILENAME_INSTANCE, 0, f.FILENAME)
+                           + f.list_entry(owner, SECURITY_INSTANCE, 0, SECURITY_ATTRIBUTE)
                            + f.list_entry(owner, DATA_INSTANCE, 0)
                            + f.list_entry(owner, ADS_INSTANCE, 0, name='$Bad'))
         records[BAD_CLUSTERS_RECORD] = attrs(BAD_CLUSTERS_RECORD, [
@@ -282,6 +303,7 @@ def build(source, case, *, mirror=None, index=None):
         filename_reference = extension_reference if case == 'extension-filename' else base_reference
         descriptors = [f.list_entry(base_reference, SI_INSTANCE, 0, f.SI),
                        f.list_entry(filename_reference, FILENAME_INSTANCE, 0, f.FILENAME),
+                       f.list_entry(base_reference, SECURITY_INSTANCE, 0, SECURITY_ATTRIBUTE),
                        f.list_entry(base_reference, DATA_INSTANCE, 0)]
         continuation_ref = (f.file_reference(EXTENSION_RECORD, f.FILE_SEQUENCE + 1)
                             if case == 'stale-list-reference' else extension_reference)
@@ -504,4 +526,6 @@ def author(output, source):
     manifest.extend(mirror_fixtures(output, source))
     from index_inventory_fixtures import author as index_inventory_fixtures
     manifest.extend(index_inventory_fixtures(output, source))
+    from security_validation_fixtures import author as security_validation_fixtures
+    manifest.extend(security_validation_fixtures(output, source))
     (output / 'validation-cases.json').write_text(json.dumps(manifest, indent=2) + '\n')

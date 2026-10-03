@@ -158,8 +158,20 @@ standard-information subject. SECURITY is appended to the public stage enum,
 preserving earlier numeric values and report layout. See SECURITY.md for the
 bounded vector/cursor contract, partial counts and Windows-dependent inferences.
 
-The diagnostic does not parse arbitrary resident payload semantics, zero-ID
-per-file descriptor bodies, unindexed SDS gaps, quota/object-ID/reparse view-index
+The same SECURITY stage then validates selected unnamed per-file descriptor
+bodies for allocated zero-ID base files, through bounded private snapshots.
+The earlier attribute pass supplies complete extent/list and physical checks.
+Specific fixed internal metadata and recognized empty/inert reserved slots may
+lack a descriptor; present selected packets are checked, and missing ordinary,
+root, `$Volume` or `$Boot` storage remains CORRUPT. Neither the system attribute
+bit nor an arbitrary low MFT slot grants this exception; SECURITY.md defines it.
+Each file shares one mounted operation across node open and descriptor reading;
+temporary storage releases before the next file. Descriptor-byte work is charged
+to both accounting planes before decoding. Reports identify the FILE and
+`$SECURITY_DESCRIPTOR` attribute; no new report fields or API version are needed.
+
+The diagnostic does not parse arbitrary other resident payload semantics,
+unindexed SDS gaps, quota/object-ID/reparse view-index
 relations or their complete allocation inventories, qualify Windows-dependent extended mirror tails, verify boot replicas,
 read all file content, decompress every compression unit or replay `$LogFile`.
 Those checks remain separate qualification work. Mount's existing mirror check

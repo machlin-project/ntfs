@@ -173,6 +173,8 @@ enum ntfs_result ntfs_reparse_name_impl(const struct ntfs_reparse *snapshot,
 enum ntfs_result ntfs_security_resolve_impl(
     struct ntfs_volume *volume, uint32_t id, struct ntfs_security **out);
 enum ntfs_result ntfs_security_open_impl(struct ntfs_node *node, struct ntfs_security **out);
+enum ntfs_result ntfs_security_file_validate(
+    struct ntfs_node *, bool required, enum ntfs_result (*charge)(void *, uint64_t), void *);
 enum ntfs_result ntfs_security_store_validate_impl(struct ntfs_volume *,
     const struct ntfs_security_store_limits *, struct ntfs_security_store_report *,
     enum ntfs_result (*charge)(void *, uint64_t), void *,

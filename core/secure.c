@@ -1082,7 +1082,8 @@ finish:
 }
 
 static enum ntfs_result
-open_file_descriptor(struct ntfs_node *node, struct ntfs_security **out)
+open_file_descriptor(struct ntfs_node *node, struct ntfs_security **out,
+    enum ntfs_result (*charge)(void *, uint64_t), void *context)
 {
 	struct ntfs_volume *v = node->volume;
 	struct ntfs_stream *stream = NULL;
@@ -1094,7 +1095,7 @@ open_file_descriptor(struct ntfs_node *node, struct ntfs_security **out)
 	}
 	result = ntfs_attribute_open(node, NTFS_ATTR_SECURITY_DESCRIPTOR, NULL, 0, &stream);
 	if (result != NTFS_OK) {
-		return result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
+		return result;
 	}
 	if (stream->flags != 0 || stream->initialized != stream->size ||
 	    stream->size < sizeof(struct ntfs_disk_security_descriptor)) {
@@ -1128,7 +1129,7 @@ open_file_descriptor(struct ntfs_node *node, struct ntfs_security **out)
 			goto finish;
 		}
 	}
-	result = ntfs_work(v, snapshot->size);
+	result = ntfs_index_work(v, charge, context, snapshot->size);
 	if (result == NTFS_OK) {
 		result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
 	}
@@ -1140,6 +1141,21 @@ finish:
 	}
 	*out = snapshot;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_security_file_validate(struct ntfs_node *node, bool required,
+    enum ntfs_result (*charge)(void *, uint64_t), void *context)
+{
+	struct ntfs_security *snapshot = NULL;
+	enum ntfs_result result;
+
+	result = open_file_descriptor(node, &snapshot, charge, context);
+	ntfs_security_close(snapshot);
+	if (result == NTFS_NOT_FOUND) {
+		return required ? NTFS_CORRUPT : NTFS_OK;
+	}
+	return result;
 }
 
 enum ntfs_result
@@ -1157,7 +1173,8 @@ ntfs_security_open_impl(struct ntfs_node *node, struct ntfs_security **out)
 		return result;
 	}
 	if (stat.security_id == 0) {
-		return open_file_descriptor(node, out);
+		result = open_file_descriptor(node, out, NULL, NULL);
+		return result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;
 	}
 	result = ntfs_security_resolve(node->volume, stat.security_id, out);
 	return result == NTFS_NOT_FOUND ? NTFS_CORRUPT : result;

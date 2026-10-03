@@ -50,10 +50,10 @@ def author():
     try:
         f.FIXUP_SEQUENCE = NEW_FIXUP_SEQUENCE
         f.put_record(after, v.HELLO_RECORD, f.file_record(v.HELLO_RECORD, [
-            v.standard(), v.filename(new_link),
+            v.standard(), v.filename(new_link), v.security(),
             f.nonresident(f.DATA, [(1, NEW_DATA_LCN)], len(NEW_DATA), v.DATA_INSTANCE)]))
         f.put_record(after, f.BITMAP_RECORD, f.file_record(f.BITMAP_RECORD, [
-            v.standard(), v.filename(v.Link('$Bitmap')),
+            v.standard(), v.filename(v.Link('$Bitmap')), v.security(),
             f.resident(f.DATA, bytes(bitmap), v.DATA_INSTANCE)]))
         f.put_data(after, f.INDEX_LCN, f.index_block(0, [
             v.index_entry(number, link, directory) for number, link, directory in items]))

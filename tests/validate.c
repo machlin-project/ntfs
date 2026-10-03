@@ -39,7 +39,16 @@ enum {
 	TEST_INDEX_BUDGET_DIMENSIONS = 3,
 	TEST_EMPTY_DIRECTORY = 48,
 	TEST_SMALL_INDEX_ORPHAN_LCN = 276,
-	TEST_LARGE_INDEX_ORPHAN_LCN = 10
+	TEST_LARGE_INDEX_ORPHAN_LCN = 10,
+	TEST_FILE_SECURITY_RECORD = 24,
+	TEST_FILE_SECURITY_TYPE = 0x50,
+	TEST_FILE_SECURITY_FIRST_LCN = 170,
+	TEST_FILE_SECURITY_SECOND_LCN = 178,
+	TEST_FILE_SECURITY_LARGE_BYTES = 9001,
+	TEST_FILE_SECURITY_MAX_BYTES = 1024 * 1024,
+	TEST_FILE_SECURITY_RECORD_BYTES = 1024,
+	TEST_FILE_SECURITY_PAYLOAD_READS = 2,
+	TEST_FILE_SECURITY_BUDGET_DIMENSIONS = 3
 };
 
 struct index_reads {
@@ -849,6 +858,213 @@ check_security(const char *directory)
 	     "boundaries");
 }
 
+struct file_security_reads {
+	struct fuzz_device *device;
+	struct ntfs_validation_report *report;
+	uint64_t first, last, payload_size, payload_bytes, decode_before;
+	uint64_t calls_before[TEST_FILE_SECURITY_PAYLOAD_READS];
+	uint64_t bytes_before[TEST_FILE_SECURITY_PAYLOAD_READS];
+	uint64_t work_before[TEST_FILE_SECURITY_PAYLOAD_READS];
+	size_t payload_calls;
+	bool full_failure;
+};
+
+static void *
+file_security_allocate(void *context, size_t size)
+{
+	struct file_security_reads *reads = context;
+
+	return fuzz_allocate(reads->device, size);
+}
+
+static void
+file_security_release(void *context, void *bytes, size_t size)
+{
+	struct file_security_reads *reads = context;
+
+	fuzz_release(reads->device, bytes, size);
+}
+
+static enum ntfs_result
+file_security_read(void *context, uint64_t offset, void *bytes, size_t size)
+{
+	struct file_security_reads *reads = context;
+	struct fuzz_device *device = reads->device;
+	struct ntfs_validation_report *report = reads->report;
+	uint64_t first = (uint64_t)TEST_FILE_SECURITY_FIRST_LCN * TEST_CLUSTER_BYTES;
+	uint64_t second = (uint64_t)TEST_FILE_SECURITY_SECOND_LCN * TEST_CLUSTER_BYTES;
+	size_t index, partial;
+
+	assert(offset <= device->size && size <= device->size - offset);
+	if (report->stage == NTFS_VALIDATION_SECURITY) {
+		if (reads->first == 0) {
+			reads->first = report->read_calls;
+		}
+		reads->last = report->read_calls;
+		if (report->record_number == TEST_FILE_SECURITY_RECORD &&
+		    ((offset >= first && offset < first + TEST_CLUSTER_BYTES) ||
+			(offset >= second && offset < second + reads->payload_size))) {
+			index = reads->payload_calls++;
+			assert(index < TEST_FILE_SECURITY_PAYLOAD_READS);
+			reads->payload_bytes += size;
+			reads->calls_before[index] = report->read_calls - 1;
+			reads->bytes_before[index] = report->read_bytes - size;
+			reads->work_before[index] = report->work_units - size;
+			reads->decode_before = report->work_units;
+		}
+	}
+	if (device->fail_read != 0 && device->reads + 1 == device->fail_read) {
+		partial = reads->full_failure ? size : size / 2;
+		memcpy(bytes, device->data + offset, partial);
+	}
+	return fuzz_read(device, offset, bytes, size);
+}
+
+static enum ntfs_result
+validate_file_security(struct file_security_reads *reads,
+    const struct ntfs_validation_limits *limits, const struct ntfs_limits *configured)
+{
+	struct fuzz_device *device = reads->device;
+	struct ntfs_environment environment = {NTFS_API_VERSION, reads, device->size,
+	    file_security_read, file_security_allocate, file_security_release};
+	struct ntfs_limits defaults;
+	enum ntfs_result result;
+
+	ntfs_default_limits(&defaults);
+	defaults.record_cache_entries = 0;
+	device->allocations = 0;
+	device->reads = 0;
+	reads->first = 0;
+	reads->last = 0;
+	reads->payload_calls = 0;
+	reads->payload_bytes = 0;
+	reads->decode_before = 0;
+	result = ntfs_validate(
+	    &environment, configured == NULL ? &defaults : configured, limits, reads->report);
+	assert(result == reads->report->result && device->memory == 0);
+	assert(device->reads == reads->report->read_calls &&
+	    device->allocations == reads->report->allocation_calls);
+	assert(reads->report->complete == (result == NTFS_OK));
+	return result;
+}
+
+static void
+check_file_security_interruptions(struct fuzz_device *device, uint64_t payload_size)
+{
+	struct ntfs_validation_report baseline, report;
+	struct file_security_reads observed = {
+	    .device = device, .report = &baseline, .payload_size = payload_size};
+	struct file_security_reads attempt;
+	struct ntfs_validation_limits limits;
+	struct ntfs_limits core_limits;
+	uint8_t *original;
+	uint64_t call;
+	size_t index;
+	unsigned full, dimension;
+
+	original = malloc(device->size);
+	assert(original != NULL);
+	memcpy(original, device->data, device->size);
+	assert(validate_file_security(&observed, NULL, NULL) == NTFS_OK);
+	assert(observed.first != 0 && observed.last >= observed.first);
+	assert(observed.payload_calls == TEST_FILE_SECURITY_PAYLOAD_READS &&
+	    observed.payload_bytes == payload_size);
+	for (full = 0; full < 2; full++) {
+		for (call = observed.first; call <= observed.last; call++) {
+			attempt = (struct file_security_reads){.device = device,
+			    .report = &report,
+			    .payload_size = payload_size,
+			    .full_failure = full != 0};
+			device->fail_read = (size_t)call;
+			assert(validate_file_security(&attempt, NULL, NULL) == NTFS_IO);
+			assert(report.stage == NTFS_VALIDATION_SECURITY && !report.complete &&
+			    report.exhausted == NTFS_VALIDATION_LIMIT_NONE &&
+			    report.attribute_type == TEST_FILE_SECURITY_TYPE);
+			assert(memcmp(original, device->data, device->size) == 0);
+			device->fail_read = 0;
+			assert(validate_file_security(&attempt, NULL, NULL) == NTFS_OK);
+		}
+	}
+	for (index = 0; index < observed.payload_calls; index++) {
+		for (dimension = 0; dimension < TEST_FILE_SECURITY_BUDGET_DIMENSIONS; dimension++) {
+			ntfs_validation_default_limits(&limits);
+			if (dimension == 0) {
+				limits.max_read_calls = observed.calls_before[index];
+			} else if (dimension == 1) {
+				limits.max_read_bytes = observed.bytes_before[index];
+			} else {
+				limits.max_work_units = observed.work_before[index];
+			}
+			attempt = (struct file_security_reads){
+			    .device = device, .report = &report, .payload_size = payload_size};
+			assert(validate_file_security(&attempt, &limits, NULL) == NTFS_RANGE);
+			assert(report.stage == NTFS_VALIDATION_SECURITY &&
+			    report.record_number == TEST_FILE_SECURITY_RECORD &&
+			    report.attribute_type == TEST_FILE_SECURITY_TYPE &&
+			    report.exhausted == NTFS_VALIDATION_LIMIT_READ_CALLS + dimension);
+			assert(device->reads == observed.calls_before[index] &&
+			    attempt.payload_calls == index &&
+			    report.work_units <= limits.max_work_units);
+		}
+	}
+	ntfs_validation_default_limits(&limits);
+	limits.max_work_units = observed.decode_before + payload_size - 1;
+	attempt = (struct file_security_reads){
+	    .device = device, .report = &report, .payload_size = payload_size};
+	assert(validate_file_security(&attempt, &limits, NULL) == NTFS_RANGE);
+	assert(report.exhausted == NTFS_VALIDATION_LIMIT_WORK &&
+	    report.stage == NTFS_VALIDATION_SECURITY &&
+	    report.record_number == TEST_FILE_SECURITY_RECORD);
+	assert(
+	    attempt.payload_bytes == payload_size && report.work_units == observed.decode_before);
+	if (payload_size == TEST_FILE_SECURITY_MAX_BYTES) {
+		ntfs_default_limits(&core_limits);
+		core_limits.record_cache_entries = 0;
+		core_limits.operation.read_bytes = payload_size + TEST_FILE_SECURITY_RECORD_BYTES;
+		assert(validate_file_security(&attempt, NULL, &core_limits) == NTFS_OK);
+		core_limits.operation.read_bytes--;
+		assert(validate_file_security(&attempt, NULL, &core_limits) == NTFS_RANGE);
+		assert(report.exhausted == NTFS_VALIDATION_LIMIT_NONE &&
+		    report.stage == NTFS_VALIDATION_SECURITY &&
+		    report.record_number == TEST_FILE_SECURITY_RECORD &&
+		    attempt.payload_calls == 1);
+	}
+	assert(validate_file_security(&attempt, NULL, NULL) == NTFS_OK);
+	assert(memcmp(original, device->data, device->size) == 0);
+	printf("per-file security interruptions: %zu partial/full read faults, %zu pre-callback "
+	       "budgets, parser precharge and retry\n",
+	    (size_t)(2 * (observed.last - observed.first + 1)),
+	    observed.payload_calls * TEST_FILE_SECURITY_BUDGET_DIMENSIONS);
+	free(original);
+}
+
+static void
+check_file_security(const char *directory)
+{
+	const struct {
+		const char *image;
+		uint64_t payload_size;
+	} profiles[] = {{"validation-file-security-legacy-standard.img", 0},
+	    {"validation-file-security-hardlinks.img", 0},
+	    {"validation-file-security-listed-resident.img", 0},
+	    {"validation-file-security-fragmented.img", TEST_FILE_SECURITY_LARGE_BYTES},
+	    {"validation-file-security-listed-fragmented.img", TEST_FILE_SECURITY_LARGE_BYTES},
+	    {"validation-file-security-maximum.img", TEST_FILE_SECURITY_MAX_BYTES}};
+	struct fuzz_device device;
+	size_t index;
+
+	for (index = 0; index < sizeof(profiles) / sizeof(profiles[0]); index++) {
+		device = (struct fuzz_device){0};
+		load_image(directory, profiles[index].image, &device);
+		check_faults(&device);
+		if (profiles[index].payload_size != 0) {
+			check_file_security_interruptions(&device, profiles[index].payload_size);
+		}
+		free((void *)device.data);
+	}
+	puts("PASS: per-file security storage faults, selected parser and compound core credits");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -879,5 +1095,6 @@ main(int argc, char **argv)
 	check_index_cases(argv[1]);
 	check_index_interruptions(argv[1]);
 	check_security(argv[1]);
+	check_file_security(argv[1]);
 	return 0;
 }

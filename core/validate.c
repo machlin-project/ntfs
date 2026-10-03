@@ -1424,6 +1424,70 @@ security_references(
 	return NTFS_OK;
 }
 
+static bool
+file_security_required(uint64_t record_number, bool reserved_inert)
+{
+	if (reserved_inert) {
+		return false;
+	}
+	switch (record_number) {
+	case NTFS_MFT_RECORD:
+	case NTFS_MFT_MIRROR_RECORD:
+	case NTFS_LOGFILE_RECORD:
+	case NTFS_BITMAP_RECORD:
+	case NTFS_BAD_CLUSTERS_RECORD:
+	case NTFS_UPCASE_RECORD:
+		/* Fixed internal metadata can omit per-file security storage. A present
+		 * descriptor is still checked; this supplies no access decision. */
+		return false;
+	default:
+		return true;
+	}
+}
+
+static enum ntfs_result
+scan_file_security(struct validation *validation)
+{
+	struct validation_record *record;
+	struct ntfs_node *node = NULL;
+	uint64_t index;
+	enum ntfs_result result;
+
+	for (index = 0; index < validation->report->record_slots; index++) {
+		result = work(validation, 1);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		record = &validation->records[index];
+		if (record->reference == 0 || record->base != 0 || record->security_id != 0 ||
+		    record->reserved_empty) {
+			continue;
+		}
+		validation->report->record_number = index;
+		validation->report->reference = record->reference;
+		validation->report->related_reference = 0;
+		validation->report->attribute_type = NTFS_ATTR_SECURITY_DESCRIPTOR;
+		validation->report->cluster = 0;
+		result = ntfs_operation_enter(validation->volume);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		result = ntfs_node_open(validation->volume, record->reference, &node);
+		if (result == NTFS_OK) {
+			result = ntfs_security_file_validate(node,
+			    file_security_required(index, record->reserved_inert),
+			    index_inventory_work, validation);
+		}
+		ntfs_node_close(node);
+		node = NULL;
+		ntfs_operation_leave(validation->volume);
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
+	return NTFS_OK;
+}
+
 static enum ntfs_result
 scan_security(struct validation *validation)
 {
@@ -1432,12 +1496,12 @@ scan_security(struct validation *validation)
 	uint64_t index;
 	enum ntfs_result result;
 
+	validation->report->stage = NTFS_VALIDATION_SECURITY;
 	if (validation->report->record_slots <= NTFS_SECURE_RECORD ||
 	    validation->records[NTFS_SECURE_RECORD].reference == 0) {
 		if (!validation->has_security_ids) {
-			return NTFS_OK;
+			return scan_file_security(validation);
 		}
-		validation->report->stage = NTFS_VALIDATION_SECURITY;
 		for (index = 0; index < validation->report->record_slots; index++) {
 			result = work(validation, 1);
 			if (result != NTFS_OK) {
@@ -1456,7 +1520,6 @@ scan_security(struct validation *validation)
 		}
 		return NTFS_CORRUPT;
 	}
-	validation->report->stage = NTFS_VALIDATION_SECURITY;
 	validation->report->record_number = NTFS_SECURE_RECORD;
 	validation->report->reference = validation->records[NTFS_SECURE_RECORD].reference;
 	validation->report->related_reference = 0;
@@ -1478,5 +1541,5 @@ scan_security(struct validation *validation)
 			validation->report->attribute_type = NTFS_ATTRIBUTE_DATA;
 		}
 	}
-	return result;
+	return result == NTFS_OK ? scan_file_security(validation) : result;
 }

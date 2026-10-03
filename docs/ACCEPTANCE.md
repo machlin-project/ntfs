@@ -7,7 +7,39 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current indexed security-store source passes 64 sanitized-build suites, both
+The current per-file security continuation passes all 64 sanitized-build suites,
+both 2-KiB freestanding targets, style, 22 legacy component groups/eight explicit
+modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. The complete
+diagnostic now checks selected unnamed zero-ID descriptors with bounded
+per-file staging and parser precharge; 48 new cases and two additional indexed/
+per-file combinations bring the total to 175 complete-volume verdicts. Its
+17 fault profiles cover 3,328 allocation/1,803 read failures, plus 68 partial/full
+SECURITY-stage errors, 18 pre-callback refusals, three parser-work refusals and
+the maximum descriptor's compound core read-credit boundary.
+
+Both fresh four-geometry external oracles pass with unchanged images; descriptor
+exports retain 24 byte comparisons and the complete leaf-store counters. The
+initial validation oracle incorrectly required a per-file descriptor on zero-ID
+`$MFT` and failed at SECURITY. Its original log/report remain under
+`artifacts/plan-file-security-validation-oracle-reviewed.log` and
+`artifacts/interoperability-file-security-reviewed/`. The corrected fixed-slot
+policy uses original metadata inventories and 48 independent `ntfsinfo` exports,
+retained in `artifacts/file-security-system-inventory/`. It checks present packets
+and all nonzero IDs; missing ordinary/system-flagged file, root, Volume and Boot
+cases still fail. SECURITY.md and PROVENANCE.md define its precise scope.
+
+Current logs use `artifacts/plan-file-security-*-owner-fixed.log`; successful
+oracles are `artifacts/interoperability-file-security-{owner-fixed,descriptors-owner-fixed}/`.
+The validation campaign fixed-replays all 173 compact seeds, exits zero and
+reports no OOM/timeout/crash events under
+`artifacts/fuzz-file-security-validation-owner-fixed/`. Its last reported
+exploration count is 43,828 at 63 seconds, not an exact final total; fork mode
+emits no terminal execution count. The 1-MiB envelope omits the maximum and
+over-limit per-file layouts, which retain direct full-image tests. Configured
+1-GiB RSS is a ceiling, not observed usage. Native Windows, installed/runtime,
+identity/authorization and distribution acceptance remain open.
+
+The indexed security-store checkpoint passes 64 sanitized-build suites, both
 2-KiB freestanding targets, style, 22 FSKit component groups/eight explicit
 modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. Both independent
 four-geometry oracles pass unchanged. SECURITY.md and VALIDATION.md define exact
@@ -20,7 +52,7 @@ checks were relaxed. Existing metadata-only authors now use explicit zero IDs
 instead of dangling placeholder indexed references; a separate missing-store
 case proves nonzero references still fail.
 
-The current image campaign fixed-replays all 323 authored seeds and completes
+The indexed-store image campaign fixed-replays all 323 authored seeds and completes
 53,736 exploration executions in 70 seconds; validation fixed-replays 125 seeds
 and completes 57,077 executions in 68 seconds. Both pass with zero OOM/timeout/
 crash events under `artifacts/fuzz-secure-store-{image,validation}/`. The 1-MiB
@@ -47,7 +79,7 @@ claimed.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
-| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership and complete indexed security/nonzero FILE-ID references; partial budget/fault/unsupported reports | 125 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 1,454 allocation/1,074 read faults, 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets and four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, listed/flagged bad-cluster storage, other view-index semantics, zero-ID per-file payloads and Windows qualification remain open |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 175 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 3,328 allocation/1,803 read faults, 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, listed/flagged bad-cluster storage, other view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
@@ -76,7 +108,7 @@ claimed.
 | Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
 | Transaction/durability reference model | Exclusive serialized owner, complete private/log credits, data/WAL/commit/home/checkpoint ordering, arbitrary pending-sector eviction, partial/full I/O failures and interrupted abstract replay against independently authored NTFS endpoints | 49,855 modeled states, 22 ownership contracts, 14 history refusals, 1,205 interrupted-recovery states, 47 complete native-byte diagnostics/content checks and four unsafe-order witnesses passed; typed in-memory evidence, no native journal or product write API; see RECOVERY-MODEL.md |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Product implementation remains open; read-only primitives and abstract reference-model replay do not provide native recovery or permit writes/dirty mounts |
-| Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry | 74 resolver contracts plus 46 whole-store/seven complete-volume security verdicts, 496 allocation/730 partial-and-full read positions, six operation profiles and whole-volume fault/budget checks; four independent complete leaf-view/descriptor geometries passed; Windows/zero-ID payload/native authorization qualification incomplete |
+| Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry; whole-volume selected per-file framing with explicit fixed-internal/inert source exceptions | 74 resolver contracts plus 46 whole-store/nine complete-volume store verdicts and 48 per-file diagnostic images, 496 allocation/730 partial-and-full store read positions, six operation profiles and whole-volume fault/budget checks; six per-file fault layouts and staged parser/I/O boundaries; four independent complete leaf-view/descriptor geometries passed; Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
 | Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded single-edge native links and WOF file-provider content are tracked separately |

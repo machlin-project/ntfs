@@ -191,7 +191,12 @@ conditions. Unknown ACE bodies remain explicitly opaque. No input pointer become
 a native identity or access grant. The resolver now owns bounded immutable
 snapshots from `$Secure` or per-file descriptor attributes, independently of file
 content. It checks both indexes and SDS copies, reuses one block buffer and
-retains original bytes. Source selection, budgets and evidence are defined in
+retains original bytes. The separate whole-store diagnostic traverses both
+supported view trees and used allocation inventories, checks exact membership
+and nonoverlapping SDS intervals, and validates every indexed descriptor/copy.
+The private whole-volume diagnostic additionally checks nonzero FILE-ID
+references and selected zero-ID per-file descriptor framing. Source selection,
+budgets and evidence are defined in
 SECURITY.md. A separate allocation-free discretionary evaluator uses immutable
 caller-owned user/group/restricting contexts, preserves plain ACE order and exact
 file-right mappings, and returns no partial grant on denial/error. It checks all
@@ -218,7 +223,12 @@ flags, $UpCase, and the root index. It does not claim a full filesystem check.
 The separate synchronous `ntfs_validate` API uses its own private mount and
 budgeted callback owner. It scans record allocation, complete supported attribute
 mappings, the required four-record mirror prefix/boot-anchor mapping, exact
-filename/index edges, directory reachability and physical cluster ownership.
+filename/index edges, directory reachability, physical cluster ownership and
+selected security storage. Missing ordinary zero-ID descriptors fail; specific
+fixed internal metadata and empty/inert reserved records can lack them, while
+every present selected descriptor still undergoes framing checks. Descriptor
+staging is private to each file and
+released before the next; decoding shares diagnostic and mounted work credits.
 Mirror replicas use two bounded private record buffers; allocated copies compare
 used logical bytes after MST restoration, while free slots remain opaque. Larger
 declared mirror tails have explicit unchecked counts and no native coverage claim.

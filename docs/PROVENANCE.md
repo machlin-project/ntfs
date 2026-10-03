@@ -206,6 +206,19 @@ per-file descriptors. Original search, ownership, bounds and fixtures remain
 repository-owned; the failed oracle runs are retained rather than converted to
 passes. Actual Windows storage and authorization qualification remain required.
 
+The whole-volume per-file pass reuses the original bounded snapshot/descriptor
+decoder. [Original MFT inventories](https://flatcap.github.io/linux-ntfs/ntfs/files/mft.html)
+and the corresponding MFTMirr/LogFile/Bitmap/BadClus/UpCase attribute tables omit
+per-file descriptors. Independent `ntfsinfo` exports of slots 0 through 11 in
+all four geometries observe zero-ID `$MFT` without one, with unchanged images.
+The initial diagnostic wrongly required storage there and failed; its report
+remains retained. The diagnostic now permits absence only for those six fixed
+internal records and recognized inert reserved records, while checking every
+present selected packet and all nonzero indexed references. Ordinary files,
+root, Volume/Boot and arbitrary system-marked objects retain required storage.
+This is a read-only consistency policy informed by original research and local
+NTFS-3G observations, not a native Windows authorization/default-ACL rule.
+
 The discretionary evaluator uses Microsoft's ordered DACL, exact file mapping,
 SID/group attribute and restricted-token descriptions. It is original code;
 its independent per-right test oracle is not a port of a filesystem/security

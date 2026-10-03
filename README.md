@@ -158,5 +158,7 @@ The separate indexed `$Secure` diagnostic now walks both complete supported view
 trees and used allocation inventories, checks exact SII/SDH membership and
 nonoverlapping SDS intervals, and validates every indexed descriptor/hash/copy.
 The general consistency diagnostic also rejects missing nonzero FILE security
-IDs. Unindexed gaps, zero-ID per-file semantics, Windows/native identity and
-authorization remain separate contracts; SECURITY.md defines the exact scope.
+IDs. It also validates selected unnamed per-file descriptors for zero-ID base
+files, including resident, fragmented and listed storage. Unindexed SDS gaps,
+Windows/native identity and authorization remain separate contracts;
+SECURITY.md defines the exact scope and fixed-internal/reserved-record exceptions.

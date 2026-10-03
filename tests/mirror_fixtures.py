@@ -93,7 +93,7 @@ def replace_replica(image, number, mirror, transform):
 
 
 def long_volume_record():
-    attributes = [v.standard(), v.filename(v.Link('$Volume')),
+    attributes = [v.standard(), v.filename(v.Link('$Volume')), v.security(),
                   f.resident(f.VOL_NAME, ('V' * VOLUME_LABEL_UNITS).encode('utf-16le'),
                              v.VOLUME_NAME_INSTANCE),
                   f.resident(f.VOL_INFO, v.VOLUME_INFORMATION.pack(

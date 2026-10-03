@@ -53,6 +53,18 @@ directory timings to a new source comparison. Native Windows, installed FSKit,
 identity/owning authorization, recovery and the full measured optimization
 program remain required under CORE-QUALIFICATION.md.
 
+Both isolated ordinary Release/O3 builds match all eight actual portable products
+under `artifacts/reproducibility-file-security/`, with unchanged source during
+the comparison. The fresh retained abstract model uses coherent per-file
+descriptors: 49,855 states, 47 current native-byte endpoint/diagnostic/content
+checks and four unsafe witnesses pass under
+`artifacts/recovery-model-file-security/`. Main review checks full products,
+independently re-authored inputs, every metadata endpoint/unowned byte and
+actual tools, external packets and replay paths in
+`artifacts/file-security-review.json`. These remain local reproducibility and
+abstract/native-byte evidence, without a product writer or native log replay.
+Earlier model reports have earlier diagnostic scope; preserve them as history.
+
 ## Preceding indexed security-store checkpoint
 
 `ntfs_security_store_validate` now completely traverses supported SII/SDH trees,

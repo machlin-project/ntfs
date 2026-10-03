@@ -39,6 +39,22 @@ over-limit per-file layouts, which retain direct full-image tests. Configured
 1-GiB RSS is a ceiling, not observed usage. Native Windows, installed/runtime,
 identity/authorization and distribution acceptance remain open.
 
+The committed source also passes two isolated ordinary Release/O3 builds and
+all eight full product byte comparisons under
+`artifacts/reproducibility-file-security/`. A fresh retained reference-model run
+uses coherent authored per-file descriptors: 49,855 modeled states and all 47
+native-byte endpoint images pass the expanded diagnostic/content checks under
+`artifacts/recovery-model-file-security/`. Main review re-authors both inputs,
+compares every metadata endpoint/unowned byte and actual diagnostic/tool digest;
+it also re-reads all release products, original external packets, unique fuzz
+replays/event counters and component/build evidence. The reviewed report is
+`artifacts/file-security-review.json`; launch logs are
+`artifacts/plan-file-security-{reproducibility,recovery-endpoints}.log`.
+Reproducibility covers one checkout/toolchain/macOS arm64, not relocated/native
+signing or remote CI. The abstract model still supplies no native replay or
+device writer. Earlier native-byte reports and directory measurements retain
+their earlier source/diagnostic scope rather than qualifying this expanded pass.
+
 The indexed security-store checkpoint passes 64 sanitized-build suites, both
 2-KiB freestanding targets, style, 22 FSKit component groups/eight explicit
 modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. Both independent

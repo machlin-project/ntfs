@@ -32,6 +32,17 @@ observed RSS is available. Current evidence uses `plan-file-security-*-owner-fix
 logs and `artifacts/fuzz-file-security-validation-owner-fixed/`. The complete
 Windows/native/security/recovery/optimization plan remains open.
 
+Fresh committed-source Release/O3 reproducibility matches eight full portable
+products under `artifacts/reproducibility-file-security/`. The retained abstract
+model now uses coherent per-file security packets and all 47 native-byte images
+pass the expanded current diagnostic/content checks. The 49,855 modeled states,
+ordering/ownership/replay semantics and four unsafe witnesses are unchanged.
+Actual full products, independently re-authored endpoints, every metadata and
+unowned byte, current tool/descriptor digests and fuzz paths/counters pass main
+review in `artifacts/file-security-review.json`. The current model report is
+`artifacts/recovery-model-file-security/`; no device writer/native recovery,
+relocated-source/native signing, installed performance or Windows evidence follows.
+
 The preceding indexed security-store checkpoint passes all 64 sanitized-build
 suites, both 2-KiB freestanding targets, style, 22 component groups/eight explicit
 modern-runtime SKIPs and the unsigned arm64/x86_64 Release app. It includes bounded

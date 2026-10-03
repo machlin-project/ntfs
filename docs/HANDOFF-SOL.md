@@ -17,7 +17,30 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current filename inventory qualification
+## Selected native filename groundwork
+
+Eight basic/namespace images now have complete selected filename storage authored
+from the exact original structured index names. They retain their original stream
+bytes and namespace failures. The large case has 2,000 long primary names in real
+extension records, with 2,064 MFT slots. The separate DOS alias counts physically
+but not as another primary name. Invalid NUL storage and stale index references
+retain their rejection cases.
+
+Current core qualification is 71 fatal-sanitizer suites. The new CLI checks 33
+inventories, 2,077 exact filename bodies, 23 original streams and one stale lookup.
+Main independently compares every source/image hash. Evidence is
+artifacts/filename-storage-reviewed/, artifacts/plan-filename-storage-reviewed-*,
+artifacts/filename-storage-reviewed-testlog.json and
+artifacts/filename-storage-review.json. These are selected-object storage fixtures,
+not whole-volume diagnostic or Windows-authored images. The trusted writer assumes
+a complete initialized base MFT mapping and resident volume bitmap.
+
+Continue the owning-layer adapter migration described below. Remaining native
+fixture families need equivalent exact filename bodies before strict adoption.
+Core and adapter implementation sources are unchanged by this fixture checkpoint;
+the prior component/universal-build evidence retains its scope.
+
+## Filename inventory qualification
 
 The new additive ntfs_node_link_counts API keeps ntfs_stat.links as the physical
 FILE-header value and separately returns physical_names, primary_names and

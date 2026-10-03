@@ -44,6 +44,13 @@ storage oracles, not claims of whole-namespace validity. The new NIST comparison
 retains original per-record info and descriptor exports alongside counts. No
 foreign filesystem counting or hard-link implementation is copied or linked.
 
+The selected native filename-storage writer is original Python over this
+repository's existing independently authored index payloads and named wire fields.
+It supplies exact filenames rather than inferring names from the C implementation.
+Original body hashes, stream bytes and source-image hashes form its construction
+oracles. Its trusted synthetic-input scope and unsupported author geometries are
+explicit; it imports no foreign filesystem writer or recovery implementation.
+
 Primary references:
 
 - [Microsoft MFT overview](https://learn.microsoft.com/en-us/windows/win32/devnotes/master-file-table)

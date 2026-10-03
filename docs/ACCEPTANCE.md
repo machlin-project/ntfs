@@ -8,7 +8,32 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Current filename inventory
+## Selected native filename fixtures
+
+The original Python author now supplies complete selected FILE_NAME bodies for
+eight basic/namespace images, using the exact structured names used by their
+independent index authors. It preserves stream bytes, extends the MFT for new
+filename records, retains existing attribute-list locations and updates cluster
+allocation. Trusted author inputs require a complete initialized base MFT
+mapping and resident volume bitmap; this is not an untrusted volume parser.
+Unreferenced records and system stores retain their earlier fixture scope.
+
+All 71 fatal-ASan/UBSan suites pass. The new CLI checks 33 selected inventories,
+2,077 exact filename-body hashes, 23 original stream-byte oracles and the retained
+stale-index lookup rejection. Invalid NUL storage still refuses as corrupt.
+The separate DOS case has thirteen physical names, twelve primary names and one
+alias. The 2,000 long-name case uses 2,000 real extension records in 2,064 MFT
+slots. Main review confirms all new image hashes and all eight source hashes
+against the existing independently generated fixtures.
+
+Logs are artifacts/plan-filename-storage-reviewed-*; the retained manifest/images
+are under artifacts/filename-storage-reviewed/ and the complete test log is
+artifacts/filename-storage-reviewed-testlog.json. Actual-file review is
+artifacts/filename-storage-review.json. Adapter/core product sources remain at
+the preceding qualification below. FSKit primary-count adoption, remaining native
+fixture families, installed mounts and Windows qualification remain open.
+
+## Filename inventory qualification
 
 ntfs_node_link_counts inventories all selected resident FILE_NAME attributes,
 including listed extension records and a nonresident attribute list. Physical

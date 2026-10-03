@@ -21,6 +21,8 @@ link_count_fixture = custom_target('link-count-fixtures', output: 'link-count-fi
 links = executable('ntfs-link-count-tests', ['tests/links.c', 'tests/fuzz_device.c'], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('link-counts', links, args: [meson.current_build_dir() / 'link-count-fixtures'], depends: link_count_fixture, timeout: 120)
 test('link-counts-cli', python, args: [files('tests/links_cli.py'), inspector.full_path(), meson.current_build_dir() / 'link-count-fixtures'], depends: link_count_fixture, timeout: 120)
+filename_storage_fixture = custom_target('filename-storage-fixtures', output: 'filename-storage-fixtures.stamp', command: [python, files('tests/filename_storage_fixtures.py'), meson.current_build_dir() / 'filename-storage-fixtures', '@OUTPUT@'], depend_files: files('tests/filename_storage.py', 'tests/fixtures.py', 'tests/secure_fixtures.py', 'tests/secure_store_fixtures.py'), build_by_default: true)
+test('filename-storage-cli', python, args: [files('tests/filename_storage_cli.py'), inspector.full_path(), meson.current_build_dir() / 'filename-storage-fixtures'], depends: filename_storage_fixture, timeout: 120)
 test('unit', unit, args: [meson.current_build_dir() / 'fixtures/standard.img'], depends: fixture, timeout: 120)
 streams = executable('ntfs-stream-tests', 'tests/streams.c', include_directories: inc, link_with: [posix, core], c_args: ['-Wdeclaration-after-statement'])
 test('streams', streams, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)

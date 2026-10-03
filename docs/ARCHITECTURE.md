@@ -56,6 +56,14 @@ installed scheduling qualification remain separate from the tested eligibility
 model.
 [LIFECYCLE.md](LIFECYCLE.md) defines remount, overlapping teardown and the remaining
 synchronous cancellation/deadline and installed-runtime limits.
+The filesystem controller has separate load/unload/check reservations; its monitor
+never spans core I/O, volume ownership methods or replies. Maintenance admits an
+inactive volume without live items, runs a private validator through the same
+serialized resource pool, then seals and detaches its admission/resource owner.
+Forced failed-layout loads can publish a geometry-free, nonmountable unary identity
+with valid zero statistics. Quick/full scope, asynchronous repair/format refusal,
+cooperative cancellation/drain and terminal retirement retain separate contracts
+from ordinary item-read interruption; see the lifecycle document.
 An independent Dispatch pressure observer changes read-cache retention without
 waiting for the operation monitor or traversing dormant items. Access/completion
 boundaries release default streams, catalogs and raw reparse snapshots while

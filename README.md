@@ -102,6 +102,12 @@ draining reads, clears transient caches at unmount and retains item ownership fo
 reclamation. Eight blocked-read/overlapping-teardown scenarios and interleaved
 enumerations pass locally; synchronous I/O interruption and installed lifecycle
 remain separate acceptance requirements.
+The resource-bound read-only maintenance entry point now runs that private
+diagnostic as an FSKit task. Quick checks retain an explicit partial scope;
+repair/formatting refuse asynchronously. Forced failed-layout loads can retain
+a temporary nonmountable identity, and cancellation drains owned storage before
+retirement. Ordinary synchronous item reads retain their separate interruption
+limits; installed checker dispatch and client behavior still require acceptance.
 Conditional native reclaim now serializes against item-result publication;
 older runtimes retain item ownership until the last FSItem reference. Five
 modeled eligibility/ownership/publication cases and the current component/app

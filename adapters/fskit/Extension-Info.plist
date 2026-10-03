@@ -11,6 +11,7 @@
     <key>FSSupportsServerURLs</key><false/>
     <key>FSRequiresSecurityScopedPathURLResources</key><false/>
     <key>FSActivateOptionSyntax</key><dict><key>shortOptions</key><string>o:</string></dict>
+    <key>FSCheckOptionSyntax</key><dict><key>shortOptions</key><string>fnpqy</string></dict>
     <key>FSPersonalities</key><dict><key>ntfs</key><dict>
       <key>FSName</key><string>Machlin NTFS</string>
       <key>FSSubType</key><integer>0</integer>

@@ -17,7 +17,47 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current optional compression-unit retention
+## Current read-only FSKit maintenance
+
+The private validator now runs through `FSManageableResourceMaintenanceOperations`.
+Default/`-n` runs a full supported inventory; `-q` is mount eligibility with an
+explicit incomplete report, and `-f` overrides quick mode. Repair and format
+refuse asynchronously without I/O or ownership takeover. A forced failed-layout
+load can create a geometry-free nonmountable unary identity, retired after every
+check with valid zero statistics and ESTALE activation/mount replies.
+
+The controller reserves load/unload/check state without holding its monitor
+through I/O or volume methods. Checking admits only inactive owners without live
+items; active reads and busy publication refuse promptly. The original mounted
+core and private diagnostic share one serialized resource pool. Cancelled tasks
+stop at callback boundaries and wait up to five seconds for owned work to drain;
+timeout requests FSKit container escalation and never frees borrowed I/O storage.
+Native drain wins over checker completion. A sealed late cancellation handler
+retains no old resource or volume. Full failures block activation until a clean
+full retry; quick success and cancellation cannot clear them. See LIFECYCLE.md.
+
+The current component passes 36 groups/ten genuine modern-runtime SKIPs, with
+191/25 full/quick allocation and 86/7 partial-full physical-read positions,
+204 required failures/12 optional omissions, eight exact/one-below boundaries,
+weak retired-owner release, five blocked checker cases, blocked load and two
+prompt admission cases. Three unchanged-core validation suites, format/style and
+the clean unsigned arm64/x86_64 Release app pass. Main reviews every component
+group and all eight actual changed-adapter architecture compilations under
+`artifacts/readonly-check-review.json`; logs use
+`artifacts/plan-readonly-check-*-admission.log` plus the initial targeted-core log.
+The final test grace naming change passes the format/component/style-only
+`*-named.log` rerun without changing app or core source.
+ACCEPTANCE.md preserves the corrected ARC compile failures and two benign
+App Intents metadata warnings.
+
+This adds no installed/native, Windows, write, signing/distribution or general
+performance acceptance. When native qualification resumes, check actual unary
+acquisition, quick/full/corrupt/dirty task results and client exit status, async
+repair/format refusal, cancellation/escalation, retained retired identities and
+the complete ordinary read/mount behavior on both supported runtime families.
+The broader no-VM and measured optimization scope remains in CORE-QUALIFICATION.md.
+
+## Preceding optional compression-unit retention
 
 LZNT1 and WOF XPRESS/LZX streams retain at most two decoded outputs. The original
 output/input/workspace allocation stays required; after the first useful fill,

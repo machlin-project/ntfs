@@ -20,6 +20,7 @@ to simulate cancellation. Unaligned fragments retain the fixed private window.
 | Active | Read-only operations are admitted after checking permanent resource revocation. |
 | Draining | Unmount has closed admission; it waits for the serialized operation to return. New operations fail with ESTALE when they acquire the monitor. |
 | Unmounted | Transient item caches are closed; core nodes and FSItem identities remain owned for subsequent reclamation. A mount may return the immutable owner to Active. |
+| Checking | A maintenance task reserves a Loaded or Unmounted owner without live FSItems. Activation/mount reject with EBUSY; the private diagnostic shares its serialized resource pool. Unmount/invalidation can close admission and drain it. |
 | Invalidating | Deactivation or resource unload has permanently closed admission and is waiting to release every child and the core. Mount and activation cannot reopen it. |
 | Invalidated | Core ownership and retained resource ownership have been released. Repeated teardown is harmless; ordinary operations remain stale. |
 
@@ -104,18 +105,18 @@ modern runtime scheduling. The budgets add no synchronous-read timeout.
 The adapter uses the synchronous FSBlockDeviceResource read method. Its ordinary
 read handlers receive no FSTask cancellation object. FSContext carries initiator
 identity information; it is not a cancellation token. FSTask cancellation applies
-to separate task-based operations, such as check/format handlers, which this
-adapter does not currently implement. The CLI consistency diagnostic is not an
-FSKit task handler.
+to the separate maintenance handlers below. The CLI consistency diagnostic and
+ordinary item requests retain their own contracts.
 
 Closing admission suppresses a delayed successful completion, but cannot forcibly
 interrupt the native synchronous read. Unmount/deactivation therefore have no
 bounded completion-time guarantee if that read never returns. The adapter does
 not release or reuse an outstanding buffer to simulate a timeout. Resource
 revocation is observed at admission/read completion; the framework owns native
-resource removal. Asynchronous resource callbacks, task cancellation, native
+resource removal. Asynchronous resource callbacks, native task cancellation,
 request scheduling and installed buffer lifetime still require their own
-implementation and acceptance if those surfaces are introduced.
+acceptance. A bounded maintenance cancellation wait does not give ordinary reads
+or unmount a synchronous-I/O deadline.
 
 These distinctions follow Apple's [volume operations](https://developer.apple.com/documentation/fskit/fsvolume/operations),
 [deactivation contract](https://developer.apple.com/documentation/fskit/fsvolume/operations/deactivate(options:replyhandler:)),
@@ -123,6 +124,80 @@ These distinctions follow Apple's [volume operations](https://developer.apple.co
 [task cancellation](https://developer.apple.com/documentation/fskit/fstask/cancellationhandler)
 and [initiator context](https://developer.apple.com/documentation/fskit/fscontext),
 checked against the selected Xcode SDK headers.
+
+## Read-only maintenance tasks
+
+`NTFSFileSystem` conforms to `FSManageableResourceMaintenanceOperations`. Default
+and `-n` checks run the bounded private `ntfs_validate` inventory. `-q` checks only
+ordinary mount eligibility and always logs `complete=0`; `-f` overrides `-q`.
+Repair options `-y`/`-p` and formatting complete with EROFS. Unknown options return
+EINVAL; more than 16 check options return EOVERFLOW. Refusals complete through
+the public task asynchronously with noncancellable progress, no resource I/O and
+no takeover of an existing operation. Repeating the active FSTask returns initial
+EBUSY without completing that already running task.
+
+Controller reservations cover load, unload and check preparation. Resource I/O,
+volume ownership methods and reply/task callbacks run outside the controller
+monitor. Active/draining owners reject before waiting for core reads, and a busy
+publication lock refuses checking before task preparation. Only an inactive
+volume without live items admits checking. The worker
+holds its operation monitor through diagnostic cleanup and verdict sealing; the
+original mounted core and private diagnostic share the same 64-MiB resource pool.
+Diagnostic logical limits and rounded physical fragments are separately charged.
+There is no write, repair, journal replay or authorization capability.
+
+Progress cancellation requests cooperative stopping at the next allocation/read
+boundary. FSTask cancellation also waits up to five seconds for resource and
+controller cleanup. ETIMEDOUT invokes FSKit's documented container-termination
+escalation; it never frees a buffer still borrowed by synchronous native I/O.
+The in-flight read must return before cleanup can drain. Admission is checked
+after reads and before sealing, so cancellation, revocation or native drain
+cannot publish a successful inventory. Cancellation wins until sealing; a late
+handler retains only the terminal report after the resource/admission references
+are detached. Progress/task hooks clear at completion. The drain group covers
+resource ownership and controller cleanup, and leaves before foreign task log/
+completion callbacks to permit reentry without waiting on itself.
+
+A failed full inventory blocks later activation. Successful quick checks and
+cancelled checks cannot clear that failure; a complete clean retry can. Native
+unmount/invalidation overrides Checking, and completion never restores admission
+over that drain. Normal volumes retain their original immutable core. Temporary
+maintenance volumes are always invalidated and removed from the controller after
+checking, including failure/cancellation, before a fresh load may claim a source.
+
+An explicit forced load may admit a temporary, nonmountable unary identity for
+NOT_NTFS, CORRUPT, DIRTY or UNSUPPORTED mount results. The constructor needs no
+usable filesystem geometry; statistics explicitly contain zero blocks/bytes/
+files with a valid 512-byte accounting/I/O unit, also after retirement. Retired
+activation and mount replies are ESTALE, preserving fresh-load ownership. The
+normal mount attempt still validates resource geometry and reads media. I/O,
+quota, allocator, policy and result-construction errors remain load failures. This
+boundary applies ext4's installed unary/async-refusal lessons without importing
+its writer, subprocess checker or repair supervisor.
+
+`tests/fskit_maintenance.m` exercises the real controller with public-message
+task/options/device doubles, never a daemon-acquired device. It checks quick/full/
+forced modes, four forced-layout failure kinds, mountable corruption, stale
+ownership, sticky errors, callback reentry, held items, blocked loading, two prompt
+admission refusals and five blocked checker scenarios. Required/optional allocation
+and partial/full physical I/O sweeps, exact/one-below bounds and weak sealed-owner
+cleanup accompany those cases. Installed fsck/unary dispatch, client exit status,
+native cancellation escalation and both supported OS runtimes remain separate
+acceptance gates.
+
+Current ASan/UBSan components pass 36 groups with ten explicit modern-runtime
+SKIPs. Full/quick checks sweep 191/25 allocation and 86/7 physical-read positions,
+including both partial and full failed transfers, 204 required failures and 12
+successful optional omissions. All eight exact/one-below boundaries and ownership
+gates pass. The targeted unchanged-core validation, validation-cli and
+fuzz-validation suites pass. Format/style and the clean unsigned Release app pass,
+with actual compilation of all four changed adapter implementations for arm64
+and x86_64. Main review is `artifacts/readonly-check-review.json`; current logs
+use `artifacts/plan-readonly-check-*-admission.log`, the final naming-only
+format/component/style `*-named.log` rerun and the initial targeted-core log.
+ACCEPTANCE.md retains the corrected ARC switch/self compile failures and
+the app's two App Intents metadata warnings. This qualifies local components and
+builds; the installed/native and full continuation gates above remain open.
 
 ## Local component evidence
 

@@ -9,13 +9,26 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 	NTFSVolumeDraining,
 	NTFSVolumeUnmounted,
 	NTFSVolumeInvalidating,
-	NTFSVolumeInvalidated
+	NTFSVolumeInvalidated,
+	NTFSVolumeChecking
 };
 
 @interface NTFSVolume : FSVolume <FSVolumePathConfOperations>
 /* Takes core ownership only on success. The resource remains retained until
  * all child objects are invalidated and the core is unmounted. */
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource;
+/* A forced offline load needs a native identity even without usable disk
+ * geometry. This volume has zero statistics and cannot activate or serve items. */
+- (instancetype)initForCheckWithResource:(NTFSResource *)resource
+			      mountError:(enum ntfs_result)error;
+@property(readonly) BOOL maintenanceOnly;
+/* Reserve an inactive owner without live items. The checker holds the volume's
+ * operation monitor while using the common allocator and physical read scope. */
+- (enum ntfs_result)beginMaintenance;
+- (enum ntfs_result)maintenanceAdmissionResult;
+- (void)endMaintenanceWithResult:(enum ntfs_result)result
+		   completeCheck:(BOOL)complete
+		       cancelled:(BOOL)cancelled;
 /* Native namespace work budget, including hidden metadata and DOS aliases.
  * The ordinary initializer uses the default cap; limits are never silent skips. */
 - (instancetype)initWithCore:(struct ntfs_volume *)core
@@ -87,3 +100,4 @@ API_AVAILABLE(macos(27.0))
 NTFSVolume *ntfs_volume_create(struct ntfs_volume *core, NTFSResource *resource);
 NTFSVolume *ntfs_volume_create_with_policy(
     struct ntfs_volume *core, NTFSResource *resource, NTFSLinkPolicy *policy);
+NTFSVolume *ntfs_volume_create_for_check(NTFSResource *resource, enum ntfs_result error);

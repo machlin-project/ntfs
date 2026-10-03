@@ -31,6 +31,8 @@ targets:
       - NTFSExtension.swift
       - NTFSFileSystem.m
       - NTFSFileSystem.h
+      - NTFSCheckTask.m
+      - NTFSCheckTask.h
       - NTFSResource.m
       - NTFSResource.h
       - NTFSNames.m

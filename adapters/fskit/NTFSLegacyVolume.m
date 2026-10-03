@@ -228,3 +228,16 @@ ntfs_volume_create_with_policy(
 		      maximumDirectoryEntries:NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT
 				   linkPolicy:policy];
 }
+
+NTFSVolume *
+ntfs_volume_create_for_check(NTFSResource *resource, enum ntfs_result error)
+{
+	Class selected = NTFSLegacyVolume.class;
+
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+	if (@available(macOS 27.0, *)) {
+		selected = NTFSModernVolume.class;
+	}
+#endif
+	return [[selected alloc] initForCheckWithResource:resource mountError:error];
+}

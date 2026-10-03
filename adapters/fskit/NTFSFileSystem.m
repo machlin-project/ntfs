@@ -1,10 +1,68 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSFileSystem.h"
 #import "NTFSVolume.h"
+#import "NTFSCheckTask.h"
+#include <errno.h>
+
+typedef NS_ENUM(NSUInteger, NTFSFileSystemPhase) {
+	NTFSFileSystemIdle,
+	NTFSFileSystemLoading,
+	NTFSFileSystemUnloading,
+	NTFSFileSystemChecking
+};
+
+static BOOL
+checkable_mount_failure(enum ntfs_result result)
+{
+	return result == NTFS_NOT_NTFS || result == NTFS_CORRUPT || result == NTFS_DIRTY ||
+	    result == NTFS_UNSUPPORTED;
+}
+
+static enum ntfs_result
+check_options(NSArray<NSString *> *arguments, BOOL *quick)
+{
+	BOOL force = NO, repair = NO;
+	NSString *argument;
+
+	*quick = NO;
+	if (arguments.count > NTFS_CHECK_OPTION_LIMIT) {
+		return NTFS_RANGE;
+	}
+	for (argument in arguments) {
+		if ([argument isEqualToString:@"-q"]) {
+			*quick = YES;
+		} else if ([argument isEqualToString:@"-f"]) {
+			force = YES;
+		} else if ([argument isEqualToString:@"-y"] || [argument isEqualToString:@"-p"]) {
+			repair = YES;
+		} else if (![argument isEqualToString:@"-n"]) {
+			return NTFS_INVALID;
+		}
+	}
+	*quick = *quick && !force;
+	return repair ? NTFS_READ_ONLY : NTFS_OK;
+}
 
 @implementation NTFSFileSystem {
 	NTFSVolume *_volume;
 	FSResource *_resource;
+	NTFSResource *_resourceOwner;
+	NTFSFileSystemPhase _phase;
+	NTFSCheckTask *_check;
+	FSTask *_maintenanceTask;
+}
+
+- (NTFSResource *)newResourceWithReader:(id<NTFSBlockReader>)reader
+{
+	return [[NTFSResource alloc] initWithReader:reader];
+}
+
+- (struct ntfs_validation_limits)validationLimits
+{
+	struct ntfs_validation_limits limits;
+
+	ntfs_validation_default_limits(&limits);
+	return limits;
 }
 
 - (void)probeResource:(FSResource *)resource
@@ -21,7 +79,7 @@
 		reply(FSProbeResult.notRecognizedProbeResult, nil);
 		return;
 	}
-	owner = [[NTFSResource alloc] initWithReader:(id<NTFSBlockReader>)resource];
+	owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
 	if (owner == nil) {
 		reply(nil, ntfs_error(NTFS_INVALID));
 		return;
@@ -53,69 +111,96 @@
 	     options:(FSTaskOptions *)options
 	replyHandler:(void (^)(FSVolume *, NSError *))reply
 {
-	__attribute__((objc_precise_lifetime)) NTFSResource *owner;
+	__attribute__((objc_precise_lifetime)) NTFSResource *owner = nil;
 	NTFSVolume *loaded = nil;
+	NTFSLinkPolicy *policy = nil;
 	struct ntfs_environment env;
 	struct ntfs_volume *core = NULL;
 	struct ntfs_info info;
 	struct ntfs_operation_limits limits;
 	struct ntfs_resource_read_budget budget = {0};
-	NTFSLinkPolicy *policy;
-	enum ntfs_result result = NTFS_OK;
+	enum ntfs_result result = NTFS_OK, mountResult = NTFS_OK;
+	BOOL reserved = NO, force = [options.taskOptions containsObject:@"-f"];
 
 	@synchronized(self) {
-		if (_volume != nil) {
+		if (_phase != NTFSFileSystemIdle || _volume != nil) {
 			result = NTFS_BUSY;
 		} else if (![resource isKindOfClass:FSBlockDeviceResource.class]) {
 			result = NTFS_UNSUPPORTED;
 		} else {
-			owner = [[NTFSResource alloc] initWithReader:(id<NTFSBlockReader>)resource];
-			if (owner == nil) {
-				result = NTFS_INVALID;
-			} else {
-				env = [owner environment];
-				ntfs_operation_default_limits(&limits);
-				result = [owner beginReadBudget:&budget limits:&limits];
+			_phase = NTFSFileSystemLoading;
+			reserved = YES;
+		}
+	}
+	if (!reserved) {
+		reply(nil, ntfs_error(result));
+		return;
+	}
+	/* Never hold the controller monitor across core I/O or volume ownership. */
+	owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
+	if (owner == nil) {
+		result = NTFS_INVALID;
+	} else {
+		env = [owner environment];
+		ntfs_operation_default_limits(&limits);
+		result = [owner beginReadBudget:&budget limits:&limits];
+		if (result == NTFS_OK) {
+			@try {
+				mountResult = ntfs_mount(&env, NULL, &core);
+				result = mountResult;
 				if (result == NTFS_OK) {
-					@try {
-						result = ntfs_mount(&env, NULL, &core);
-						if (result == NTFS_OK) {
-							ntfs_get_info(core, &info);
-							result =
-							    ntfs_native_link_policy(info.serial,
-								options.taskOptions, &policy);
-							if (result == NTFS_OK) {
-								loaded =
-								    ntfs_volume_create_with_policy(
-									core, owner, policy);
-							}
-							if (result == NTFS_OK) {
-								result = [owner readBudgetResult];
-							}
-							if (loaded == nil || result != NTFS_OK) {
-								if (loaded != nil) {
-									[loaded invalidate];
-									loaded = nil;
-								} else {
-									(void)ntfs_unmount(core);
-								}
-								if (result == NTFS_OK) {
-									result = NTFS_IO;
-								}
-							} else {
-								_volume = loaded;
-								_resource = resource;
-							}
+					ntfs_get_info(core, &info);
+					result = ntfs_native_link_policy(
+					    info.serial, options.taskOptions, &policy);
+					if (result == NTFS_OK) {
+						loaded = ntfs_volume_create_with_policy(
+						    core, owner, policy);
+						if (loaded == nil) {
+							result = NTFS_IO;
 						}
-					} @finally {
-						(void)[owner endReadBudget:&budget];
 					}
 				}
+				if (result == NTFS_OK) {
+					result = [owner readBudgetResult];
+				}
+			} @finally {
+				(void)[owner endReadBudget:&budget];
 			}
 		}
-		self.containerStatus = result == NTFS_OK
-		    ? FSContainerStatus.ready
-		    : [FSContainerStatus blockedWithStatus:ntfs_error(result)];
+		if (result == NTFS_OK && !owner.isAvailable) {
+			result = NTFS_IO;
+		}
+		if (result != NTFS_OK && core != NULL) {
+			if (loaded != nil) {
+				[loaded invalidate];
+				loaded = nil;
+			} else {
+				(void)ntfs_unmount(core);
+			}
+			core = NULL;
+		}
+		/* Only an explicit forced checker load may publish a geometry-free,
+		 * nonmountable unary identity. I/O, quota, allocator, policy and result
+		 * construction failures never become successful maintenance loads. */
+		if (force && result == mountResult && checkable_mount_failure(mountResult) &&
+		    owner.isAvailable) {
+			loaded = ntfs_volume_create_for_check(owner, mountResult);
+			result = loaded == nil ? NTFS_NO_MEMORY : NTFS_OK;
+		}
+	}
+	@synchronized(self) {
+		if (result == NTFS_OK) {
+			_volume = loaded;
+			_resource = resource;
+			_resourceOwner = owner;
+			self.containerStatus = loaded.maintenanceOnly
+			    ? [FSContainerStatus blockedWithStatus:ntfs_error(mountResult)]
+			    : FSContainerStatus.ready;
+		} else {
+			self.containerStatus =
+			    [FSContainerStatus blockedWithStatus:ntfs_error(result)];
+		}
+		_phase = NTFSFileSystemIdle;
 	}
 	reply(loaded, ntfs_error(result));
 }
@@ -124,21 +209,238 @@
 	       options:(FSTaskOptions *)options
 	  replyHandler:(void (^)(NSError *))reply
 {
+	NTFSVolume *volume = nil;
 	enum ntfs_result result = NTFS_OK;
+	BOOL reserved = NO;
 
 	(void)options;
 	@synchronized(self) {
-		if (_resource != nil && _resource != resource) {
+		if (_phase != NTFSFileSystemIdle) {
+			result = NTFS_BUSY;
+		} else if (_resource != nil && _resource != resource) {
 			result = NTFS_INVALID;
 		} else {
-			[_volume invalidate];
+			_phase = NTFSFileSystemUnloading;
+			volume = _volume;
+			reserved = YES;
+		}
+	}
+	if (reserved) {
+		[volume invalidate];
+		@synchronized(self) {
 			_volume = nil;
 			_resource = nil;
+			_resourceOwner = nil;
+			_phase = NTFSFileSystemIdle;
 			self.containerStatus =
 			    [FSContainerStatus notReadyWithStatus:ntfs_error(NTFS_STALE)];
 		}
 	}
 	reply(ntfs_error(result));
+}
+
+- (NSProgress *)completeRejectedTask:(FSTask *)task error:(NSError *)failure
+{
+	NSProgress *progress = [NSProgress progressWithTotalUnitCount:NTFS_CHECK_PROGRESS_UNITS];
+
+	/* ext4's installed framework history requires asynchronous refusal for
+	 * maintenance. Refusal claims no device and offers no cancellation hook. */
+	progress.cancellable = NO;
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+	  @autoreleasepool {
+		  progress.completedUnitCount = NTFS_CHECK_PROGRESS_UNITS;
+		  [task didCompleteWithError:failure];
+	  }
+	});
+	return progress;
+}
+
+- (NSProgress *)startCheckWithTask:(FSTask *)task
+			   options:(FSTaskOptions *)options
+			     error:(NSError **)error
+{
+	NTFSVolume *volume = nil;
+	NTFSResource *owner = nil;
+	FSContainerStatus *previousStatus = nil;
+	NTFSCheckTask *check;
+	NSProgress *progress;
+	dispatch_group_t group;
+	struct ntfs_validation_limits limits;
+	enum ntfs_result result;
+	BOOL quick;
+
+	if (error != NULL) {
+		*error = nil;
+	}
+	if (task == nil) {
+		if (error != NULL) {
+			*error = ntfs_error(NTFS_INVALID);
+		}
+		return nil;
+	}
+	result = check_options(options.taskOptions, &quick);
+	@synchronized(self) {
+		/* Completing a repeated FSTask would terminate its existing operation. */
+		if (_maintenanceTask == task) {
+			if (error != NULL) {
+				*error = ntfs_error(NTFS_BUSY);
+			}
+			return nil;
+		}
+		if (result == NTFS_OK) {
+			if (_phase != NTFSFileSystemIdle) {
+				result = NTFS_BUSY;
+			} else if (_volume == nil || _resourceOwner == nil) {
+				result = NTFS_STALE;
+			} else {
+				_phase = NTFSFileSystemChecking;
+				_maintenanceTask = task;
+				volume = _volume;
+				owner = _resourceOwner;
+				previousStatus = self.containerStatus;
+			}
+		}
+	}
+	if (result != NTFS_OK) {
+		return [self completeRejectedTask:task error:ntfs_error(result)];
+	}
+	result = [volume beginMaintenance];
+	limits = [self validationLimits];
+	check = result == NTFS_OK
+	    ? [[NTFSCheckTask alloc] initWithResource:owner
+						quick:quick
+					    admission:^{
+					      return [volume maintenanceAdmissionResult];
+					    }
+					       limits:&limits]
+	    : nil;
+	if (result == NTFS_OK && check == nil) {
+		result = NTFS_NO_MEMORY;
+		[volume endMaintenanceWithResult:result completeCheck:NO cancelled:YES];
+	}
+	if (result != NTFS_OK) {
+		@synchronized(self) {
+			_phase = NTFSFileSystemIdle;
+			_maintenanceTask = nil;
+		}
+		return [self completeRejectedTask:task error:ntfs_error(result)];
+	}
+	group = dispatch_group_create();
+	dispatch_group_enter(group);
+	progress = [NSProgress progressWithTotalUnitCount:NTFS_CHECK_PROGRESS_UNITS];
+	progress.cancellable = YES;
+	progress.cancellationHandler = ^{
+	  [check cancel];
+	};
+	task.cancellationHandler = ^NSError * {
+	  [check cancel];
+	  if (dispatch_group_wait(group,
+		  dispatch_time(DISPATCH_TIME_NOW,
+		      (int64_t)NTFS_CHECK_CANCEL_DRAIN_SECONDS * NSEC_PER_SEC)) != 0) {
+		  /* FSKit escalates this to container termination. Borrowed resource
+		   * storage stays owned until the outstanding exact read returns. */
+		  return [NSError errorWithDomain:NSPOSIXErrorDomain code:ETIMEDOUT userInfo:nil];
+	  }
+	  return nil;
+	};
+	@synchronized(self) {
+		_check = check;
+		self.containerStatus = [FSContainerStatus notReadyWithStatus:ntfs_error(NTFS_BUSY)];
+	}
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+	  @autoreleasepool {
+		  struct ntfs_validation_report report = {0};
+		  enum ntfs_result checked;
+		  NSError *failure;
+
+		  /* The retained mounted core and this private diagnostic share one
+		   * resource pool. Serialize both run and terminal admission against
+		   * native teardown before releasing any owning diagnostic storage. */
+		  @synchronized(volume) {
+			  checked = [check run];
+			  failure = [check sealResult:checked];
+			  [volume endMaintenanceWithResult:check.result
+					     completeCheck:!quick
+						 cancelled:check.cancelled];
+		  }
+		  if (volume.maintenanceOnly) {
+			  [volume invalidate];
+		  }
+		  progress.cancellationHandler = nil;
+		  task.cancellationHandler = nil;
+		  progress.completedUnitCount = NTFS_CHECK_PROGRESS_UNITS;
+		  @synchronized(self) {
+			  if (self->_check == check) {
+				  self->_check = nil;
+				  self->_phase = NTFSFileSystemIdle;
+				  if (volume.maintenanceOnly) {
+					  self->_volume = nil;
+					  self->_resource = nil;
+					  self->_resourceOwner = nil;
+					  self.containerStatus =
+					      [FSContainerStatus notReadyWithStatus:failure != nil
+						      ? failure
+						      : ntfs_error(NTFS_STALE)];
+				  } else if (check.cancelled || (quick && failure == nil)) {
+					  self.containerStatus = previousStatus;
+				  } else {
+					  self.containerStatus = failure == nil
+					      ? FSContainerStatus.ready
+					      : [FSContainerStatus blockedWithStatus:failure];
+				  }
+			  }
+		  }
+		  /* The drain group covers resource ownership and controller cleanup.
+		   * Release it before calling foreign task code so callback reentry
+		   * cannot wait on its own completion. Replies remain exactly once. */
+		  dispatch_group_leave(group);
+		  (void)[check validationReport:&report];
+		  [task logMessage:
+			  [NSString stringWithFormat:@"NTFS read-only %@: %s; complete=%u stage=%u "
+						     @"records=%llu reads=%llu bytes=%llu",
+			      quick ? @"mount check" : @"metadata check",
+			      ntfs_result_string(check.result), (unsigned)report.complete,
+			      (unsigned)report.stage, (unsigned long long)report.records_scanned,
+			      (unsigned long long)report.read_calls,
+			      (unsigned long long)report.read_bytes]];
+		  [task logMessage:quick
+			  ? @"Mount eligibility only; no complete metadata inventory."
+			  : @"Supported metadata inventory only; no repair, journal replay, or "
+			    @"authorization."];
+		  [task didCompleteWithError:failure];
+		  @synchronized(self) {
+			  if (self->_maintenanceTask == task) {
+				  self->_maintenanceTask = nil;
+			  }
+		  }
+	  }
+	});
+	return progress;
+}
+
+- (NSProgress *)startFormatWithTask:(FSTask *)task
+			    options:(FSTaskOptions *)options
+			      error:(NSError **)error
+{
+	(void)options;
+	if (error != NULL) {
+		*error = nil;
+	}
+	if (task == nil) {
+		if (error != NULL) {
+			*error = ntfs_error(NTFS_INVALID);
+		}
+		return nil;
+	}
+	@synchronized(self) {
+		if (_maintenanceTask == task) {
+			if (error != NULL) {
+				*error = ntfs_error(NTFS_BUSY);
+			}
+			return nil;
+		}
+	}
+	return [self completeRejectedTask:task error:ntfs_error(NTFS_READ_ONLY)];
 }
 
 @end

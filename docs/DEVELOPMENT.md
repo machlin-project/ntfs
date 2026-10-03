@@ -48,9 +48,21 @@ original-wire xattrs, remount/revocation and all 79 allocation/17 read fault
 positions across listed/reserved lookup and reopened snapshots. Core reparse tests
 also check copy guards, physical allocation and node-independent lifetime. See
 LINK-POLICY.md for the supported subset and remaining resolution contracts.
-The current component has nine explicit macOS-27 runtime SKIPs: lifecycle,
+The current component has ten explicit macOS-27 runtime SKIPs: lifecycle,
 operation budgets, pressure, enumeration, dot lookup, content metadata, link projection and
-two case-policy checks. These in-process results do not mount the filesystem.
+two case-policy checks and the temporary maintenance identity. These in-process
+results do not mount the filesystem.
+
+The resource-bound maintenance component also compiles the actual filesystem
+controller and checker. Public-message task/options/device doubles drive full/
+quick/forced checks and asynchronous refusals without a daemon-acquired resource.
+It sweeps required/optional allocations and partial/full physical reads, tightens
+memory/I/O/work credits, and gates cancellation, revocation, teardown, blocked
+load and active-read/publication admission. Its five-second cancellation-drain
+timeout deliberately keeps borrowed buffers owned until the gated read returns;
+test deadlines include drain grace. Current-source components, both app
+architectures and installed task behavior remain distinct evidence. LIFECYCLE.md
+defines option, progress, failure retention, temporary identity and native limits.
 
 The separate `operation` suite checks 12 storage/operation profiles and 144
 exact/one-below thresholds across cumulative read/allocation/work and aggregate

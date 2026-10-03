@@ -278,6 +278,9 @@ item_id(uint64_t reference)
 	NTFSVolumeLifecycle _lifecycle;
 	NSUInteger _pendingUnmounts;
 	NTFSReadCachePolicy *_readCachePolicy;
+	BOOL _maintenanceOnly;
+	NTFSVolumeLifecycle _beforeMaintenance;
+	enum ntfs_result _mountError, _checkFailure;
 }
 
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource
@@ -366,6 +369,99 @@ item_id(uint64_t reference)
 	return self;
 }
 
+- (instancetype)initForCheckWithResource:(NTFSResource *)resource mountError:(enum ntfs_result)error
+{
+	if (resource == nil || error == NTFS_OK) {
+		return nil;
+	}
+	self = [super initWithVolumeID:[[FSVolumeIdentifier alloc] initWithUUID:NSUUID.UUID]
+			    volumeName:[FSFileName nameWithString:@"NTFS check"]];
+	if (self != nil) {
+		_lifecycleLock = [[NSLock alloc] init];
+		_publicationLock = [[NSRecursiveLock alloc] init];
+		_readCachePolicy = [self newReadCachePolicy];
+		_lifecycle = NTFSVolumeLoaded;
+		_resource = resource;
+		_items = [NSMapTable strongToWeakObjectsMapTable];
+		_paths = [NSMapTable strongToWeakObjectsMapTable];
+		_maximumDirectoryEntries = NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT;
+		_maintenanceOnly = YES;
+		_mountError = error;
+	}
+	return self;
+}
+
+- (BOOL)maintenanceOnly
+{
+	return _maintenanceOnly;
+}
+
+- (enum ntfs_result)beginMaintenance
+{
+	enum ntfs_result result = NTFS_BUSY;
+	NTFSVolumeLifecycle state = self.lifecycle;
+
+	if (state == NTFSVolumeInvalidating || state == NTFSVolumeInvalidated) {
+		return NTFS_STALE;
+	}
+	if ((state != NTFSVolumeLoaded && state != NTFSVolumeUnmounted) ||
+	    ![_publicationLock tryLock]) {
+		/* A checker must not wait behind an active read or item publication
+		 * before its task cancellation handler can even be installed. */
+		return NTFS_BUSY;
+	}
+	@try {
+		@synchronized(self) {
+			state = self.lifecycle;
+			if (state == NTFSVolumeInvalidating || state == NTFSVolumeInvalidated) {
+				result = NTFS_STALE;
+			} else if ((state == NTFSVolumeLoaded || state == NTFSVolumeUnmounted) &&
+			    self->_items.objectEnumerator.allObjects.count == 0) {
+				if (!self->_resource.isAvailable) {
+					result = NTFS_IO;
+				} else {
+					[self->_lifecycleLock lock];
+					if (self->_lifecycle == state &&
+					    self->_pendingUnmounts == 0) {
+						self->_beforeMaintenance = state;
+						self->_lifecycle = NTFSVolumeChecking;
+						result = NTFS_OK;
+					}
+					[self->_lifecycleLock unlock];
+				}
+			}
+		}
+	} @finally {
+		[_publicationLock unlock];
+	}
+	return result;
+}
+
+- (enum ntfs_result)maintenanceAdmissionResult
+{
+	return self.lifecycle != NTFSVolumeChecking ? NTFS_STALE
+	    : _resource.isAvailable		    ? NTFS_OK
+						    : NTFS_IO;
+}
+
+- (void)endMaintenanceWithResult:(enum ntfs_result)result
+		   completeCheck:(BOOL)complete
+		       cancelled:(BOOL)cancelled
+{
+	@synchronized(self) {
+		[_lifecycleLock lock];
+		if (_lifecycle == NTFSVolumeChecking) {
+			_lifecycle = _beforeMaintenance;
+			/* A quick mount check or interrupted inventory cannot clear a
+			 * previously observed whole-diagnostic failure. */
+			if (!cancelled && (complete || result != NTFS_OK)) {
+				_checkFailure = result;
+			}
+		}
+		[_lifecycleLock unlock];
+	}
+}
+
 - (struct ntfs_operation_limits)operationLimits
 {
 	struct ntfs_operation_limits limits;
@@ -386,10 +482,12 @@ item_id(uint64_t reference)
 	*resource = nil;
 	if (activating) {
 		state = self.lifecycle;
-		result = _core == NULL || (state != NTFSVolumeLoaded && state != NTFSVolumeActive)
-		    ? NTFS_STALE
-		    : _resource.isAvailable ? NTFS_OK
-					    : NTFS_IO;
+		result = state != NTFSVolumeLoaded && state != NTFSVolumeActive ? NTFS_STALE
+		    : _maintenanceOnly						? _mountError
+		    : _checkFailure != NTFS_OK					? _checkFailure
+		    : _core == NULL						? NTFS_STALE
+		    : _resource.isAvailable					? NTFS_OK
+										: NTFS_IO;
 	} else {
 		result = [self admissionResult];
 	}
@@ -705,6 +803,10 @@ item_id(uint64_t reference)
 
 - (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error
 {
+	if (self.lifecycle == NTFSVolumeChecking) {
+		*error = ntfs_error(NTFS_BUSY);
+		return nil;
+	}
 	@synchronized(self) {
 		struct ntfs_operation operation = {0};
 		struct ntfs_resource_read_budget budget = {0};
@@ -2101,9 +2203,18 @@ item_id(uint64_t reference)
 	NTFSVolumeLifecycle state;
 
 	(void)options;
+	if (self.lifecycle == NTFSVolumeChecking) {
+		reply(ntfs_error(NTFS_BUSY));
+		return;
+	}
 	@synchronized(self) {
 		state = self.lifecycle;
-		result = _core == NULL || !_active ||
+		result = state == NTFSVolumeInvalidating || state == NTFSVolumeInvalidated ||
+			state == NTFSVolumeDraining || state == NTFSVolumeChecking
+		    ? NTFS_STALE
+		    : _maintenanceOnly	       ? _mountError
+		    : _checkFailure != NTFS_OK ? _checkFailure
+		    : _core == NULL || !_active ||
 			(state != NTFSVolumeActive && state != NTFSVolumeUnmounted)
 		    ? NTFS_STALE
 		    : NTFS_OK;
@@ -2174,6 +2285,9 @@ item_id(uint64_t reference)
 {
 	FSVolumeSupportedCapabilities *caps = [[FSVolumeSupportedCapabilities alloc] init];
 
+	if (_maintenanceOnly) {
+		return caps;
+	}
 	caps.supportsPersistentObjectIDs = YES;
 	caps.supportsSymbolicLinks = YES;
 	caps.supports64BitObjectIDs = YES;
@@ -2193,6 +2307,23 @@ item_id(uint64_t reference)
 {
 	FSStatFSResult *s = [[FSStatFSResult alloc] initWithFileSystemTypeName:@"machlinntfs"];
 
+	if (_maintenanceOnly) {
+		/* Required native statistics have a valid accounting unit without
+		 * inventing filesystem geometry, including after owner retirement. */
+		s.blockSize = NTFS_RESOURCE_MIN_ALIGNMENT;
+		s.ioSize = NTFS_RESOURCE_MIN_ALIGNMENT;
+		s.totalBlocks = 0;
+		s.freeBlocks = 0;
+		s.availableBlocks = 0;
+		s.usedBlocks = 0;
+		s.totalBytes = 0;
+		s.freeBytes = 0;
+		s.availableBytes = 0;
+		s.usedBytes = 0;
+		s.totalFiles = 0;
+		s.freeFiles = 0;
+		return s;
+	}
 	s.blockSize = _info.cluster_size;
 	s.ioSize = NTFS_RESOURCE_WINDOW;
 	s.totalBlocks = _info.cluster_count;

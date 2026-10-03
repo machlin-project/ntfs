@@ -7,7 +7,45 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current compression-cache continuation implements at most two private decoded
+The read-only FSKit maintenance continuation now connects the private consistency
+diagnostic to resource-bound tasks, with quick/full scope, cooperative cancellation,
+bounded cancellation drain and asynchronous repair/format refusal. Explicit
+forced failed-layout loads can retain a nonmountable unary identity; retired
+identities retain valid zero statistics and return ESTALE on activation/mount.
+Active reads and busy item publication refuse checker admission before task
+preparation. Lifecycle, aggregate resource ownership, late-handler detachment
+and native limits are
+defined in LIFECYCLE.md; no writer or journal recovery is added.
+
+The current ASan/UBSan component passes 36 groups with ten explicit macOS-27
+runtime SKIPs. Full/quick helpers sweep 191/25 allocation positions and 86/7
+physical-read positions with both partial and full failed transfers. The 216
+allocation injections produce 204 required failures and 12 successful optional
+cache omissions. Eight memory/logical-or-rounded-physical/work boundaries,
+early cancellation, weak sealed-owner release, five blocked checker scenarios,
+blocked loading and two prompt admission refusals pass. Three unchanged-core
+suites pass: validation, validation-cli and fuzz-validation. Format/style and the
+clean unsigned arm64/x86_64 Release app pass, including actual compilation of
+FileSystem, CheckTask, Volume and LegacyVolume for both architectures. Two
+App Intents metadata warnings remain; no compiler/runtime/sanitizer errors occur
+in the accepted component. Current logs use
+`artifacts/plan-readonly-check-{format,component,style,app}-admission.log` and
+`artifacts/plan-readonly-check-core-initial.log`.
+The final naming-only test grace change passes format/component/style again in
+`artifacts/plan-readonly-check-{format,component,style}-named.log`; production
+and core sources remain unchanged from the accepted build and targeted suites.
+
+Preserve `*-component-initial.log`: the first new test compile lacked scoped ARC
+switch cases. Preserve `*-app-scoped.log`: the first app compile required explicit
+self retention in worker blocks. The corrected `*-retained.log` checks passed
+before the subsequent admission/retired-status regressions. Main review of the
+accepted current evidence is `artifacts/readonly-check-review.json`. Core and
+portable workload source remain unchanged, so their preceding full-suite/fuzz/
+reproducibility/benchmark reports retain their exact scope. Installed unary/fsck
+dispatch, client exit status, native cancellation/container escalation, modern
+runtime behavior, Windows compatibility and commercial qualification remain open.
+
+The preceding compression-cache continuation implements at most two private decoded
 outputs for LZNT1 and WOF XPRESS/LZX streams. A second distinct-unit miss attempts
 one optional output allocation; allocator or allocation/live-credit refusal
 keeps successful one-slot reading without poisoning enclosing operations. A

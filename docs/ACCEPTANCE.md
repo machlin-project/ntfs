@@ -13,9 +13,17 @@ and range/sample oracles. The two focused sanitized suites pass: 47 measured
 profiles and 86 benchmark helper contracts. Format/build/style pass; logs use
 `artifacts/plan-compression-profile-*.log`. No core or adapter source changed;
 the preceding full-suite/native-component evidence retains its source scope.
-LZNT1/WOF still cache one decoded unit per stream. Release measurements and a
-qualified cache improvement remain open; these harness results establish no
-throughput gain or installed behavior. See PERFORMANCE.md.
+LZNT1/WOF still cache one decoded unit per stream. The current-only Release
+baseline passes 540 runs/60 summaries across five synthetic codec/storage
+inputs. Both ordinary Release/O3 builds match eight actual full products under
+`artifacts/reproducibility-compression-profile/`. Main review checks actual
+products, independently re-authored payload/storage bytes, measured ranges and
+resource counters, and every summary median/range in
+`artifacts/compression-profile-review.json`. Reports use
+`artifacts/compression-profile-baseline-*/report.json`; PERFORMANCE.md records
+the exact configuration and mixed-unit/clock/cache limits. A qualified cache
+improvement, Windows/installed behavior and relocated/native release evidence
+remain open; these current-only results establish no speedup.
 
 The current shared FSKit lookup recognizes exact native `.` and `..` through
 checked numeric ancestry. Root lookup clamps both to the root; a live canonical

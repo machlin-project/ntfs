@@ -193,6 +193,48 @@ workloads with CPU, latency, allocation and I/O metrics. Sparse/raw units and
 paged WOF tables can change read counts independently of decoder-cache misses;
 record the exact storage layout before interpreting them.
 
+The current-only baseline passes 540 runs/60 summaries: five independently
+authored LZNT1/XPRESS4K/8K/16K/LZX32K inputs, memory/POSIX callbacks, one reader,
+512-byte requests, 64 record-cache entries, 0/128 warmup operations and 3,000
+measured operations, with nine repetitions of each configuration. All use codec-
+unit strides and one/two/three positions. Setup and media hashing warm metadata
+and the host page cache; this is not cold-device evidence. Ordinary committed-
+source Release/O3 products are retained under
+`artifacts/reproducibility-compression-profile/`; both builds match all eight
+actual full products on the same checkout/toolchain/macOS arm64. Native app,
+relocated-source and remote CI qualification remain separate.
+
+The memory callback's 128-warmup wall medians are below, in milliseconds per
+3,000 requests. Full timing/CPU/latency/RSS ranges remain in each
+`artifacts/compression-profile-baseline-*/report.json`.
+
+| Input | One position | Two positions | Three positions | Peak charged core bytes |
+| --- | --- | --- | --- | --- |
+| LZNT1 mixed units | 0.151 | 120.950 | 81.512 | 270,760 |
+| WOF XPRESS4K | 0.152 | 9.973 | 10.196 | 153,840 |
+| WOF XPRESS8K | 0.151 | 18.668 | 15.439 | 162,032 |
+| WOF XPRESS16K | 0.155 | 34.359 | 25.938 | 178,416 |
+| WOF LZX32K packed/raw | 0.154 | 78.787 | 57.121 | 214,460 |
+
+LZNT1's first three windows contain a fragmented compressed prefix, a full raw
+unit and a hole. WOF's windows contain a packed first unit, a raw second unit and
+a partial packed final unit. Wider profiles therefore change the data mix as
+well as cache access. The hot warm runs make zero resource reads; alternating
+runs make 4,500 calls because the authored backing spans fragmented physical
+runs. Their observed call/byte counts exactly match independent packet lengths
+and physical layouts. These are resource observations, not explicit decoder-miss
+counters. Hot p99 reaches the clock resolution; a candidate needs longer hot
+runs before a regression conclusion.
+
+Main review re-authors the original payloads, checks actual packed/raw input
+storage and retained binaries, verifies every measured range/sample and resource
+counter, and recomputes all summary medians/ranges in
+`artifacts/compression-profile-review.json`. This establishes the baseline for a
+bounded second decoded-output slot; no cache source changed or speedup is claimed.
+Required-allocation failures, optional storage refusal, failed-fill retry and
+exact release must remain qualified before comparing a candidate. Sequential,
+random, multiple-reader and installed workloads still need their own evidence.
+
 ## Paired reader accounting measurements
 
 `--release-report` verifies the selected binaries against a passing ordinary

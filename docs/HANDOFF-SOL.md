@@ -17,7 +17,7 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current compression workload foundation
+## Current compression workload baseline
 
 The opt-in `strided` workload cyclically visits bounded windows, continuing each
 reader's independent position through warmup. The runner records stride/position
@@ -27,10 +27,27 @@ suites pass 47 measured profiles and 86 helper contracts, with format/build/styl
 passing under `artifacts/plan-compression-profile-*.log`.
 
 No core/adapter source changed and both LZNT1/WOF still cache one decoded unit per
-stream. Retain an ordinary Release baseline before changing that implementation,
-then measure hot/alternating/wider codec-unit working sets under PERFORMANCE.md.
-This foundation adds no throughput, Windows or installed-native claim. The
-full continuation and separately measured optimization program remain open.
+stream. The retained current-only Release baseline passes 540 runs/60 summaries:
+five synthetic codec/storage inputs, both callbacks, one reader, 512-byte reads,
+64 record-cache entries, 0/128 warmup and 3,000 measured operations, with nine
+repetitions at each of one/two/three unit-stride positions. Reports use
+`artifacts/compression-profile-baseline-*/report.json`. Both ordinary Release/O3
+builds match eight actual products under
+`artifacts/reproducibility-compression-profile/`. Main review checks actual
+products, re-authored original and stored bytes, every range/sample/resource
+counter and summary median/range in `artifacts/compression-profile-review.json`.
+PERFORMANCE.md defines mixed raw/packed/sparse units, warmed-cache scope and hot
+clock-resolution limits. This baseline supplies no speedup, Windows or native
+mount claim; relocated/native release qualification remains separate.
+
+Next evaluate one optional second decoded-output unit per stream. Preserve the
+single-unit fallback when allocation/live credits refuse optional storage, exact
+cleanup and successful publication only after a complete fill. Failed replacement
+must preserve the other valid unit. Qualify required/optional failures, partial
+I/O, retry, sparse/raw/partial units and cumulative budgets before matched Release
+comparison. Keep these workload/POSIX sources unchanged for paired runs; extend
+hot duration and sequential/random/multiple-reader profiles before accepting the
+cache. The full continuation and optimization program remain open.
 
 ## Preceding exact native dot lookup
 

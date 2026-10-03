@@ -34,14 +34,12 @@ limit_result(enum ntfs_operation_limit limit)
 static enum ntfs_result
 exhausted(const struct ntfs_volume *volume)
 {
-	const struct ntfs_operation *operation;
+	const struct ntfs_operation *operation = volume->operation;
 
-	for (operation = volume->operation; operation != NULL; operation = operation->_previous) {
-		if (operation->usage.exhausted != NTFS_OPERATION_LIMIT_NONE) {
-			return limit_result(operation->usage.exhausted);
-		}
-	}
-	return NTFS_OK;
+	/* Required refusal latches every active ancestor, and begin rejects an
+	 * exhausted parent. The head therefore carries the whole stack's result.
+	 * Admission still preflights every ancestor before committing any credit. */
+	return operation == NULL ? NTFS_OK : limit_result(operation->usage.exhausted);
 }
 
 enum ntfs_result
@@ -121,7 +119,8 @@ ntfs_operation_begin(struct ntfs_volume *volume, const struct ntfs_operation_lim
 	if (result != NTFS_OK) {
 		return result;
 	}
-	ntfs_zero(operation, sizeof(*operation));
+	/* All other fields are assigned below; only usage requires clearing. */
+	ntfs_zero(&operation->usage, sizeof(operation->usage));
 	operation->limits = selected;
 	operation->usage.peak_live_bytes = volume->live_bytes;
 	operation->_volume = volume;

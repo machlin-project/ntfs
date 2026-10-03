@@ -49,6 +49,36 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource and nine-repetition directory comparisons with independent exact inventories | Specific allocation/metadata, aligned resource and interleaved-directory memory-reader improvement measured; installed/device and independent-driver performance unmeasured |
 
+The paired portable reader measurement adds 58 independent benchmark contracts:
+canonical retained-build paths, actual release product/digest agreement, failed/
+changed/duplicate evidence rejection, matched toolchain/source and semantic
+results, and independently modeled read ranges/samples. The initial contract
+failure in `artifacts/plan-accounting-benchmark-contract-initial.log` exposed
+macOS `/var` versus `/private/var` path aliases; canonicalizing selected paths
+fixed the loader. The retry/focused logs use `plan-accounting-*-canonical.log`.
+`artifacts/measure-accounting-smoke/report.json` qualifies all six workload paths
+with 24 paired runs; its short timings establish no performance conclusion.
+
+The real guard comparison passes 2,880 runs/160 paired configurations, nine
+repetitions per variant, across ten ordinary/synthetic storage and compression
+inputs. Reports are `artifacts/measure-accounting-*/report.json`, excluding the
+separately scoped smoke. Full byte oracles, read schedule/sample checks, paired
+semantic results and input/binary integrity pass. PERFORMANCE.md preserves
+hardware/cache/matrix scope and selected overhead; this is no installed or
+independent-driver performance claim.
+
+A candidate governor simplification uses the uniformly propagated head result
+and clears only usage before explicitly assigning scope fields. Its 32-level
+test denies each ancestor in turn, checks all 1,024 scope flags/zero work credits,
+rejects new children during unwind and reuses storage after a fresh success.
+The existing 12 profiles/144 boundaries remain unchanged. All 61 sanitized
+suites, style, both freestanding 2-KiB-frame targets, 22 component groups/eight
+modern-runtime SKIPs and the actual unsigned Release operation source compiled
+for both architectures pass under `artifacts/plan-accounting-*-candidate.log`.
+The candidate's performance acceptance remains pending a matched comparison
+against the guarded reader. Core/native resource limits and full qualification
+gaps remain unchanged.
+
 The ordinary directory allocation diagnostic now scans the complete `$I30`
 bitmap after checked traversal and rejects used unreachable slots, out-of-span
 bits and partial final allocation records. Free storage stays opaque and unread;

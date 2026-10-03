@@ -1,11 +1,12 @@
 # Performance contracts
 
-The new operation-accounting guards in core and FSKit have not yet undergone a
-matched performance comparison. The retained measurements below qualify their
-earlier source configurations; their percentages cannot be assigned to the
-current guarded product. Measure accounting cost on small cached operations,
-large/fragmented scans, cold/warm compression and compound native pages using
-the same original bytes, policies and counters. Existing directory references
+The core operation-accounting guards now have a paired retained-Release comparison
+across ordinary/fragmented/resident/sparse/LZNT1/WOF reading and metadata. It
+measures complete reader versions with the same workload, compiler, SDK, inputs
+and arguments; the new accounting simplification still needs its own comparison.
+Earlier optimization percentages below cannot be assigned to the guarded product.
+Compound native pages, installed I/O and broader workloads remain separate.
+Existing directory references
 require an identical core archive, so an older pre-accounting archive is not a
 valid matched reference for that runner. Keep its check intact and establish a
 new current-source baseline. OPERATION-BUDGETS.md distinguishes work units,
@@ -122,7 +123,11 @@ python3 scripts/benchmark.py artifacts/interoperability-next/ntfs-s512-c4096.img
 
 The runner refuses an existing output directory, non-release/sanitized build,
 changed input bytes or a content mismatch against the independently supplied
-original stream payload. It preserves failed qualification reports. Five-run
+original stream payload. It now retains immutable measurement binaries and checks
+each read run's delivered bytes and deterministic prefix samples against the
+original file, outside the measured process. Full content hashes still run before
+and after; sampling alone does not establish full content integrity.
+It preserves failed qualification reports. Five-run
 matrices cover 64 configurations on a 64-MiB NTFS-3G image and 16 configurations
 on the independently authored 8-MiB attribute-list fixture. Baseline evidence is
 in `artifacts/plan-measure-oracle-2/` and `artifacts/plan-measure-metadata/`;
@@ -133,6 +138,59 @@ initial cache reports are in `artifacts/plan-cache-measure-oracle/` and
 images. The images contain 2,097,408-byte and 8,192-byte tested streams
 respectively; image size is not the independent content-oracle size. Earlier
 failed preflights remain retained.
+
+## Paired reader accounting measurements
+
+`--release-report` verifies the selected binaries against a passing ordinary
+Release reproducibility report. `--reference-release` selects the first retained
+build in a second report, verifies the actual products and requires identical
+release options, compiler/SDK/host and unchanged workload/POSIX source through
+ordinary Git. Both variants run the same new invocation and alternate execution
+order between repetitions. Core sources may differ: this compares reader
+versions, with no independent-driver or isolated-instruction-cost claim. Copies
+of both inspector/workload binaries and their digests remain in the output;
+input, original-data and retained-binary changes fail qualification. Paired
+bytes, entry counts and sampled sums must agree. I/O/allocation differences remain
+reported metrics, so a genuine reuse optimization can change them.
+
+```sh
+python3 scripts/benchmark.py artifacts/interoperability-operation-reviewed/ntfs-s512-c4096.img /large.bin --expected-data artifacts/interoperability-operation-reviewed/large.bin --dataset-kind ntfs3g --build artifacts/reproducibility-index/first --release-report artifacts/reproducibility-index/report.json --reference-release artifacts/reproducibility-mirror/report.json --output artifacts/measure-accounting-next --profiles sequential random --backends posix memory --requests 4096 65536 --readers 1 4 --cache-entries 64 --warmup-operations 0 2000 --operations 10000 --repetitions 9
+```
+
+The initial guard comparison passes 2,880 runs across 160 paired configurations
+(320 variant summaries), nine repetitions per variant/configuration, under
+`artifacts/measure-accounting-{large,metadata,resident,fragmented,sparse,lznt1,wof-4k,wof-lzx-packed,wof-pages,wof-lzx-pages}/`.
+The independent large-file source is a 64-MiB NTFS-3G image with a 2,097,408-byte
+original payload. Synthetic sources cover resident/attribute-list/fragmented/
+sparse/LZNT1 storage, mixed XPRESS4K/LZX units and 1,100-entry provider tables.
+Provider table-open oracles contain 4,502,281/36,012,809 decoded bytes; their images
+are 8 MiB. Acquisition uses authored original data, never inspector exports.
+
+Hardware is Apple M4 Pro, 14 logical CPUs and 64 GiB RAM on arm64 macOS 26.6.2,
+with selected Xcode clang 21 and SDK 27. Exact build/hardware/revision/digest
+evidence remains in generated reports. Only one task-owned benchmark ran at a
+time. The host page cache is warm; zero warmup means new stream/unit/cursor state,
+not cold physical media. Percentiles retain per-run resolution and ranges.
+
+Selected memory-backend/cache-64/one-reader/2,000-warmup medians:
+
+| Profile | Operations/request | Before/guarded wall, ms | Change |
+| --- | --- | ---: | ---: |
+| Resident sequential | 50,000 / 17 bytes | 1.799 / 2.140 | +18.92% |
+| Resident repeated open | 50,000 | 5.547 / 6.556 | +18.20% |
+| Attribute-list repeated open | 10,000 | 3.596 / 4.118 | +14.52% |
+| Directory continuation | 10,000 | 1.686 / 1.887 | +11.92% |
+| Ordinary sequential | 10,000 / 64 KiB | 8.566 / 8.683 | +1.36% |
+
+The metadata/resident ranges support targeted accounting optimization; broad
+data-read percentages have overlapping ranges and cannot establish a universal
+regression. Random WOF/table-open timings are mixed with overlapping ranges,
+so their lower guarded medians establish no throughput win. All selected rows
+retain identical I/O/allocation counts and add 248 peak core bytes for the new
+volume accounting state. Process RSS and native pool/window memory are separate.
+The later head-result/usage-initialization simplification is not measured by
+these reports. Native/Windows/device, larger independent directory/file sets,
+matched independent drivers and the complete optimization program remain open.
 
 ## Validated live-node metadata reuse
 

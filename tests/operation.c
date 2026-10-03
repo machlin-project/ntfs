@@ -663,6 +663,55 @@ faults_and_optional_cache(const uint8_t *image, size_t size)
 }
 
 static void
+deep_sticky(const uint8_t *image, size_t size)
+{
+	struct test_device device = {.device = {.data = image, .size = size}};
+	struct ntfs_volume *volume = mount_device(&device, 0, false);
+	struct ntfs_node *node;
+	struct ntfs_stat stat, zero = {0};
+	struct ntfs_operation scopes[NTFS_OPERATION_MAX_DEPTH] = {0}, extra = {0};
+	struct ntfs_operation_limits limits;
+	size_t denied, depth, reads, allocations;
+
+	assert(lookup(volume, "hello.txt", &node) == NTFS_OK);
+	assert(ntfs_node_metadata(node, &stat) == NTFS_OK);
+	reads = device.device.reads;
+	allocations = device.device.allocations;
+	for (denied = 0; denied < NTFS_OPERATION_MAX_DEPTH; denied++) {
+		for (depth = 0; depth < NTFS_OPERATION_MAX_DEPTH; depth++) {
+			ntfs_get_operation_limits(volume, &limits);
+			if (depth == denied) {
+				limits.work = sizeof(stat) - 1;
+			}
+			assert(ntfs_operation_begin(volume, &limits, &scopes[depth]) == NTFS_OK);
+		}
+		memset(&stat, TEST_SENTINEL, sizeof(stat));
+		assert(ntfs_node_metadata(node, &stat) == NTFS_RANGE &&
+		    memcmp(&stat, &zero, sizeof(stat)) == 0);
+		for (depth = 0; depth < NTFS_OPERATION_MAX_DEPTH; depth++) {
+			assert(scopes[depth].usage.work == 0 &&
+			    scopes[depth].usage.exhausted == NTFS_OPERATION_LIMIT_WORK &&
+			    ntfs_operation_result(&scopes[depth]) == NTFS_RANGE);
+		}
+		for (depth = NTFS_OPERATION_MAX_DEPTH; depth != 0; depth--) {
+			assert(ntfs_operation_end(&scopes[depth - 1], NULL) == NTFS_OK);
+			if (depth != 1) {
+				assert(ntfs_operation_check(volume) == NTFS_RANGE &&
+				    ntfs_operation_begin(volume, NULL, &extra) == NTFS_RANGE &&
+				    !extra._active);
+			}
+		}
+		assert(ntfs_operation_check(volume) == NTFS_OK &&
+		    ntfs_node_metadata(node, &stat) == NTFS_OK);
+		assert(device.device.reads == reads && device.device.allocations == allocations);
+	}
+	ntfs_node_close(node);
+	assert(ntfs_unmount(volume) == NTFS_OK && device.device.memory == 0);
+	puts("PASS: all 32 denying ancestors latch all 32 scopes, preserve zero failed credits, "
+	     "reject new children during unwind and permit fresh reused-scope operations");
+}
+
+static void
 aggregate_live(const uint8_t *image, size_t size)
 {
 	struct test_device device = {.device = {.data = image, .size = size}};
@@ -778,6 +827,7 @@ main(int argc, char **argv)
 	memcpy(original, image, size);
 	mount_boundaries(image, size);
 	nested_lifetime(image, size);
+	deep_sticky(image, size);
 	faults_and_optional_cache(image, size);
 	aggregate_live(image, size);
 	assert(memcmp(image, original, size) == 0);

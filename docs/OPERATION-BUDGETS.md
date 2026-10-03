@@ -45,7 +45,12 @@ the bootstrap boot read; operation usage and those statistics need not match.
 Scope storage starts zeroed, remains at the same address through begin/end and
 must not be copied, mutated or reused while active. The caller still serializes
 the volume and every child. Begin/end allocate nothing. While the owner is alive,
-end follows reverse begin order. Begin/end and unmount return BUSY during an
+end follows reverse begin order. Required refusal propagates the same sticky
+result to every active ancestor; begin refuses an exhausted parent. The head
+therefore supplies the stack's sticky result without scanning older flags.
+Every credit dimension still preflights every ancestor before admission. Begin
+clears usage and explicitly assigns all remaining scope fields, including reused
+storage. Begin/end and unmount return BUSY during an
 active public C call, including from an allocator or exact-read callback.
 An out-of-order or otherwise failed end changes neither scope nor output report.
 On success, passing `&scope.usage` as the end report is valid.

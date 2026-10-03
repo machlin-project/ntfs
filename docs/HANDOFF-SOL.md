@@ -17,7 +17,29 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current ordinary directory inventory checkpoint
+## Current accounting measurement checkpoint
+
+The benchmark runner now retains binaries, validates ordinary release evidence,
+requires matching toolchain/workload/POSIX sources for paired variants, alternates
+execution order and checks independent read ranges/prefix samples alongside full
+before/after content hashes. Fifty-eight helper contracts and six-path paired
+smoke pass; canonical-path failure evidence remains in ACCEPTANCE.md.
+Ten input matrices pass 2,880 runs/160 paired configurations with nine repeats
+per variant. PERFORMANCE.md describes the measured guard cost and retains broad
+data/native/Windows/independent-driver limits; historical adapter gains remain
+scoped to their earlier source.
+
+The governor now obtains sticky failure from the head because every required
+refusal propagates to all ancestors and begin rejects exhausted parents. It
+clears usage before assigning the remaining fields, with unchanged ancestor
+credit preflight. All 61 suites, both freestanding targets, style, component
+22 PASS/eight SKIP and unsigned Release operation source on both architectures
+pass. The 32-level test exercises every denying ancestor, all propagated flags,
+unwind and reuse. Its separate performance acceptance is pending. Preserve the
+complete continuation in CORE-QUALIFICATION.md; this checkpoint enables neither
+native authorization nor writes/recovery or a commercial release.
+
+## Ordinary directory inventory checkpoint
 
 The diagnostic now compares the complete `$I30` bitmap with the fully traversed
 cursor's bounded visited-block set. Used unreachable/out-of-span slots and partial

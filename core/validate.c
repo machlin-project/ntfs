@@ -560,6 +560,12 @@ check_directory_graph(struct validation *v)
 }
 
 static enum ntfs_result
+index_inventory_work(void *context, uint64_t units)
+{
+	return work(context, units);
+}
+
+static enum ntfs_result
 scan_namespace(struct validation *v)
 {
 	struct ntfs_node *node = NULL;
@@ -580,6 +586,9 @@ scan_namespace(struct validation *v)
 		}
 		v->report->reference = v->records[i].reference;
 		v->report->record_number = i;
+		v->report->stage = NTFS_VALIDATION_NAMESPACE;
+		v->report->attribute_type = NTFS_ATTR_INDEX_ROOT;
+		v->report->cluster = 0;
 		result = ntfs_node_open(v->volume, v->records[i].reference, &node);
 		if (result == NTFS_OK) {
 			result = ntfs_directory_open(node, &directory);
@@ -599,11 +608,22 @@ scan_namespace(struct validation *v)
 				break;
 			}
 		}
+		if (result == NTFS_END) {
+			/* Namespace pairing reports individual children. Inventory failures
+			 * instead belong to the directory owning the allocation/bitmap. */
+			v->report->reference = v->records[i].reference;
+			v->report->record_number = i;
+			v->report->related_reference = 0;
+			v->report->stage = NTFS_VALIDATION_INDEX_ALLOCATION;
+			v->report->attribute_type = NTFS_ATTR_BITMAP;
+			result = ntfs_directory_check_allocation(
+			    directory, node, index_inventory_work, v, &v->report->cluster);
+		}
 		ntfs_directory_close(directory);
 		directory = NULL;
 		ntfs_node_close(node);
 		node = NULL;
-		if (result != NTFS_END) {
+		if (result != NTFS_OK) {
 			break;
 		}
 		v->report->directories++;
@@ -614,6 +634,7 @@ scan_namespace(struct validation *v)
 	if (result != NTFS_OK) {
 		return result;
 	}
+	v->report->stage = NTFS_VALIDATION_NAMESPACE;
 	result = sort(v, v->links, sizeof(*v->links), v->link_count, compare_links);
 	if (result != NTFS_OK) {
 		return result;

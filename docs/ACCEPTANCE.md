@@ -11,7 +11,7 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
-| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, namespace reachability/link counts and physical ownership; partial budget/fault/unsupported reports | 96 synthetic verdicts, seven budgets, 1,068 allocation/772 read faults, 80 partial/full mirror-stage read failures, 48 prefix budgets and four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, listed/flagged bad-cluster storage, view-index semantics and Windows qualification remain open |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, required four-record mirror prefix and boot-anchor mapping, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts and physical ownership; partial budget/fault/unsupported reports | 118 synthetic verdicts, seven budgets, 1,305 allocation/963 read faults, 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets and four independent bitmap/mirror-export geometries passed; extended mirror tails, boot replicas, DOS counts, listed/flagged bad-cluster storage, view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
@@ -48,6 +48,48 @@ see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 | Remote CI | macOS/Linux core, Linux oracle and bounded libFuzzer workflow | Prepared; not executed remotely |
 | FSKit resource transfers | Physically aligned caller-directed fragments with bounded window fallback; exact completion/revocation/error checks and unchanged allocation/I/O limits | 120 geometry/fault verdicts at three alignments and 16 gated direct/window lifecycle cases passed; targeted memory-reader measurements below; installed buffer/device qualification open |
 | Performance and metadata reuse | Release POSIX/memory profiles, warmup/cache controls, reader scaling and five-run matrices; verified live-node metadata cache; retained-binary FSKit resource and nine-repetition directory comparisons with independent exact inventories | Specific allocation/metadata, aligned resource and interleaved-directory memory-reader improvement measured; installed/device and independent-driver performance unmeasured |
+
+The ordinary directory allocation diagnostic now scans the complete `$I30`
+bitmap after checked traversal and rejects used unreachable slots, out-of-span
+bits and partial final allocation records. Free storage stays opaque and unread;
+normal mounted directory operations do not run this complete inventory. Twenty-two
+new images cover free garbage, orphan records, fragmentation, long resident/
+nonresident bitmaps, small roots and three index/cluster size relations. Both
+cache modes pass. Added fragmented/paged required-failure sweeps contribute 237
+allocation/191 read positions to the totals above; three bitmap reads add six
+partial/full failures and nine read-call/read-byte/work refusals before callbacks.
+Every retry releases its owners and preserves media.
+
+`artifacts/plan-index-focused-owner-fixed.log` passes all five focused suites;
+`artifacts/plan-index-freestanding-owner-fixed.log` passes both 2-KiB-frame targets.
+The complete sanitized run passes 60/60 in
+`artifacts/plan-index-suite-equivalent-complete.log`, style in
+`artifacts/plan-index-style-complete.log`, and 22 component groups/eight explicit
+modern-runtime SKIPs in `artifacts/plan-index-component-complete.log`.
+`artifacts/plan-index-app-release-complete.log` is an actual unsigned Release
+app build with both changed core sources compiled for arm64/x86_64. No installed
+runtime follows from that build.
+
+The initial focused failure in `artifacts/plan-index-focused-initial.log`
+identified a diagnostic subject bug: namespace pairing left the last child in
+the report before the owning directory's inventory failed. Restoring the owning
+directory before that check fixed product reporting without weakening its oracle.
+`artifacts/plan-index-existing-fixtures-compare.json` verifies all 96 preceding
+fixtures remain byte-identical and adds exactly 22. The unsupported prepared
+launcher spelling is retained in `artifacts/plan-index-suite-complete.log`;
+the documented build/test launchers pass under the successful log above.
+
+`artifacts/fuzz-index-validation/report.json` passes fixed replay of all 118 seeds
+and 54,415 exploration executions over 68 seconds, with zero reported OOM,
+timeout or crash events. Review counted every replay line and checked the actual
+binary against its reported digest. The unchanged 1024-MiB RSS ceiling is a policy,
+not an observed campaign peak. `artifacts/interoperability-index-reviewed/report.json`
+passes complete diagnostics and independent MFT/cluster bitmap and required mirror
+prefix exports in all four preceding external image geometries. Review rehashed
+each actual image against both reports. The independent utility does not compare
+external `$I30` visited slots; that new product check executes inside the diagnostic.
+Windows, view-store, native installation, authorization and recovery remain open.
+The preceding Release reproducibility report predates this changed core source.
 
 The operation-budget continuation passes all 60 sanitized core suites in
 `artifacts/plan-operation-suite-complete.log`, both freestanding 2-KiB-frame

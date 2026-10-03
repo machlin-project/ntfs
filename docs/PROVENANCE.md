@@ -68,6 +68,9 @@ Primary references:
 - [Original Linux-NTFS filename lifetime notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/file_name.html)
 - [Original Linux-NTFS root anchor notes](https://flatcap.github.io/linux-ntfs/ntfs/files/dot.html)
 - [Original Linux-NTFS bad-cluster format notes](https://flatcap.github.io/linux-ntfs/ntfs/files/badclus.html)
+- [Original Linux-NTFS index bitmap format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/bitmap.html)
+- [Original Linux-NTFS index allocation format notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/index_allocation.html)
+- [Original Linux-NTFS index root and VCN unit notes](https://flatcap.github.io/linux-ntfs/ntfs/attributes/index_root.html)
 
 Cross-checked format details include the 512-byte fixup stride, compression-unit
 byte width, physical versus logical allocation, partial final compression units,
@@ -83,6 +86,15 @@ The explicit bootstrap, B-tree bounds, stream lifetime and decoder algorithms
 are repository-owned implementations. Synthetic vectors use independently
 authored named fields and expected bytes; Windows corpus qualification remains
 separate from both those vectors and the external NTFS-3G utility comparisons.
+
+The ordinary directory inventory diagnostic uses only the original Linux-NTFS
+format facts that an index bitmap bit identifies one allocation record, allocation
+stores the tree's subnodes and subcluster index VCNs use sectors. Its reachability
+policy is an explicit consistency inference, implemented through the repository's
+existing bounded visited set, paged bitmap scan and independent fixture author.
+No external inventory implementation was examined or imported. Free records stay
+opaque; Windows-authored layouts and non-directory view indexes require separate
+qualification.
 
 The mirror diagnostic's mandatory four-record prefix uses the
 [MS-FSCC glossary](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/8ac44452-328c-4d7b-a784-d72afd19bd9f).

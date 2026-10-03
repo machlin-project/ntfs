@@ -17,7 +17,29 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current operation-budget checkpoint
+## Current ordinary directory inventory checkpoint
+
+The diagnostic now compares the complete `$I30` bitmap with the fully traversed
+cursor's bounded visited-block set. Used unreachable/out-of-span slots and partial
+allocation records fail with the owning directory's subject; free storage stays
+opaque and unread. This diagnostic-only check changes no ordinary FSKit directory
+operation. Read VALIDATION.md for slot/VCN units, work credits and the explicit
+consistency inference from original format research. View indexes and Windows
+qualification remain open.
+
+All 60 sanitized suites, both freestanding 2-KiB-frame targets, style, 22 component
+groups/eight modern-runtime SKIPs and an unsigned Release app compiled for both
+architectures pass. The 118-image inventory includes 22 new cases, 237 added
+allocation/191 read fault positions, six partial/full bitmap failures and nine
+pre-callback read/work budgets. Validation fuzz fixed-replays all 118 seeds and
+passes 54,415 executions; four independent bitmap/mirror-export geometries pass
+with unchanged images. ACCEPTANCE.md retains exact logs and the corrected
+diagnostic subject bug. It also distinguishes independent exported metadata from
+the product's used-slot check. Earlier Release reproducibility predates this
+inventory source; Windows/native authorization, recovery and the complete
+optimization program remain part of CORE-QUALIFICATION.md.
+
+## Operation-budget checkpoint
 
 The mounted reader now has cumulative read/allocation/work ceilings plus one
 aggregate core live-storage cap. Public owning calls have implicit scopes;

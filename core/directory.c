@@ -634,3 +634,137 @@ ntfs_directory_volume(const struct ntfs_directory *object)
 {
 	return object == NULL ? NULL : object->volume;
 }
+
+static enum ntfs_result
+inventory_work(struct ntfs_directory *directory, enum ntfs_result (*charge)(void *, uint64_t),
+    void *context, uint64_t units)
+{
+	enum ntfs_result result;
+
+	result = charge(context, units);
+	return result == NTFS_OK ? ntfs_work(directory->volume, units) : result;
+}
+
+static enum ntfs_result
+inventory_slot(struct ntfs_directory *directory, uint64_t slot,
+    enum ntfs_result (*charge)(void *, uint64_t), void *context, uint64_t *cluster)
+{
+	struct ntfs_volume *volume = directory->volume;
+	const struct ntfs_run *run;
+	uint64_t offset, vcn, storage_vcn;
+	uint32_t unit;
+	size_t position;
+	enum ntfs_result result;
+
+	if (directory->allocation == NULL ||
+	    slot >= directory->allocation->size / volume->info.index_size) {
+		return NTFS_CORRUPT;
+	}
+	/* The slot bound proves this multiplication fits the validated stream. */
+	offset = slot * volume->info.index_size;
+	unit = volume->info.cluster_size <= volume->info.index_size ? volume->info.cluster_size
+								    : volume->info.sector_size;
+	vcn = offset / unit;
+	if (directory->visited_capacity != 0) {
+		position = hash_vcn(vcn, directory->visited_capacity);
+		while (directory->visited[position] != 0) {
+			result = inventory_work(directory, charge, context, 1);
+			if (result != NTFS_OK) {
+				return result;
+			}
+			if (directory->visited[position] == vcn + 1) {
+				return NTFS_OK;
+			}
+			position = (position + 1) & (directory->visited_capacity - 1u);
+		}
+	}
+	storage_vcn = offset / volume->info.cluster_size;
+	run = ntfs_run_find(directory->allocation, storage_vcn);
+	if (run != NULL && run->lcn != NTFS_HOLE) {
+		*cluster = run->lcn + storage_vcn - run->vcn;
+	}
+	return NTFS_CORRUPT;
+}
+
+enum ntfs_result
+ntfs_directory_check_allocation(struct ntfs_directory *directory, struct ntfs_node *node,
+    enum ntfs_result (*charge)(void *, uint64_t), void *context, uint64_t *cluster)
+{
+	struct ntfs_stream *bitmap, *temporary = NULL;
+	uint8_t bytes[NTFS_INDEX_BITMAP_SCAN_BYTES];
+	uint64_t offset, slot, used = 0;
+	size_t take, byte;
+	unsigned bit;
+	enum ntfs_result result;
+
+	if (cluster == NULL) {
+		return NTFS_INVALID;
+	}
+	*cluster = 0;
+	if (directory == NULL || node == NULL || charge == NULL ||
+	    directory->volume != node->volume || directory->reference != node->reference) {
+		return NTFS_INVALID;
+	}
+	if (directory->depth != 0 || directory->failure != NTFS_OK) {
+		return NTFS_BUSY;
+	}
+	result = ntfs_operation_enter(directory->volume);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	bitmap = directory->bitmap;
+	if (bitmap == NULL) {
+		/* A small root may retain a zero bitmap, but cannot own a used slot
+		 * without allocation storage. Ordinary opens need no extra lookup. */
+		result = ntfs_attribute_open(node, NTFS_ATTR_BITMAP, index_name,
+		    sizeof(index_name) / sizeof(index_name[0]), &temporary);
+		if (result == NTFS_NOT_FOUND) {
+			result = directory->visited_count == 0 ? NTFS_OK : NTFS_CORRUPT;
+			goto finish;
+		}
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		bitmap = temporary;
+	}
+	if (bitmap->flags != 0 || bitmap->initialized != bitmap->size ||
+	    (directory->allocation != NULL &&
+		directory->allocation->size % directory->volume->info.index_size != 0)) {
+		result = NTFS_CORRUPT;
+		goto finish;
+	}
+	for (offset = 0; offset < bitmap->size; offset += take) {
+		take = bitmap->size - offset < sizeof(bytes) ? (size_t)(bitmap->size - offset)
+							     : sizeof(bytes);
+		result =
+		    inventory_work(directory, charge, context, (uint64_t)take * NTFS_BITS_PER_BYTE);
+		if (result == NTFS_OK) {
+			result = ntfs_stream_exact(bitmap, offset, bytes, take);
+		}
+		if (result != NTFS_OK) {
+			goto finish;
+		}
+		for (byte = 0; byte < take; byte++) {
+			if (offset + byte > UINT64_MAX / NTFS_BITS_PER_BYTE) {
+				result = NTFS_CORRUPT;
+				goto finish;
+			}
+			for (bit = 0; bit < NTFS_BITS_PER_BYTE; bit++) {
+				if ((bytes[byte] & (1u << bit)) == 0) {
+					continue;
+				}
+				slot = (offset + byte) * NTFS_BITS_PER_BYTE + bit;
+				result = inventory_slot(directory, slot, charge, context, cluster);
+				if (result != NTFS_OK) {
+					goto finish;
+				}
+				used++;
+			}
+		}
+	}
+	result = used == directory->visited_count ? NTFS_OK : NTFS_CORRUPT;
+finish:
+	ntfs_stream_close(temporary);
+	ntfs_operation_leave(directory->volume);
+	return result;
+}

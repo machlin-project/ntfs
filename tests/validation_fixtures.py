@@ -39,6 +39,7 @@ UPCASE_UNITS = 1 << (f.U16_BYTES * f.BYTE_BITS)
 MFT_BYTES = f.MFT_COUNT * f.RECORD
 VOLUME_INFORMATION = struct.Struct('<8xBBH')
 INDEX_STREAM_NAME = '$I30'
+INDEX_UNUSED_STORAGE_BYTE = 0xa9
 HELLO_DATA = b'validation resident data'
 FRAGMENTED_DATA = f.pattern(f.FRAGMENTED_BYTES)
 
@@ -63,16 +64,31 @@ class Mirror:
     list_lcn: int | None = None
 
 
+@dataclass(frozen=True)
+class Index:
+    block_bytes: int
+    slots: int = 1
+    split: bool = False
+    bitmap: bytes = b'\x01'
+    bitmap_lcn: int | None = None
+    fragmented: bool = False
+    unused_valid: bool = False
+    leaf_bitmap: bytes | None = None
+    leaf_allocation: bool = False
+    trailing_bytes: int = 0
+
+
 def filename(link, instance=FILENAME_INSTANCE, directory=False):
     attributes = f.FILE_ATTRIBUTE_DIRECTORY if directory else 0
     return f.resident(f.FILENAME, f.key(link.name, link.size, link.namespace,
                                      link.parent, attributes), instance)
 
 
-def index_entry(number, link, directory=False, reference=None):
+def index_entry(number, link, directory=False, reference=None, child=None):
     encoded = bytearray(f.entry(link.name, number, link.size,
                                namespace=link.namespace, parent=link.parent,
-                               attributes=f.FILE_ATTRIBUTE_DIRECTORY if directory else 0))
+                               attributes=f.FILE_ATTRIBUTE_DIRECTORY if directory else 0,
+                               child=child))
     if reference is not None:
         _, length, key_length, flags = f.INDEX_ENTRY.unpack_from(encoded)
         f.INDEX_ENTRY.pack_into(encoded, 0, reference, length, key_length, flags)
@@ -88,14 +104,17 @@ def collation(item):
     return folded, units
 
 
-def root_value(entries, external=False):
-    return (f.INDEX_ROOT_HEADER.pack(f.FILENAME, f.COLLATION_FILENAME, f.CLUSTER, 1)
+def root_value(entries, external=False, block_bytes=None):
+    block_bytes = f.CLUSTER if block_bytes is None else block_bytes
+    unit = f.CLUSTER if f.CLUSTER <= block_bytes else f.SECTOR
+    return (f.INDEX_ROOT_HEADER.pack(f.FILENAME, f.COLLATION_FILENAME,
+                                    block_bytes, block_bytes // unit)
             + f.INDEX_HEADER.pack(f.INDEX_HEADER.size, f.INDEX_HEADER.size + len(entries),
                                   f.INDEX_HEADER.size + len(entries),
                                   f.INDEX_LARGE if external else 0) + entries)
 
 
-def build(source, case, *, mirror=None):
+def build(source, case, *, mirror=None, index=None):
     image = bytearray(source)
     if mirror is None:
         clusters = (MIRROR_RECORDS * f.RECORD + f.CLUSTER - 1) // f.CLUSTER
@@ -109,6 +128,11 @@ def build(source, case, *, mirror=None):
         FRAGMENTED_RECORD: [Link('fragmented.bin')],
     }
     directories = {f.ROOT_RECORD}
+    if index is not None:
+        image[f.BOOT_FIELDS['index_code']] = -(index.block_bytes.bit_length() - 1) % f.BYTE_VALUES
+        if index.leaf_bitmap is not None:
+            directories.add(FIRST_DIRECTORY)
+            links[FIRST_DIRECTORY] = [Link('empty')]
     records = {}
     fragmented_clusters = max(FRAGMENT_MIN_CLUSTERS,
                               (f.FRAGMENTED_BYTES + f.CLUSTER - 1) // f.CLUSTER)
@@ -307,19 +331,69 @@ def build(source, case, *, mirror=None):
                     reference = f.file_reference(EXTRA_RECORD)
             entries.append(index_entry(child, link, child in directories, reference))
         if number == f.ROOT_RECORD:
+            layout = Index(f.CLUSTER) if index is None else index
+            unit = f.CLUSTER if f.CLUSTER <= layout.block_bytes else f.SECTOR
+            allocation_bytes = layout.slots * layout.block_bytes + layout.trailing_bytes
+            clusters = (allocation_bytes + f.CLUSTER - 1) // f.CLUSTER
+            runs = ([(1, f.INDEX_LCN), (1, ORPHAN_LCN)] if layout.fragmented
+                    else [(clusters, f.INDEX_LCN)])
+            for count, lcn in runs:
+                occupied.update(range(lcn, lcn + count))
+            midpoint = len(items) // 2
+            root_entries = f.entry(child=0)
+            if layout.split:
+                child, link, _ = items[midpoint]
+                root_entries = (index_entry(child, link, child in directories, child=0)
+                                + f.entry(child=layout.block_bytes // unit))
+            # The format author uses the requested block geometry, independently
+            # of the core's VCN-to-slot conversion.
+            previous_cluster = f.CLUSTER
+            try:
+                f.CLUSTER = layout.block_bytes
+                blocks = [f.index_block(0, entries[:midpoint] if layout.split else entries)]
+                for slot in range(1, layout.slots):
+                    vcn = slot * layout.block_bytes // unit
+                    blocks.append(f.index_block(vcn, entries[midpoint + 1:] if layout.split else [])
+                                  if layout.split or layout.unused_valid else
+                                  bytes([INDEX_UNUSED_STORAGE_BYTE]) * layout.block_bytes)
+            finally:
+                f.CLUSTER = previous_cluster
+            payload = b''.join(blocks) + bytes(layout.trailing_bytes)
+            position = 0
+            for count, lcn in runs:
+                length = count * f.CLUSTER
+                f.put_data(image, lcn, payload[position:position + length])
+                position += length
+            bitmap_attribute = f.resident(f.BITMAP, layout.bitmap, ROOT_BITMAP_INSTANCE,
+                                          INDEX_STREAM_NAME)
+            if layout.bitmap_lcn is not None:
+                occupied.add(layout.bitmap_lcn)
+                f.put_data(image, layout.bitmap_lcn, layout.bitmap)
+                bitmap_attribute = f.nonresident(f.BITMAP, [(1, layout.bitmap_lcn)],
+                    len(layout.bitmap), ROOT_BITMAP_INSTANCE, INDEX_STREAM_NAME)
             records[number] = attrs(number, [
-                f.resident(f.INDEX_ROOT, root_value(f.entry(child=0), True),
+                f.resident(f.INDEX_ROOT, root_value(root_entries, True, layout.block_bytes),
                            ROOT_INDEX_INSTANCE, INDEX_STREAM_NAME),
-                f.nonresident(f.INDEX_ALLOC, [(1, f.INDEX_LCN)], f.CLUSTER,
+                f.nonresident(f.INDEX_ALLOC, runs, allocation_bytes,
                               ROOT_ALLOCATION_INSTANCE, INDEX_STREAM_NAME),
-                f.resident(f.BITMAP, b'\x01', ROOT_BITMAP_INSTANCE, INDEX_STREAM_NAME)])
+                bitmap_attribute])
             if case == 'sensitive':
                 records[number][SI_INSTANCE] = f.standard(f.FILE_ATTRIBUTE_DIRECTORY, version=1)
-            f.put_data(image, f.INDEX_LCN, f.index_block(0, entries))
         else:
             records[number] = attrs(number, [f.resident(
-                f.INDEX_ROOT, root_value(b''.join(entries) + f.entry()),
+                f.INDEX_ROOT, root_value(b''.join(entries) + f.entry(),
+                                        block_bytes=None if index is None else index.block_bytes),
                 ROOT_INDEX_INSTANCE, INDEX_STREAM_NAME)])
+            if index is not None and index.leaf_bitmap is not None:
+                records[number].append(f.resident(f.BITMAP, index.leaf_bitmap,
+                    ROOT_BITMAP_INSTANCE, INDEX_STREAM_NAME))
+                if index.leaf_allocation:
+                    occupied.add(f.INDEX_LCN + 1)
+                    f.put_data(image, f.INDEX_LCN + 1,
+                               bytes([INDEX_UNUSED_STORAGE_BYTE]) * f.CLUSTER)
+                    records[number].append(f.nonresident(f.INDEX_ALLOC,
+                        [(1, f.INDEX_LCN + 1)], index.block_bytes,
+                        ROOT_ALLOCATION_INSTANCE, INDEX_STREAM_NAME))
 
     if case in ('reserved-empty', 'reserved-inert', 'reserved-with-data', 'unexpected-empty'):
         numbers = (range(RESERVED_FIRST, RESERVED_LAST + 1)
@@ -422,4 +496,6 @@ def author(output, source):
         manifest.append({'image': name, 'result': names[expected], 'complete': expected == 'ok'})
     from mirror_fixtures import author as mirror_fixtures
     manifest.extend(mirror_fixtures(output, source))
+    from index_inventory_fixtures import author as index_inventory_fixtures
+    manifest.extend(index_inventory_fixtures(output, source))
     (output / 'validation-cases.json').write_text(json.dumps(manifest, indent=2) + '\n')

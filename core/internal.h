@@ -21,6 +21,8 @@ enum {
 	NTFS_SECURITY_COMPARE_BYTES = 4096,
 	NTFS_MAX_IO = 1048576,
 	NTFS_BITMAP_SCAN_BYTES = 4096,
+	/* Directory inventory uses a small stack page within the 2-KiB frame cap. */
+	NTFS_INDEX_BITMAP_SCAN_BYTES = 256,
 	NTFS_RUN_INITIAL_CAPACITY = 8,
 	NTFS_CATALOG_INITIAL_CAPACITY = 8,
 	NTFS_VISITED_INITIAL_CAPACITY = 64,
@@ -119,6 +121,12 @@ enum ntfs_result ntfs_dacl_evaluate_volume(struct ntfs_volume *, const void *, s
     const struct ntfs_access_token *, uint32_t, const struct ntfs_dacl_limits *,
     struct ntfs_dacl_decision *);
 struct ntfs_volume *ntfs_directory_volume(const struct ntfs_directory *);
+/* Diagnostic-only comparison after complete ordinary directory enumeration.
+ * Every used bitmap slot must name a visited block; free storage stays opaque.
+ * The callback charges the diagnostic's work plane in addition to core scope
+ * credits. The failure cluster is physical, or zero for an out-of-span bit. */
+enum ntfs_result ntfs_directory_check_allocation(struct ntfs_directory *, struct ntfs_node *,
+    enum ntfs_result (*charge)(void *, uint64_t), void *, uint64_t *cluster);
 struct ntfs_volume *ntfs_catalog_volume(const struct ntfs_stream_catalog *);
 struct ntfs_volume *ntfs_reparse_volume(const struct ntfs_reparse *);
 struct ntfs_volume *ntfs_security_volume(const struct ntfs_security *);

@@ -29,6 +29,95 @@ enum {
 	TEST_DATA_TYPE = 0x80
 };
 
+enum {
+	TEST_INDEX_LCN = 100,
+	TEST_INDEX_BITMAP_LCN = 160,
+	TEST_INDEX_BITMAP_BYTES = 513,
+	TEST_INDEX_BITMAP_READS = 3,
+	TEST_INDEX_BITMAP_TYPE = 0xb0,
+	TEST_INDEX_IMAGE_NAME_BYTES = 128,
+	TEST_INDEX_BUDGET_DIMENSIONS = 3,
+	TEST_EMPTY_DIRECTORY = 48,
+	TEST_SMALL_INDEX_ORPHAN_LCN = 276,
+	TEST_LARGE_INDEX_ORPHAN_LCN = 10
+};
+
+struct index_reads {
+	struct fuzz_device *device;
+	struct ntfs_validation_report *report;
+	uint64_t forbidden_first, forbidden_end;
+	uint64_t calls[TEST_INDEX_BITMAP_READS], bytes_before[TEST_INDEX_BITMAP_READS];
+	uint64_t work_before[TEST_INDEX_BITMAP_READS];
+	size_t count;
+	uint64_t bitmap_bytes;
+	bool full_failure;
+};
+
+static void *
+index_allocate(void *context, size_t size)
+{
+	struct index_reads *reads = context;
+
+	return fuzz_allocate(reads->device, size);
+}
+
+static void
+index_release(void *context, void *bytes, size_t size)
+{
+	struct index_reads *reads = context;
+
+	fuzz_release(reads->device, bytes, size);
+}
+
+static enum ntfs_result
+index_read(void *context, uint64_t offset, void *bytes, size_t size)
+{
+	struct index_reads *reads = context;
+	struct fuzz_device *device = reads->device;
+	struct ntfs_validation_report *report = reads->report;
+	size_t partial, index;
+
+	assert(offset <= device->size && size <= device->size - offset);
+	if (reads->forbidden_end != 0) {
+		assert(offset + size <= reads->forbidden_first || offset >= reads->forbidden_end);
+	}
+	if (report->stage == NTFS_VALIDATION_INDEX_ALLOCATION) {
+		index = reads->count++;
+		assert(index < TEST_INDEX_BITMAP_READS);
+		reads->bitmap_bytes += size;
+		reads->calls[index] = report->read_calls;
+		reads->bytes_before[index] = report->read_bytes - size;
+		reads->work_before[index] = report->work_units - size;
+	}
+	if (device->fail_read != 0 && device->reads + 1 == device->fail_read) {
+		partial = reads->full_failure ? size : size / 2;
+		memcpy(bytes, device->data + offset, partial);
+	}
+	return fuzz_read(device, offset, bytes, size);
+}
+
+static enum ntfs_result
+validate_index(struct index_reads *reads, const struct ntfs_validation_limits *limits)
+{
+	struct fuzz_device *device = reads->device;
+	struct ntfs_environment environment = {
+	    NTFS_API_VERSION, reads, device->size, index_read, index_allocate, index_release};
+	struct ntfs_limits core_limits;
+	enum ntfs_result result;
+
+	device->reads = 0;
+	device->allocations = 0;
+	reads->count = 0;
+	reads->bitmap_bytes = 0;
+	ntfs_default_limits(&core_limits);
+	core_limits.record_cache_entries = 0;
+	result = ntfs_validate(&environment, &core_limits, limits, reads->report);
+	assert(result == reads->report->result && device->memory == 0);
+	assert(device->reads == reads->report->read_calls &&
+	    device->allocations == reads->report->allocation_calls);
+	return result;
+}
+
 static void
 load_image(const char *directory, const char *name, struct fuzz_device *device)
 {
@@ -582,6 +671,141 @@ check_mirror_cases(const char *directory)
 	}
 }
 
+static void
+check_index_cases(const char *directory)
+{
+	static const struct {
+		const char *name;
+		enum ntfs_result result;
+		uint64_t cluster, owner;
+	} cases[] = {{"free-garbage", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"orphan-valid", NTFS_CORRUPT, TEST_INDEX_LCN + 1, NTFS_ROOT_RECORD},
+	    {"orphan-garbage", NTFS_CORRUPT, TEST_INDEX_LCN + 1, NTFS_ROOT_RECORD},
+	    {"outside-allocation", NTFS_CORRUPT, 0, NTFS_ROOT_RECORD},
+	    {"padding-used", NTFS_CORRUPT, 0, NTFS_ROOT_RECORD},
+	    {"later-used", NTFS_CORRUPT, 0, NTFS_ROOT_RECORD},
+	    {"partial-allocation", NTFS_CORRUPT, 0, NTFS_ROOT_RECORD},
+	    {"two-blocks", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"fragmented", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"orphan-fragmented", NTFS_CORRUPT, TEST_INDEX_BITMAP_LCN, NTFS_ROOT_RECORD},
+	    {"resident-paged-bitmap", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"nonresident-paged-bitmap", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"late-bitmap-used", NTFS_CORRUPT, 0, NTFS_ROOT_RECORD},
+	    {"leaf-zero-bitmap", NTFS_OK, 0, TEST_EMPTY_DIRECTORY},
+	    {"leaf-used-bitmap", NTFS_CORRUPT, 0, TEST_EMPTY_DIRECTORY},
+	    {"leaf-free-storage", NTFS_OK, 0, TEST_EMPTY_DIRECTORY},
+	    {"subcluster-two-blocks", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"subcluster-orphan", NTFS_CORRUPT, TEST_INDEX_LCN, NTFS_ROOT_RECORD},
+	    {"small-cluster-two-blocks", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"small-cluster-orphan", NTFS_CORRUPT, TEST_SMALL_INDEX_ORPHAN_LCN, NTFS_ROOT_RECORD},
+	    {"large-cluster-two-blocks", NTFS_OK, 0, NTFS_ROOT_RECORD},
+	    {"large-cluster-orphan", NTFS_CORRUPT, TEST_LARGE_INDEX_ORPHAN_LCN, NTFS_ROOT_RECORD}};
+	struct fuzz_device device;
+	struct ntfs_validation_report report;
+	struct index_reads reads;
+	uint8_t *original;
+	char name[TEST_INDEX_IMAGE_NAME_BYTES];
+	size_t i;
+	unsigned cache;
+
+	for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		assert(snprintf(name, sizeof(name), "validation-index-%s.img", cases[i].name) > 0);
+		device = (struct fuzz_device){0};
+		load_image(directory, name, &device);
+		original = malloc(device.size);
+		assert(original != NULL);
+		memcpy(original, device.data, device.size);
+		for (cache = 0; cache < 2; cache++) {
+			assert(validate(&device, NULL, &report, cache) == cases[i].result);
+			if (cases[i].result != NTFS_OK) {
+				assert(report.stage == NTFS_VALIDATION_INDEX_ALLOCATION &&
+				    report.attribute_type == TEST_INDEX_BITMAP_TYPE &&
+				    report.cluster == cases[i].cluster &&
+				    report.record_number == cases[i].owner);
+			} else {
+				assert(report.claimed_clusters == report.allocated_clusters &&
+				    report.unclaimed_clusters == 0);
+			}
+			assert(report.exhausted == NTFS_VALIDATION_LIMIT_NONE);
+			assert(memcmp(original, device.data, device.size) == 0);
+		}
+		if (strcmp(cases[i].name, "free-garbage") == 0 ||
+		    strcmp(cases[i].name, "leaf-free-storage") == 0) {
+			reads = (struct index_reads){.device = &device,
+			    .report = &report,
+			    .forbidden_first = (TEST_INDEX_LCN + 1) * TEST_CLUSTER_BYTES,
+			    .forbidden_end = (TEST_INDEX_LCN + 2) * TEST_CLUSTER_BYTES};
+			assert(validate_index(&reads, NULL) == NTFS_OK);
+		}
+		if (strcmp(cases[i].name, "fragmented") == 0 ||
+		    strcmp(cases[i].name, "nonresident-paged-bitmap") == 0) {
+			check_faults(&device);
+		}
+		free(original);
+		free((void *)device.data);
+	}
+	puts("PASS: 22 index bitmap/reachability/storage/geometry verdicts with cache on/off, "
+	     "physical failure subjects, unchanged images and no free-block reads");
+}
+
+static void
+check_index_interruptions(const char *directory)
+{
+	struct fuzz_device device = {0};
+	struct ntfs_validation_report report;
+	struct ntfs_validation_limits limits;
+	struct index_reads reads = {.device = &device, .report = &report}, observed;
+	uint8_t *original;
+	size_t i;
+	unsigned mode, dimension;
+
+	load_image(directory, "validation-index-nonresident-paged-bitmap.img", &device);
+	original = malloc(device.size);
+	assert(original != NULL);
+	memcpy(original, device.data, device.size);
+	assert(validate_index(&reads, NULL) == NTFS_OK && reads.count == TEST_INDEX_BITMAP_READS);
+	assert(reads.bitmap_bytes == TEST_INDEX_BITMAP_BYTES);
+	observed = reads;
+	for (mode = 0; mode < 2; mode++) {
+		for (i = 0; i < observed.count; i++) {
+			device.fail_read = observed.calls[i];
+			reads.full_failure = mode != 0;
+			assert(validate_index(&reads, NULL) == NTFS_IO);
+			assert(report.stage == NTFS_VALIDATION_INDEX_ALLOCATION &&
+			    !report.complete && report.exhausted == NTFS_VALIDATION_LIMIT_NONE &&
+			    report.attribute_type == TEST_INDEX_BITMAP_TYPE &&
+			    report.record_number == NTFS_ROOT_RECORD);
+			device.fail_read = 0;
+			assert(validate_index(&reads, NULL) == NTFS_OK);
+			assert(memcmp(original, device.data, device.size) == 0);
+		}
+	}
+	for (dimension = 0; dimension < TEST_INDEX_BUDGET_DIMENSIONS; dimension++) {
+		for (i = 0; i < observed.count; i++) {
+			ntfs_validation_default_limits(&limits);
+			if (dimension == 0) {
+				limits.max_read_calls = observed.calls[i] - 1;
+			} else if (dimension == 1) {
+				limits.max_read_bytes = observed.bytes_before[i];
+			} else {
+				limits.max_work_units = observed.work_before[i];
+			}
+			assert(validate_index(&reads, &limits) == NTFS_RANGE);
+			assert(report.stage == NTFS_VALIDATION_INDEX_ALLOCATION &&
+			    !report.complete &&
+			    report.exhausted == NTFS_VALIDATION_LIMIT_READ_CALLS + dimension &&
+			    device.reads == observed.calls[i] - 1 &&
+			    report.work_units <= limits.max_work_units);
+			assert(validate_index(&reads, NULL) == NTFS_OK);
+			assert(memcmp(original, device.data, device.size) == 0);
+		}
+	}
+	free(original);
+	free((void *)device.data);
+	puts("PASS: all three bitmap reads, six partial/full failures and nine "
+	     "pre-callback budget refusals, fresh retry and exact cleanup");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -609,5 +833,7 @@ main(int argc, char **argv)
 		free((void *)device.data);
 	}
 	check_mirror_cases(argv[1]);
+	check_index_cases(argv[1]);
+	check_index_interruptions(argv[1]);
 	return 0;
 }

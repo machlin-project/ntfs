@@ -83,7 +83,10 @@ See [directory case policy](docs/CASE-POLICY.md).
 The separate [consistency diagnostic](docs/VALIDATION.md) now checks bounded
 MFT/cluster allocation, extension/list ownership, filename/index pairing,
 required mirror-prefix/boot-anchor consistency, directory reachability and physical
-extents through a private read-only mount. Declared extended mirror tails retain
+extents through a private read-only mount. Complete ordinary directory bitmaps
+also reject used unreachable index blocks while leaving free storage unread;
+this check adds no whole-bitmap scan to normal FSKit enumeration.
+Declared extended mirror tails retain
 explicit unchecked counts; prefix agreement selects no repair source.
 Synthetic fault/budget checks and four independent bitmap geometries pass;
 complete reports retain a defined scope, with native Windows, view-store and

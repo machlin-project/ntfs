@@ -83,6 +83,31 @@ identify this name. Other directories must have one primary parent and reach
 the root. An iterative colored graph walk detects disconnected cycles without
 recursive stack growth. Ordinary non-DOS link counts must match stored names.
 
+After each ordinary `$I30` traversal finishes, the diagnostic scans its complete
+bitmap and compares every used slot with the cursor's retained visited-block set.
+[Original bitmap research](https://flatcap.github.io/linux-ntfs/ntfs/attributes/bitmap.html)
+assigns one bit to each index record;
+[allocation research](https://flatcap.github.io/linux-ntfs/ntfs/attributes/index_allocation.html)
+describes the nonresident sequence of index records. Requiring all used records
+to be reachable is the diagnostic's consistency inference from those format
+facts, still subject to Windows-authored qualification. A used unreachable slot,
+a used bit outside the logical allocation or a partial final allocation record
+fails. Zero padding and free allocation slots remain opaque, even if their bytes
+look like valid records or garbage. A small resident root may retain an all-zero
+bitmap without allocation storage.
+
+Bitmap slots count index records; tree VCNs use clusters, or sectors when the
+index record is smaller than a cluster, as described by
+[root format research](https://flatcap.github.io/linux-ntfs/ntfs/attributes/index_root.html).
+The check maps between these units and reports the owning directory reference,
+bitmap attribute and first physical cluster of an unreachable slot. An
+out-of-span bit has no physical cluster and reports zero. `INDEX_ALLOCATION` is
+appended to the stage enum without changing earlier stage values, report sizes
+or API version 2. Each 256-byte stack chunk and membership probe consumes both
+diagnostic work and core operation credits before further work. Reads also retain
+their independent read budgets. No free index block is read and ordinary mount,
+lookup and FSKit enumeration do not run this whole-bitmap diagnostic.
+
 Physical extents are sorted, checked for overlaps and compared bit-for-bit with
 `$Bitmap::$DATA`. A claimed free cluster fails immediately. An allocated cluster
 without a physical owner is reported as unclaimed and fails the verdict. Sparse
@@ -124,8 +149,8 @@ entry is one primary name. Reparse directories, encrypted mappings and other
 unsupported ordinary stream formats also retain incomplete verdicts.
 
 The diagnostic does not parse arbitrary resident payload semantics, validate
-all `$Secure`/quota/object-ID/reparse view-index relations, enumerate unreferenced
-index-allocation blocks, qualify Windows-dependent extended mirror tails, verify boot replicas,
+all `$Secure`/quota/object-ID/reparse view-index relations or their complete
+allocation inventories, qualify Windows-dependent extended mirror tails, verify boot replicas,
 read all file content, decompress every compression unit or replay `$LogFile`.
 Those checks remain separate qualification work. Mount's existing mirror check
 still covers only bootstrap record zero; the diagnostic compares the required
@@ -187,6 +212,12 @@ duplicate root anchors, duplicate empty bad-cluster streams and explicit
 unsupported cases. Fault sweeps verify exact release sizes, unchanged source
 bytes, complete retry and private ownership beside an existing live mount.
 The physical bad-cluster test refuses any callback read of its bad sector range.
+Twenty-two additional index images cover used unreachable slots, out-of-span
+padding, fragmented and multi-block trees, resident/nonresident paged bitmaps,
+small roots and index sizes below/equal/above cluster size. Forbidden-range
+callbacks prove free index storage stays unread. The three reads of a 513-byte
+nonresident bitmap have six partial/full backend failures and nine read-call,
+read-byte or work refusals before their callbacks, with retry and exact cleanup.
 Required-allocation sweeps disable optional record caching; separate successful
 runs exercise cache-enabled owners. A best-effort cache miss is not a required
 allocation failure.

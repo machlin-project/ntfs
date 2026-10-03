@@ -131,7 +131,7 @@ The accounting deliberately includes cached and memory-only paths:
 | Mount and records | Boot/record spans before decoding or cache copying; validated UpCase loop units |
 | Attributes and mappings | Base record scans, attribute-list entry spans and each referenced-record scan; mapping attribute spans and validated run counts |
 | Streams | EOF-clipped delivered bytes, raw stream spans and additional cold compression-unit output work before decode/copy/zero |
-| Directory indexes | Checked frame spans, seek/traversal transitions, visited-table scans, collision probes and rehash steps |
+| Directory indexes | Checked frame spans, seek/traversal transitions, visited-table scans, collision probes and rehash steps; diagnostic-only complete bitmap bit scans and visited-block membership probes |
 | ADS catalogs | Record/list spans, each name comparison including its minimum UTF-16 span, sort/uniqueness/base lookup and copied entry size |
 | Metadata and reparse | Cold record or cached stat size; actual original-byte and UTF-16 copies |
 | Security | Index-frame spans, descriptor hash/validation/copy spans, bounded token group scans and each owned DACL SID comparison |

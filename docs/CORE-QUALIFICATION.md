@@ -27,6 +27,10 @@ is 519 MiB under the separate unchanged 1-GiB policy. Main actual-evidence revie
 is `artifacts/stored-mask-review.json`; ACCEPTANCE.md preserves the first test
 compile's missing-SDK failure and the corrected complete run. These checks do not
 qualify Windows decisions, native authorization or installed/commercial behavior.
+Committed-source portable Release/O3 reproducibility matches eight actual full
+products in two build directories under `artifacts/reproducibility-stored-mask/`;
+main verifies their bytes and selected options. Relocated-source/native app
+reproducibility and distribution remain open.
 
 The preceding read-only maintenance component passes 36 groups/ten explicit
 modern-runtime SKIPs, three targeted unchanged-core validation suites, format/

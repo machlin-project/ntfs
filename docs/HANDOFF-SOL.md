@@ -48,6 +48,10 @@ Current logs use `artifacts/plan-stored-mask-*`, matched packets use
 `artifacts/fuzz-stored-mask-fatal/`. Main review is
 `artifacts/stored-mask-review.json`. Preserve preceding campaign/environment and
 cache/maintenance evidence with their exact source scopes.
+Current committed-source portable Release/O3 reproducibility matches all eight
+full products under `artifacts/reproducibility-stored-mask/`, independently read
+by main. The two builds use one checkout/toolchain and distinct directories;
+relocated-source/native app reproducibility and distribution remain unqualified.
 
 Next acquire real Windows AccessCheck vectors before expanding restricted-owner,
 maximum-access, privilege or advanced-ACE semantics. Native identity/owning

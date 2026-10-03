@@ -44,6 +44,11 @@ Current logs use `artifacts/plan-stored-mask-*-{initial,sdk,fatal}.log`; matched
 packets use `artifacts/stored-mask-{before,after}/`. Main independent review is
 `artifacts/stored-mask-review.json`. The prior read-workload measurements remain
 source-scoped observations; no new performance result is claimed by this change.
+Current committed-source Release/O3 reproducibility matches all eight actual
+portable products under `artifacts/reproducibility-stored-mask/`. Main independently
+reads both full copies and selected build options. This is the same checkout/
+toolchain in distinct build directories, not relocated-source or native app
+reproducibility, signing or distribution acceptance.
 Windows acquisition, full/native authorization, installed mounts and commercial
 release qualification remain open.
 

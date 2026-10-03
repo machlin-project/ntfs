@@ -15,10 +15,18 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 68 sanitized suites, 46 FSKit component groups/eleven runtime SKIPs and a clean
+is 70 sanitized suites, 46 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
+
+The core now inventories complete FILE_NAME storage separately as physical
+names, primary names and DOS aliases. Listed extensions have checked sequences
+and ownership; successful immutable counts are cached under operation budgets.
+All 1,133 documented NIST user paths and three separate roots match NTFS-3G's
+exported filename namespaces. FSKit link-count presentation and single-edge
+reparse guards still need to adopt this API; see
+[native namespace policy](docs/NATIVE-NAMESPACE.md).
 
 FSKit activation now requires an explicit read-only extraction choice through
 the task option ntfs-access=extract, at load or activation. Windows permissions
@@ -58,7 +66,7 @@ the current or immediately following run before the binary-search fallback.
 Six original workloads include up to 1,024 runs through eleven attribute records,
 sparse storage and uninitialized tails. Exact bytes, independent streams,
 partial/full I/O failures and compound quota checks pass. Current source passes
-68 sanitized suites and builds the universal Release app. Matched portable
+70 sanitized suites and builds the universal Release app. Matched portable
 measurements and their tradeoffs are tracked in PERFORMANCE.md; Windows/native
 and the complete optimization program remain open.
 

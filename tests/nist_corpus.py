@@ -25,7 +25,9 @@ LAYOUT_URL = 'https://cfreds-archive.nist.gov/dfr-images/setup-july-10-2012.pdf'
 PARTITION_BYTES = 300 * 1024 * 1024
 COPY_BYTES = 1024 * 1024
 OUTPUT_BYTES = 2 * 1024 * 1024
-TOOL_SECONDS, TOTAL_SECONDS, MAX_COMMANDS = 30, 1200, 10000
+# The largest documented profile has 1,031 objects. This margin covers ten
+# commands per object plus directory, store and structural-root observations.
+TOOL_SECONDS, TOTAL_SECONDS, MAX_COMMANDS = 30, 1200, 12000
 REFERENCE_SEQUENCE_SHIFT = 48
 REFERENCE_RECORD_MASK = (1 << REFERENCE_SEQUENCE_SHIFT) - 1
 DOS_NAMESPACE = 2
@@ -53,6 +55,7 @@ LINK_PROFILE_NAMES = ('Archive-ntfs.txt', 'Hidden-ntfs.txt', 'NotIndexed-ntfs.tx
                       'shortcut-file.txt', 'shortcut-shortcut.lnk', 'stream-file.txt',
                       'symbolic-file.txt', 'symbolic-link.txt')
 STREAM_NAME = 'Brahmaputra.txt'
+NAMESPACE_LABELS = frozenset(('POSIX', 'Win32', 'DOS', 'Win32 & DOS'))
 
 
 def require(condition, detail):
@@ -220,10 +223,25 @@ class Comparison:
         require(sequence is not None and links is not None, 'Missing independent FILE-header observations')
         require(int(sequence[1]) == int(reference, 16) >> REFERENCE_SEQUENCE_SHIFT and int(links[1]) == metadata['links'],
                 'FILE sequence or physical header link count differs')
+        namespaces = re.findall(rb'^\s*Namespace:\s*([^\r\n]+?)\s*$', info, re.MULTILINE)
+        namespaces = [name.decode('ascii') for name in namespaces]
+        require(namespaces and all(name in NAMESPACE_LABELS for name in namespaces),
+                'Missing or unknown independent FILE_NAME namespace observations')
+        counts = {'physical_names': len(namespaces),
+                  'primary_names': sum(name != 'DOS' for name in namespaces),
+                  'dos_aliases': namespaces.count('DOS')}
+        require(counts['physical_names'] == metadata['links'], 'Independent filename inventory/header counts disagree')
+        require(json.loads(self.core('links-ref', reference)) == counts, 'Primary/DOS counts differ from NTFS-3G')
         expected_descriptor = (self.descriptors[fields['security_id']] if fields['security_id']
                                else self.export(number, ATTRIBUTE_SECURITY))
         require(self.core('security-ref', reference) == expected_descriptor, 'Per-file descriptor differs')
-        row = {'path': path, 'reference': reference, 'metadata': metadata, 'standard_hex': original.hex()}
+        info_name, descriptor_name = f'file-{number}-info.txt', f'file-{number}-security.bin'
+        (self.output / info_name).write_bytes(info)
+        (self.output / descriptor_name).write_bytes(expected_descriptor)
+        row = {'path': path, 'reference': reference, 'metadata': metadata, 'standard_hex': original.hex(),
+               'link_counts': counts, 'info_oracle': info_name,
+               'security_oracle': descriptor_name, 'security_bytes': len(expected_descriptor),
+               'security_sha256': hashlib.sha256(expected_descriptor).hexdigest()}
         if not directory:
             catalog = [json.loads(line)['name_utf16'] for line in self.core('streams-ref', reference).splitlines()]
             expected_streams = [[], list(utf16_units(STREAM_NAME))] if path == '/stream-file.txt' else [[]]
@@ -299,6 +317,7 @@ def main():
                 references = {'/': info['root_reference']}
                 row['geometry'] = info
                 row['security_store'] = comparison.security()
+                row['root'] = comparison.object('/', references['/'], True)
                 for path, expected in documented_directories(name).items():
                     actual = comparison.directory(path, references[path], expected)
                     for child, directory in expected.items():

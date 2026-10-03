@@ -183,6 +183,7 @@ struct ntfs_stat {
 	uint64_t allocated_size;
 	uint32_t file_attributes;
 	uint32_t security_id;
+	/* Physical FILE-header names, including separately stored DOS aliases. */
 	uint16_t links;
 	bool directory;
 	bool reparse;
@@ -200,6 +201,12 @@ struct ntfs_dirent {
 	uint8_t name_namespace;
 	uint16_t name_length;
 	uint16_t name[NTFS_NAME_MAX];
+};
+
+struct ntfs_link_counts {
+	uint16_t physical_names;
+	uint16_t primary_names;
+	uint16_t dos_aliases;
 };
 
 struct ntfs_stream_name {
@@ -252,6 +259,12 @@ enum ntfs_result ntfs_node_metadata(struct ntfs_node *, struct ntfs_stat *);
  * nodes retain base metadata; malformed known packets fail.
  * Successful stat does not imply support for decryption or decompression. */
 enum ntfs_result ntfs_node_stat(struct ntfs_node *, struct ntfs_stat *);
+/* Count complete resident FILE_NAME inventory, including listed extensions.
+ * Every selected location and extension owner is checked; physical counts must
+ * match the base FILE header. DOS-only names do not add a logical hard link.
+ * Does not qualify parent/index reachability or native directory link policy.
+ * Successful immutable counts belong to this node. Output is zero on failure. */
+enum ntfs_result ntfs_node_link_counts(struct ntfs_node *, struct ntfs_link_counts *);
 /* Validate Microsoft reparse-buffer framing and link name spans. WOF, cloud and
  * unknown Microsoft payloads remain opaque: recognizing a tag is not data support.
  * GUID framing is UNSUPPORTED, including Microsoft-tagged candidates whose size

@@ -116,6 +116,30 @@ ntfs_node_stat(struct ntfs_node *node, struct ntfs_stat *out)
 }
 
 enum ntfs_result
+ntfs_node_link_counts(struct ntfs_node *node, struct ntfs_link_counts *out)
+{
+	struct ntfs_volume *owner = node == NULL ? NULL : node->volume;
+	enum ntfs_result result;
+
+	if (out != NULL) {
+		ntfs_zero(out, sizeof(*out));
+	}
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_operation_enter(owner);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_node_link_counts_impl(node, out);
+	if (result != NTFS_OK) {
+		ntfs_zero(out, sizeof(*out));
+	}
+	ntfs_operation_leave(owner);
+	return result;
+}
+
+enum ntfs_result
 ntfs_stream_open(
     struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_stream **out)
 {

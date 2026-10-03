@@ -1,6 +1,29 @@
 # Core qualification and continuation
 
-The current public-corpus continuation closes physical DOS-name diagnostic counts
+The current filename-inventory continuation adds an owning core API for complete
+physical/primary/DOS counts, including resident/nonresident attribute lists and
+sequence-checked extensions. Forty-three independently authored inventories,
+23 allocation/24 partial-full read fault positions, twelve cold budget boundaries
+and hot-cache ancestor refusal/retry pass. These inventories qualify filename
+storage; they do not qualify the whole parent/index graph or native directory
+link policy. The adapter still uses physical header counts and needs migration.
+
+All 70 fatal-sanitizer suites, both 2-KiB freestanding targets, style, 46 FSKit
+component groups/eleven runtime SKIPs and the clean universal Release pass.
+The new module compiles for arm64 and x86_64. The fresh image campaign replays
+435 authored seeds, including all 43 new inventories, and exits zero with
+reported OOM/timeout/crash counters zero. Its last periodic observation is 50,022
+executions at 70 seconds; the terminal log records exit zero at 71 seconds.
+All three public NIST partitions pass complete diagnostics and an offline
+NTFS-3G comparison of 1,133 documented user paths plus three separate roots,
+including every exported primary/DOS count. Source bytes stay unchanged.
+Main review is artifacts/link-counts-review.json; comparison evidence is
+artifacts/nist-corpus-logical-links-reviewed/report.json. Windows/native counts,
+authorization, installed mounts, recovery, release and the wider optimization
+program remain open. Previous validation fuzz/performance/reproducibility
+reports retain their exact source scopes.
+
+The preceding public-corpus continuation closes physical DOS-name diagnostic counts
 and recognizes the observed internal repair descriptor omission through bounded,
 checked namespace ownership. All 68 fatal-sanitizer suites, 46 FSKit groups/eleven
 runtime SKIPs, both freestanding targets and the clean universal Release app pass.

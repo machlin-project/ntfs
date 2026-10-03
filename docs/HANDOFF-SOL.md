@@ -17,7 +17,51 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current public-corpus diagnostic qualification
+## Current filename inventory qualification
+
+The new additive ntfs_node_link_counts API keeps ntfs_stat.links as the physical
+FILE-header value and separately returns physical_names, primary_names and
+dos_aliases. Complete resident filenames may live in checked listed extensions;
+the list itself may be nonresident. Private bounded sorting and one read per
+selected extension validate location uniqueness, owner/sequence and complete
+storage. Cached success remains subject to operation/ancestor admission. This
+does not establish parent/index reachability or native directory link policy.
+
+Evidence is 70 fatal-sanitizer suites, both 2-KiB freestanding targets, style,
+46 FSKit component groups/eleven genuine runtime SKIPs and a clean universal
+Release. The module compiles for both architectures; app signatures remain
+linker ad hoc with no distribution authority. The new tests cover 43 authored
+inventories, 23 allocation/24 partial-full read fault positions, twelve cold
+budget boundaries and hot-cache refusal/retry. Main actual-file review is
+artifacts/link-counts-review.json; accepted CLI/archive/component binaries are
+under artifacts/link-counts-accepted/ and the app under artifacts/fskit-link-counts/.
+
+The offline NIST comparison passes all three full diagnostics and 1,133 documented
+user paths plus three separate structural roots. Counts match standalone
+NTFS-3G filename namespaces; original info/descriptor exports are retained, and
+every source hash stays unchanged. The report is
+artifacts/nist-corpus-logical-links-reviewed/report.json. The image campaign
+replays all 435 authored inputs, including 43 new inventory seeds, and exits zero
+with OOM/timeout/crash counters zero. Its last periodic sample is 50,022 executions
+at 70 seconds; terminal exit is zero at 71 seconds. Evidence is under
+artifacts/fuzz-link-counts-reviewed/. Earlier validation fuzz, performance and
+reproducibility retain their original scope.
+
+Next owning-layer work: migrate FSKit linkCount and all three single-edge reparse
+guards from stat.links to checked primary counts. Existing native fixtures can
+omit FILE_NAME storage; author complete names/parents/listed extensions before
+enabling strict inventory use. Do not fall back to raw header counts or invent
+names to keep component tests passing. Qualify DOS-bearing ordinary hard links,
+symlink/junction contexts, quotas, faults, remount/revocation and both protocol
+families. Ext4 exports its inode count directly; NTFS needs this format boundary.
+Windows/native observations remain a separate gate.
+
+Retain the first two harness failures, app environment failure and broken-output
+corpus attempt described in ACCEPTANCE.md. The corrected corpus supervisor owns
+its deadline/capture outside the transient REPL connection. No VM, host install,
+write capability, native authorization or commercial acceptance was added.
+
+## Preceding public-corpus diagnostic qualification
 
 Full diagnostics now count all physical FILE_NAME/index pairs, including separate
 DOS aliases, against the base FILE header. The legacy deferred counter remains

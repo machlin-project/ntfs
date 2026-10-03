@@ -8,7 +8,59 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current public-corpus continuation closes two diagnostic gaps: physical
+## Current filename inventory
+
+ntfs_node_link_counts inventories all selected resident FILE_NAME attributes,
+including listed extension records and a nonresident attribute list. Physical
+counts must agree with the base FILE header; DOS namespace names are separate
+from primary names, while combined Win32/DOS names count once as primary.
+Sorted location keys reject duplicates; every selected record checks sequence
+and base ownership. Missing/unlisted filenames fail. Successful immutable
+counts are cached only after complete checks. Failed calls leave zero output,
+release scratch and permit a fresh retry. This is storage qualification, not
+parent/index reachability or native directory link policy.
+
+All 70 fatal-sanitizer suites, both 2-KiB freestanding targets, style, 46 FSKit
+component PASS groups/eleven genuine runtime SKIPs and a clean universal Release
+pass. The new module genuinely compiles for both architectures; both app binaries
+retain linker ad hoc signatures with no distribution authority. New local
+evidence covers 43 independently authored inventory verdicts, 23 required
+allocation/24 partial-full read fault positions, twelve cold exact/one-below
+boundaries, allocation/read-free hot reuse and denying ancestor scopes.
+
+The fresh image campaign replays all 435 authored inputs, including the 43 new
+inventories, and exits zero with reported OOM/timeout/crash counters zero. The
+last periodic sample is 50,022 executions at 70 seconds; terminal exit is zero
+at 71 seconds, without an exact terminal execution total. Reports are under
+artifacts/fuzz-link-counts-reviewed/. Earlier validation/performance/
+reproducibility reports retain their source scope.
+
+The reviewed NIST comparison completes all three full diagnostics and 11,380
+bounded tool commands. All 1,133 documented user paths and three separately
+reported roots match standalone NTFS-3G filename namespaces, raw header counts,
+metadata/security exports and prior stream/link oracles. Original source hashes
+remain unchanged. Evidence is artifacts/nist-corpus-logical-links-reviewed/;
+main actual-file review is artifacts/link-counts-review.json. Retained current
+CLI/archive/component products are under artifacts/link-counts-accepted/ and
+the app remains under artifacts/fskit-link-counts/.
+
+The initial two new suite failures came from a fixture mutation selecting DATA
+instead of FILE_NAME and a live quota rejecting mount before the target call.
+Their corrected harness keeps required checks intact; preserve the first logs.
+The first app attempt lacked USER/LOGNAME in its isolated runner environment and
+never compiled. The first new corpus run lost its output connection and failed
+with BrokenPipe after two profiles; the reviewed independent supervisor completed
+all three with actual exit zero. These failures remain separate artifacts.
+
+FSKit linkCount and single-edge reparse guards still consume ntfs_stat.links.
+Migrate them to checked primary counts and author complete native filename
+fixtures before claiming DOS-alias support there. Windows/native logical counts,
+owning authorization, installed mounts, native recovery and commercial release
+remain unqualified.
+
+## Preceding public-corpus diagnostics
+
+The preceding public-corpus continuation closes two diagnostic gaps: physical
 DOS-alias header counts and the narrowly identified internal `$Repair` descriptor
 omission. The paired namespace identifies movable metadata through full checked
 references; no fixed `$Repair` slot or blanket system-flag exemption is used.

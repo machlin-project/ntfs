@@ -18,6 +18,25 @@ LINK-POLICY.md defines native size/type, inode-context limits, bounded target
 translation and the original-wire `org.machlin.ntfs.reparse` xattr. Ordinary inode
 hard links and reparse hard-link qualification are separate contracts.
 
+## Stored filename counts
+
+ntfs_stat.links preserves the physical FILE-header count, including separately
+stored DOS aliases. The additive ntfs_node_link_counts API inventories complete
+resident FILE_NAME storage in the base and selected checked extensions, through
+either attribute-list storage form. It returns physical_names, primary_names and
+dos_aliases. POSIX, Win32 and combined Win32/DOS namespaces count as primary;
+DOS-only namespace entries do not add primary names. Header disagreement,
+duplicate/missing locations and malformed filename bodies fail with zero output.
+Successful immutable counts are cached on the node under ordinary operation
+admission. Parent/index reachability remains the whole-volume validator's scope;
+the inventory does not define native directory link policy.
+
+FSKit currently exports ntfs_stat.links and uses that field for single-edge
+reparse admission. Migrating both uses and qualifying complete native fixtures is
+the next adapter task. The core's 43 inventory verdicts and external NIST filename
+oracles do not qualify installed link counts. See CORE-QUALIFICATION.md and
+HANDOFF-SOL.md for accepted evidence and remaining native contracts.
+
 ## Filename projection
 
 A component that converts to valid UTF-8 within the native 255-byte NAME_MAX cap

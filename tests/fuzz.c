@@ -39,6 +39,32 @@ struct operation_credit_seed {
 #define FUZZ_RANDOM_INCREMENT UINT32_C(1013904223)
 
 static void
+fuzz_links(struct ntfs_node *node)
+{
+	struct ntfs_link_counts counts, cached;
+	enum ntfs_result result;
+
+	memset(&counts, -1, sizeof(counts));
+	result = ntfs_node_link_counts(node, &counts);
+	if (result == NTFS_OK) {
+		assert(counts.primary_names != 0 &&
+		    (uint32_t)counts.primary_names + counts.dos_aliases == counts.physical_names);
+		result = ntfs_node_link_counts(node, &cached);
+		if (result == NTFS_OK) {
+			assert(counts.physical_names == cached.physical_names &&
+			    counts.primary_names == cached.primary_names &&
+			    counts.dos_aliases == cached.dos_aliases);
+		} else {
+			assert(cached.physical_names == 0 && cached.primary_names == 0 &&
+			    cached.dos_aliases == 0);
+		}
+	} else {
+		assert(counts.physical_names == 0 && counts.primary_names == 0 &&
+		    counts.dos_aliases == 0);
+	}
+}
+
+static void
 fuzz_journal(struct ntfs_volume *volume, struct fuzz_device *device)
 {
 	struct ntfs_logfile *source = NULL;
@@ -140,6 +166,7 @@ fuzz_budgeted(
 		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;
 		    i++) {
 			if (ntfs_node_open(volume, entry.reference, &node) == NTFS_OK) {
+				fuzz_links(node);
 				(void)ntfs_node_stat(node, &stat);
 				if (ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK) {
 					(void)ntfs_stream_read(
@@ -208,6 +235,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		    i < FUZZ_DIRECTORY_ENTRIES && ntfs_directory_next(directory, &entry) == NTFS_OK;
 		    i++) {
 			if (ntfs_node_open(v, entry.reference, &node) == NTFS_OK) {
+				fuzz_links(node);
 				if (ntfs_security_open(node, &security) == NTFS_OK) {
 					(void)ntfs_security_copy(
 					    security, buffer, sizeof(buffer), &count);

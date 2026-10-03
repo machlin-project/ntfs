@@ -204,6 +204,7 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 	struct ntfs_dirent entry;
 	struct ntfs_stat st;
 	uint16_t name[NTFS_NAME_MAX], *target = NULL;
+	struct ntfs_link_counts links;
 	uint64_t reference;
 	size_t length = 0, capacity = 0;
 	uint32_t stream_index;
@@ -227,6 +228,12 @@ inspect_reference(struct ntfs_volume *v, int argc, char **argv)
 		result = ntfs_node_stat(node, &st);
 		if (result == NTFS_OK) {
 			json_stat(&st);
+		}
+	} else if (strcmp(argv[2], "links-ref") == 0 && argc == 4) {
+		result = ntfs_node_link_counts(node, &links);
+		if (result == NTFS_OK) {
+			printf("{\"physical_names\":%u,\"primary_names\":%u,\"dos_aliases\":%u}\n",
+			    links.physical_names, links.primary_names, links.dos_aliases);
 		}
 	} else if (strcmp(argv[2], "ls-ref") == 0 && argc == 4) {
 		result = ntfs_directory_open(node, &directory);
@@ -419,7 +426,7 @@ main(int argc, char **argv)
 		    "       ntfs-inspect IMAGE security-id HEX_SECURITY_ID\n"
 		    "       ntfs-inspect IMAGE security-store [MAX_DESCRIPTORS]\n"
 		    "       ntfs-inspect IMAGE "
-		    "stat-ref|ls-ref|reparse-ref|streams-ref|security-ref "
+		    "stat-ref|links-ref|ls-ref|reparse-ref|streams-ref|security-ref "
 		    "HEX_REFERENCE\n"
 		    "       ntfs-inspect IMAGE cat-ref|lookup-ref HEX_REFERENCE [UTF16_HEX]\n");
 		return 2;

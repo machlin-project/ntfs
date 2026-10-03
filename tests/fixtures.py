@@ -767,6 +767,8 @@ def main():
     wof_file_fixtures(output, image)
     from validation_fixtures import author as validation_fixtures
     validation_fixtures(output, image)
+    from link_count_fixtures import author as link_count_fixtures
+    link_count_fixtures(output, image)
     from secure_fixtures import author as secure_fixtures
     secure_fixtures(output, image, contents)
     (output / 'standard.img').write_bytes(image)

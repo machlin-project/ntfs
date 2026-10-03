@@ -36,6 +36,14 @@ retained under ignored artifacts, and the offline test pins observed partition
 bytes. Those pins are local observations rather than publisher-authenticated
 digests. Authoring OS and Windows/native authorization remain unestablished.
 
+The separate primary/DOS inventory uses those same format observations and
+NTFS-3G's independently exported namespace labels. Its location sort, complete
+record inventory, owner/sequence checks and success cache are original code.
+Forty-three focused images are authored independently of the reader; they are
+storage oracles, not claims of whole-namespace validity. The new NIST comparison
+retains original per-record info and descriptor exports alongside counts. No
+foreign filesystem counting or hard-link implementation is copied or linked.
+
 Primary references:
 
 - [Microsoft MFT overview](https://learn.microsoft.com/en-us/windows/win32/devnotes/master-file-table)

@@ -106,6 +106,8 @@ struct ntfs_node {
 	 * The immutable medium and this node's record snapshot share one lifetime. */
 	struct ntfs_stat metadata;
 	bool metadata_verified;
+	struct ntfs_link_counts link_counts;
+	bool link_counts_verified;
 };
 
 struct ntfs_attr_view {
@@ -167,6 +169,7 @@ enum ntfs_result ntfs_node_open_impl(
 enum ntfs_result ntfs_root_impl(struct ntfs_volume *volume, struct ntfs_node **out);
 enum ntfs_result ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *out);
 enum ntfs_result ntfs_node_stat_impl(struct ntfs_node *node, struct ntfs_stat *out);
+enum ntfs_result ntfs_node_link_counts_impl(struct ntfs_node *, struct ntfs_link_counts *);
 enum ntfs_result ntfs_stream_open_impl(
     struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_stream **out);
 enum ntfs_result ntfs_stream_read_impl(

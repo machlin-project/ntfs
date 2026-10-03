@@ -32,8 +32,13 @@ normal names, full normal/DOS inventories and identities, metadata wire exports,
 all readable user streams, selected descriptor bytes and raw symlink packets
 have independent oracles. Ordinary symlink data reads must refuse. The runner
 supports common/extended standard information and indexed/per-file descriptors.
-Its resident-leaf SII oracle does not independently inventory an allocated SDH
-tree. Commands, pipe output, files and total run time are bounded; actual binary
+Each object's physical/primary/DOS counts compare with exported FILE_NAME
+namespace labels. Original per-record ntfsinfo and selected security packets
+are retained. Structural root observations are separate from the 1,133 documented
+user paths. Its resident-leaf SII oracle does not independently inventory an
+allocated SDH tree. The command cap is 12,000 per profile, covering ten calls per
+object in the largest 1,031-object profile plus directory/store/root work. Pipe
+output, files and total run time are bounded; actual binary
 digests, original exports, diagnostic reports and unchanged image hashes remain
 in the output. This test downloads nothing, mounts nothing and does not enable
 an extension. Windows acquisition and installed acceptance remain separate.

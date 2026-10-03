@@ -55,7 +55,12 @@ reported OOM/timeout/crash counters zero. Reports are
 1-GiB per-process RSS policies remain. Last periodic counts are 41,479/37,866 at
 70/60 seconds, not exact terminal totals; actual RSS is not measured. Windows,
 installed/runtime, authorization, recovery and commercial qualification remain
-open. Earlier reproduction/performance evidence retains its source scope.
+open. Fresh committed-source portable Release/O3 reproducibility matches all eight
+actual full products under `artifacts/reproducibility-boot-replicas/`. Main compares
+full bytes and actual selected options in the current review; native-app and
+relocated-source qualification remain false. The launcher log is
+`artifacts/plan-boot-replicas-reproducibility.log`. Earlier performance evidence
+retains its source scope.
 
 ## Preceding within-owner intermediate links
 

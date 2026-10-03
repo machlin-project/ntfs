@@ -62,6 +62,12 @@ dispatch. These failed attempts are not qualified fuzz/component evidence.
 An initial review-only prefix check confused truncated `partial-SECTOR` copies
 with `partial-initialization`; the corrected exact labels preserve product and
 fixture bytes. Its retained diagnosis is `artifacts/boot-replicas-review-initial.log`.
+Fresh committed-source portable Release/O3 reproducibility matches all eight
+actual full products under `artifacts/reproducibility-boot-replicas/`. Main compares
+complete bytes and actual selected build options in the current review. The
+launcher log is `artifacts/plan-boot-replicas-reproducibility.log`. This qualifies
+one arm64 checkout/toolchain in distinct build directories; native-app and
+relocated-source reproducibility remain explicitly false.
 Windows boot variants, installed/modern FSKit, owning authorization, complete
 recovery, broader optimization and commercial release remain open.
 

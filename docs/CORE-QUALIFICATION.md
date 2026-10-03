@@ -38,6 +38,11 @@ seconds/1 GiB; RSS is configured, not observed. Reports use
 `artifacts/fuzz-boot-replicas-image-span-reviewed/`. Windows boot profiles,
 installed/modern FSKit, owning authorization, recovery, release and the complete
 optimization program remain open.
+Fresh committed-source portable Release/O3 builds match eight actual full products
+under `artifacts/reproducibility-boot-replicas/`. Main compares complete bytes and
+actual selected build options in the current review. This remains the same
+arm64 checkout/toolchain in distinct directories, with relocated-source and
+native-app qualification explicitly false.
 
 The preceding intermediate-link continuation passes all 67 sanitized suites, both
 2-KiB freestanding targets, format/style, 42 FSKit groups/ten runtime SKIPs and

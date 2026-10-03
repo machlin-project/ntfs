@@ -16,6 +16,28 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+The optional offline public-corpus comparison uses existing NIST DFR-15/16/17
+partitions and ignored standalone NTFS-3G tools. Obtain archives from the NIST
+links in PROVENANCE.md; their documented single type-07 partition starts at byte
+65,536 and spans 300 MiB. Retain acquisition and extraction hashes separately.
+Name the extracted files dfr-{15,16,17}-ntfs.partition.img and run:
+
+```sh
+python3 tests/nist_corpus.py --images artifacts/public-corpus-nist-acquired --output artifacts/nist-corpus-comparison-new
+```
+
+The output directory must be fresh. Local first-acquisition pins guard inputs;
+they do not establish publisher digest authority or a Windows author. Documented
+normal names, full normal/DOS inventories and identities, metadata wire exports,
+all readable user streams, selected descriptor bytes and raw symlink packets
+have independent oracles. Ordinary symlink data reads must refuse. The runner
+supports common/extended standard information and indexed/per-file descriptors.
+Its resident-leaf SII oracle does not independently inventory an allocated SDH
+tree. Commands, pipe output, files and total run time are bounded; actual binary
+digests, original exports, diagnostic reports and unchanged image hashes remain
+in the output. This test downloads nothing, mounts nothing and does not enable
+an extension. Windows acquisition and installed acceptance remain separate.
+
 Native activation requires an explicit read-only extraction choice at load or
 activation: -o ntfs-access=extract. Windows ACLs are not enforced. Ordinary loads
 without the choice still support maintenance, but cannot activate. Internal

@@ -24,12 +24,13 @@ enum {
 
 struct validation_record {
 	uint64_t reference, base, parent;
-	uint32_t primary_names, security_id;
+	uint32_t security_id;
+	uint16_t primary_names, dos_names;
 	uint16_t flags, links;
 	uint8_t directory_state;
-	bool dos_names;
 	bool reserved_empty;
 	bool reserved_inert;
+	bool hidden_system;
 };
 
 struct validation_run {
@@ -56,7 +57,6 @@ struct validation {
 	uint32_t run_count, run_capacity, link_count, link_capacity;
 	uint32_t name_count, name_capacity;
 	size_t memory;
-	uint64_t deferred_dos_reference;
 	bool has_security_ids;
 	enum ntfs_result failure;
 };
@@ -509,12 +509,10 @@ check_directory_graph(struct validation *v)
 		v->report->related_reference = record->parent;
 		v->report->attribute_type = NTFS_ATTR_FILENAME;
 		v->report->cluster = 0;
-		if (record->dos_names) {
-			v->report->deferred_dos_link_counts++;
-			if (v->deferred_dos_reference == 0) {
-				v->deferred_dos_reference = record->reference;
-			}
-		} else if (record->primary_names != record->links || record->primary_names == 0) {
+		/* The FILE header counts physical names, including separate DOS aliases.
+		 * Native logical hard-link counts are a separate presentation contract. */
+		if ((uint32_t)record->primary_names + record->dos_names != record->links ||
+		    record->primary_names == 0) {
 			return NTFS_CORRUPT;
 		}
 		if ((record->flags & NTFS_RECORD_DIRECTORY) == 0) {
@@ -1055,15 +1053,6 @@ ntfs_validate(const struct ntfs_environment *environment, const struct ntfs_limi
 	if (result == NTFS_OK) {
 		result = scan_security(&v);
 	}
-	if (result == NTFS_OK && report->deferred_dos_link_counts != 0) {
-		result = NTFS_UNSUPPORTED;
-		report->stage = NTFS_VALIDATION_NAMESPACE;
-		report->reference = v.deferred_dos_reference;
-		report->record_number = v.deferred_dos_reference & NTFS_REFERENCE_RECORD_MASK;
-		report->related_reference = 0;
-		report->attribute_type = NTFS_ATTR_FILENAME;
-		report->cluster = 0;
-	}
 	validation_release(&v, v.names, (size_t)v.name_capacity * sizeof(*v.names));
 	validation_release(&v, v.links, (size_t)v.link_capacity * sizeof(*v.links));
 	validation_release(&v, v.runs, (size_t)v.run_capacity * sizeof(*v.runs));
@@ -1184,8 +1173,14 @@ remember_link(struct validation *v, uint64_t parent, uint64_t reference, const u
 	v->name_count += length;
 	if (source == VALIDATION_FILENAME_SOURCE) {
 		if (name_namespace == NTFS_NAMESPACE_DOS) {
-			owner->dos_names = true;
+			if (owner->dos_names == UINT16_MAX) {
+				return NTFS_CORRUPT;
+			}
+			owner->dos_names++;
 		} else {
+			if (owner->primary_names == UINT16_MAX) {
+				return NTFS_CORRUPT;
+			}
 			owner->primary_names++;
 			if ((owner->flags & NTFS_RECORD_DIRECTORY) != 0) {
 				if (owner->parent != 0 && owner->parent != parent) {
@@ -1354,6 +1349,9 @@ scan_attributes(struct validation *v)
 		}
 		if (v->records[i].base == 0) {
 			v->records[i].security_id = stat.security_id;
+			v->records[i].hidden_system =
+			    (stat.file_attributes & (NTFS_FILE_HIDDEN | NTFS_FILE_SYSTEM)) ==
+			    (NTFS_FILE_HIDDEN | NTFS_FILE_SYSTEM);
 			if (stat.security_id != 0) {
 				v->has_security_ids = true;
 			}
@@ -1507,6 +1505,94 @@ security_references(
 	return NTFS_OK;
 }
 
+static enum ntfs_result
+unique_internal_child(struct validation *v, uint64_t parent, const uint16_t *name, uint16_t length,
+    bool directory, uint64_t *reference)
+{
+	const struct validation_link *link;
+	struct validation_record *record;
+	uint64_t match = 0;
+	uint32_t first = 0, end = v->link_count / VALIDATION_LINK_PAIR, middle, index;
+
+	*reference = 0;
+	v->report->reference = parent;
+	v->report->record_number = parent & NTFS_REFERENCE_RECORD_MASK;
+	v->report->related_reference = 0;
+	v->report->attribute_type = NTFS_ATTR_FILENAME;
+	v->report->cluster = 0;
+	/* The namespace pass has paired every physical name with its index entry
+	 * and sorted the pairs by their complete, sequence-checked parent reference. */
+	while (first < end) {
+		if (work(v, sizeof(*link)) != NTFS_OK) {
+			return v->failure;
+		}
+		middle = first + (end - first) / VALIDATION_VECTOR_GROWTH;
+		if (v->links[middle * VALIDATION_LINK_PAIR].parent < parent) {
+			first = middle + 1;
+		} else {
+			end = middle;
+		}
+	}
+	for (index = first; index < v->link_count / VALIDATION_LINK_PAIR; index++) {
+		link = &v->links[index * VALIDATION_LINK_PAIR];
+		if (work(v, sizeof(*link) + (uint64_t)length * sizeof(*name)) != NTFS_OK) {
+			return v->failure;
+		}
+		if (link->parent != parent) {
+			break;
+		}
+		if (link->length != length ||
+		    !ntfs_equal(v->names + link->offset, name, (size_t)length * sizeof(*name))) {
+			continue;
+		}
+		if (match != 0) {
+			*reference = 0;
+			return NTFS_OK;
+		}
+		match = link->reference;
+		record = checked_reference(v, match);
+		if (record == NULL) {
+			return NTFS_STALE;
+		}
+		if (((record->flags & NTFS_RECORD_DIRECTORY) != 0) == directory &&
+		    record->links == 1 && record->primary_names == 1 && record->dos_names == 0) {
+			*reference = match;
+		}
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+repair_metadata_reference(struct validation *v, uint64_t *reference)
+{
+	static const uint16_t extend[] = {'$', 'E', 'x', 't', 'e', 'n', 'd'};
+	static const uint16_t metadata[] = {'$', 'R', 'm', 'M', 'e', 't', 'a', 'd', 'a', 't', 'a'};
+	static const uint16_t repair[] = {'$', 'R', 'e', 'p', 'a', 'i', 'r'};
+	uint64_t parent;
+	enum ntfs_result result;
+
+	*reference = 0;
+	result = unique_internal_child(v, v->records[NTFS_ROOT_RECORD].reference, extend,
+	    sizeof(extend) / sizeof(*extend), true, &parent);
+	if (result != NTFS_OK || parent == 0 ||
+	    (parent & NTFS_REFERENCE_RECORD_MASK) != NTFS_EXTEND_RECORD) {
+		return result;
+	}
+	result = unique_internal_child(
+	    v, parent, metadata, sizeof(metadata) / sizeof(*metadata), true, reference);
+	if (result != NTFS_OK || *reference == 0) {
+		return result;
+	}
+	parent = *reference;
+	result = unique_internal_child(
+	    v, parent, repair, sizeof(repair) / sizeof(*repair), false, reference);
+	if (result == NTFS_OK && *reference != 0 &&
+	    !v->records[*reference & NTFS_REFERENCE_RECORD_MASK].hidden_system) {
+		*reference = 0;
+	}
+	return result;
+}
+
 static bool
 file_security_required(uint64_t record_number, bool reserved_inert)
 {
@@ -1533,9 +1619,16 @@ scan_file_security(struct validation *validation)
 {
 	struct validation_record *record;
 	struct ntfs_node *node = NULL;
-	uint64_t index;
+	uint64_t index, repair_reference;
 	enum ntfs_result result;
 
+	/* Omission is observed for the canonical internal $Repair object. Resolve
+	 * checked ownership rather than assigning that purpose to a movable slot.
+	 * Present packets and every nonzero indexed ID retain their ordinary checks. */
+	result = repair_metadata_reference(validation, &repair_reference);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	for (index = 0; index < validation->report->record_slots; index++) {
 		result = work(validation, 1);
 		if (result != NTFS_OK) {
@@ -1558,7 +1651,8 @@ scan_file_security(struct validation *validation)
 		result = ntfs_node_open(validation->volume, record->reference, &node);
 		if (result == NTFS_OK) {
 			result = ntfs_security_file_validate(node,
-			    file_security_required(index, record->reserved_inert),
+			    file_security_required(index, record->reserved_inert) &&
+				record->reference != repair_reference,
 			    index_inventory_work, validation);
 		}
 		ntfs_node_close(node);

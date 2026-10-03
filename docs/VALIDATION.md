@@ -194,11 +194,16 @@ All owned descriptions/list buffers close on failure. A complete bad-cluster
 open shares one mounted operation, including nested list reads and extension
 allocations, in addition to the diagnostic's existing budgets.
 
-Separate DOS aliases have exact filename/index pairing checks, but their header
-link-count convention is deferred pending native observations. They increment
-`deferred_dos_link_counts`; even when the other passes succeed the final result
-is UNSUPPORTED, naming the first affected record. A combined Win32/DOS namespace
-entry is one primary name. Reparse directories, encrypted mappings and other
+Every physical filename, including a separate DOS alias, must have its exact
+index partner. The sum of primary and separate DOS names must equal the base
+FILE header's link count; at least one primary name remains required. Combined
+Win32/DOS entries count once. Both counters reject overflow before incrementing.
+The legacy `deferred_dos_link_counts` report field remains zero to preserve the
+public layout. This checks physical storage, independently of native logical
+hard-link presentation. The convention is supported by the NTFS-3 maintainer's
+[format correction](https://www.spinics.net/lists/kernel/msg5191992.html), pinned
+NTFS-3G layout facts and original bytes from three public NIST images.
+Reparse directories, encrypted mappings and other
 unsupported ordinary stream formats also retain incomplete verdicts.
 
 After physical ownership succeeds, a separate SECURITY pass fully walks the
@@ -218,6 +223,14 @@ Specific fixed internal metadata and recognized empty/inert reserved slots may
 lack a descriptor; present selected packets are checked, and missing ordinary,
 root, `$Volume` or `$Boot` storage remains CORRUPT. Neither the system attribute
 bit nor an arbitrary low MFT slot grants this exception; SECURITY.md defines it.
+The observed internal `$Extend/$RmMetadata/$Repair` omission is recognized through
+the fully paired, sequence-checked namespace. `$Extend` must own fixed slot 11;
+both directories and the final regular file must have one physical name each.
+Exact observed spelling and the final file's hidden/system bits are required.
+The two movable objects have no prescribed record number. Bounded parent-range
+searches charge work without additional I/O or allocation. Present descriptors
+and nonzero indexed IDs retain their ordinary checks; explicit descriptor
+resolution still rejects missing storage and supplies no access decision.
 Each file shares one mounted operation across node open and descriptor reading;
 temporary storage releases before the next file. Descriptor-byte work is charged
 to both accounting planes before decoding. Reports identify the FILE and
@@ -231,7 +244,9 @@ read all file content, decompress every compression unit or replay `$LogFile`.
 Those checks remain separate qualification work. Mount's existing mirror check
 still covers only bootstrap record zero; the diagnostic compares the required
 four-record prefix separately. Windows-authored fragmented metadata,
-large directories and native DOS observations remain required.
+large directories and native logical hard-link observations remain required.
+The public NIST namespace profiles add external large-directory/nested-path
+evidence; their authoring OS is not established by the observed documentation.
 
 ## Budgets and reports
 

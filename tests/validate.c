@@ -488,13 +488,14 @@ check_budgets(struct fuzz_device *device)
 			limits.max_work_units = baseline.work_units - 1;
 			break;
 		case NTFS_VALIDATION_LIMIT_RECORDS:
-			limits.max_records = TEST_RECORDS - 1;
+			limits.max_records = (uint32_t)baseline.record_slots - 1;
 			break;
 		case NTFS_VALIDATION_LIMIT_RUNS:
-			limits.max_runs = TEST_PHYSICAL_RUNS - 1;
+			limits.max_runs = (uint32_t)baseline.physical_runs - 1;
 			break;
 		case NTFS_VALIDATION_LIMIT_LINKS:
-			limits.max_links = 2 * TEST_PRIMARY_NAMES - 1;
+			limits.max_links =
+			    (uint32_t)(baseline.filename_attributes + baseline.index_entries) - 1;
 			break;
 		default:
 			assert(false);
@@ -504,9 +505,9 @@ check_budgets(struct fuzz_device *device)
 		assert(validate(device, NULL, &report, 0) == NTFS_OK);
 	}
 	ntfs_validation_default_limits(&limits);
-	limits.max_records = TEST_RECORDS;
-	limits.max_runs = TEST_PHYSICAL_RUNS;
-	limits.max_links = 2 * TEST_PRIMARY_NAMES;
+	limits.max_records = (uint32_t)baseline.record_slots;
+	limits.max_runs = (uint32_t)baseline.physical_runs;
+	limits.max_links = (uint32_t)(baseline.filename_attributes + baseline.index_entries);
 	assert(validate(device, &limits, &report, 0) == NTFS_OK);
 	ntfs_validation_default_limits(&limits);
 	limits.max_memory_bytes = baseline.peak_memory_bytes;
@@ -1270,7 +1271,9 @@ check_file_security(const char *directory)
 	    {"validation-file-security-listed-resident.img", 0},
 	    {"validation-file-security-fragmented.img", TEST_FILE_SECURITY_LARGE_BYTES},
 	    {"validation-file-security-listed-fragmented.img", TEST_FILE_SECURITY_LARGE_BYTES},
-	    {"validation-file-security-maximum.img", TEST_FILE_SECURITY_MAX_BYTES}};
+	    {"validation-file-security-maximum.img", TEST_FILE_SECURITY_MAX_BYTES},
+	    {"validation-file-security-repair-missing.img", 0},
+	    {"validation-file-security-repair-moved.img", 0}};
 	struct fuzz_device device;
 	size_t index;
 
@@ -1278,6 +1281,7 @@ check_file_security(const char *directory)
 		device = (struct fuzz_device){0};
 		load_image(directory, profiles[index].image, &device);
 		check_faults(&device);
+		check_budgets(&device);
 		if (profiles[index].payload_size != 0) {
 			check_file_security_interruptions(&device, profiles[index].payload_size);
 		}
@@ -1291,6 +1295,8 @@ main(int argc, char **argv)
 {
 	const char *images[] = {"validation-standard.img", "validation-listed.img",
 	    "validation-extension-filename.img", "validation-bad-clusters-owned.img"};
+	const char *dos_images[] = {
+	    "validation-dos-hardlinks.img", "validation-dos-nested-hardlinks.img"};
 	struct fuzz_device device;
 	size_t i;
 
@@ -1318,5 +1324,12 @@ main(int argc, char **argv)
 	check_index_interruptions(argv[1]);
 	check_security(argv[1]);
 	check_file_security(argv[1]);
+	for (i = 0; i < sizeof(dos_images) / sizeof(dos_images[0]); i++) {
+		device = (struct fuzz_device){0};
+		load_image(argv[1], dos_images[i], &device);
+		check_faults(&device);
+		check_budgets(&device);
+		free((void *)device.data);
+	}
 	return 0;
 }

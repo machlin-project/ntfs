@@ -11,6 +11,15 @@ handoff, not a production NTFS driver. Build, component tests and installed nati
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
+Three public NIST partitions now pass complete diagnostics and an independent
+offline NTFS-3G comparison of 1,133 documented user objects and their readable
+streams. The validator checks physical DOS-alias counts and the observed internal
+repair descriptor omission through bounded namespace ownership. Current evidence
+is 68 sanitized suites, 46 FSKit component groups/eleven runtime SKIPs and a clean
+universal Release app. This corpus has unestablished authoring OS; Windows/native
+acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
+and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
+
 FSKit activation now requires an explicit read-only extraction choice through
 the task option ntfs-access=extract, at load or activation. Windows permissions
 are not enforced in that mode. Each owner keeps immutable native presentation

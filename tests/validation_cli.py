@@ -67,8 +67,7 @@ def main():
             assert report[name] == expected, (case['image'], name, expected, report)
         for name, expected in case.get('boot', {}).items():
             assert report[name] == expected, (case['image'], name, expected, report)
-        if case['image'] == 'validation-dos.img':
-            assert report['deferred_dos_link_counts'] == '1'
+        assert report['deferred_dos_link_counts'] == '0'
         if case['image'] == 'validation-allocated-unclaimed-cluster.img':
             assert report['unclaimed_clusters'] == '1'
         if case['complete']:

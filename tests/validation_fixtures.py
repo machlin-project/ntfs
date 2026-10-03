@@ -26,6 +26,8 @@ FILENAME_INSTANCE = 1
 DATA_INSTANCE = 2
 LIST_INSTANCE = 3
 EXTRA_FILENAME_INSTANCE = 4
+FILENAME_INSTANCES = (FILENAME_INSTANCE, EXTRA_FILENAME_INSTANCE)
+ADDITIONAL_FILENAME_INSTANCE = 16
 ADS_INSTANCE = 5
 SECURITY_INSTANCE = 6
 SECURITY_ATTRIBUTE = 0x50
@@ -145,7 +147,8 @@ def root_value(entries, external=False, block_bytes=None):
                                   f.INDEX_LARGE if external else 0) + entries)
 
 
-def build(source, case, *, mirror=None, index=None, boot=None):
+def build(source, case, *, mirror=None, index=None, boot=None,
+          links_override=None, directory_records=()):
     image = bytearray(source)
     if mirror is None:
         clusters = (MIRROR_RECORDS * f.RECORD + f.CLUSTER - 1) // f.CLUSTER
@@ -196,8 +199,28 @@ def build(source, case, *, mirror=None, index=None, boot=None):
         links[FRAGMENTED_RECORD] = [Link('foo.txt')]
     if case == 'hardlinks':
         links[HELLO_RECORD].append(Link('other-hello.txt'))
-    if case == 'dos':
+    if case in ('dos', 'dos-header-count-low', 'dos-header-count-high'):
         links[HELLO_RECORD].append(Link('HELLO~1.TXT', namespace=f.NAMESPACE_DOS))
+    elif case == 'dos-only':
+        links[HELLO_RECORD] = [Link('HELLO~1.TXT', namespace=f.NAMESPACE_DOS)]
+    elif case == 'combined-name':
+        links[HELLO_RECORD] = [Link('HELLO.TXT', namespace=f.NAMESPACE_WIN32_DOS)]
+    elif case in ('dos-hardlinks', 'dos-nested-hardlinks'):
+        if case == 'dos-nested-hardlinks':
+            directories.update((FIRST_DIRECTORY, SECOND_DIRECTORY))
+            links[FIRST_DIRECTORY] = [Link('first')]
+            links[SECOND_DIRECTORY] = [Link('second')]
+            parents = (f.file_reference(FIRST_DIRECTORY), f.file_reference(SECOND_DIRECTORY))
+        else:
+            parents = (f.ROOT_REF, f.ROOT_REF)
+        links[HELLO_RECORD] = [
+            Link('hello.txt', parent=parents[0]),
+            Link('HELLO~1.TXT', parent=parents[0], namespace=f.NAMESPACE_DOS),
+            Link('other-hello.txt', parent=parents[1]),
+            Link('OTHERH~1.TXT', parent=parents[1], namespace=f.NAMESPACE_DOS)]
+    elif case == 'dos-directory':
+        directories.add(FIRST_DIRECTORY)
+        links[FIRST_DIRECTORY] = [Link('directory'), Link('DIRECT~1', namespace=f.NAMESPACE_DOS)]
     if case == 'stale-cached-sizes':
         links[HELLO_RECORD] = [Link('hello.txt', size=f.LARGE_SPARSE_BYTES)]
         links[FRAGMENTED_RECORD] = [Link('fragmented.bin', size=1)]
@@ -216,6 +239,9 @@ def build(source, case, *, mirror=None, index=None, boot=None):
     elif case == 'invalid-root-anchor':
         links[f.ROOT_RECORD] = [Link('other-root-name')]
 
+    if links_override is not None:
+        links.update(links_override)
+    directories.update(directory_records)
     index_links = {number: list(names) for number, names in links.items()}
     if case == 'filename-mismatch':
         links[HELLO_RECORD] = [Link('changed-name.txt')]
@@ -234,7 +260,8 @@ def build(source, case, *, mirror=None, index=None, boot=None):
     def attrs(number, extras=()):
         names = links[number]
         return [standard(f.FILE_ATTRIBUTE_DIRECTORY if number in directories else 0),
-                *(filename(link, FILENAME_INSTANCE if i == 0 else EXTRA_FILENAME_INSTANCE,
+                *(filename(link, FILENAME_INSTANCES[i] if i < len(FILENAME_INSTANCES)
+                           else ADDITIONAL_FILENAME_INSTANCE + i - len(FILENAME_INSTANCES),
                            number in directories) for i, link in enumerate(names)),
                 security(), *extras]
 
@@ -503,6 +530,10 @@ def build(source, case, *, mirror=None, index=None, boot=None):
         header_links = len(links.get(number, [])) if attributes and base == 0 else 0
         if case == 'header-link-count' and number == HELLO_RECORD:
             header_links += 1
+        if case == 'dos-header-count-low' and number == HELLO_RECORD:
+            header_links -= 1
+        elif case == 'dos-header-count-high' and number == HELLO_RECORD:
+            header_links += 1
         if case == 'root-header-link-count' and number == f.ROOT_RECORD:
             header_links += 1
         f.put_record(image, number, f.file_record(number, attributes,
@@ -555,7 +586,10 @@ def author(output, source):
         ('free-claimed-cluster', 'corrupt'), ('allocated-unclaimed-cluster', 'corrupt'),
         ('overlap-streams', 'corrupt'), ('self-overlap', 'corrupt'),
         ('invalid-size', 'corrupt'), ('unexpected-empty', 'corrupt'),
-        ('dos', 'unsupported'), ('efs', 'unsupported'),
+        ('dos', 'ok'), ('dos-hardlinks', 'ok'), ('dos-nested-hardlinks', 'ok'),
+        ('dos-directory', 'ok'), ('combined-name', 'ok'), ('dos-only', 'corrupt'),
+        ('dos-header-count-low', 'corrupt'), ('dos-header-count-high', 'corrupt'),
+        ('efs', 'unsupported'),
     ]
     manifest = []
     names = {'ok': 'success', 'corrupt': 'corrupt metadata',

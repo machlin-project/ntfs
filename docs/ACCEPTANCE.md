@@ -1,13 +1,67 @@
 # Acceptance
 
 The delivered scope is a bounded read-only core and FSKit development product.
-Local core, adapter component, current unsigned app-build and independent-image
-checks passed. A preceding signed Release build passed signature verification.
+Local core, adapter component, app builds with linker ad hoc signing and
+independent-image checks passed. A preceding signed Release build passed
+signature verification.
 Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current native access continuation adds an explicitly selected read-only
+The current public-corpus continuation closes two diagnostic gaps: physical
+DOS-alias header counts and the narrowly identified internal `$Repair` descriptor
+omission. The paired namespace identifies movable metadata through full checked
+references; no fixed `$Repair` slot or blanket system-flag exemption is used.
+Present packets and nonzero IDs still validate, with no synthesized descriptor
+or native authorization. VALIDATION.md and SECURITY.md define the supported shape.
+
+All 68 fatal-sanitizer suites, both 2-KiB freestanding targets, style, 46 component
+PASS groups/eleven genuine runtime SKIPs and the clean universal Release app pass.
+Seven new DOS and seventeen repair-security cases bring the general CLI inventory
+to 259 images; with nine separate store cases there are 268 complete-volume
+verdicts. Four new profiles add 854 allocation/438 I/O fault positions with retry,
+unchanged bytes and cleanup. The full maintenance component accepts four DOS/
+repair inventories and permits explicit extraction activation. The app compiles
+the changed validator on both architectures and retains linker ad hoc signatures,
+without distribution authority. Logs use artifacts/plan-nist-validation-*;
+main actual-file review is artifacts/nist-validation-review.json.
+Accepted core CLI/archive and component binaries are retained under
+artifacts/nist-validation-accepted/; app products remain in the dedicated
+artifacts/fskit-nist-validation/ derived-data directory.
+
+Three original public NIST DFR partitions pass complete diagnostics and the
+bounded offline NTFS-3G comparison. The independent documented namespace contains
+1,133 user objects: 1,079 files and 54 directories, including a 512-entry directory
+and nine nested directory levels. There are 1,080 observed stream entries; 1,079
+readable streams compare byte-for-byte, and ordinary reading of the symlink's
+empty default DATA refuses as required. Lookup/enumeration identities, raw
+standard information/timestamps, physical header counts, indexed/per-file
+descriptors, ADS, hard-link identity and original symlink bytes agree. Source
+hashes remain unchanged. The SII/SDS oracle resolves original packets but does
+not independently inventory the allocated SDH tree. Accepted comparison evidence
+is artifacts/nist-corpus-comparison-layout-aware/report.json; the acquisition
+and first failing diagnostic reports remain under artifacts/public-corpus-nist-*.
+The public documentation does not establish authoring OS or publisher digest
+authority. Local acquisition pins are observations, not Windows qualification.
+
+Retain both failed comparison attempts: the first incorrectly treated a symlink
+as ordinary data, and the second required only extended standard information.
+The corrected oracle accepts the supported common/extended layouts and requires
+the symlink read refusal. The initial validator collector also checked a nonexistent
+status key; its corrected report validates the already successful first invocation
+without rerunning it. None of these test errors is a product failure.
+
+The fresh validation-only campaign replays all 266 authored inputs and exits zero
+with reported OOM/timeout/crash counters zero. Its last periodic sample is 45,501
+executions at 69 seconds; terminal totals and actual RSS are not observed. The
+existing 1-MiB data plus 4-KiB resource envelope, five-second input deadline and
+1-GiB RSS policy remain. Evidence is artifacts/fuzz-nist-validation-reviewed/.
+Previous image fuzz and optimization/reproducibility reports retain their source
+scope; no new broad/native performance claim follows. Windows/native logical
+link counts, owning authorization, installed mounts, recovery and release remain
+open. The public corpus supplies useful format evidence without closing them.
+
+The preceding native access continuation adds an explicitly selected read-only
 extraction mode. Missing selection returns EACCES without a root; invalid load
 configuration fails before resource construction or I/O. Load selection survives
 activation, while successful activation keeps its selection across remount.
@@ -506,7 +560,7 @@ claimed.
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |
 | MFT and attributes | NTFS 3.0/3.1 headers; incremental fragmented bootstrap with resident/nonresident lists; sequence, base reference, continuation instance, reachability, gaps and duplicates | Local tests passed within limits below |
-| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, complete unflagged bad-cluster lists with metadata-only/content guards, required four-record mirror prefix/anchor and declared reserved boot-sector agreement, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 244 synthetic verdicts, seven budgets plus four security exact/one-below boundaries, 3,430 allocation/1,854 read faults plus 959 allocation/914 partial/full bad-chain failures, 25 private-open allocation/12 partial/full read failures and 38 operation boundaries; 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; 49 boot allocation/44 partial-full read failures, 66 pre-callback budgets/seven comparison precharges and four independent bitmap/mirror/boot-export geometries passed; extended mirror tails, Windows/historical boot profiles, DOS counts, flagged/native-Windows bad-cluster storage, other view-index semantics and Windows qualification remain open |
+| Read-only consistency diagnostic | Private bounded mount; MFT/cluster bitmaps, extension/list ownership, complete unflagged bad-cluster lists with metadata-only/content guards, required four-record mirror prefix/anchor and declared reserved boot-sector agreement, exact filename/index pairing, complete ordinary directory bitmap/reachability inventory, namespace reachability/link counts, physical ownership, complete indexed security/nonzero FILE-ID references and selected zero-ID per-file bodies; partial budget/fault/unsupported reports | 268 synthetic verdicts and three complete public NIST partitions, seven budgets plus four security exact/one-below boundaries, 4,284 allocation/2,292 read faults plus 959 allocation/914 partial/full bad-chain failures, 25 private-open allocation/12 partial/full read failures and 38 operation boundaries; 80 partial/full mirror-stage read failures, 48 mirror prefix budgets, six partial/full index-bitmap failures, nine index read-prefix budgets, 68 partial/full per-file SECURITY failures, 18 per-file pre-callback refusals/three parser precharges and compound core boundary passed; 49 boot allocation/44 partial-full read failures, 66 pre-callback budgets/seven comparison precharges and four independent bitmap/mirror/boot-export geometries passed; extended mirror tails, Windows/historical boot profiles, Windows logical-link counts, flagged/native-Windows bad-cluster storage, other view-index semantics and Windows qualification remain open |
 | Streams | Fragmentation, sparse/VDL zeroing, independent ADS and directory ADS, mixed LZNT1 units, empty nonresident data, cache retry and offsets beyond 4 GiB | Synthetic tests passed; ordinary data/ADS independently compared |
 | Metadata without content decoding | Complete unnamed-stream mappings and list/extent ownership; truthful logical/physical sizes for ordinary encoded files, strict content rejection and independent readable ADS | 18 core verdicts, 29 allocation/four read faults and six FSKit storage variants passed; Windows-authored EFS/compression metadata and installed behavior unqualified |
 | Stream inventory and projection | Bounded exact-UTF-16 catalog, extension ownership/duplicates, immutable lifetime, read-only FSKit xattrs and reverse manifest, response limits and revocation | 14 core and five component scenarios passed; four independent image geometries verify inventories and bytes; installed and Windows-authored projection untested |
@@ -535,7 +589,7 @@ claimed.
 | Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
 | Transaction/durability reference model | Exclusive serialized owner, complete private/log credits, data/WAL/commit/home/checkpoint ordering, arbitrary pending-sector eviction, partial/full I/O failures and interrupted abstract replay against independently authored NTFS endpoints | 49,855 modeled states, 22 ownership contracts, 14 history refusals, 1,205 interrupted-recovery states, 47 complete native-byte diagnostics/content checks and four unsafe-order witnesses passed; typed in-memory evidence, no native journal or product write API; see RECOVERY-MODEL.md |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Product implementation remains open; read-only primitives and abstract reference-model replay do not provide native recovery or permit writes/dirty mounts |
-| Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry; whole-volume selected per-file framing with explicit fixed-internal/inert source exceptions | 74 resolver contracts plus 46 whole-store/nine complete-volume store verdicts and 48 per-file diagnostic images, 496 allocation/730 partial-and-full store read positions, six operation profiles and whole-volume fault/budget checks; six per-file fault layouts and staged parser/I/O boundaries; four independent complete leaf-view/descriptor geometries passed; Windows/native authorization qualification incomplete |
+| Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry; whole-volume selected per-file framing with explicit fixed-internal/inert and narrowly owned canonical repair source exceptions | 74 resolver contracts plus 46 whole-store/nine complete-volume store verdicts and 65 per-file diagnostic images, 496 allocation/730 partial-and-full store read positions, six operation profiles and whole-volume fault/budget checks; eight per-file fault layouts and staged parser/I/O boundaries; four independent complete leaf-view/descriptor geometries and three public NIST stores/user descriptors passed; Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |
 | Full authorization and special data | Advanced ACE/SACL/integrity/privilege/maximum access, restricted ownership, identity mapping and owning native decisions; complete reparse target resolution, EFS decryption and WIM/cloud content | Not implemented; bounded within-owner intermediate native links and WOF file-provider content are tracked separately |

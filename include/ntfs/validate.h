@@ -47,6 +47,7 @@ struct ntfs_validation_report {
 	uint64_t record_slots, records_scanned, base_records, extension_records;
 	uint64_t attributes, streams, physical_runs, claimed_clusters;
 	uint64_t filename_attributes, index_entries, directories;
+	/* Retained for report layout compatibility; physical DOS counts are checked. */
 	uint64_t deferred_dos_link_counts;
 	uint64_t allocated_clusters, unclaimed_clusters;
 	uint64_t read_calls, read_bytes, allocation_calls, work_units;

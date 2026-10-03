@@ -24,9 +24,26 @@ history informed the boundary; no ext4 or NTFS-3G implementation was copied into
 this policy. NATIVE-ACCESS.md records the primary API references and exact native
 identity/enforcement limits. Core descriptor/DACL code remains a separate plane.
 
+The physical filename-count rule uses the NTFS-3 maintainer's explanation,
+pinned NTFS-3G wire comments and independently exported NIST record headers.
+The private counting, paired-parent searches, work admission and omission
+recognition are original implementation. No foreign traversal, permission or
+repair implementation is imported. Microsoft's repair path/purpose descriptions
+do not specify descriptor omission; the narrow diagnostic rule records an
+inference from three original public images. Their documented user namespaces
+provide an independent inventory. Acquisition archive/disk/partition hashes are
+retained under ignored artifacts, and the offline test pins observed partition
+bytes. Those pins are local observations rather than publisher-authenticated
+digests. Authoring OS and Windows/native authorization remain unestablished.
+
 Primary references:
 
 - [Microsoft MFT overview](https://learn.microsoft.com/en-us/windows/win32/devnotes/master-file-table)
+- [Microsoft reserved NTFS metadata names](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/b04c3bd0-79dc-4e58-b8ed-74f19fc2ea0a)
+- [Microsoft nested repair metadata paths](https://learn.microsoft.com/en-us/windows/win32/fileio/defragmenting-files)
+- [NTFS-3 maintainer's physical DOS-name link-count correction](https://www.spinics.net/lists/kernel/msg5191992.html)
+- [Public NIST DFR images](https://cfreds-archive.nist.gov/dfr-test-images.html)
+- [NIST documented namespace inventories](https://cfreds-archive.nist.gov/dfr-images/setup-july-10-2012.pdf)
 - [Attribute header and mapping pairs](https://learn.microsoft.com/en-us/windows/win32/devnotes/attribute-record-header)
 - [Attribute lists](https://learn.microsoft.com/en-us/windows/win32/devnotes/attribute-list-entry)
 - [Independent file streams](https://learn.microsoft.com/en-us/windows/win32/fileio/file-streams)

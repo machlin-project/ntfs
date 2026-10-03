@@ -17,7 +17,50 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current explicit extraction access
+## Current public-corpus diagnostic qualification
+
+Full diagnostics now count all physical FILE_NAME/index pairs, including separate
+DOS aliases, against the base FILE header. The legacy deferred counter remains
+zero with unchanged public report layout. Native logical hard-link presentation
+is a separate open contract. The canonical internal `$Repair` omission resolves
+through checked root/$Extend/$RmMetadata ownership, exact spelling, single names,
+directory parents and a hidden/system regular leaf. `$Extend` retains fixed slot
+11; movable metadata has no prescribed slot. Parent-range searches allocate and
+read nothing, charge bounded work and preserve present-packet/nonzero-ID checks.
+No descriptor is synthesized and no access decision follows.
+
+Current evidence: 68 fatal-sanitizer suites, 259 general diagnostic images plus
+nine independent store cases, two 2-KiB freestanding targets, style, 46 component
+PASS groups/eleven genuine macOS-27 runtime SKIPs and a clean universal Release
+app. Four new profiles add 854 allocation/438 I/O fault positions; the maintenance
+component accepts four corrected inventories before extraction activation. Both
+app binaries remain linker ad hoc signed without distribution authority.
+Main actual-file review is artifacts/nist-validation-review.json; accepted logs
+use artifacts/plan-nist-validation-*.
+The reviewed CLI/archive and component binaries are retained under
+artifacts/nist-validation-accepted/; universal app products remain under
+artifacts/fskit-nist-validation/.
+
+The three public NIST partitions pass full diagnostics and independent offline
+comparison of 1,133 documented user objects, 1,079 readable streams and the
+symlink's expected ordinary-data refusal. A 512-entry directory, nine directory
+levels, separate DOS aliases, hard links, ADS, common/extended standard information,
+indexed/per-file descriptors and raw symlink bytes have actual external oracles.
+Every source hash stays unchanged. The accepted report is
+artifacts/nist-corpus-comparison-layout-aware/report.json. DEVELOPMENT.md defines
+the offline command, pins, resource limits and SII/SDS versus SDH oracle boundary.
+Retain the two earlier failed oracle attempts and the initial collector-key error;
+ACCEPTANCE.md identifies the corrected test assumptions. Authoring OS/publisher
+digests remain unestablished, so this does not replace Windows acquisition.
+
+Validation fuzz replays all 266 actual authored inputs and exits zero with periodic
+OOM/timeout/crash counters zero. Its last periodic observation is 45,501 executions
+at 69 seconds, not an exact terminal total. See artifacts/fuzz-nist-validation-reviewed/.
+Earlier image fuzz, measurements and portable reproducibility retain their exact
+source scopes. Windows/native logical counts and authorization, installed mounts,
+native recovery, release and the remaining optimization program stay open.
+
+## Preceding explicit extraction access
 
 Native load or activation must select ntfs-access=extract. An ordinary load can
 remain unselected for maintenance; activation then returns EACCES with no root.
@@ -28,7 +71,7 @@ effective credentials once. Neither those IDs nor existing 0400/0500 modes map
 Windows principals or prove installed isolation. NATIVE-ACCESS.md defines this
 explicit restricted product mode and the native acceptance matrix to execute.
 
-Current evidence is 45 fatal-sanitizer component PASS groups/eleven genuine
+Evidence at that checkpoint is 45 fatal-sanitizer component PASS groups/eleven genuine
 runtime SKIPs, style and a clean arm64/x86_64 Release app. The original first
 component attempt failed compilation on a missing engine getter declaration and
 ran no tests; preserve that log separately. Accepted logs are

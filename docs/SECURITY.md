@@ -123,6 +123,20 @@ and every nonzero ID still requires the indexed store. `$Volume`, `$AttrDef`,
 Explicit resolver requests still reject missing storage; the diagnostic supplies
 no default or synthesized descriptor for an allowed internal omission.
 
+The diagnostic also recognizes the observed omitted descriptor on the internal
+`$Extend/$RmMetadata/$Repair` file. Microsoft documents the
+[reserved metadata purpose](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-fscc/b04c3bd0-79dc-4e58-b8ed-74f19fc2ea0a)
+and [exact nested path](https://learn.microsoft.com/en-us/windows/win32/fileio/defragmenting-files).
+Descriptor omission itself is an inference from original public NIST bytes,
+not a Microsoft authorization guarantee. Identification requires fully checked
+namespace ownership, fixed `$Extend` slot 11, exact component spelling, one
+physical name on each object, directory parents and a regular hidden/system
+leaf. Neither movable record number is hardcoded. Alternate parents/names,
+extra links/aliases, directory leaves or missing flags receive no exception.
+All present selected packets and nonzero indexed IDs still validate normally;
+the explicit resolver continues to reject a missing descriptor. This neither
+grants native access nor enables transactional repair.
+
 The already recognized empty/inert reserved MFT slots 12 through 15 have no
 active namespace edge. Empty records have no payload to interpret; inert records
 may lack a descriptor, but every present unnamed descriptor is checked. This

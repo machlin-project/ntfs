@@ -706,7 +706,7 @@ test_inventory_verdicts(NSString *fixtures)
 {
 	NSArray<NSString *> *names = @[
 		@"validation-filename-mismatch.img", @"validation-allocated-unclaimed-cluster.img",
-		@"validation-dos.img", @"validation-boot-signature.img"
+		@"validation-efs.img", @"validation-boot-signature.img"
 	];
 	const int expected[] = {EIO, EIO, ENOTSUP, EIO};
 	NSData *image, *original;
@@ -737,6 +737,41 @@ test_inventory_verdicts(NSString *fixtures)
 	}
 	puts("PASS: mountable corrupt/unsupported inventory verdicts stay partial and block "
 	     "activation");
+}
+
+static void
+test_internal_inventory(NSString *fixtures)
+{
+	NSArray<NSString *> *names = @[
+		@"validation-dos-hardlinks.img", @"validation-dos-nested-hardlinks.img",
+		@"validation-file-security-repair-missing.img",
+		@"validation-file-security-repair-moved.img"
+	];
+	NSData *image, *original;
+	CheckFileSystem *fileSystem;
+	CheckReader *reader;
+	NTFSVolume *volume;
+	CheckTask *task;
+	FSItem *root;
+	NSError *error;
+
+	for (NSString *name in names) {
+		image =
+		    [NSData dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:name]];
+		original = [image copy];
+		reader = reader_for(image);
+		fileSystem = [[CheckFileSystem alloc] init];
+		volume = load(fileSystem, reader, NO, 0);
+		task = [[CheckTask alloc] init];
+		finish(task, start(fileSystem, task, @[ @"-n" ]), 0, NO);
+		error = nil;
+		root = [volume activateExtraction:&error];
+		assert(root != nil && error == nil && [image isEqualToData:original]);
+		root = nil;
+		unload(fileSystem, reader, 0);
+		assert(fileSystem.lastResource.liveAllocations == 0);
+	}
+	puts("PASS: full DOS-name/internal-repair inventories permit extraction activation");
 }
 
 static void
@@ -991,6 +1026,7 @@ ntfs_test_fskit_maintenance(NSString *fixtures)
 	test_controller_modes(image);
 	test_forced_loads(image, corrupt, fixtures);
 	test_inventory_verdicts(fixtures);
+	test_internal_inventory(fixtures);
 	test_gated_load(image);
 	test_gated_admission(image);
 	test_gated_checks(image);

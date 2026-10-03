@@ -18,6 +18,10 @@ UNKNOWN_ACL_REVISION = 0xff
 UNKNOWN_ACE_TYPE = 0xff
 INVALID_SID_COUNT = 16
 FILE_ATTRIBUTE_SYSTEM = 0x0004
+FILE_ATTRIBUTE_HIDDEN = 0x0002
+REPAIR_ATTRIBUTES = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM
+EXTEND_RECORD = 11
+OTHER_EXTEND_RECORD = 52
 SID_FIELDS = ('revision', 'count', 'authority')
 ACL_FIELDS = ('revision', 'reserved1', 'length', 'count', 'reserved2')
 
@@ -162,6 +166,52 @@ def author(output, source):
               if kind(value) != v.SECURITY_ATTRIBUTE]
     rewrite(image, v.HELLO_RECORD, values)
     save('ordinary-system-flag-missing', image, 'corrupt metadata')
+
+    def repair_image(*, repair_record=v.HELLO_RECORD, metadata_record=v.FIRST_DIRECTORY,
+                     extend_record=EXTEND_RECORD, extend_name='$Extend',
+                     metadata_name='$RmMetadata', repair_name='$Repair',
+                     outside=False, directory=False, flags=REPAIR_ATTRIBUTES,
+                     security_id=0, extra_repair_links=(), extra_extend_links=()):
+        parent = f.ROOT_REF if outside else f.file_reference(metadata_record)
+        links = {extend_record: [v.Link(extend_name), *extra_extend_links],
+                 metadata_record: [v.Link(metadata_name, parent=f.file_reference(extend_record))],
+                 repair_record: [v.Link(repair_name, parent=parent), *extra_repair_links]}
+        directories = (extend_record, metadata_record, *((repair_record,) if directory else ()))
+        image = v.build(source, 'standard', links_override=links, directory_records=directories)
+        values = [f.standard(flags | (f.FILE_ATTRIBUTE_DIRECTORY if directory else 0),
+                             security_id=security_id) if kind(value) == f.SI else value
+                  for value in attributes(image, repair_record)
+                  if kind(value) != v.SECURITY_ATTRIBUTE]
+        rewrite(image, repair_record, values)
+        return image
+
+    image = repair_image()
+    save('repair-missing', image)
+    image = repair_image(repair_record=v.FRAGMENTED_RECORD, metadata_record=v.SECOND_DIRECTORY)
+    save('repair-moved', image, subject=v.FRAGMENTED_RECORD)
+    for label, payload, result in (('present', s.sd(), 'success'),
+                                   ('invalid', header_change(s.sd(), revision=0), 'corrupt metadata')):
+        image = repair_image()
+        replace_security(image, v.HELLO_RECORD, [descriptor(payload)])
+        save('repair-' + label, image, result)
+    for label, options in (
+            ('outside', {'outside': True}),
+            ('other-extend-record', {'extend_record': OTHER_EXTEND_RECORD}),
+            ('other-extend-name', {'extend_name': '$OtherExtend'}),
+            ('other-metadata-name', {'metadata_name': '$OtherMetadata'}),
+            ('other-repair-name', {'repair_name': '$OtherRepair'}),
+            ('directory', {'directory': True}),
+            ('no-flags', {'flags': 0}),
+            ('hidden-only', {'flags': FILE_ATTRIBUTE_HIDDEN}),
+            ('system-only', {'flags': FILE_ATTRIBUTE_SYSTEM}),
+            ('hardlink', {'extra_repair_links': (v.Link('ordinary-link'),)}),
+            ('dos-alias', {'extra_repair_links': (v.Link('REPAIR~1',
+                           parent=f.file_reference(v.FIRST_DIRECTORY), namespace=f.NAMESPACE_DOS),)}),
+            ('extend-alias', {'extra_extend_links': (v.Link('EXTEND~1', namespace=f.NAMESPACE_DOS),)})):
+        save('repair-' + label, repair_image(**options), 'corrupt metadata')
+    image = repair_image(security_id=f.SECURITY_ID)
+    save('repair-indexed-missing-store', image, 'corrupt metadata', attribute=f.SI)
+
     image = bytearray(baseline)
     replace_security(image, v.HELLO_RECORD, [descriptor(s.sd()),
                      f.resident(v.SECURITY_ATTRIBUTE, s.sd(), v.SECURITY_INSTANCE + 1)])

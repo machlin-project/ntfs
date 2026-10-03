@@ -30,9 +30,37 @@ architectures' changed-core compilation and pressure PASS/SKIP groups. Logs use
 `artifacts/plan-unit-cache-pressure-{format,component,style}.log`. Pressure checks
 fill both outputs, release them on accessed-item cleanup and recreate exactly
 one extra unit after restoration. READ-CACHE-POLICY.md records current core bytes.
-Matched Release comparison, fresh integrated fuzzing and current portable
-reproducibility remain to be run; no performance gain or installed/native/Windows
-acceptance follows from these correctness checks.
+Fresh sequential image/validation campaigns fixed-replay 363/205 unique seeds,
+exit zero and report no OOM/timeout/crash. Their last periodic exploration counts
+are 51,793/45,993 at 69/68 seconds; terminal exits occur at 70/69 seconds, with no
+exact final execution totals or aggregate observed RSS. Input/time/per-process
+RSS policies remain 1 MiB/five seconds/1 GiB. Reports use
+`artifacts/fuzz-unit-cache-{image,validation}-reviewed/`.
+Committed-source ordinary Release/O3 reproducibility matches all eight full
+actual products under `artifacts/reproducibility-unit-cache/`.
+
+Matched retained-release comparisons pass 4,560 runs/240 paired configurations:
+hot/alternating/wider strides, longer one-unit hot reads, sequential/random with
+one/four externally serialized readers, and longer confirmation of short negative
+cases. Five warmed two-unit inputs reduce physical callbacks from 4,500 to zero
+per 3,000 requests. The optional output costs one unit, plus current private-state
+fields; no three-unit cyclic I/O saving or general throughput improvement is
+established. PERFORMANCE.md records the exact medians, memory cost, negative
+results and longer confirmation. Reports use
+`artifacts/compression-{profile,hot,general,confirm}-unit-cache-*/report.json`.
+
+Main review independently re-authors original/stored bytes, verifies all run
+ranges/samples, physical call/byte and allocation counts, matched pairs and every
+summary median/range. It also reads actual release products, fuzz binaries/unique
+replays and periodic events in `artifacts/unit-cache-review-confirmed.json`.
+An initial review-only assertion reversed the runner's alternating variant order;
+the failed `artifacts/unit-cache-review.json` remains, and the corrected original
+matrix review remains in `artifacts/unit-cache-review-order-fixed.json`. Product
+tests, measurements and pairing order were unchanged.
+The bounded cache is accepted for the measured reuse benefit with explicit memory
+cost. Windows, installed/modern FSKit, owning authorization, native aggregate
+pressure, device/independent-driver comparisons, relocated/native release and the
+complete continuation remain open.
 
 The preceding optimization continuation adds an opt-in strided workload for hot,
 alternating and wider compression working sets, with independent delivered-byte
@@ -48,9 +76,9 @@ products, independently re-authored payload/storage bytes, measured ranges and
 resource counters, and every summary median/range in
 `artifacts/compression-profile-review.json`. Reports use
 `artifacts/compression-profile-baseline-*/report.json`; PERFORMANCE.md records
-the exact configuration and mixed-unit/clock/cache limits. A qualified cache
-improvement, Windows/installed behavior and relocated/native release evidence
-remain open; these current-only results establish no speedup.
+the exact configuration and mixed-unit/clock/cache limits. At that baseline a
+qualified cache improvement, Windows/installed behavior and relocated/native
+release evidence were still open; those current-only results establish no speedup.
 
 The current shared FSKit lookup recognizes exact native `.` and `..` through
 checked numeric ancestry. Root lookup clamps both to the root; a live canonical
@@ -67,8 +95,9 @@ core storage. Both released ancestors, remount, file/foreign/impostor rejection,
 cached permanent revocation and cold-read revocation have separate checks.
 Current logs are `artifacts/plan-dot-lookup-{component,style}-named-final.log` and
 `artifacts/plan-dot-lookup-app.log`; actual changed owner compilation is present
-for both architectures. The core/portable products are unchanged and retain
-the preceding bad-cluster suite/oracle/fuzz/reproducibility evidence below.
+for both architectures. At that dot-lookup checkpoint the core/portable products
+were unchanged and retained the preceding bad-cluster suite/oracle/fuzz/
+reproducibility evidence below.
 No installed mount, modern runtime, native authorization or performance gain is
 established by this continuation.
 Main review re-reads actual PASS/SKIP groups, both protocol architectures and

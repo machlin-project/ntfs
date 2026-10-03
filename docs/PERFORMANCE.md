@@ -233,8 +233,85 @@ counter, and recomputes all summary medians/ranges in
 `artifacts/compression-profile-review.json`. This establishes the baseline for a
 bounded second decoded-output slot; that baseline changes no cache source or claims a speedup.
 Required-allocation failures, optional storage refusal, failed-fill retry and
-exact release must remain qualified before comparing a candidate. Sequential,
-random, multiple-reader and installed workloads still need their own evidence.
+exact release must remain qualified before comparing a candidate. Those baseline
+runs do not cover sequential/random, multiple readers or installed workloads.
+
+### Optional second decoded output
+
+The current bounded cache keeps the original required input/output/workspace and
+attempts one optional output on the first distinct-unit miss after a useful fill.
+Allocation/live-credit refusal preserves single-unit reading without poisoning
+owning scopes. Hits promote the older output; failed replacements preserve the
+other valid unit. Correctness/fault/pressure evidence is in ACCEPTANCE.md and
+READ-CACHE-POLICY.md.
+
+Matched ordinary Release/O3 binaries retain identical workload/POSIX sources,
+toolchain, arguments, independently authored bytes and immutable image hashes.
+The comparison passes 4,560 runs/240 paired configurations across the five
+preceding codec/storage inputs: 1,080 strided, 300 longer hot, 2,880 general and
+300 longer negative-case confirmation runs. Each report summary is per variant,
+so there are 480 summaries. Both current Release builds match all eight full
+products under `artifacts/reproducibility-unit-cache/`. Reports use
+`artifacts/compression-{profile,hot,general,confirm}-unit-cache-*/report.json`.
+
+For memory callbacks, two positions and 128 warmup, wall medians below are
+milliseconds per 3,000 512-byte reads. Every input reduces physical resource
+calls from 4,500 to zero in every repetition; CPU confirms the avoided fill work.
+
+| Input | Retained one-unit reference | Current two-unit cache | Extra charged core bytes |
+| --- | ---: | ---: | ---: |
+| LZNT1 mixed | 117.475 | 0.152 | 65,600 |
+| XPRESS4K packed/raw | 10.837 | 0.157 | 4,224 |
+| XPRESS8K packed/raw | 18.711 | 0.156 | 8,320 |
+| XPRESS16K packed/raw | 34.304 | 0.154 | 16,512 |
+| LZX32K packed/raw | 79.907 | 0.157 | 32,896 |
+
+The extra output itself is 64/4/8/16/32 KiB. Private stream/cache state additionally
+costs 64 bytes for this single-reader LZNT1 owner and 128 for these WOF owners,
+including the mounted MFT stream. Cold two-position profiles fill both outputs
+with three physical calls rather than 4,500. One-position profiles never allocate
+the extra output. Three cyclic positions exceed the cache and keep the original
+physical call/byte counts, while retaining the additional unit. These observations
+are specific to the earlier raw/packed/hole/partial layouts, not explicit decoder
+miss counters or cold-device measurements.
+
+Longer hot checks use one position, 2,000 warmup, 500,000 measured 512-byte reads
+and 15 repetitions on both callbacks. Wall medians range from -0.23% to +0.23%
+and CPU from -0.25% to +0.29% relative to the reference. All ranges overlap and
+paired directions are mixed; there is no resolved hot-path gain. Physical I/O
+and measured allocation counts are unchanged; private-state costs remain.
+Per-request p99 can still reach clock resolution despite a longer total sample.
+
+The general matrix covers sequential/random, memory/POSIX, 512/4096-byte requests,
+one/four externally serialized readers, 0/128 warmup and nine repetitions of
+3,000 measured operations. Per codec, 16 of its 32 paired configurations lower
+physical I/O and 16 keep it equal. Timing medians are mixed. The largest short
+negative case is XPRESS16K sequential/memory/512-byte/four-reader/cold:
+1.706 to 1.888 ms (+10.63%) wall and 2.155 to 2.715 ms (+25.99%) CPU, with
+overlapping ranges. Neither those small intervals nor lower I/O establish a
+general throughput conclusion.
+
+Targeted confirmations retain the exact negative configurations and extend
+LZNT1/XPRESS4K/XPRESS16K sequential runs to 200,000 operations, XPRESS8K to 30,000,
+with 15 repetitions. Across ten pairs wall medians range -1.18% to +1.58%, CPU
+-1.16% to +2.37%, all ranges overlap and paired directions remain mixed.
+The preceding XPRESS16K case becomes +0.39%/+1.14%; XPRESS8K's short POSIX/4096-byte/
+one-reader +6.40%/+6.79% becomes -0.55%/-0.37%. I/O is exactly unchanged in these
+sequential confirmations. Extra charged core bytes range 8,320 to 262,304,
+depending on output-unit size and reader count. The short negative reports remain
+qualified observations, not discarded results or a universal no-regression claim.
+
+Main review re-authors original/stored bytes, independently predicts every read
+range/sample and physical call/byte/allocation count using successful one/two-
+unit working sets, verifies each alternating pair and recomputes every summary
+median/range/deviation. It also checks actual releases and fuzz replay/event
+evidence in `artifacts/unit-cache-review-confirmed.json`. Acceptance records the
+initial review-only ordering assertion and its retained failed artifact.
+The cache is accepted for measured reuse benefit with explicit memory cost.
+Windows, FSKit/device/independent-driver comparisons, aggregate native/RSS stress,
+broader codec/metadata/concurrency work and complete optimization qualification
+remain separate. Multiple benchmark readers still share externally serialized
+core ownership and do not establish independent parallel reads.
 
 ## Paired reader accounting measurements
 

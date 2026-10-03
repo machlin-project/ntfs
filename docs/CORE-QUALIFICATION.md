@@ -24,11 +24,18 @@ I/O failure, 14 partial/full replacements and 12 read-byte/work boundaries.
 The WOF suite now has 390 allocation/101 read fault positions; native pressure
 fills both outputs and checks exact extra-unit release/recreation. Logs use
 `artifacts/plan-unit-cache-*-reviewed.log` and the subsequent
-`artifacts/plan-unit-cache-pressure-*.log`. Fresh integrated fuzz, committed-source
-Release reproducibility and matched hot/alternating/wider plus general-profile
-measurements remain open. This changes portable core source; preceding portable
-reports retain their source scope. Full Windows/native/security/recovery and
-optimization requirements remain in the tables.
+`artifacts/plan-unit-cache-pressure-*.log`. Fresh image/validation campaigns
+fixed-replay 363/205 unique seeds and exit zero with no reported events; last
+periodic counts are 51,793/45,993, not terminal totals or observed aggregate RSS.
+Current committed-source Release reproducibility matches eight full products.
+Matched comparisons pass 4,560 runs/240 paired configurations including longer
+hot and selected negative-case confirmations. Warm two-unit physical calls fall
+from 4,500 to zero per 3,000 requests with one extra output-unit cost; wider/general
+profiles retain their mixed timing and memory tradeoffs in PERFORMANCE.md.
+Main independent review is `artifacts/unit-cache-review-confirmed.json`, with
+reproducibility/fuzz/benchmark directories recorded in ACCEPTANCE.md. This changes
+portable core source; preceding reports retain their source scope. Full
+Windows/native/security/recovery and optimization requirements remain in the tables.
 
 The preceding FSKit continuation implements exact dot lookup through the existing
 checked ancestry, including no-callback canonical reuse and full-reference
@@ -206,7 +213,7 @@ head-result/usage-initialization change only for cached resident sequential/rand
 reads (2.18%/1.55% wall, both 15/15 paired directions with CPU confirmation).
 Repeated opens remain mixed and p99 is unchanged at clock resolution. Native
 guard-cost comparisons and broader measurements remain separate in PERFORMANCE.md.
-Fresh current-source legacy directory baselines pass 54 runs/six summaries,
+The preceding legacy directory baselines pass 54 runs/six summaries,
 complete large/small inventories and actual source/archive/input/binary review.
 They exercise compound core/physical scopes but provide no paired guard-cost,
 modern-runtime, installed/device or earlier-adapter gain conclusion.
@@ -217,12 +224,12 @@ aggregate memory, installed notification delivery and throughput measurements.
 
 | Required outcome | Current implementation and evidence | Work remaining |
 | --- | --- | --- |
-| Repeatable measurements | `ntfs-workload` records wall/CPU, request percentiles, allocation/I/O/cache counters and peak memory; POSIX/memory callbacks, explicit warmup, request sizes and serialized readers; runner checks independent original bytes/ranges/samples, retains binaries and validates release/toolchain/source evidence for alternating pairs; opt-in cyclic strided windows add hot/alternating/wider working sets with 47 measured contract profiles and 86 helper contracts; preceding two ten-input matrices and 120 targeted confirmation runs pass; actual legacy directory handler has full independent inventory and retained-binary comparisons, nine paired repetitions per profile on large/small authored namespaces | Measure the new compression working sets; broaden independent file-set and fragmentation workloads; true native/device cache profiles and matched independent driver comparisons |
+| Repeatable measurements | `ntfs-workload` records wall/CPU, request percentiles, allocation/I/O/cache counters and peak memory; POSIX/memory callbacks, explicit warmup, request sizes and serialized readers; runner checks independent original bytes/ranges/samples, retains binaries and validates release/toolchain/source evidence for alternating pairs; opt-in cyclic strided windows add hot/alternating/wider working sets with 47 measured contract profiles and 86 helper contracts; current compression comparison passes 4,560 runs/240 paired configurations with longer hot/negative-case confirmation; preceding two ten-input matrices and 120 targeted accounting confirmations pass; actual legacy directory handler has full independent inventory and retained-binary comparisons, nine paired repetitions per profile on large/small authored namespaces | Broaden independent file-set and fragmentation workloads; true native/device cache profiles and matched independent driver comparisons |
 | Metadata reuse | One validated metadata snapshot per live immutable node; failed checks publish nothing; retry, zero repeated I/O/allocation and owner-lifetime tests | Attribute-list/stream metadata and bounded index reuse only where profiles justify their cost |
 | Directory continuation | Two independent actual core cursors retained per enumerated item through a lazy bounded table; exact/nearest-earlier same-view reuse, completed-scan eviction, pinned packing, epoch teardown and pressure trimming; all 32 cache cases and 151 allocation/41 read faults pass; matched legacy memory-reader interleaving wall reductions of 88–89% on the 2,000-link fixture and 32–35% on the 12-link fixture, with disclosed pool cost | Broader bounded checkpoint/checked-index reuse, more than two active positions, diverse independent files and Windows-authored fragmentation; installed/native/device profiles and aggregate allocation/RSS stress |
 | Native link and type metadata | Immutable target bytes reused per live FSItem; names-only classification validates node/reparse metadata without target resolution; alias translation has one shared scan budget | Measure cold/warm classification and alias-heavy paths, including repeated page lookahead; bounded checked-record/index/alias reuse only after profiling and unchanged fault/lifetime behavior |
 | Data I/O | Whole-run coalescing, sparse/VDL zeroing and bounded compression buffer; resource-aligned caller transfers with unchanged limits and window fallback; five-run retained-binary memory-reader comparisons show targeted 64-KiB/1-MiB benefit with byte/guard/fault/lifecycle checks | Native caller alignment/transport/buffer/device qualification, matched independent driver throughput; broader fragmentation, reused buffers and extent hints only after profiling |
-| Compression | Existing one-unit LZNT1 and WOF XPRESS/LZX caches; independent codec vectors, external LZX packets and integrated provider byte/fault cases; current-only Release hot/alternating/wider strided baseline passes 540 runs/60 summaries over five original storage inputs, with actual product/payload/resource-counter review | Implement and qualify an optional bounded second decoded-output slot; compare longer hot, alternating and wider workloads plus sequential/random/multiple readers; profile whole-table open and page costs; Windows/native/device codec/cache qualification |
+| Compression | At most two decoded outputs for LZNT1/WOF XPRESS/LZX, with once-only optional allocation, one-slot refusal fallback, failed-victim/other-output preservation and exact release; six byte/fault/budget profiles and native pressure checks; independent codec vectors/external LZX packets; retained one-slot baseline and current Release comparison of 4,560 runs/240 paired configurations qualify warm two-unit I/O elimination with disclosed memory cost, unchanged three-unit I/O and mixed general/longer-confirmation timings | Profile whole-table open, page and decoder costs; broaden independent/fragmented working sets; Windows/native/device codec/cache qualification and aggregate native allocation/RSS stress |
 | Concurrency | Benchmark discloses external serialization and lock wait in latency | Object/callback/teardown contract, then independent reads with measured benefit and progress guarantees |
 
 ## Windows acquisition and comparison

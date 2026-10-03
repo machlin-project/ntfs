@@ -37,12 +37,31 @@ late codec errors. Pressure tests fill both slots, measure accessed-item release
 and verify exact extra-unit recreation after NORMAL. Current logs use
 `artifacts/plan-unit-cache-*-reviewed.log` and the later pressure logs.
 
-Next run fresh integrated fuzzing and committed-source Release reproducibility,
-then matched comparisons with the retained baseline below. Keep workload/POSIX
-sources unchanged; extend hot duration and sequential/random/multiple-reader
-profiles before accepting the cache. No throughput gain, native mount or Windows
-compatibility is established by correctness checks. The full continuation remains
-open in CORE-QUALIFICATION.md.
+Fresh image/validation campaigns replay 363/205 unique seeds and exit zero with
+no reported OOM/timeout/crash; last periodic counts are 51,793/45,993, not exact
+terminal totals or aggregate RSS observations. Current Release/O3 reproducibility
+matches all eight actual full products under `artifacts/reproducibility-unit-cache/`.
+Matched retained releases pass 4,560 runs/240 paired configurations with unchanged
+workload/POSIX sources, original bytes and media hashes. All five warmed two-unit
+inputs reduce physical calls from 4,500 to zero per 3,000 requests. The second
+output costs one codec unit; private state also grows. Three-unit cyclic I/O is
+unchanged, and general timings are mixed.
+
+Longer hot profiles use 500,000 operations/15 repetitions, with overlapping
+ranges and no resolved speedup. The largest short general negative case was
+XPRESS16K sequential/memory/512-byte/four-reader: +10.63% wall/+25.99% CPU over
+3,000 requests. Its 200,000-request confirmation is +0.39%/+1.14%, with overlapping
+ranges. All short/negative results remain retained; PERFORMANCE.md records other
+confirmations and memory costs. Main independently checks original/stored bytes,
+every run counter/range/sample/pair and summary under
+`artifacts/unit-cache-review-confirmed.json`; ACCEPTANCE.md retains the corrected
+review-only pairing assertion and its failed artifact.
+
+The bounded cache is accepted for the measured two-unit reuse benefit. Next close
+Windows/provider and installed/native qualification, owning authorization,
+aggregate pressure/device measurements and the remaining functional/recovery
+contracts in CORE-QUALIFICATION.md. This portable comparison supplies no native
+mount, Windows compatibility or broad throughput claim.
 
 ## Preceding compression workload baseline
 

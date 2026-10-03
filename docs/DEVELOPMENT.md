@@ -16,6 +16,20 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+Native activation requires an explicit read-only extraction choice at load or
+activation: -o ntfs-access=extract. Windows ACLs are not enforced. Ordinary loads
+without the choice still support maintenance, but cannot activate. Internal
+component/workload callers use activateExtraction:; native messages use task
+options. NATIVE-ACCESS.md defines exact parsing, metadata and installed limits.
+
+The access component models unary load and both activation message families
+without acquiring a real device. It checks invalid configuration before resource
+creation, explicit load/activation selection, parser count/string boundaries,
+root allocation refusal/retry, native presentation and remount/terminal lifetime.
+The current component has eleven macOS-27 runtime SKIPs, including extraction
+activation. Directory smoke reports qualify the migrated internal activation
+entry point and policy module list, with no optimization claim.
+
 `scripts/check_core.py` additionally compiles arm64 and x86_64 objects on macOS
 without libc assumptions and with a 2 KiB frame limit. `scripts/test_fskit.py`
 exercises the real adapter against a bounded fake resource in-process; it neither
@@ -56,7 +70,7 @@ allocation versus read/work errors, successful scope closure and fresh retry.
 Core reparse tests
 also check copy guards, physical allocation and node-independent lifetime. See
 LINK-POLICY.md for the supported subset and remaining resolution contracts.
-The current component has ten explicit macOS-27 runtime SKIPs: lifecycle,
+The preceding component had ten explicit macOS-27 runtime SKIPs: lifecycle,
 operation budgets, pressure, enumeration, dot lookup, content metadata, link projection and
 two case-policy checks and the temporary maintenance identity. These in-process
 results do not mount the filesystem.

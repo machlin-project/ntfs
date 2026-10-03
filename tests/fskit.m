@@ -18,6 +18,7 @@
 #import "fskit_operation.h"
 #import "fskit_lookup.h"
 #import "fskit_maintenance.h"
+#import "fskit_access.h"
 
 @implementation TestReader
 
@@ -216,7 +217,7 @@ test_volume(NSData *image)
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
 	assert(volume != nil);
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	file = [volume lookup:[FSFileName nameWithString:@"HELLO.TXT"]
 		  inDirectory:root
@@ -323,7 +324,7 @@ test_volume(NSData *image)
 		[volume invalidate];
 	}
 	assert([volume readItem:file offset:0 bytes:buffer length:1 completed:&done] == NTFS_STALE);
-	assert([volume activate:&error] == nil && error.code == ESTALE);
+	assert([volume activateExtraction:&error] == nil && error.code == ESTALE);
 }
 
 static void
@@ -349,7 +350,7 @@ test_revocation(NSData *image)
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	resident = [volume lookup:[FSFileName nameWithString:@"hello.txt"]
 		      inDirectory:root
@@ -468,7 +469,7 @@ test_ads(NSData *image, NSString *fileName, const uint16_t *name, uint16_t nameL
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	item = fileName != nil ? [volume lookup:[FSFileName nameWithString:fileName]
 				     inDirectory:root
@@ -677,7 +678,7 @@ test_namespace(NSData *image, NSArray<NSDictionary *> *names, BOOL caseSensitive
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil && volume.maximumNameLength == NAME_MAX);
 	resource.failAllocation = YES;
 	[volume getXattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
@@ -936,7 +937,7 @@ test_case_policy(NSData *image, BOOL rootSensitive, BOOL modern)
 	} else {
 		volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
 	}
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	assert(volume.supportedVolumeCapabilities.caseFormat == FSVolumeCaseFormatSensitive);
 	sensitive = [volume lookup:[FSFileName nameWithString:@"Sensitive"]
@@ -1022,7 +1023,7 @@ test_namespace_large(NSData *image)
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.names"]
 			   ofItem:root
@@ -1081,7 +1082,7 @@ test_namespace_rejection(NSData *image, BOOL stale)
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil);
 	assert([volume lookup:[FSFileName nameWithString:@"~ntfs-0007000000000018-00000000"]
 		   inDirectory:root
@@ -1170,7 +1171,7 @@ namespace_fault_run(NSData *image, NSArray<NSDictionary *> *names, BOOL lookup,
 	limits.record_cache_entries = 0;
 	assert(ntfs_mount(&env, &limits, &core) == NTFS_OK);
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	startAllocations = resource.allocations;
 	startReads = reader.reads;
@@ -1243,7 +1244,7 @@ test_namespace_budget(NSData *image, NSArray<NSDictionary *> *names)
 	volume = [[NTFSLegacyVolume alloc] initWithCore:core
 					       resource:resource
 				maximumDirectoryEntries:SCAN_LIMIT];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	packer = [[TestPacker alloc] init];
 	packer.names = [NSMutableArray array];
@@ -1312,6 +1313,8 @@ main(int argc, char **argv)
 		    [@"alternate payload" dataUsingEncoding:NSUTF8StringEncoding], NO);
 		fixtures = [@(argv[1]) stringByDeletingLastPathComponent];
 		ntfs_test_fskit_maintenance(fixtures);
+		ntfs_test_fskit_access(image, NO);
+		ntfs_test_fskit_access(image, YES);
 		ntfs_test_fskit_operation(fixtures, NO);
 		ntfs_test_fskit_operation(fixtures, YES);
 		ntfs_test_fskit_pressure(fixtures, NO);

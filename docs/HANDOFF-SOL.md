@@ -17,7 +17,38 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current extent-read qualification
+## Current explicit extraction access
+
+Native load or activation must select ntfs-access=extract. An ordinary load can
+remain unselected for maintenance; activation then returns EACCES with no root.
+Malformed, duplicate and unsupported modes refuse, including during remount.
+A selected load carries policy into separate activation; successful activation
+retains it across remount. Native UID/GID presentation snapshots the extension's
+effective credentials once. Neither those IDs nor existing 0400/0500 modes map
+Windows principals or prove installed isolation. NATIVE-ACCESS.md defines this
+explicit restricted product mode and the native acceptance matrix to execute.
+
+Current evidence is 45 fatal-sanitizer component PASS groups/eleven genuine
+runtime SKIPs, style and a clean arm64/x86_64 Release app. The original first
+component attempt failed compilation on a missing engine getter declaration and
+ran no tests; preserve that log separately. Accepted logs are
+artifacts/plan-access-mode-*-declared.log and
+artifacts/plan-access-mode-{app-release,products}.log. Main actual-file review is
+artifacts/access-mode-review.json. Both bundle binaries have linker ad hoc
+signatures, no distribution authority, and compile the new policy on both targets.
+The updated native directory tool checks all twelve independent namespace entries
+in six smoke runs/three profiles under artifacts/directory-access-mode-smoke/.
+Its oracle and unchanged-input checks are compatibility evidence, not a timing gain.
+
+Portable core sources have not changed from the preceding 68-suite/freestanding/
+fuzz qualification. Do not rerun those for this adapter-only change or treat their
+reports as native evidence. Before installed acceptance, propagate the explicit
+extraction option, observe actual service credentials, and check both protocol
+families, users/groups/root, owner-ignore options, mode caching, execute/mmap and
+mutation flows. Full Windows identity/DACL authorization, Windows acquisition,
+installed/commercial acceptance and recovery remain open.
+
+## Preceding extent-read qualification
 
 Nonresident reads retain one checked mapping index per stream. Current and
 successor hits precede the binary fallback; indexes survive bootstrap array

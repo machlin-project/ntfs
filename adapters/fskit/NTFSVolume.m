@@ -258,7 +258,8 @@ item_id(uint64_t reference)
 			      bytes:(void *)bytes
 			     length:(size_t)length
 			  completed:(size_t *)completed;
-- (FSItem *)performActivation:(FSTaskOptions *)options error:(NSError **)error;
+- (FSItem *)activateWithArguments:(NSArray<NSString *> *)arguments error:(NSError **)error;
+- (FSItem *)performActivation:(NSArray<NSString *> *)arguments error:(NSError **)error;
 - (enum ntfs_result)operationBudgetResult;
 @end
 
@@ -269,6 +270,9 @@ item_id(uint64_t reference)
 	NSMapTable<NSNumber *, NTFSItem *> *_items;
 	NSMapTable<NSNumber *, NTFSDirectoryPath *> *_paths;
 	NTFSLinkPolicy *_linkPolicy;
+	NTFSNativeAccessMode _nativeAccessMode;
+	uid_t _nativeUserID;
+	gid_t _nativeGroupID;
 	FSDirectoryVerifier _directoryVerifier;
 	uint64_t _freeClusters;
 	uint32_t _maximumDirectoryEntries;
@@ -305,6 +309,19 @@ item_id(uint64_t reference)
      maximumDirectoryEntries:(uint32_t)maximum
 		  linkPolicy:(NTFSLinkPolicy *)policy
 {
+	return [self initWithCore:core
+			   resource:resource
+	    maximumDirectoryEntries:maximum
+			 linkPolicy:policy
+			 accessMode:NTFSNativeAccessUnselected];
+}
+
+- (instancetype)initWithCore:(struct ntfs_volume *)core
+		    resource:(NTFSResource *)resource
+     maximumDirectoryEntries:(uint32_t)maximum
+		  linkPolicy:(NTFSLinkPolicy *)policy
+		  accessMode:(NTFSNativeAccessMode)mode
+{
 	struct ntfs_info info;
 	struct ntfs_operation operation = {0};
 	struct ntfs_resource_read_budget budget = {0};
@@ -313,7 +330,8 @@ item_id(uint64_t reference)
 	NSString *label;
 	enum ntfs_result result;
 
-	if (core == NULL || resource == nil || maximum == 0 ||
+	if ((mode != NTFSNativeAccessUnselected && mode != NTFSNativeAccessExtraction) ||
+	    core == NULL || resource == nil || maximum == 0 ||
 	    maximum > NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
 		return nil;
 	}
@@ -363,6 +381,9 @@ item_id(uint64_t reference)
 		_items = [NSMapTable strongToWeakObjectsMapTable];
 		_paths = [NSMapTable strongToWeakObjectsMapTable];
 		_linkPolicy = policy;
+		_nativeAccessMode = mode;
+		_nativeUserID = geteuid();
+		_nativeGroupID = getegid();
 		_directoryVerifier =
 		    ((uint64_t)arc4random() << (sizeof(uint32_t) * CHAR_BIT)) | arc4random() | 1;
 	}
@@ -803,6 +824,11 @@ item_id(uint64_t reference)
 
 - (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error
 {
+	return [self activateWithArguments:options.taskOptions error:error];
+}
+
+- (FSItem *)activateWithArguments:(NSArray<NSString *> *)arguments error:(NSError **)error
+{
 	if (self.lifecycle == NTFSVolumeChecking) {
 		*error = ntfs_error(NTFS_BUSY);
 		return nil;
@@ -825,7 +851,7 @@ item_id(uint64_t reference)
 			return nil;
 		}
 		@try {
-			value = [self performActivation:options error:error];
+			value = [self performActivation:arguments error:error];
 			if (*error == nil) {
 				status = ntfs_operation_result(&operation);
 				if (status == NTFS_OK) {
@@ -1299,12 +1325,12 @@ item_id(uint64_t reference)
 			 error:error];
 }
 
-- (FSItem *)activate:(NSError **)error
+- (FSItem *)activateExtraction:(NSError **)error
 {
-	return [self activateWithOptions:nil error:error];
+	return [self activateWithArguments:@[ NTFSExtractionAccessOption ] error:error];
 }
 
-- (FSItem *)performActivation:(FSTaskOptions *)options error:(NSError **)error
+- (FSItem *)performActivation:(NSArray<NSString *> *)arguments error:(NSError **)error
 {
 	struct ntfs_node *root = NULL;
 	struct ntfs_info info;
@@ -1312,6 +1338,7 @@ item_id(uint64_t reference)
 	NTFSItem *item;
 	NTFSLinkPolicy *policy;
 	NTFSVolumeLifecycle state;
+	NTFSNativeAccessMode requested;
 
 	*error = nil;
 	@synchronized(self) {
@@ -1324,8 +1351,25 @@ item_id(uint64_t reference)
 			*error = ntfs_error(NTFS_IO);
 			return nil;
 		}
+		result = ntfs_native_access_mode(arguments, &requested);
+		if (result != NTFS_OK) {
+			*error = ntfs_error(result);
+			return nil;
+		}
+		if (requested == NTFSNativeAccessUnselected &&
+		    _nativeAccessMode == NTFSNativeAccessUnselected) {
+			*error = [NSError
+			    errorWithDomain:NSPOSIXErrorDomain
+				       code:EACCES
+				   userInfo:@{
+					   NSLocalizedDescriptionKey :
+					       @"Select read-only extraction access explicitly. "
+					       @"Windows permissions are not enforced."
+				   }];
+			return nil;
+		}
 		ntfs_get_info(_core, &info);
-		result = ntfs_native_link_policy(info.serial, options.taskOptions, &policy);
+		result = ntfs_native_link_policy(info.serial, arguments, &policy);
 		if (result == NTFS_OK && policy.windowsRoots.count != 0) {
 			if (state == NTFSVolumeLoaded && _linkPolicy.windowsRoots.count == 0) {
 				_linkPolicy = policy;
@@ -1348,6 +1392,7 @@ item_id(uint64_t reference)
 		if (item != nil) {
 			[_lifecycleLock lock];
 			if (_lifecycle == NTFSVolumeLoaded || _lifecycle == NTFSVolumeActive) {
+				_nativeAccessMode = NTFSNativeAccessExtraction;
 				_active = YES;
 				_lifecycle = NTFSVolumeActive;
 			} else {
@@ -1510,10 +1555,10 @@ item_id(uint64_t reference)
 {
 	FSItemAttributes *attrs = [[FSItemAttributes alloc] init];
 
-	/* Explicit single-user read-only presentation. Windows ACL
-	 * translation is a separate, unaccepted contract. */
-	attrs.uid = geteuid();
-	attrs.gid = getegid();
+	/* Extraction presentation has one stable native identity. Neither this
+	 * snapshot nor mode bits authenticate a Windows principal. */
+	attrs.uid = _nativeUserID;
+	attrs.gid = _nativeGroupID;
 	attrs.mode =
 	    stat->directory && !link ? NTFS_READ_ONLY_DIRECTORY_MODE : NTFS_READ_ONLY_FILE_MODE;
 	attrs.type =
@@ -2202,8 +2247,8 @@ item_id(uint64_t reference)
 	NSError *error;
 	enum ntfs_result result;
 	NTFSVolumeLifecycle state;
+	NTFSNativeAccessMode requested;
 
-	(void)options;
 	if (self.lifecycle == NTFSVolumeChecking) {
 		reply(ntfs_error(NTFS_BUSY));
 		return;
@@ -2221,6 +2266,9 @@ item_id(uint64_t reference)
 		    : NTFS_OK;
 		if (result == NTFS_OK && !_resource.isAvailable) {
 			result = NTFS_IO;
+		}
+		if (result == NTFS_OK) {
+			result = ntfs_native_access_mode(options.taskOptions, &requested);
 		}
 		if (result == NTFS_OK) {
 			[_lifecycleLock lock];
@@ -2280,6 +2328,23 @@ item_id(uint64_t reference)
 - (FSMountOptions)requestedMountOptions
 {
 	return FSMountOptionsReadOnly;
+}
+
+- (NTFSNativeAccessMode)nativeAccessMode
+{
+	@synchronized(self) {
+		return _nativeAccessMode;
+	}
+}
+
+- (uid_t)nativeUserID
+{
+	return _nativeUserID;
+}
+
+- (gid_t)nativeGroupID
+{
+	return _nativeGroupID;
 }
 
 - (FSVolumeSupportedCapabilities *)supportedVolumeCapabilities

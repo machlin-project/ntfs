@@ -325,7 +325,7 @@ pressure_owner(NSData *image, BOOL modern, PressureReader **readerOut,
 		volume = [[PressureLegacyVolume alloc] initWithCore:core resource:resource];
 	}
 	assert(volume != nil);
-	*rootOut = [volume activate:&error];
+	*rootOut = [volume activateExtraction:&error];
 	assert(*rootOut != nil && error == nil && volume.readCachePolicy.retentionActive);
 	*readerOut = reader;
 	*resourceOut = resource;

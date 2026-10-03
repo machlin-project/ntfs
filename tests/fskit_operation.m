@@ -225,7 +225,7 @@ new_volume(NSData *image, BOOL modern, BudgetReader **reader_out, FaultResource 
 		volume = [[BudgetLegacyVolume alloc] initWithCore:core resource:resource];
 	}
 	assert(volume != nil);
-	*root_out = [volume activate:&error];
+	*root_out = [volume activateExtraction:&error];
 	assert(*root_out != nil && error == nil);
 	*reader_out = reader;
 	*resource_out = resource;

@@ -11,6 +11,12 @@ handoff, not a production NTFS driver. Build, component tests and installed nati
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
+FSKit activation now requires an explicit read-only extraction choice through
+the task option ntfs-access=extract, at load or activation. Windows permissions
+are not enforced in that mode. Each owner keeps immutable native presentation
+IDs and owner-read/search mode bits; installed identity and enforcement remain
+unqualified. See [native access policy](docs/NATIVE-ACCESS.md) before mounting.
+
 Mounted operations now have explicit read/allocation/work budgets and an aggregate
 core live-memory cap. Compound FSKit requests share credits across nested core
 calls and separately bound rounded physical resource reads. This changes the

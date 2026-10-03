@@ -285,7 +285,7 @@ test_reclaim_volume(
 	assert(ntfs_mount(&env, &limits, &core) == NTFS_OK);
 	volume = [[ReclaimModelVolume alloc] initWithCore:core resource:resource];
 	assert(volume != nil);
-	*rootOut = [volume activate:&error];
+	*rootOut = [volume activateExtraction:&error];
 	assert(*rootOut != nil && error == nil);
 	*resourceOut = resource;
 	*readerOut = reader;
@@ -649,7 +649,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario, 
 		    replyHandler:^(NSError *e) {
 		      assert(e.code == ESTALE);
 		    }];
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil && volume.lifecycle == NTFSVolumeActive);
 	file = [volume lookup:[FSFileName nameWithString:@"fragmented.bin"]
 		  inDirectory:root
@@ -869,7 +869,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario, 
 		    replyHandler:^(NSError *e) {
 		      assert(e.code == ESTALE);
 		    }];
-	assert([volume activate:&error] == nil && error.code == ESTALE);
+	assert([volume activateExtraction:&error] == nil && error.code == ESTALE);
 }
 
 @implementation LifecyclePacker
@@ -917,7 +917,7 @@ test_interleaved_enumeration(NSData *image, BOOL modern)
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = test_new_volume(core, resource, modern);
-	root = [volume activate:&error];
+	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
 	for (round = 0; round <= TEST_FILE_COUNT; round++) {
 		page = [[LifecyclePacker alloc] init];

@@ -120,7 +120,8 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	struct ntfs_operation_limits limits;
 	struct ntfs_resource_read_budget budget = {0};
 	enum ntfs_result result = NTFS_OK, mountResult = NTFS_OK;
-	BOOL reserved = NO, force = [options.taskOptions containsObject:@"-f"];
+	BOOL reserved = NO, force = NO;
+	NTFSNativeAccessMode accessMode = NTFSNativeAccessUnselected;
 
 	@synchronized(self) {
 		if (_phase != NTFSFileSystemIdle || _volume != nil) {
@@ -137,10 +138,15 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 		return;
 	}
 	/* Never hold the controller monitor across core I/O or volume ownership. */
-	owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
-	if (owner == nil) {
+	result = ntfs_native_access_mode(options.taskOptions, &accessMode);
+	if (result == NTFS_OK) {
+		force = [options.taskOptions containsObject:@"-f"];
+		owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
+	}
+	if (result == NTFS_OK && owner == nil) {
 		result = NTFS_INVALID;
-	} else {
+	}
+	if (owner != nil) {
 		env = [owner environment];
 		ntfs_operation_default_limits(&limits);
 		result = [owner beginReadBudget:&budget limits:&limits];
@@ -153,8 +159,8 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 					result = ntfs_native_link_policy(
 					    info.serial, options.taskOptions, &policy);
 					if (result == NTFS_OK) {
-						loaded = ntfs_volume_create_with_policy(
-						    core, owner, policy);
+						loaded = ntfs_volume_create_with_policies(
+						    core, owner, policy, accessMode);
 						if (loaded == nil) {
 							result = NTFS_IO;
 						}

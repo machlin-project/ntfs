@@ -174,7 +174,7 @@ enumeration_owner(NSData *image, BOOL modern, uint32_t maximum, TestReader **rea
 					maximumDirectoryEntries:maximum];
 	}
 	assert(volume != nil);
-	*rootOut = [volume activate:&error];
+	*rootOut = [volume activateExtraction:&error];
 	assert(*rootOut != nil && error == nil);
 	*readerOut = reader;
 	*resourceOut = resource;

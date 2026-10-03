@@ -40,6 +40,17 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 		    resource:(NTFSResource *)resource
      maximumDirectoryEntries:(uint32_t)maximum
 		  linkPolicy:(NTFSLinkPolicy *)policy;
+/* A load-selected extraction policy survives the separate activate message.
+ * Native presentation IDs snapshot the extension's effective credentials.
+ * They are neither an authenticated mount initiator nor Windows identities. */
+- (instancetype)initWithCore:(struct ntfs_volume *)core
+		    resource:(NTFSResource *)resource
+     maximumDirectoryEntries:(uint32_t)maximum
+		  linkPolicy:(NTFSLinkPolicy *)policy
+		  accessMode:(NTFSNativeAccessMode)mode;
+@property(readonly) NTFSNativeAccessMode nativeAccessMode;
+@property(readonly) uid_t nativeUserID;
+@property(readonly) gid_t nativeGroupID;
 - (void)invalidate;
 /* Admission state can be inspected without waiting for an outstanding read.
  * Unmount retains item identities for reclamation; invalidation is terminal. */
@@ -57,7 +68,9 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 /* Native bridge, invoked with publication/core ownership already serialized.
  * Older runtimes keep a node alive until the last FSItem reference disappears. */
 - (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup;
-- (FSItem *)activate:(NSError **)error;
+/* Explicit internal extraction entry point, also used by component workloads.
+ * Native protocol messages use activateWithOptions: and cannot silently select. */
+- (FSItem *)activateExtraction:(NSError **)error;
 - (FSItem *)activateWithOptions:(FSTaskOptions *)options error:(NSError **)error;
 - (FSItem *)lookup:(FSFileName *)name
        inDirectory:(FSItem *)directory
@@ -84,6 +97,7 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 - (void)reclaimItem:(FSItem *)item replyHandler:(void (^)(NSError *))reply;
 @property(readonly) FSVolumeSupportedCapabilities *supportedVolumeCapabilities;
 @property(readonly) FSStatFSResult *volumeStatistics;
+@property(readonly) FSMountOptions requestedMountOptions;
 @end
 
 @interface NTFSLegacyVolume
@@ -100,4 +114,6 @@ API_AVAILABLE(macos(27.0))
 NTFSVolume *ntfs_volume_create(struct ntfs_volume *core, NTFSResource *resource);
 NTFSVolume *ntfs_volume_create_with_policy(
     struct ntfs_volume *core, NTFSResource *resource, NTFSLinkPolicy *policy);
+NTFSVolume *ntfs_volume_create_with_policies(struct ntfs_volume *core, NTFSResource *resource,
+    NTFSLinkPolicy *policy, NTFSNativeAccessMode mode);
 NTFSVolume *ntfs_volume_create_for_check(NTFSResource *resource, enum ntfs_result error);

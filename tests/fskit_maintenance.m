@@ -310,7 +310,7 @@ temporary_statistics(NTFSVolume *volume, int mountError)
 	    [stats.fileSystemTypeName isEqualToString:@"machlinntfs"]);
 	assert(!caps.supportsPersistentObjectIDs && !caps.supportsSymbolicLinks &&
 	    !caps.supportsSparseFiles && !caps.supportsFastStatFS);
-	assert([volume activate:&error] == nil && error.code == expected);
+	assert([volume activateExtraction:&error] == nil && error.code == expected);
 	[volume mountWithOptions:options(@[])
 		    replyHandler:^(NSError *failure) {
 		      assert(failure.code == expected);
@@ -588,11 +588,11 @@ test_controller_modes(NSData *image)
 	fileSystem.recordLimit = 1;
 	task = [[CheckTask alloc] init];
 	finish(task, start(fileSystem, task, @[]), EOVERFLOW, NO);
-	assert([volume activate:&error] == nil && error.code == EOVERFLOW);
+	assert([volume activateExtraction:&error] == nil && error.code == EOVERFLOW);
 	fileSystem.recordLimit = 0;
 	task = [[CheckTask alloc] init];
 	finish(task, start(fileSystem, task, @[ @"-q" ]), 0, NO);
-	assert([volume activate:&error] == nil && error.code == EOVERFLOW);
+	assert([volume activateExtraction:&error] == nil && error.code == EOVERFLOW);
 	reader.blockReadAt = reader.reads + 1;
 	task = [[CheckTask alloc] init];
 	progress = start(fileSystem, task, @[]);
@@ -600,13 +600,13 @@ test_controller_modes(NSData *image)
 	[progress cancel];
 	dispatch_semaphore_signal(reader.resume);
 	finish(task, progress, ECANCELED, NO);
-	assert([volume activate:&error] == nil && error.code == EOVERFLOW);
+	assert([volume activateExtraction:&error] == nil && error.code == EOVERFLOW);
 	task = [[CheckTask alloc] init];
 	task.completed = ^{
 	  /* Native completion is outside all owning monitors and sees committed state. */
 	  @autoreleasepool {
 		  NSError *activationError = nil;
-		  FSItem *root = [volume activate:&activationError];
+		  FSItem *root = [volume activateExtraction:&activationError];
 
 		  assert(root != nil && activationError == nil);
 		  unload(fileSystem, reader, 0);
@@ -618,7 +618,7 @@ test_controller_modes(NSData *image)
 	    fileSystem.lastResource.liveAllocations == 0 && [image isEqualToData:original]);
 	volume = load(fileSystem, reader, NO, 0);
 	@autoreleasepool {
-		FSItem *root = [volume activate:&error];
+		FSItem *root = [volume activateExtraction:&error];
 
 		assert(root != nil && error == nil);
 		task = [[CheckTask alloc] init];
@@ -729,7 +729,7 @@ test_inventory_verdicts(NSString *fixtures)
 		finish(task, start(fileSystem, task, @[ @"-q" ]), 0, NO);
 		task = [[CheckTask alloc] init];
 		finish(task, start(fileSystem, task, @[ @"-n" ]), expected[i], NO);
-		assert([volume activate:&error] == nil && error.code == expected[i] &&
+		assert([volume activateExtraction:&error] == nil && error.code == expected[i] &&
 		    [image isEqualToData:original] &&
 		    fileSystem.lastResource.liveAllocations == live);
 		unload(fileSystem, reader, 0);
@@ -797,7 +797,7 @@ test_gated_admission(NSData *image)
 	__block uint8_t byte = 0;
 
 	@autoreleasepool {
-		FSItem *root = [volume activate:&error];
+		FSItem *root = [volume activateExtraction:&error];
 		FSItem *file = [volume lookup:[FSFileName nameWithString:@"fragmented.bin"]
 				  inDirectory:root
 				   storedName:&stored
@@ -880,7 +880,8 @@ test_gated_checks(NSData *image)
 		assert(volume.lifecycle == NTFSVolumeChecking &&
 		    fileSystem.lastResource.liveAllocations > live && task.completions == 0);
 		cancel = task.cancellationHandler;
-		assert(cancel != nil && [volume activate:&error] == nil && error.code == EBUSY);
+		assert(cancel != nil && [volume activateExtraction:&error] == nil &&
+		    error.code == EBUSY);
 		load(fileSystem, reader, NO, EBUSY);
 		unload(fileSystem, reader, EBUSY);
 		other = [[CheckTask alloc] init];

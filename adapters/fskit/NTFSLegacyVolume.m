@@ -216,6 +216,13 @@ NTFSVolume *
 ntfs_volume_create_with_policy(
     struct ntfs_volume *core, NTFSResource *resource, NTFSLinkPolicy *policy)
 {
+	return ntfs_volume_create_with_policies(core, resource, policy, NTFSNativeAccessUnselected);
+}
+
+NTFSVolume *
+ntfs_volume_create_with_policies(struct ntfs_volume *core, NTFSResource *resource,
+    NTFSLinkPolicy *policy, NTFSNativeAccessMode mode)
+{
 	Class selected = NTFSLegacyVolume.class;
 
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
@@ -226,7 +233,8 @@ ntfs_volume_create_with_policy(
 	return [[selected alloc] initWithCore:core
 				     resource:resource
 		      maximumDirectoryEntries:NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT
-				   linkPolicy:policy];
+				   linkPolicy:policy
+				   accessMode:mode];
 }
 
 NTFSVolume *

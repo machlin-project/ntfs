@@ -7,7 +7,36 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current extent-read continuation retains one checked run index per stream.
+The current native access continuation adds an explicitly selected read-only
+extraction mode. Missing selection returns EACCES without a root; invalid load
+configuration fails before resource construction or I/O. Load selection survives
+activation, while successful activation keeps its selection across remount.
+Native presentation IDs snapshot the extension process once, retaining existing
+owner-read/search bits. They neither identify a Windows principal nor prove
+installed user isolation. NATIVE-ACCESS.md defines the supported contract.
+
+The fresh fatal-sanitizer component run passes 45 groups with eleven explicit
+macOS-27 runtime SKIPs. Parser bounds/output guards, native legacy once-only
+replies, allocation refusal/retry, unary load selection, stable root/file modes,
+invalid remount options, revocation and cleanup pass. The clean universal Release
+compiles NTFSAccessPolicy.m for both architectures. Main inspects actual source,
+logs, binaries, signatures and directory inputs in artifacts/access-mode-review.json.
+Accepted logs are artifacts/plan-access-mode-*-declared.log,
+artifacts/plan-access-mode-app-release.log and artifacts/plan-access-mode-products.log.
+The initial component attempt failed compilation because the test engine lacked
+the already implemented requestedMountOptions declaration; no tests ran in that
+attempt. Its log remains artifacts/plan-access-mode-component.log.
+
+The updated native directory workload passes six full-inventory smoke runs over
+three profiles in artifacts/directory-access-mode-smoke/report.json. All twelve
+original names/identities/sizes and unchanged input hashes are checked. This
+proves workload compatibility, not an optimization or installed performance.
+Both app binaries retain linker ad hoc signatures without distribution authority.
+Portable core sources are unchanged from the preceding 68-suite/fuzz/freestanding
+qualification; those reports retain their source scope. Windows/native identity,
+installed mode enforcement, recovery, release and the full continuation remain open.
+
+The preceding extent-read continuation retains one checked run index per stream.
 Current/successor hits and the binary fallback preserve all I/O, work and
 ownership contracts; failed reads retain geometry without publishing content.
 Six original 16-MiB images contain independent 4-MiB data, up to 1,024 extents

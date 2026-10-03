@@ -17,6 +17,13 @@ SHAKE-derived per-extent bytes and explicit sparse/VDL oracles. Their manifests
 describe synthetic storage and grant no Windows qualification. No foreign
 filesystem/cache algorithm or product dependency was imported for this change.
 
+The extraction-policy parser and owner-presentation changes are original adapter
+code. They use the selected Apple SDK's task/common-volume interfaces and named
+native permission constants. Ext4's native owners/permissions and inspected
+history informed the boundary; no ext4 or NTFS-3G implementation was copied into
+this policy. NATIVE-ACCESS.md records the primary API references and exact native
+identity/enforcement limits. Core descriptor/DACL code remains a separate plane.
+
 Primary references:
 
 - [Microsoft MFT overview](https://learn.microsoft.com/en-us/windows/win32/devnotes/master-file-table)

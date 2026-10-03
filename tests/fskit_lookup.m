@@ -77,7 +77,7 @@ lookup_owner(NSData *image, BOOL modern, LookupReader **readerOut, FaultResource
 		volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
 	}
 	assert(volume != nil);
-	*rootOut = [volume activate:&error];
+	*rootOut = [volume activateExtraction:&error];
 	assert(*rootOut != nil && error == nil);
 	*readerOut = reader;
 	*resourceOut = resource;

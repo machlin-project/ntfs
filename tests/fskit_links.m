@@ -140,7 +140,8 @@ link_options(NSArray<NSString *> *roots)
 	}
 	options.taskOptions = @[
 		@"-o",
-		[[@[ @"ro" ] arrayByAddingObjectsFromArray:values] componentsJoinedByString:@","]
+		[[@[ @"ro", @"ntfs-access=extract" ] arrayByAddingObjectsFromArray:values]
+		    componentsJoinedByString:@","]
 	];
 	return (FSTaskOptions *)options;
 }
@@ -164,7 +165,7 @@ link_activate(NTFSVolume *volume, FSTaskOptions *options, BOOL modern, NSInteger
 			if (code == 0) {
 				NSError *error = nil;
 
-				root = [volume activate:&error];
+				root = [volume activateExtraction:&error];
 				assert(root != nil && error == nil);
 			}
 		}

@@ -10,8 +10,10 @@ An allowed discretionary result is only one part of a complete access decision.
 The token contains a user SID, attributed groups and a separate restricting list.
 Extraction from an authenticated native principal and Windows-to-macOS mapping
 remain owning-adapter work. Do not substitute the mount owner or UID zero for a
-Windows identity. The current FSKit development presentation has not adopted
-this evaluator and still does not enforce Windows ACLs.
+Windows identity. The explicitly selected FSKit
+[extraction mode](NATIVE-ACCESS.md) has not adopted this evaluator and does not
+enforce Windows ACLs. Its native presentation IDs are process snapshots, not
+an authenticated mount initiator or a Windows-to-native mapping.
 
 The independent [AccessCheck observation pipeline](ACCESS-ORACLE.md) captures
 Windows token fields and original descriptors, then compares decisions offline.

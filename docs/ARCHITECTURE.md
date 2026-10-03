@@ -1,5 +1,11 @@
 # Architecture
 
+FSKit's explicit extraction mode owns activation policy independently of NTFS
+security parsing and DACL evaluation. Load/activation must select the mode;
+missing or unsupported selection publishes no root. Native presentation IDs
+snapshot the extension process once and survive remount. This neither maps
+Windows principals nor proves installed native enforcement; see NATIVE-ACCESS.md.
+
 The portable C11 core owns NTFS 3.0/3.1 boot geometry, FILE/INDX fixups, MFT
 references, attributes, mapping pairs, streams, directory indexes, reparse metadata
 and Unicode collation. Byte-array wire structures have compile-time size checks.

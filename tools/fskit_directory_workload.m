@@ -378,7 +378,7 @@ main(int argc, char **argv)
 		assert(ntfs_mount(&environment, &limits, &core) == NTFS_OK);
 		volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
 		assert(volume != nil);
-		root = [volume activate:&error];
+		root = [volume activateExtraction:&error];
 		assert(root != nil && error == nil);
 		for (round = 0; round < warmup; round++) {
 			round_scan(

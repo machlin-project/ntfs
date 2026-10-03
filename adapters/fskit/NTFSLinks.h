@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSNames.h"
+#import "NTFSAccessPolicy.h"
 
 enum {
 	NTFS_FSKIT_LINK_TARGET_BYTES = PATH_MAX - 1,
@@ -9,8 +10,7 @@ enum {
 	 * adapter work/stack independently of installed native path-walk limits. */
 	NTFS_FSKIT_LINK_RESOLUTION_LIMIT = 63,
 	/* Trusted mount configuration stays small independently of media size. */
-	NTFS_FSKIT_WINDOWS_ROOT_LIMIT = 64,
-	NTFS_FSKIT_OPTION_LIMIT = 128
+	NTFS_FSKIT_WINDOWS_ROOT_LIMIT = 64
 };
 
 /* Configuration binds Windows root aliases to this mounted owner, never to a

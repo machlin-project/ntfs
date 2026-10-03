@@ -37,6 +37,12 @@ Image/validation fuzz replay all 323/125 authored seeds and pass 53,736/57,077
 executions with zero OOM/timeout/crash. Five store layouts outside the compact
 1-MiB envelope retain full direct-suite coverage; actual replay/binary/descriptor
 evidence is reviewed in `artifacts/secure-store-review.json`.
+Both isolated ordinary Release/O3 builds match all eight actual portable
+products under `artifacts/reproducibility-secure-store/`. Fresh current-only
+legacy directory baselines pass 54 runs/six complete inventory summaries;
+PERFORMANCE.md records actual large/small page settings, O2 adapter/O3 core
+configuration and the absence of paired/installed gain claims. Actual product/
+source/input evidence is independently reviewed in the same review report.
 The 64-KiB external geometry still compares only four mirror records and reports
 60 declared tail records as unchecked. No native mount, Windows access decision,
 identity mapping, recovery or commercial qualification was performed.

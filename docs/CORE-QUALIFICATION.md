@@ -30,6 +30,11 @@ current image/validation campaigns replay all 323/125 authored seeds and pass
 compact store corpus contains 41 cases; five larger layouts retain direct
 full-image acceptance instead. Actual products, replay paths and external bytes
 are independently reviewed in `artifacts/secure-store-review.json`.
+Both isolated ordinary Release/O3 builds match all eight portable products;
+current-only large/small legacy directory baselines pass 54 runs/six summaries
+with complete inventories. The same review checks actual products and input/
+source bytes. PERFORMANCE.md retains configuration, ranges and the absence of
+a paired or installed improvement claim.
 
 The executable reference model supplies one bounded serialized transaction
 foundation without adding a product writer or private on-disk journal. All 62

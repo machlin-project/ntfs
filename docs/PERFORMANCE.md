@@ -15,6 +15,33 @@ new current-source baseline. OPERATION-BUDGETS.md distinguishes work units,
 cumulative allocation attempts, live core/pool bytes and excluded native/RSS
 memory. Broader and installed optimization acceptance remains separate.
 
+The current indexed-store source has fresh ordinary Release/O3 byte comparisons
+and legacy directory baselines. Both isolated builds match all eight portable
+products under `artifacts/reproducibility-secure-store/`. The native workloads
+use that verified archive with O2 adapter/workload sources, no sanitizer and no
+MFT record cache. Each profile has nine repetitions, ten measured rounds and
+five separate warmup rounds. Large uses the 2,000-entry `namespace-large` image
+with pages 8/16; small uses the 12-entry `namespace` image with pages 1/2.
+
+| Inventory | Profile | Median batch wall / CPU (ms) | Peak accounted core bytes |
+| --- | --- | ---: | ---: |
+| Large | Sequential | 67.476 / 67.477 | 196,232 |
+| Large | Interleaved | 130.349 / 130.337 | 248,096 |
+| Large | Views | 120.012 / 120.005 | 248,096 |
+| Small | Sequential | 0.899 / 0.902 | 151,561 |
+| Small | Interleaved | 1.276 / 1.278 | 166,946 |
+| Small | Views | 0.951 / 0.957 | 166,946 |
+
+These 54 runs/six summaries are current-only observations with complete original
+inventory checks. Reports retain ranges, request percentiles, resource calls/
+bytes, allocations and measured process RSS under
+`artifacts/fskit-directory-secure-store-{large,small}/`. Main review compares the
+actual binaries/archive/source/input bytes and every run's oracle verdict in
+`artifacts/secure-store-review.json`. No paired improvement or installed/macOS-27
+runtime performance is inferred. The complete security diagnostic is explicit
+and is not part of ordinary native enumeration. Earlier percentages retain
+their original source/workload scope.
+
 Current optimizations are structural: binary-search run lookup, adjacent-run
 coalescing, geometrically grown bounded vectors, a 64-entry MFT LRU, whole-run
 data reads capped at 1 MiB, a persistent in-order directory cursor, direct B-tree

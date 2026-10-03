@@ -32,6 +32,17 @@ event counter, unchanged external images and retained descriptor bytes in
 `artifacts/secure-store-review.json`. Ordinary Git reads/re-authorship also
 confirm all 65 preceding security images retain identical bytes.
 
+Both isolated ordinary Release/O3 builds also match all eight actual portable
+products under `artifacts/reproducibility-secure-store/`, with unchanged Git
+source during the comparison. Current-only large/small legacy directory
+baselines pass 54 runs/six complete-inventory summaries under
+`artifacts/fskit-directory-secure-store-{large,small}/`. PERFORMANCE.md records
+their distinct page settings and O2 adapter/O3 core configuration. Main review
+checks actual products, source/input bytes and every oracle result in
+`artifacts/secure-store-review.json`. No matched gain, installed performance,
+relocated/native signing reproducibility or broader release qualification is
+claimed.
+
 | Contract | Scope and required evidence | Status |
 | --- | --- | --- |
 | Geometry and MST | 512/4096-byte sectors, 1/4/64-KiB clusters in independent images; boot bounds and torn FILE/INDX tests | Local tests passed |

@@ -22,6 +22,7 @@ enum {
 	WORKLOAD_DEFAULT_REQUEST = 65536,
 	WORKLOAD_MAX_REQUEST = 1048576,
 	WORKLOAD_MAX_READERS = 64,
+	WORKLOAD_MAX_POSITIONS = 1000000,
 	WORKLOAD_MEMORY_IMAGE_LIMIT = 256 * 1048576,
 	WORKLOAD_CORE_MEMORY_LIMIT = 64 * 1048576,
 	WORKLOAD_SAMPLE_BYTES = 64,
@@ -49,7 +50,15 @@ enum {
 #define WORKLOAD_WALL_CLOCK_NAME "monotonic"
 #endif
 
-enum profile { READ_SEQUENTIAL, READ_RANDOM, OPEN_STREAM, LOOKUP, DIRECTORY_NEXT, DIRECTORY_SCAN };
+enum profile {
+	READ_SEQUENTIAL,
+	READ_RANDOM,
+	READ_STRIDED,
+	OPEN_STREAM,
+	LOOKUP,
+	DIRECTORY_NEXT,
+	DIRECTORY_SCAN
+};
 
 struct measured_device {
 	struct ntfs_image image;
@@ -66,7 +75,7 @@ union allocation_header {
 struct options {
 	enum profile profile;
 	const char *profile_name;
-	size_t operations, warmup_operations, request, readers;
+	size_t operations, warmup_operations, request, readers, stride, positions;
 	uint32_t cache_entries;
 	bool memory_backend;
 	const char *stream_name;
@@ -89,7 +98,7 @@ struct worker {
 	struct ntfs_directory *directory;
 	uint8_t *buffer;
 	uint64_t *samples;
-	size_t operations;
+	size_t operations, position;
 	uint64_t bytes, entries, sampled_sum, offset;
 	uint32_t random;
 	enum ntfs_result result;
@@ -213,6 +222,8 @@ parse_options(int argc, char **argv, struct options *options)
 				options->profile = READ_SEQUENTIAL;
 			} else if (strcmp(value, "random") == 0) {
 				options->profile = READ_RANDOM;
+			} else if (strcmp(value, "strided") == 0) {
+				options->profile = READ_STRIDED;
 			} else if (strcmp(value, "open") == 0) {
 				options->profile = OPEN_STREAM;
 			} else if (strcmp(value, "lookup") == 0) {
@@ -259,11 +270,22 @@ parse_options(int argc, char **argv, struct options *options)
 				return false;
 			}
 			options->cache_entries = (uint32_t)count;
+		} else if (strcmp(key, "--stride") == 0) {
+			if (!number(value, SIZE_MAX, &options->stride) || options->stride == 0) {
+				return false;
+			}
+		} else if (strcmp(key, "--positions") == 0) {
+			if (!number(value, WORKLOAD_MAX_POSITIONS, &options->positions) ||
+			    options->positions == 0) {
+				return false;
+			}
 		} else {
 			return false;
 		}
 	}
-	return options->readers <= options->operations;
+	return options->readers <= options->operations &&
+	    (options->profile == READ_STRIDED ? options->stride != 0 && options->positions != 0
+					      : options->stride == 0 && options->positions == 0);
 }
 
 static enum ntfs_result
@@ -281,8 +303,11 @@ one_operation(struct worker *worker, size_t *read_bytes)
 	switch (shared->options.profile) {
 	case READ_RANDOM:
 	case READ_SEQUENTIAL:
+	case READ_STRIDED:
 		size = ntfs_stream_size(worker->stream);
-		if (shared->options.profile == READ_RANDOM) {
+		if (shared->options.profile == READ_STRIDED) {
+			worker->offset = (uint64_t)worker->position * shared->options.stride;
+		} else if (shared->options.profile == READ_RANDOM) {
 			maximum =
 			    size > shared->options.request ? size - shared->options.request : 0;
 			worker->offset = random_offset(worker) % (maximum + 1);
@@ -290,9 +315,16 @@ one_operation(struct worker *worker, size_t *read_bytes)
 		result = ntfs_stream_read(worker->stream, worker->offset, worker->buffer,
 		    shared->options.request, read_bytes);
 		if (result == NTFS_OK) {
-			worker->offset += *read_bytes;
-			if (worker->offset >= size) {
-				worker->offset = 0;
+			if (shared->options.profile == READ_STRIDED) {
+				worker->position++;
+				if (worker->position == shared->options.positions) {
+					worker->position = 0;
+				}
+			} else {
+				worker->offset += *read_bytes;
+				if (worker->offset >= size) {
+					worker->offset = 0;
+				}
 			}
 		}
 		return result;
@@ -418,10 +450,11 @@ main(int argc, char **argv)
 	if (argc < 3 || !parse_options(argc, argv, &options)) {
 		fprintf(stderr,
 		    "usage: ntfs-workload IMAGE PATH [--profile "
-		    "sequential|random|open|lookup|directory-next|directory-scan]\n"
+		    "sequential|random|strided|open|lookup|directory-next|directory-scan]\n"
 		    "       [--backend posix|memory] [--operations N] [--request BYTES] [--readers "
 		    "N]\n"
-		    "       [--warmup-operations N] [--cache-entries N] [--stream NAME]\n");
+		    "       [--warmup-operations N] [--cache-entries N] [--stream NAME]\n"
+		    "       [--stride BYTES --positions N] (required only for strided)\n");
 		return 2;
 	}
 	error = ntfs_image_open(argv[1], &device.image);
@@ -495,7 +528,8 @@ main(int argc, char **argv)
 		workers[i].random = RANDOM_SEED + (uint32_t)i;
 		workers[i].samples = samples + sample_offset;
 		sample_offset += workers[i].operations;
-		if (options.profile == READ_RANDOM || options.profile == READ_SEQUENTIAL) {
+		if (options.profile == READ_RANDOM || options.profile == READ_SEQUENTIAL ||
+		    options.profile == READ_STRIDED) {
 			workers[i].buffer = malloc(options.request);
 			if (workers[i].buffer == NULL) {
 				result = NTFS_NO_MEMORY;
@@ -503,6 +537,14 @@ main(int argc, char **argv)
 			}
 			result = ntfs_stream_open(shared.node, shared.stream_name,
 			    shared.stream_units, &workers[i].stream);
+			if (result == NTFS_OK && options.profile == READ_STRIDED &&
+			    (ntfs_stream_size(workers[i].stream) == 0 ||
+				options.positions - 1 >
+				    (ntfs_stream_size(workers[i].stream) - 1) / options.stride)) {
+				/* Prove every start fits before multiplying a wide stride.
+				 * The last request may still have a truthful partial EOF. */
+				result = NTFS_INVALID;
+			}
 		} else if (options.profile == DIRECTORY_NEXT) {
 			result = ntfs_directory_open(shared.node, &workers[i].directory);
 		}
@@ -605,6 +647,7 @@ finish:
 	       "\"concurrency\":\"shared volume with external "
 	       "serialization\",\"readers\":%zu,\"operations\":%zu,"
 	       "\"warmup_operations\":%zu,"
+	       "\"stride_bytes\":%zu,\"positions\":%zu,"
 	       "\"wall_clock\":\"" WORKLOAD_WALL_CLOCK_NAME
 	       "\",\"wall_clock_resolution_ns\":%" PRIu64 ","
 	       "\"request_bytes\":%zu,\"record_cache_entries\":%u,\"wall_ns\":%" PRIu64
@@ -615,7 +658,7 @@ finish:
 	       ",\"record_cache_misses\":%" PRIu64 ",\"allocations\":%" PRIu64
 	       ",\"peak_core_bytes\":%zu,\"peak_rss_bytes\":%" PRIu64 "}\n",
 	    options.profile_name, options.memory_backend ? "memory" : "posix", options.readers,
-	    options.operations, options.warmup_operations,
+	    options.operations, options.warmup_operations, options.stride, options.positions,
 	    (uint64_t)resolution.tv_sec * NANOSECONDS_PER_SECOND + (uint64_t)resolution.tv_nsec,
 	    options.request, options.cache_entries, elapsed, cpu,
 	    percentile(samples, options.operations, PERCENTILE_MEDIAN),

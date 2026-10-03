@@ -16,6 +16,8 @@ from workload_contract import expected_read
 OPERATIONS = 29
 WARMUP = 13
 READERS = 3
+STRIDED_POSITIONS = 3
+STRIDED_STRIDE = 2
 REFERENCE_REVISION = 'a' * 40
 CURRENT_REVISION = 'b' * 40
 
@@ -45,6 +47,24 @@ def main():
                     assert b.expected_reads(data_path, profile, request, OPERATIONS,
                                             WARMUP, READERS) == expected
                     checks += 1
+            if data:
+                for request in (1, 17, 64, 4096):
+                    for stride, positions in ((len(data), 1),
+                                               (STRIDED_STRIDE, STRIDED_POSITIONS)):
+                        expected = expected_read(data, 'strided', request, OPERATIONS,
+                                                 WARMUP, READERS, stride=stride,
+                                                 positions=positions)
+                        assert b.expected_reads(data_path, 'strided', request, OPERATIONS,
+                                                WARMUP, READERS, stride=stride,
+                                                positions=positions) == expected
+                        checks += 1
+            refused(lambda: b.expected_reads(data_path, 'strided', 1, OPERATIONS,
+                                              WARMUP, READERS, stride=0, positions=1))
+            refused(lambda: b.expected_reads(data_path, 'strided', 1, OPERATIONS,
+                                              WARMUP, READERS, stride=1, positions=0))
+            refused(lambda: b.expected_reads(data_path, 'strided', 1, OPERATIONS,
+                                              WARMUP, READERS, stride=max(1, len(data)),
+                                              positions=STRIDED_POSITIONS))
 
         directories = [root / 'first', root / 'second']
         products = []
@@ -130,6 +150,15 @@ def main():
         for name, value in (('bytes', 5), ('entries', 1), ('sampled_sum', '0')):
             refused(lambda name=name, value=value:
                     b.validate_pair([row, {**row, name: value}]))
+        strided_key = {**key, 'profile': 'strided', 'stride_bytes': STRIDED_STRIDE,
+                       'positions': STRIDED_POSITIONS}
+        strided_row = {**row, **strided_key}
+        b.validate_run(strided_row, strided_key, 2, expected)
+        checks += 1
+        for field in ('stride_bytes', 'positions'):
+            refused(lambda field=field:
+                    b.validate_run({**strided_row, field: strided_row[field] + 1},
+                                   strided_key, 2, expected))
 
     print(f'PASS: {checks} independent range, release, toolchain/source and result contracts')
 

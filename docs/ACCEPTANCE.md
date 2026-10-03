@@ -7,6 +7,16 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
+The current optimization continuation adds an opt-in strided workload for hot,
+alternating and wider compression working sets, with independent delivered-byte
+and range/sample oracles. The two focused sanitized suites pass: 47 measured
+profiles and 86 benchmark helper contracts. Format/build/style pass; logs use
+`artifacts/plan-compression-profile-*.log`. No core or adapter source changed;
+the preceding full-suite/native-component evidence retains its source scope.
+LZNT1/WOF still cache one decoded unit per stream. Release measurements and a
+qualified cache improvement remain open; these harness results establish no
+throughput gain or installed behavior. See PERFORMANCE.md.
+
 The current shared FSKit lookup recognizes exact native `.` and `..` through
 checked numeric ancestry. Root lookup clamps both to the root; a live canonical
 parent needs no core I/O/allocation, while a released parent reopens its full

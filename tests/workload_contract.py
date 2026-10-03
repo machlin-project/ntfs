@@ -22,9 +22,11 @@ RANDOM_SEED = 0x85A7F12D
 OPERATIONS = 29
 WARMUP_OPERATIONS = 13
 READERS = 3
+STRIDED_POSITIONS = 3
+WIDE_STRIDED_POSITIONS = 2
 
 
-def expected_read(data, profile, request, operations, warmup, readers):
+def expected_read(data, profile, request, operations, warmup, readers, *, stride=0, positions=0):
     """Independent byte oracle for the documented deterministic request schedule."""
     total_bytes = sampled_sum = 0
     for reader in range(readers):
@@ -32,7 +34,9 @@ def expected_read(data, profile, request, operations, warmup, readers):
         skipped = warmup // readers + (reader < warmup % readers)
         offset, random = 0, RANDOM_SEED + reader
         for operation in range(skipped + measured):
-            if profile == 'random':
+            if profile == 'strided':
+                offset = (operation % positions) * stride
+            elif profile == 'random':
                 random = (random * RANDOM_MULTIPLIER + RANDOM_INCREMENT) & UINT32_MASK
                 high = random << 32
                 random = (random * RANDOM_MULTIPLIER + RANDOM_INCREMENT) & UINT32_MASK
@@ -59,19 +63,24 @@ def main():
         original_hash = hashlib.sha256(image).hexdigest()
 
         def run(path, profile, *, backend='posix', operations=OPERATIONS,
-                warmup=0, request=4096, readers=1, cache=64, stream='', image_path=source):
+                warmup=0, request=4096, readers=1, cache=64, stream='', image_path=source,
+                stride=0, positions=0):
             nonlocal checks
             command = [str(workload), str(image_path), path, '--profile', profile,
                        '--backend', backend, '--operations', str(operations),
                        '--warmup-operations', str(warmup), '--request', str(request),
                        '--readers', str(readers), '--cache-entries', str(cache),
                        '--stream', stream]
-            process = subprocess.run(command, env=env, capture_output=True, timeout=30)
+            if profile == 'strided':
+                command += ['--stride', str(stride), '--positions', str(positions)]
+            process = subprocess.run(command, env=env, stdin=subprocess.DEVNULL,
+                                     capture_output=True, timeout=30)
             assert process.returncode == 0, (command, process.stderr.decode(errors='replace'))
             result = json.loads(process.stdout)
             assert result['profile'] == profile and result['backend'] == backend
             assert result['readers'] == readers and result['operations'] == operations
             assert result['warmup_operations'] == warmup
+            assert result['stride_bytes'] == stride and result['positions'] == positions
             assert 0 <= result['p50_ns'] <= result['p95_ns'] <= result['p99_ns']
             assert result['wall_clock_resolution_ns'] > 0
             assert result['wall_ns'] > 0 and result['cpu_ns'] > 0
@@ -87,14 +96,18 @@ def main():
             assert actual == expected, name
         for name in ('hello.txt', 'fragmented.bin', 'extended.bin', 'sparse.bin',
                      'tail.bin', 'compressed.bin'):
-            for profile in ('sequential', 'random'):
+            for profile in ('sequential', 'random', 'strided'):
                 request = 37 if name == 'hello.txt' else 4096
+                stride = max(1, len(contents[name]) // STRIDED_POSITIONS) if profile == 'strided' else 0
+                positions = STRIDED_POSITIONS if profile == 'strided' else 0
                 expected_bytes, expected_sum = expected_read(contents[name], profile, request,
-                                                              OPERATIONS, WARMUP_OPERATIONS, READERS)
+                                                              OPERATIONS, WARMUP_OPERATIONS, READERS,
+                                                              stride=stride, positions=positions)
                 posix = run('/' + name, profile, request=request, readers=READERS,
-                            warmup=WARMUP_OPERATIONS)
+                            warmup=WARMUP_OPERATIONS, stride=stride, positions=positions)
                 memory = run('/' + name, profile, request=request, readers=READERS,
-                             warmup=WARMUP_OPERATIONS, backend='memory')
+                             warmup=WARMUP_OPERATIONS, backend='memory', stride=stride,
+                             positions=positions)
                 for result in (posix, memory):
                     assert result['bytes'] == expected_bytes, (name, result)
                     assert int(result['sampled_sum'], 16) == expected_sum, (name, result)
@@ -145,16 +158,37 @@ def main():
         result = run('/fragmented.bin', 'random', readers=READERS, image_path=sparse_path)
         assert result['bytes'] == OPERATIONS * 4096
         assert int(result['sampled_sum'], 16) == 0 and result['read_calls'] == 0
+        wide_stride = f.LARGE_SPARSE_BYTES // WIDE_STRIDED_POSITIONS + f.CLUSTER
+        result = run('/fragmented.bin', 'strided', readers=READERS, image_path=sparse_path,
+                     stride=wide_stride, positions=WIDE_STRIDED_POSITIONS,
+                     warmup=WARMUP_OPERATIONS)
+        assert result['bytes'] == OPERATIONS * 4096
+        assert int(result['sampled_sum'], 16) == 0 and result['read_calls'] == 0
         assert hashlib.sha256(sparse_path.read_bytes()).digest() == hashlib.sha256(sparse).digest()
 
         for arguments in (['--operations', '0'], ['--operations', '-1'],
                           ['--operations', '1000001'], ['--request', '1048577'],
                           ['--readers', '65'], ['--profile', 'unknown'],
                           ['--backend', 'unknown'], ['--warmup-operations', '-1'],
+                          ['--profile', 'strided'], ['--stride', '4096'],
+                          ['--positions', '2'],
+                          ['--profile', 'strided', '--stride', '0', '--positions', '1'],
+                          ['--profile', 'strided', '--stride', '1', '--positions', '0'],
+                          ['--profile', 'strided', '--stride', '1', '--positions', '1000001'],
                           ['--operations', '1', '--readers', '2']):
             invalid = subprocess.run([str(workload), str(source), '/hello.txt', *arguments],
                                      env=env, capture_output=True, timeout=30)
             assert invalid.returncode == 2 and not invalid.stdout, arguments
+        for stride, positions in ((len(contents['hello.txt']), WIDE_STRIDED_POSITIONS),
+                                   (UINT64_MASK, WIDE_STRIDED_POSITIONS)):
+            invalid = subprocess.run(
+                [str(workload), str(source), '/hello.txt', '--profile', 'strided',
+                 '--stride', str(stride), '--positions', str(positions)],
+                env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+            assert invalid.returncode == 1 and not invalid.stdout
+        result = run('/hello.txt', 'strided', stride=UINT64_MASK, positions=1)
+        assert result['bytes'] == len(contents['hello.txt']) * OPERATIONS
+        assert int(result['sampled_sum'], 16) == sum(contents['hello.txt']) * OPERATIONS
         failure = subprocess.run([str(workload), str(source), '/missing', '--profile', 'open'],
                                  env=env, capture_output=True, timeout=30)
         assert failure.returncode == 1 and not failure.stdout

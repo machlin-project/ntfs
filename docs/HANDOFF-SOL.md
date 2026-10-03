@@ -17,7 +17,22 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current exact native dot lookup
+## Current compression workload foundation
+
+The opt-in `strided` workload cyclically visits bounded windows, continuing each
+reader's independent position through warmup. The runner records stride/position
+configuration and verifies ranges, delivered bytes and prefix samples against
+original file bytes; full hashes remain separate. The two focused sanitized
+suites pass 47 measured profiles and 86 helper contracts, with format/build/style
+passing under `artifacts/plan-compression-profile-*.log`.
+
+No core/adapter source changed and both LZNT1/WOF still cache one decoded unit per
+stream. Retain an ordinary Release baseline before changing that implementation,
+then measure hot/alternating/wider codec-unit working sets under PERFORMANCE.md.
+This foundation adds no throughput, Windows or installed-native claim. The
+full continuation and separately measured optimization program remain open.
+
+## Preceding exact native dot lookup
 
 The shared FSKit adapter resolves exact `.` and `..` from the same checked
 numeric ancestry used by names-only enumeration. Both root components select

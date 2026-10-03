@@ -232,6 +232,11 @@ inventories, hard-link consistency, original UTF-16 and truthful partial reporti
 The latter verifies measured read ranges against original fixture bytes, ADS,
 sparse/VDL/compression, explicit warmup, record-cache controls and serialized
 readers on both POSIX and memory callbacks. Neither executes native Windows APIs.
+An opt-in `strided` profile adds cyclic windows through `--stride` and
+`--positions`; the benchmark runner exposes their plural matrix forms. Use
+codec-unit strides to measure hot, alternating and wider compression working
+sets. The focused workload/benchmark suites pass 47 measured profiles and 86
+helper contracts; PERFORMANCE.md defines the schedule and measurement limits.
 The FSKit component also verifies bounded stream xattrs and their raw UTF-16
 reverse manifest. Filename projection adds five namespace images, hard-link and
 lossless name reversal, response/scan exhaustion and complete required-allocation

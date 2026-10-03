@@ -24,6 +24,8 @@ MEBIBYTE_BYTES = 1024 * 1024
 MAX_OPERATIONS = 1_000_000
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_READERS = 64
+MAX_POSITIONS = 1_000_000
+DEFAULT_STRIDE_BYTES = 64 * 1024
 MAX_REPETITIONS = 100
 SAMPLE_BYTES = 64
 UINT32_MASK = (1 << 32) - 1
@@ -35,7 +37,8 @@ RELEASE_TOOLCHAIN_FIELDS = ('compiler_path', 'compiler_version', 'sdk_path', 'sd
                            'platform', 'machine')
 WORKLOAD_SOURCES = ('tools/workload.c', 'tools/path.c', 'tools/path.h', 'adapters/posix')
 RESULT_FIELDS = ('bytes', 'entries', 'sampled_sum')
-PROFILE_NAMES = ('sequential', 'random', 'open', 'lookup', 'directory-next', 'directory-scan')
+DEFAULT_PROFILES = ('sequential', 'random', 'open', 'lookup', 'directory-next', 'directory-scan')
+PROFILE_NAMES = (*DEFAULT_PROFILES, 'strided')
 METRICS = ('wall_ns', 'cpu_ns', 'p50_ns', 'p95_ns', 'p99_ns', 'peak_core_bytes',
            'peak_rss_bytes', 'allocations', 'read_calls', 'read_bytes',
            'record_cache_hits', 'record_cache_misses', 'operations_per_second',
@@ -119,9 +122,12 @@ def matching_releases(reference, current):
         raise ValueError('Paired runs require unchanged workload and POSIX adapter sources')
 
 
-def expected_reads(path, profile, request, operations, warmup, readers):
+def expected_reads(path, profile, request, operations, warmup, readers, *, stride=0, positions=0):
     """Check deterministic delivered ranges/samples against independent file bytes."""
     size = path.stat().st_size
+    if profile == 'strided' and (stride <= 0 or positions <= 0 or
+                                 (positions - 1) * stride >= size):
+        raise ValueError('Every strided window start must fit the independent file')
     if size == 0:
         return 0, 0
     total = sampled = 0
@@ -131,7 +137,9 @@ def expected_reads(path, profile, request, operations, warmup, readers):
             skipped = warmup // readers + (reader < warmup % readers)
             offset, random = 0, (RANDOM_SEED + reader) & UINT32_MASK
             for operation in range(skipped + measured):
-                if profile == 'random':
+                if profile == 'strided':
+                    offset = (operation % positions) * stride
+                elif profile == 'random':
                     random = (random * RANDOM_MULTIPLIER + RANDOM_INCREMENT) & UINT32_MASK
                     high = random << 32
                     random = (random * RANDOM_MULTIPLIER + RANDOM_INCREMENT) & UINT32_MASK
@@ -192,7 +200,11 @@ def main():
     parser.add_argument('--output', type=Path, required=True, help='New ignored artifact directory')
     parser.add_argument('--dataset-kind', choices=('synthetic', 'ntfs3g', 'windows', 'unknown'),
                         default='unknown', help='Declared input provenance; not native acceptance')
-    parser.add_argument('--profiles', nargs='+', choices=PROFILE_NAMES, default=PROFILE_NAMES)
+    parser.add_argument('--profiles', nargs='+', choices=PROFILE_NAMES, default=DEFAULT_PROFILES)
+    parser.add_argument('--strides', nargs='+', type=int, default=(DEFAULT_STRIDE_BYTES,),
+                        help='Distance between window starts in the strided profile')
+    parser.add_argument('--positions', nargs='+', type=int, default=(1, 2),
+                        help='Number of repeatedly visited windows in the strided profile')
     parser.add_argument('--backends', nargs='+', choices=('posix', 'memory'), default=('posix', 'memory'))
     parser.add_argument('--requests', nargs='+', type=int, default=(65536,))
     parser.add_argument('--readers', nargs='+', type=int, default=(1,))
@@ -208,6 +220,8 @@ def main():
             ('repetitions', (args.repetitions,), 2, MAX_REPETITIONS),
             ('requests', args.requests, 1, MAX_REQUEST_BYTES),
             ('readers', args.readers, 1, min(MAX_READERS, args.operations)),
+            ('strides', args.strides, 1, UINT64_MASK),
+            ('positions', args.positions, 1, MAX_POSITIONS),
             ('cache entries', args.cache_entries, 0, 4096),
             ('warmup operations', args.warmup_operations, 0, MAX_OPERATIONS)):
         if any(value < minimum or value > maximum for value in values):
@@ -274,18 +288,23 @@ def main():
                     content_bytes=report['oracle_bytes']) != report['oracle_sha256']:
                 raise ValueError('Driver content differs from the independent byte oracle')
         report['data_oracle'] = 'pass before measurements'
-        for profile, backend, request, readers, cache, warmup in itertools.product(
+        for profile, backend, request, readers, cache, warmup, stride, positions in itertools.product(
                 args.profiles, args.backends, args.requests, args.readers,
-                args.cache_entries, args.warmup_operations):
+                args.cache_entries, args.warmup_operations, args.strides, args.positions):
             # Request size affects data reads only; avoid duplicated metadata workloads.
-            if profile not in ('sequential', 'random') and request != args.requests[0]:
+            if profile != 'strided' and (stride != args.strides[0] or
+                                         positions != args.positions[0]):
+                continue
+            if profile not in ('sequential', 'random', 'strided') and request != args.requests[0]:
                 continue
             path = args.directory if profile.startswith('directory-') else args.file
             key = {'profile': profile, 'backend': backend, 'request_bytes': request,
                    'readers': readers, 'record_cache_entries': cache, 'warmup_operations': warmup}
+            if profile == 'strided':
+                key.update(stride_bytes=stride, positions=positions)
             expected = (expected_reads(args.expected_data, profile, request, args.operations,
-                                       warmup, readers)
-                        if profile in ('sequential', 'random') else None)
+                                       warmup, readers, stride=stride, positions=positions)
+                        if profile in ('sequential', 'random', 'strided') else None)
             repeated = {variant: [] for variant in variants}
             for repetition in range(args.repetitions):
                 order = sorted(variants, reverse=repetition % 2 == 0)
@@ -297,6 +316,8 @@ def main():
                                '--operations', str(args.operations), '--request', str(request),
                                '--readers', str(readers), '--cache-entries', str(cache),
                                '--warmup-operations', str(warmup), '--stream', args.stream]
+                    if profile == 'strided':
+                        command += ['--stride', str(stride), '--positions', str(positions)]
                     log = args.output / f'run-{run_id:05}.log'
                     started = time.monotonic()
                     with log.open('wb') as errors:

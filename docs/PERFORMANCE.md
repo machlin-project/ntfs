@@ -127,8 +127,8 @@ fixup, allocation, VDL or unsupported-feature checks.
 
 ## Repeated portable workload measurements
 
-`ntfs-workload` extends the original single microbenchmark with sequential/random
-reads, repeated stream open, lookup/stat, persistent directory continuation and
+`ntfs-workload` extends the original single microbenchmark with sequential,
+random and strided reads, repeated stream open, lookup/stat, persistent directory continuation and
 complete directory scans. It reports wall/process CPU, p50/p95/p99 request latency,
 bytes, entries, allocations, exact core I/O/cache counters, peak core allocation
 and process RSS. Request latency includes waiting for external serialization.
@@ -167,6 +167,31 @@ initial cache reports are in `artifacts/plan-cache-measure-oracle/` and
 images. The images contain 2,097,408-byte and 8,192-byte tested streams
 respectively; image size is not the independent content-oracle size. Earlier
 failed preflights remain retained.
+
+## Compression working-set measurements
+
+The opt-in `strided` profile cyclically visits `positions` windows whose starts
+are separated by `stride_bytes`. Each reader owns its stream and continues its
+position across warmup. A one-position workload measures repeated access to one
+unit; two positions alternate units; more positions exercise a wider working set.
+Set the stride to the input codec's unit size and keep requests within each unit
+to separate those cases. Every
+window start must fit the stream before multiplication, including wide strides;
+the last request may return a partial EOF. Existing default profiles are unchanged.
+
+The runner supplies `--strides` and `--positions`, retains both in each strided
+configuration and checks delivered ranges and prefix samples against independent
+original bytes. Full content hashes still run outside measurements. The focused
+sanitized suites pass 47 measured profiles and 86 helper contracts, including
+warmup/reader scheduling, partial EOF, offsets beyond 4 GiB, invalid windows and
+wide arithmetic. Logs use `artifacts/plan-compression-profile-*.log`.
+
+LZNT1 and WOF still retain one decoded unit per stream. These harness checks
+establish no cache or throughput improvement. Retain ordinary Release products
+before changing the cache, then compare identical hot, alternating and wider
+workloads with CPU, latency, allocation and I/O metrics. Sparse/raw units and
+paged WOF tables can change read counts independently of decoder-cache misses;
+record the exact storage layout before interpreting them.
 
 ## Paired reader accounting measurements
 

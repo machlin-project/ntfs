@@ -1,7 +1,7 @@
 project('machlin-ntfs', 'c', version: '0.1.0', default_options: ['c_std=c11', 'warning_level=3', 'werror=true', 'buildtype=debugoptimized'])
 cc = meson.get_compiler('c')
 inc = include_directories('include', 'adapters/posix')
-core_sources = files('core/support.c', 'core/operation.c', 'core/api.c', 'core/record.c', 'core/logfile.c', 'core/logfile_source.c', 'core/stream.c', 'core/lznt1.c', 'core/lzx.c', 'core/wof.c', 'core/wof_stream.c', 'core/xpress.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/index.c', 'core/reparse.c', 'core/security.c', 'core/secure.c', 'core/access.c', 'core/validate.c')
+core_sources = files('core/support.c', 'core/operation.c', 'core/api.c', 'core/record.c', 'core/logfile.c', 'core/logfile_source.c', 'core/stream.c', 'core/unit_cache.c', 'core/lznt1.c', 'core/lzx.c', 'core/wof.c', 'core/wof_stream.c', 'core/xpress.c', 'core/attribute.c', 'core/catalog.c', 'core/node.c', 'core/unicode.c', 'core/mount.c', 'core/directory.c', 'core/index.c', 'core/reparse.c', 'core/security.c', 'core/secure.c', 'core/access.c', 'core/validate.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
 posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directories: inc, c_args: ['-D_POSIX_C_SOURCE=200809L'], install: false)
@@ -19,6 +19,8 @@ unit = executable('ntfs-unit', 'tests/unit.c', include_directories: [inc, includ
 test('unit', unit, args: [meson.current_build_dir() / 'fixtures/standard.img'], depends: fixture, timeout: 120)
 streams = executable('ntfs-stream-tests', 'tests/streams.c', include_directories: inc, link_with: [posix, core], c_args: ['-Wdeclaration-after-statement'])
 test('streams', streams, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
+compression_cache = executable('ntfs-compression-cache-tests', ['tests/compression_cache.c', 'tests/fuzz_device.c'], include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('compression-cache', compression_cache, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 bad_clusters = executable('ntfs-bad-clusters-tests', ['tests/bad_clusters.c', 'tests/fuzz_device.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('bad-clusters', bad_clusters, args: [meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 codec = executable('ntfs-codec-tests', 'tests/codec.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])

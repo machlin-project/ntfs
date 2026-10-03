@@ -17,7 +17,34 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current compression workload baseline
+## Current optional compression-unit retention
+
+LZNT1 and WOF XPRESS/LZX streams retain at most two decoded outputs. The original
+output/input/workspace allocation stays required; after the first useful fill,
+one distinct miss attempts one optional output allocation. Refusal preserves
+single-unit reading without poisoning enclosing credits. Hits promote the older
+output; replacement invalidates only the victim before I/O/decode and publishes
+only after complete success. Failed fills preserve the other unit. Close releases
+the separately owned extra allocation before the original storage.
+
+All 66 sanitized core suites, both freestanding targets, style, 25 component
+groups/nine explicit modern-runtime SKIPs and the unsigned dual-architecture
+Release app pass. Dedicated profiles cover six layouts, four optional refusals,
+14 partial/full replacement faults, 12 read-byte/work boundaries, compound
+fallback failure and exact cleanup. Required operation boundaries remain strict;
+the WOF suite has 390 allocation/101 read positions and cached-prefix checks after
+late codec errors. Pressure tests fill both slots, measure accessed-item release
+and verify exact extra-unit recreation after NORMAL. Current logs use
+`artifacts/plan-unit-cache-*-reviewed.log` and the later pressure logs.
+
+Next run fresh integrated fuzzing and committed-source Release reproducibility,
+then matched comparisons with the retained baseline below. Keep workload/POSIX
+sources unchanged; extend hot duration and sequential/random/multiple-reader
+profiles before accepting the cache. No throughput gain, native mount or Windows
+compatibility is established by correctness checks. The full continuation remains
+open in CORE-QUALIFICATION.md.
+
+## Preceding compression workload baseline
 
 The opt-in `strided` workload cyclically visits bounded windows, continuing each
 reader's independent position through warmup. The runner records stride/position
@@ -26,8 +53,8 @@ original file bytes; full hashes remain separate. The two focused sanitized
 suites pass 47 measured profiles and 86 helper contracts, with format/build/style
 passing under `artifacts/plan-compression-profile-*.log`.
 
-No core/adapter source changed and both LZNT1/WOF still cache one decoded unit per
-stream. The retained current-only Release baseline passes 540 runs/60 summaries:
+At this preceding baseline no core/adapter source changed and both LZNT1/WOF
+cache one decoded unit per stream. The retained current-only baseline passes 540 runs/60 summaries:
 five synthetic codec/storage inputs, both callbacks, one reader, 512-byte reads,
 64 record-cache entries, 0/128 warmup and 3,000 measured operations, with nine
 repetitions at each of one/two/three unit-stride positions. Reports use
@@ -40,14 +67,8 @@ PERFORMANCE.md defines mixed raw/packed/sparse units, warmed-cache scope and hot
 clock-resolution limits. This baseline supplies no speedup, Windows or native
 mount claim; relocated/native release qualification remains separate.
 
-Next evaluate one optional second decoded-output unit per stream. Preserve the
-single-unit fallback when allocation/live credits refuse optional storage, exact
-cleanup and successful publication only after a complete fill. Failed replacement
-must preserve the other valid unit. Qualify required/optional failures, partial
-I/O, retry, sparse/raw/partial units and cumulative budgets before matched Release
-comparison. Keep these workload/POSIX sources unchanged for paired runs; extend
-hot duration and sequential/random/multiple-reader profiles before accepting the
-cache. The full continuation and optimization program remain open.
+This remains the retained source/product baseline for the current candidate;
+its one-slot timing and counters must not be treated as candidate observations.
 
 ## Preceding exact native dot lookup
 

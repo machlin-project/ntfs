@@ -352,7 +352,7 @@ pressure_lookup(NTFSVolume *volume, FSItem *root, NSString *name)
 
 static void
 test_content_pressure(NSString *fixtures, NSString *imageName, NSString *fileName, NSData *original,
-    NSData *wire, BOOL modern)
+    NSData *wire, NSUInteger unitBytes, BOOL modern)
 {
 	NSData *image =
 	    [NSData dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:imageName]];
@@ -363,13 +363,16 @@ test_content_pressure(NSString *fixtures, NSString *imageName, NSString *fileNam
 	NSError *error = nil;
 	NSData *manifest, *savedWire = nil;
 	FSItemAttributes *attributes;
-	NSUInteger retained, transient, reads;
+	NSUInteger retained, transient, reads, singleUnit;
 	__block NSUInteger replies = 0;
 
 	item = pressure_lookup(volume, root, fileName);
 	attributes = [volume attributes:item error:&error];
 	assert(attributes != nil && error == nil && attributes.size == original.length);
 	pressure_read(volume, item, original, 0, modern, 0);
+	singleUnit = resource.liveBytes;
+	pressure_read(volume, item, original, unitBytes, modern, 0);
+	assert(resource.liveBytes == singleUnit + unitBytes);
 	manifest = [volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.streams"]
 			       ofItem:item
 				error:&error];
@@ -384,6 +387,7 @@ test_content_pressure(NSString *fixtures, NSString *imageName, NSString *fileNam
 	retained = resource.liveBytes;
 	reads = reader.reads;
 	pressure_read(volume, item, original, 0, modern, 0);
+	pressure_read(volume, item, original, unitBytes, modern, 0);
 	assert(resource.liveBytes == retained && reader.reads == reads);
 	pressure_notify(volume, DISPATCH_MEMORYPRESSURE_NORMAL | DISPATCH_MEMORYPRESSURE_WARN);
 	/* The notification itself touches neither dormant items nor core allocations. */
@@ -392,6 +396,8 @@ test_content_pressure(NSString *fixtures, NSString *imageName, NSString *fileNam
 	pressure_read(volume, item, original, 0, modern, 0);
 	transient = resource.liveBytes;
 	assert(transient < retained && reader.reads > reads);
+	pressure_read(volume, item, original, unitBytes, modern, 0);
+	assert(resource.liveBytes == transient);
 	assert([volume xattrNamed:[FSFileName nameWithString:@"org.machlin.ntfs.streams"]
 			   ofItem:item
 			    error:&error] != nil &&
@@ -413,8 +419,12 @@ test_content_pressure(NSString *fixtures, NSString *imageName, NSString *fileNam
 	assert(volume.readCachePolicy.retentionActive);
 	pressure_read(volume, item, original, 0, modern, 0);
 	assert(resource.liveBytes > transient);
+	singleUnit = resource.liveBytes;
+	pressure_read(volume, item, original, unitBytes, modern, 0);
+	assert(resource.liveBytes == singleUnit + unitBytes);
 	reads = reader.reads;
 	pressure_read(volume, item, original, 0, modern, 0);
+	pressure_read(volume, item, original, unitBytes, modern, 0);
 	assert(reader.reads == reads);
 	pressure_notify(volume, DISPATCH_MEMORYPRESSURE_CRITICAL);
 	[volume unmountWithReplyHandler:^{
@@ -702,8 +712,7 @@ test_pressure_link(NSString *fixtures, BOOL modern)
 void
 ntfs_test_fskit_pressure(NSString *fixtures, BOOL modern)
 {
-	NSData *lzx, *xpress, *wireLZX, *wireXPRESS;
-	NSMutableData *lznt1;
+	NSData *lzx, *xpress, *wireLZX, *wireXPRESS, *lznt1;
 
 	if (modern && !ntfs_test_native_reclaim_available()) {
 		puts("SKIP: modern FSKit pressure runtime requires macOS 27");
@@ -722,14 +731,15 @@ ntfs_test_fskit_pressure(NSString *fixtures, BOOL modern)
 	wireXPRESS = [NSData
 	    dataWithContentsOfFile:[fixtures
 				       stringByAppendingPathComponent:@"wof-file-4k.reparse"]];
-	lznt1 = [NSMutableData dataWithLength:TEST_COMPRESSION_UNIT_BYTES];
-	memset(lznt1.mutableBytes, 'Z', lznt1.length);
-	assert(lzx != nil && xpress != nil && wireLZX != nil && wireXPRESS != nil);
-	test_content_pressure(fixtures, @"standard.img", @"compressed.bin", lznt1, nil, modern);
-	test_content_pressure(
-	    fixtures, @"wof-file-4k.img", @"hello.txt", xpress, wireXPRESS, modern);
-	test_content_pressure(
-	    fixtures, @"wof-file-lzx-packed.img", @"hello.txt", lzx, wireLZX, modern);
+	lznt1 = [NSData dataWithContentsOfFile:
+		[fixtures stringByAppendingPathComponent:@"expected/mixed-compression.bin"]];
+	assert(lzx != nil && xpress != nil && lznt1 != nil && wireLZX != nil && wireXPRESS != nil);
+	test_content_pressure(fixtures, @"mixed-compression.img", @"compressed.bin", lznt1, nil,
+	    TEST_COMPRESSION_UNIT_BYTES, modern);
+	test_content_pressure(fixtures, @"wof-file-4k.img", @"hello.txt", xpress, wireXPRESS,
+	    NTFS_WOF_UNIT_4K, modern);
+	test_content_pressure(fixtures, @"wof-file-lzx-packed.img", @"hello.txt", lzx, wireLZX,
+	    NTFS_WOF_UNIT_32K, modern);
 	test_pressure_blocked_read(fixtures, lzx, modern);
 	test_pressure_reopen_faults(fixtures, lzx, modern);
 	test_pressure_namespace(fixtures, modern);

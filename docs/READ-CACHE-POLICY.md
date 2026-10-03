@@ -28,8 +28,8 @@ items or performs filesystem reads.
 
 | Released on an accessed item | Preserved ownership |
 | --- | --- |
-| Default stream description, resident bytes/extents and LZNT1 unit buffers | Checked node, immutable stat, canonical FSItem and counted owner |
-| WOF private backing streams, table page, encoded/decoded unit and codec scratch | Provider classification, original namespace identity and independent returned bytes |
+| Default stream description, resident bytes/extents and both LZNT1 decoded outputs/input | Checked node, immutable stat, canonical FSItem and counted owner |
+| WOF private backing streams, table page, both decoded outputs/input and codec scratch | Provider classification, original namespace identity and independent returned bytes |
 | Stored stream-name catalog | Stable ADS ordinals and separately owned native response data |
 | Raw reparse snapshot | Immutable native readlink target, directory ancestry and per-edge name policy |
 
@@ -51,10 +51,13 @@ Core required allocation, cumulative attempts and aggregate live bytes now have
 the separate execution policies in [OPERATION-BUDGETS.md](OPERATION-BUDGETS.md).
 Optional validated-record cache retention can be omitted before an allocator
 callback when credits are insufficient, without failing the required read.
+The optional second decoded output uses the same soft allocation/live admission;
+its refusal leaves the required one-unit path available. Pressure cleanup closes
+the owning stream and therefore releases both outputs, rather than resetting tags.
 Pressure cleanup and scope exhaustion both permit unconditional release. The
 resource pool also charges continuation tables; the aligned window, Foundation
 objects and native response memory remain outside the core ledger. The measured
-byte scenarios below predate the added volume accounting fields and retain their
+earlier byte scenarios below predate the added volume accounting fields and retain their
 original evidence scope; current aggregate native/RSS stress remains open.
 
 ## Component evidence
@@ -116,3 +119,23 @@ prefix reads refused to distinguish reuse from replay. Its interleaved fault and
 reentrant teardown evidence is in LIFECYCLE.md. The earlier three content-byte
 measurements above retain their scope; directory pool peaks and process RSS are
 reported separately in PERFORMANCE.md.
+
+The current two-unit component fills distinct units and verifies that the second
+adds exactly one output-unit allocation. Both alternating hits then perform no
+additional resource I/O. Elevated access releases both outputs with the stream;
+restored retention lazily adds exactly one extra output again. Original bytes,
+identity, returned metadata, remount and blocked-read contracts remain required.
+
+| Current independently authored input | Retained | Transient after access | Released |
+| --- | ---: | ---: | ---: |
+| Mixed LZNT1 units | 336,144 | 134,944 | 201,200 |
+| WOF XPRESS4K units | 157,952 | 134,944 | 23,008 |
+| WOF LZX32K packed/raw units | 247,244 | 134,944 | 112,300 |
+
+These measured core bytes include current accounting/object fields and disable
+the record cache. The LZNT1 input now has multiple mixed units, so its total must
+not be compared directly with the earlier standard-file scenario. The current
+component passes 25 groups/nine explicit modern-runtime SKIPs under
+`artifacts/plan-unit-cache-pressure-component.log`; formatter/style pass separately.
+Foundation/I/O-window/kernel memory, RSS, installed delivery and aggregate native
+pressure stress remain outside these measurements.

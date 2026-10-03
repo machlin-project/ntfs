@@ -23,6 +23,8 @@ enum {
 	LZX_PAGE_BACKING_CLUSTERS = 70
 };
 
+enum { REQUIRED_DECODE_ALLOCATION = 1, OPTIONAL_OUTPUT_ALLOCATION };
+
 enum { FAULT_STAT, FAULT_OPEN, FAULT_READ, FAULT_PHASES };
 
 struct test_case {
@@ -222,7 +224,15 @@ exercise(struct fuzz_device *device, const struct test_case *test, const uint8_t
 		if (phase == FAULT_READ) {
 			work =
 			    (struct work){device->allocations - allocations, device->reads - reads};
-			if (failed_allocation != 0 || failed_read != 0) {
+			if (failed_allocation == OPTIONAL_OUTPUT_ALLOCATION) {
+				/* A refused extra output must preserve complete successful data. */
+				assert(result == NTFS_OK && done == length &&
+				    device->allocations ==
+					allocations + OPTIONAL_OUTPUT_ALLOCATION);
+				assert(memcmp(output + GUARD_BYTES, original + (size_t)offset,
+					   done) == 0);
+				device->fail_allocation = 0;
+			} else if (failed_allocation != 0 || failed_read != 0) {
 				expected_error = failed_allocation != 0 ? NTFS_NO_MEMORY : NTFS_IO;
 				assert(result == expected_error && done <= length);
 				assert(memcmp(output + GUARD_BYTES, original + (size_t)offset,
@@ -257,6 +267,14 @@ exercise(struct fuzz_device *device, const struct test_case *test, const uint8_t
 			assert(done == expected_prefix);
 			assert(memcmp(output + GUARD_BYTES, original, done) == 0);
 			guards(output + GUARD_BYTES + done, length - done);
+			if (expected_prefix != 0) {
+				/* Failed decoding of the next unit preserves the prior output. */
+				reads = device->reads;
+				assert(ntfs_stream_read(stream, offset, output + GUARD_BYTES,
+					   expected_prefix, &done) == NTFS_OK &&
+				    done == expected_prefix && device->reads == reads);
+				assert(memcmp(output + GUARD_BYTES, original, done) == 0);
+			}
 			/* The failed private block must remain invalid on the next fill. */
 			assert(ntfs_stream_read(stream, offset, output + GUARD_BYTES, length,
 				   &done) == test->read &&

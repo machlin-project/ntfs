@@ -124,6 +124,16 @@ the reader omits retention without a callback or quota latch. Required output
 still succeeds. An admitted optional allocator failure counts its attempt;
 only successfully populated immutable records become cache entries.
 
+The second LZNT1/WOF decoded-output slot uses the same soft admission. Its one
+output-unit allocation is attempted only once per stream after a useful first
+fill; refusal preserves required decoding with one slot. An admitted allocator
+failure still charges the attempt. With two outputs, failed replacement
+invalidates only the victim and retains the other valid unit; with one output,
+the old tag is invalidated before replacement. Both buffers are live-volume
+storage and close unconditionally. Required exact/one-below allocation/live
+boundaries exclude optional output storage; separate omission tests verify full
+content success at the tighter boundary and no exhausted scope.
+
 ## Work accounting
 
 Work is a deterministic policy model, not an instruction counter. Fixed bounded

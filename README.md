@@ -58,7 +58,9 @@ reparse resolution, Windows/native qualification and recovery remain open;
 see [the complete continuation scope](docs/CORE-QUALIFICATION.md).
 [WOF reading](docs/WOF.md) validates sparse unnamed storage, named backing extents,
 the complete paged chunk table and exact-size XPRESS-Huffman/LZX units. Counted streams
-survive source nodes, retain one private decoded unit and retry failed fills.
+survive source nodes, retain at most two private decoded units and retry failed
+fills. The second output is optional and falls back to one unit under allocation
+or live-credit refusal; native pressure releases both with their owning stream.
 Core and legacy FSKit content checks pass locally; Windows/native provider
 qualification remain open.
 Stored stream names now have a bounded immutable catalog and read-only FSKit

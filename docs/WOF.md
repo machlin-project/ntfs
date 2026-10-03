@@ -74,11 +74,14 @@ The public stream owns its complete provider state after source-node close and
 holds one counted volume child. A single lazy allocation contains private output,
 input and aligned queried codec scratch. XPRESS16K uses 34,432 bytes and LZX32K
 uses 70,476 bytes, excluding the optional table page and backing metadata.
-One decoded unit and one table page are cached. Failed fills
-invalidate their tags before I/O, retain buffers for retry and publish no failed
-unit bytes. Core reads may return an already completed prefix if a later unit
+At most two decoded units and one table page are cached. The second output-only
+unit is attempted once after a useful first fill and is optional: allocator or
+allocation/live-credit refusal preserves one-unit reading without quota poisoning.
+The older decoded slot is invalidated before replacement; failed fills retain
+the other valid output and buffers for retry, publishing no failed unit bytes.
+The table page keeps its independent invalidation contract. Core reads may return an already completed prefix if a later unit
 fails, following the existing stream contract. Teardown releases private backing,
-page and buffers without additional reads.
+page, both outputs and buffers without additional reads.
 
 FSKit uses explicit provider classification rather than treating every reparse
 object as a symlink. Known provider objects have ordinary-file type/attributes,

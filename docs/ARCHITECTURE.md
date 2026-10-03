@@ -146,8 +146,9 @@ The decoder uses caller-owned aligned scratch and no allocation/I/O. Failed
 decoding leaves its byte count zero but may replace an output prefix. The WOF
 stream owns sparse unnamed and exact named backing descriptions, validates all
 extents and the complete chunk table through one 4-KiB page before publication,
-then lazily retains one private input/output unit and codec workspace. Cache tags
-are invalidated before replacement and published only after successful I/O/decode.
+then lazily retains a required private input/output unit and codec workspace.
+A second output-only unit is optional and shares the bounded cache policy below.
+Victim tags are invalidated before replacement and published only after successful I/O/decode.
 The public stream owns the counted volume lifetime independently of its source node;
 private backing descriptions do not double-count it. Known provider metadata can
 report logical/backing-physical sizes without requiring a supported codec or
@@ -174,10 +175,19 @@ entry budget. Metadata copies prevent eviction from invalidating a node. Run
 vectors coalesce adjacent runs, grow geometrically within a cap and use binary
 search. Data I/O coalesces within physical runs and clips at initialized data and
 EOF. Sparse regions and uninitialized tails are zeroed without device reads.
-Compressed streams retain one decoded compression unit, with separate bounded
-input storage. There is no global file-data cache or speculative read-ahead.
-Changing compression units invalidates the cache before I/O; a failed fill cannot
-leave a valid tag on partially replaced data. Direct LZNT1 decoding distinguishes
+LZNT1 and WOF streams retain at most two decoded units, with separate bounded
+input storage. The required decode allocation owns one output, input and any
+codec workspace. After a useful first fill, one distinct-unit miss attempts a
+single optional output allocation. Failure or allocation/live-credit refusal
+keeps the one-unit path and does not poison the operation. The optional attempt
+is not repeated during that stream's lifetime. Both allocations remain charged
+to the volume and owning scopes; stream close releases them exactly.
+The current unit keeps its direct hit path. Reusing the older unit promotes it;
+a miss invalidates only the older victim before any I/O, table lookup or decoding.
+A failed fill preserves the other valid output. Without extra storage, replacement
+invalidates the single output as before. Complete decode/raw copy and padding
+precede publication. There is no global file-data cache or speculative read-ahead.
+Direct LZNT1 decoding distinguishes
 insufficient output capacity from corrupt input. A decoded unit exceeding its
 on-disk unit size is corrupt at the stream boundary.
 

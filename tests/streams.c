@@ -118,6 +118,8 @@ mixed_tests(struct ntfs_volume *volume, struct tracked_image *tracked)
 	tracked->fail_read = 0;
 	reads = tracked->reads;
 	check_mixed(stream, 0, unit);
+	assert(tracked->reads == reads);
+	check_mixed(stream, unit, unit);
 	assert(tracked->reads > reads);
 	check_mixed(stream, unit - 1, unit + 2);
 	reads = tracked->reads;

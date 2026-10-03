@@ -45,12 +45,13 @@ their original source/workload scope.
 Current optimizations are structural: binary-search run lookup, adjacent-run
 coalescing, geometrically grown bounded vectors, a 64-entry MFT LRU, whole-run
 data reads capped at 1 MiB, a persistent in-order directory cursor, direct B-tree
-lookup and one decoded LZNT1 unit per stream. Sparse and uninitialized ranges
+lookup and at most two decoded LZNT1 units per stream. Sparse and uninitialized ranges
 produce zeros without backing I/O. Compressed physical prefixes are read in
 contiguous ranges, including prefixes fragmented across multiple runs.
 
-WOF XPRESS/LZX streams retain one decoded unit, private input/workspace and one
+WOF XPRESS/LZX streams retain at most two decoded units, private input/workspace and one
 4-KiB offset page. XPRESS16K uses 34,432 bytes and LZX32K uses 70,476 bytes for data/scratch;
+these required allocations exclude the optional extra 16-KiB/32-KiB output.
 backing extents and any underlying storage codec have their separate allocations.
 Every fresh open validates the complete table within the default chunk-work cap.
 That linear startup cost, duplicated provider metadata inspection, unit/page
@@ -186,7 +187,7 @@ sanitized suites pass 47 measured profiles and 86 helper contracts, including
 warmup/reader scheduling, partial EOF, offsets beyond 4 GiB, invalid windows and
 wide arithmetic. Logs use `artifacts/plan-compression-profile-*.log`.
 
-LZNT1 and WOF still retain one decoded unit per stream. These harness checks
+The preceding baseline retains one decoded unit per LZNT1/WOF stream. Its harness checks
 establish no cache or throughput improvement. Retain ordinary Release products
 before changing the cache, then compare identical hot, alternating and wider
 workloads with CPU, latency, allocation and I/O metrics. Sparse/raw units and
@@ -230,7 +231,7 @@ Main review re-authors the original payloads, checks actual packed/raw input
 storage and retained binaries, verifies every measured range/sample and resource
 counter, and recomputes all summary medians/ranges in
 `artifacts/compression-profile-review.json`. This establishes the baseline for a
-bounded second decoded-output slot; no cache source changed or speedup is claimed.
+bounded second decoded-output slot; that baseline changes no cache source or claims a speedup.
 Required-allocation failures, optional storage refusal, failed-fill retry and
 exact release must remain qualified before comparing a candidate. Sequential,
 random, multiple-reader and installed workloads still need their own evidence.

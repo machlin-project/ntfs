@@ -7,13 +7,40 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-The current optimization continuation adds an opt-in strided workload for hot,
+The current compression-cache continuation implements at most two private decoded
+outputs for LZNT1 and WOF XPRESS/LZX streams. A second distinct-unit miss attempts
+one optional output allocation; allocator or allocation/live-credit refusal
+keeps successful one-slot reading without poisoning enclosing operations. A
+failed replacement preserves the other valid unit. Tags publish only after a
+complete fill, and stream close frees both outputs exactly.
+
+All 66 ASan/UBSan core suites, both 2-KiB freestanding targets, style, 25 FSKit
+component groups/nine explicit modern-runtime SKIPs and the unsigned arm64/x86_64
+Release app pass. Six dedicated cache profiles cover four optional-refusal modes,
+required failure, 14 partial/full replacement faults, 12 read-byte/work boundaries,
+compound fallback/partial-I/O failure, promotion/eviction and independent owners.
+The original 12 operation profiles/144 required exact-one-below boundaries remain;
+optional output storage has separately checked omission contracts. The WOF suite
+passes 37 verdicts and 390 allocation/101 read faults, including cached-prefix
+preservation after late codec failure.
+
+Main review reads all actual suite results, selected sanitizer options, both
+architectures' changed-core compilation and pressure PASS/SKIP groups. Logs use
+`artifacts/plan-unit-cache-*-reviewed.log` and the later
+`artifacts/plan-unit-cache-pressure-{format,component,style}.log`. Pressure checks
+fill both outputs, release them on accessed-item cleanup and recreate exactly
+one extra unit after restoration. READ-CACHE-POLICY.md records current core bytes.
+Matched Release comparison, fresh integrated fuzzing and current portable
+reproducibility remain to be run; no performance gain or installed/native/Windows
+acceptance follows from these correctness checks.
+
+The preceding optimization continuation adds an opt-in strided workload for hot,
 alternating and wider compression working sets, with independent delivered-byte
 and range/sample oracles. The two focused sanitized suites pass: 47 measured
 profiles and 86 benchmark helper contracts. Format/build/style pass; logs use
 `artifacts/plan-compression-profile-*.log`. No core or adapter source changed;
 the preceding full-suite/native-component evidence retains its source scope.
-LZNT1/WOF still cache one decoded unit per stream. The current-only Release
+At that baseline LZNT1/WOF cache one decoded unit per stream. Its current-only Release
 baseline passes 540 runs/60 summaries across five synthetic codec/storage
 inputs. Both ordinary Release/O3 builds match eight actual full products under
 `artifacts/reproducibility-compression-profile/`. Main review checks actual

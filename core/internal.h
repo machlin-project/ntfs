@@ -48,6 +48,16 @@ struct ntfs_index_visited {
 
 struct ntfs_wof_stream;
 
+/* Two decoded outputs: the required buffer and one optional retained unit.
+ * Input storage and codec workspace stay in the required allocation. */
+#define NTFS_UNIT_CACHE_EMPTY UINT64_MAX
+
+struct ntfs_unit_cache {
+	uint64_t current, retained;
+	uint8_t *output, *extra;
+	bool attempted;
+};
+
 struct ntfs_stream {
 	struct ntfs_volume *volume;
 	uint64_t size, initialized, allocated, physical_size, clusters;
@@ -60,7 +70,7 @@ struct ntfs_stream {
 	struct ntfs_run *runs;
 	uint32_t run_count, run_capacity;
 	uint8_t *compression_buffer;
-	uint64_t cached_unit;
+	struct ntfs_unit_cache decoded;
 	struct ntfs_wof_stream *wof;
 };
 
@@ -111,9 +121,14 @@ void ntfs_zero(void *, size_t);
 bool ntfs_equal(const void *, const void *, size_t);
 bool ntfs_bounds(uint64_t, uint64_t, uint64_t);
 void *ntfs_alloc(struct ntfs_volume *, size_t);
-/* Optional metadata retention may be omitted without exhausting a call. */
+/* Optional retention may be omitted without exhausting a call. */
 void *ntfs_alloc_optional(struct ntfs_volume *, size_t);
 void ntfs_free(struct ntfs_volume *, void *, size_t);
+void ntfs_unit_cache_initialize(struct ntfs_unit_cache *);
+bool ntfs_unit_cache_reuse(struct ntfs_unit_cache *, uint8_t *, uint64_t);
+uint8_t *ntfs_unit_cache_prepare(struct ntfs_volume *, struct ntfs_unit_cache *, uint8_t *, size_t);
+void ntfs_unit_cache_publish(struct ntfs_unit_cache *, uint64_t, uint8_t *);
+void ntfs_unit_cache_release(struct ntfs_volume *, struct ntfs_unit_cache *, size_t);
 bool ntfs_operation_limits_valid(const struct ntfs_operation_limits *);
 enum ntfs_result ntfs_operation_enter(struct ntfs_volume *);
 void ntfs_operation_leave(struct ntfs_volume *);

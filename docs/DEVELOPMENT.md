@@ -48,8 +48,8 @@ original-wire xattrs, remount/revocation and all 79 allocation/17 read fault
 positions across listed/reserved lookup and reopened snapshots. Core reparse tests
 also check copy guards, physical allocation and node-independent lifetime. See
 LINK-POLICY.md for the supported subset and remaining resolution contracts.
-The current component has eight explicit macOS-27 runtime SKIPs: lifecycle,
-operation budgets, pressure, enumeration, content metadata, link projection and
+The current component has nine explicit macOS-27 runtime SKIPs: lifecycle,
+operation budgets, pressure, enumeration, dot lookup, content metadata, link projection and
 two case-policy checks. These in-process results do not mount the filesystem.
 
 The separate `operation` suite checks 12 storage/operation profiles and 144
@@ -183,7 +183,7 @@ and exact-size XPRESS/LZX units with a 128-KiB input ceiling. It checks determin
 verdicts/counts and scratch/output guards; no filesystem provider reads or Windows
 codec execute. `tests/wof_fixtures.py` and `tests/lzx_fixtures.py` author its seeds
 and separate content/error vectors. The separate `wof-files` suite authors 37 complete storage/format cases,
-byte oracles and 376 allocation/101 read faults in selected stat/open/cold-content
+byte oracles and 390 allocation/101 read faults in selected stat/open/cold-content
 operations. The ordinary image target reads first/middle/tail default positions
 and therefore also exercises provider storage/table/content lifetimes. Twenty-three
 legacy component cases cover WOF attributes/content, backing inventory, ADS/raw
@@ -242,6 +242,17 @@ reverse manifest. Filename projection adds five namespace images, hard-link and
 lossless name reversal, response/scan exhaustion and complete required-allocation
 and read-failure sweeps. Their formats and limits appear in NATIVE-NAMESPACE.md.
 See CORE-QUALIFICATION.md for Windows-only acquisition and offline verification.
+
+The separate `compression-cache` suite checks six LZNT1/XPRESS/LZX profiles with
+independent original bytes, two-unit hits/promotion/eviction, crossing-unit and
+partial/EOF reads, independent streams and counted lifetime. Required allocation
+failure remains fatal; four optional-refusal modes preserve successful data and
+do not repeatedly attempt storage. Fourteen partial/full replacement I/O faults,
+twelve read-byte/work boundaries and compound optional-allocation/partial-read
+failures check retained-output preservation, one-slot invalidation, fresh retry
+and exact release. The WOF suite separately checks late codec errors. Current
+FSKit pressure scenarios also fill both slots and verify their release/recreation;
+see READ-CACHE-POLICY.md. Correctness evidence does not establish a speedup.
 
 The separate `bad-clusters` suite checks complete unflagged system-stream
 lists, metadata-only/public-content guards, forbidden bad-range reads, exact

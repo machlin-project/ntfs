@@ -10,7 +10,8 @@ struct ntfs_wof_stream {
 	struct ntfs_wof_layout layout;
 	uint8_t *page, *buffers;
 	size_t buffer_size;
-	uint64_t cached_page, cached_unit;
+	uint64_t cached_page;
+	struct ntfs_unit_cache decoded;
 };
 
 bool
@@ -187,6 +188,7 @@ ntfs_wof_close(struct ntfs_wof_stream *wof)
 	}
 	volume = wof->backing->volume;
 	ntfs_free(volume, wof->page, NTFS_WOF_TABLE_PAGE_BYTES);
+	ntfs_unit_cache_release(volume, &wof->decoded, wof->layout.unit_size);
 	ntfs_free(volume, wof->buffers, wof->buffer_size);
 	ntfs_stream_close(wof->backing);
 	ntfs_free(volume, wof, sizeof(*wof));
@@ -222,7 +224,7 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	wof->backing = backing;
 	wof->layout = layout;
 	wof->cached_page = UINT64_MAX;
-	wof->cached_unit = UINT64_MAX;
+	ntfs_unit_cache_initialize(&wof->decoded);
 	result = table_validate(wof);
 	if (result == NTFS_OK) {
 		stream = ntfs_alloc(node->volume, sizeof(*stream));
@@ -238,7 +240,7 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	stream->size = layout.logical_size;
 	stream->initialized = layout.logical_size;
 	stream->physical_size = backing->physical_size;
-	stream->cached_unit = UINT64_MAX;
+	ntfs_unit_cache_initialize(&stream->decoded);
 	stream->wof = wof;
 	*out = stream;
 	return NTFS_OK;
@@ -253,13 +255,13 @@ decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 	size_t scratch_size = wof->layout.algorithm == NTFS_WOF_LZX_32K
 	    ? ntfs_lzx_workspace_size()
 	    : ntfs_xpress_workspace_size();
-	uint8_t *input, *workspace;
+	uint8_t *input, *workspace, *output;
 	enum ntfs_result result;
 
-	if (wof->cached_unit == chunk) {
+	if (wof->decoded.current == chunk ||
+	    ntfs_unit_cache_reuse(&wof->decoded, wof->buffers, chunk)) {
 		return NTFS_OK;
 	}
-	wof->cached_unit = UINT64_MAX;
 	if (wof->buffers == NULL) {
 		wof->buffer_size = unit * NTFS_COMPRESSION_BUFFERS + scratch_size;
 		wof->buffers = ntfs_alloc(wof->backing->volume, wof->buffer_size);
@@ -267,6 +269,7 @@ decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 			return NTFS_NO_MEMORY;
 		}
 	}
+	output = ntfs_unit_cache_prepare(wof->backing->volume, &wof->decoded, wof->buffers, unit);
 	if (chunk != 0) {
 		result = table_offset(wof, chunk - 1, &start);
 		if (result != NTFS_OK) {
@@ -283,7 +286,7 @@ decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 	if (result != NTFS_OK) {
 		return result;
 	}
-	input = span.uncompressed ? wof->buffers : wof->buffers + unit;
+	input = span.uncompressed ? output : wof->buffers + unit;
 	result = ntfs_stream_exact(wof->backing, span.stored_offset, input, span.stored_size);
 	if (result != NTFS_OK) {
 		return result;
@@ -295,16 +298,16 @@ decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 		}
 		workspace = wof->buffers + unit * NTFS_COMPRESSION_BUFFERS;
 		result = wof->layout.algorithm == NTFS_WOF_LZX_32K
-		    ? ntfs_lzx_decode(input, span.stored_size, wof->buffers, span.logical_size,
-			  workspace, scratch_size, &written)
-		    : ntfs_xpress_huffman_decode(input, span.stored_size, wof->buffers,
-			  span.logical_size, workspace, scratch_size, &written);
+		    ? ntfs_lzx_decode(input, span.stored_size, output, span.logical_size, workspace,
+			  scratch_size, &written)
+		    : ntfs_xpress_huffman_decode(input, span.stored_size, output, span.logical_size,
+			  workspace, scratch_size, &written);
 		if (result != NTFS_OK || written != span.logical_size) {
 			return result == NTFS_RANGE || result == NTFS_OK ? NTFS_CORRUPT : result;
 		}
 	}
-	ntfs_zero(wof->buffers + span.logical_size, unit - span.logical_size);
-	wof->cached_unit = chunk;
+	ntfs_zero(output + span.logical_size, unit - span.logical_size);
+	ntfs_unit_cache_publish(&wof->decoded, chunk, output);
 	return NTFS_OK;
 }
 
@@ -325,7 +328,7 @@ ntfs_wof_read(
 		if (result != NTFS_OK) {
 			return result;
 		}
-		ntfs_copy(bytes, wof->buffers + within, take);
+		ntfs_copy(bytes, wof->decoded.output + within, take);
 		bytes += take;
 		offset += take;
 		length -= take;

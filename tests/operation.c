@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/access.h>
 #include <ntfs/logfile.h>
+#include <ntfs/wof.h>
 #include "fixture.h"
 #include "fuzz_device.h"
 #include <assert.h>
@@ -30,6 +31,8 @@ enum profile_kind {
 struct profile {
 	const char *image, *filename, *expected;
 	enum profile_kind kind;
+	/* Output-only cache storage is optional; required boundaries exclude it. */
+	uint32_t optional_unit_bytes;
 };
 
 struct test_device {
@@ -369,18 +372,20 @@ static void
 profile_boundaries(
     const char *directory, const char *journal_directory, const char *source_directory)
 {
-	static const struct profile profiles[] = {{"standard.img", NULL, NULL, PROFILE_DIRECTORY},
-	    {"nested-index.img", NULL, NULL, PROFILE_DIRECTORY},
-	    {"mft-nonresident-list.img", "extended.bin", "expected/extended.bin", PROFILE_DATA},
-	    {"standard.img", "fragmented.bin", "expected/fragmented.bin", PROFILE_DATA},
-	    {"standard.img", "sparse.bin", "expected/sparse.bin", PROFILE_DATA},
-	    {"standard.img", "compressed.bin", "expected/compressed.bin", PROFILE_DATA},
-	    {"standard.img", "streamed.txt", NULL, PROFILE_ADS},
-	    {"reparse-resident-extension.img", "hello.txt", NULL, PROFILE_REPARSE},
-	    {"secure-tree.img", "hello.txt", "secure-expected/256.bin", PROFILE_SECURITY},
-	    {"wof-file-4k.img", "hello.txt", "wof-file-4k.data", PROFILE_DATA},
-	    {"wof-file-lzx-packed.img", "hello.txt", "wof-file-lzx-packed.data", PROFILE_DATA},
-	    {"nonresident-list.img", NULL, "system-4096.journal.page", PROFILE_JOURNAL}};
+	static const struct profile profiles[] = {
+	    {"standard.img", NULL, NULL, PROFILE_DIRECTORY, 0},
+	    {"nested-index.img", NULL, NULL, PROFILE_DIRECTORY, 0},
+	    {"mft-nonresident-list.img", "extended.bin", "expected/extended.bin", PROFILE_DATA, 0},
+	    {"standard.img", "fragmented.bin", "expected/fragmented.bin", PROFILE_DATA, 0},
+	    {"standard.img", "sparse.bin", "expected/sparse.bin", PROFILE_DATA, 0},
+	    {"standard.img", "compressed.bin", "expected/compressed.bin", PROFILE_DATA, 0},
+	    {"standard.img", "streamed.txt", NULL, PROFILE_ADS, 0},
+	    {"reparse-resident-extension.img", "hello.txt", NULL, PROFILE_REPARSE, 0},
+	    {"secure-tree.img", "hello.txt", "secure-expected/256.bin", PROFILE_SECURITY, 0},
+	    {"wof-file-4k.img", "hello.txt", "wof-file-4k.data", PROFILE_DATA, NTFS_WOF_UNIT_4K},
+	    {"wof-file-lzx-packed.img", "hello.txt", "wof-file-lzx-packed.data", PROFILE_DATA,
+		NTFS_WOF_UNIT_32K},
+	    {"nonresident-list.img", NULL, "system-4096.journal.page", PROFILE_JOURNAL, 0}};
 	struct ntfs_operation_usage baseline, mount_usage;
 	struct ntfs_operation_limits limits;
 	struct test_device device;
@@ -411,6 +416,13 @@ profile_boundaries(
 			assert(used(&baseline, dimension) > 1);
 			ntfs_operation_default_limits(&limits);
 			*ceiling(&limits, dimension) = used(&baseline, dimension);
+			if (profiles[i].optional_unit_bytes != 0) {
+				if (dimension == NTFS_OPERATION_LIMIT_ALLOCATION_CALLS) {
+					limits.allocation_calls--;
+				} else if (dimension == NTFS_OPERATION_LIMIT_ALLOCATION_BYTES) {
+					limits.allocation_bytes -= profiles[i].optional_unit_bytes;
+				}
+			}
 			(void)run_profile(image, image_size, &profiles[i], expected, expected_size,
 			    &limits, 0, NTFS_OPERATION_LIMIT_NONE);
 			(*ceiling(&limits, dimension))--;
@@ -422,8 +434,9 @@ profile_boundaries(
 		volume = mount_device(&device, 0, false);
 		ntfs_get_operation_usage(volume, &mount_usage);
 		assert(ntfs_unmount(volume) == NTFS_OK && device.device.memory == 0);
-		live = baseline.peak_live_bytes > mount_usage.peak_live_bytes
-		    ? baseline.peak_live_bytes
+		live = baseline.peak_live_bytes - profiles[i].optional_unit_bytes >
+			mount_usage.peak_live_bytes
+		    ? baseline.peak_live_bytes - profiles[i].optional_unit_bytes
 		    : mount_usage.peak_live_bytes;
 		(void)run_profile(image, image_size, &profiles[i], expected, expected_size, NULL,
 		    live, NTFS_OPERATION_LIMIT_NONE);
@@ -755,9 +768,9 @@ static void
 codec_retry(const char *directory)
 {
 	static const struct profile profiles[] = {
-	    {"standard.img", "compressed.bin", "expected/compressed.bin", PROFILE_DATA},
-	    {"wof-file-4k.img", "hello.txt", "wof-file-4k.data", PROFILE_DATA},
-	    {"wof-file-lzx-packed.img", "hello.txt", "wof-file-lzx-packed.data", PROFILE_DATA}};
+	    {"standard.img", "compressed.bin", "expected/compressed.bin", PROFILE_DATA, 0},
+	    {"wof-file-4k.img", "hello.txt", "wof-file-4k.data", PROFILE_DATA, 0},
+	    {"wof-file-lzx-packed.img", "hello.txt", "wof-file-lzx-packed.data", PROFILE_DATA, 0}};
 	struct test_device device;
 	struct ntfs_volume *volume;
 	struct ntfs_node *node;

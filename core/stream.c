@@ -182,7 +182,7 @@ ntfs_bad_clusters_from_attr(
 	stream->size = bytes;
 	stream->allocated = bytes;
 	stream->initialized = ntfs_u64(disk->initialized);
-	stream->cached_unit = UINT64_MAX;
+	ntfs_unit_cache_initialize(&stream->decoded);
 	stream->metadata_only = true;
 	result = append_mapping(stream, attr, true);
 	if (result != NTFS_OK) {
@@ -254,7 +254,7 @@ stream_from_attr(struct ntfs_volume *v, const struct ntfs_attr_view *a, bool met
 	s->volume = v;
 	s->flags = a->flags;
 	s->metadata_only = metadata_only;
-	s->cached_unit = UINT64_MAX;
+	ntfs_unit_cache_initialize(&s->decoded);
 	result = NTFS_OK;
 	if (!a->disk->nonresident) {
 		result = ntfs_attr_value(a, &value, &length);
@@ -410,9 +410,10 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 	unsigned i, count, span;
 	bool hole = false;
 	enum ntfs_result result;
-	uint8_t *source;
+	uint8_t *source, *output;
 
-	if (s->cached_unit == unit) {
+	if (s->decoded.current == unit ||
+	    ntfs_unit_cache_reuse(&s->decoded, s->compression_buffer, unit)) {
 		return NTFS_OK;
 	}
 	if (s->compression_buffer == NULL) {
@@ -421,7 +422,7 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 			return NTFS_NO_MEMORY;
 		}
 	}
-	s->cached_unit = UINT64_MAX;
+	output = ntfs_unit_cache_prepare(s->volume, &s->decoded, s->compression_buffer, size);
 	source = s->compression_buffer + size;
 	start = unit * size;
 	if (unit * NTFS_COMPRESSION_CLUSTERS >= s->clusters) {
@@ -459,12 +460,12 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 		return result;
 	}
 	if (!hole) {
-		ntfs_copy(s->compression_buffer, source, packed);
-		ntfs_zero(s->compression_buffer + packed, size - packed);
+		ntfs_copy(output, source, packed);
+		ntfs_zero(output + packed, size - packed);
 	} else if (packed == 0) {
-		ntfs_zero(s->compression_buffer, size);
+		ntfs_zero(output, size);
 	} else {
-		result = ntfs_lznt1_decode(source, packed, s->compression_buffer, size, &produced);
+		result = ntfs_lznt1_decode(source, packed, output, size, &produced);
 		if (result != NTFS_OK) {
 			return result == NTFS_RANGE ? NTFS_CORRUPT : result;
 		}
@@ -475,9 +476,9 @@ compression_unit(struct ntfs_stream *s, uint64_t unit)
 		if (produced < needed) {
 			return NTFS_CORRUPT;
 		}
-		ntfs_zero(s->compression_buffer + produced, size - produced);
+		ntfs_zero(output + produced, size - produced);
 	}
-	s->cached_unit = unit;
+	ntfs_unit_cache_publish(&s->decoded, unit, output);
 	return NTFS_OK;
 }
 
@@ -535,7 +536,7 @@ ntfs_stream_read_impl(
 				if (result != NTFS_OK) {
 					return result;
 				}
-				ntfs_copy(bytes, s->compression_buffer + within, take);
+				ntfs_copy(bytes, s->decoded.output + within, take);
 			} else {
 				result = ntfs_stream_raw(s, offset, bytes, take);
 				if (result != NTFS_OK) {
@@ -585,6 +586,8 @@ ntfs_stream_close(struct ntfs_stream *s)
 	ntfs_wof_close(s->wof);
 	ntfs_free(v, s->value, s->value_allocation);
 	ntfs_free(v, s->runs, (size_t)s->run_capacity * sizeof(*s->runs));
+	ntfs_unit_cache_release(
+	    v, &s->decoded, (size_t)v->info.cluster_size * NTFS_COMPRESSION_CLUSTERS);
 	ntfs_free(v, s->compression_buffer,
 	    (size_t)v->info.cluster_size * NTFS_COMPRESSION_CLUSTERS * NTFS_COMPRESSION_BUFFERS);
 	ntfs_free(v, s, sizeof(*s));

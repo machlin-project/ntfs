@@ -27,6 +27,12 @@ the ordinary `$I30` used-block inventory implementation, leaving Windows-authore
 and non-directory view-store qualification in the row above. See VALIDATION.md
 and ACCEPTANCE.md for inference, scope, retained diagnostic failure and logs.
 Earlier Release reproducibility predates the new inventory source.
+A subsequent current-source comparison passes both ordinary Release/O3 builds
+and all eight full archive/CLI byte comparisons under
+`artifacts/reproducibility-index/`. Review re-read each actual pair and checked
+equality, lengths and reported digests. Same-checkout/toolchain scope remains;
+relocated/native/remote CI qualification and current accounting overhead remain
+open.
 
 Portable Release reproducibility now has a separate ordinary-build checker:
 two build directories in the same checkout produce eight byte-identical local

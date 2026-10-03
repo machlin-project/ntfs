@@ -38,6 +38,11 @@ diagnostic subject bug. It also distinguishes independent exported metadata from
 the product's used-slot check. Earlier Release reproducibility predates this
 inventory source; Windows/native authorization, recovery and the complete
 optimization program remain part of CORE-QUALIFICATION.md.
+The subsequent current-source ordinary Release/O3 comparison passes both builds
+and all eight full archive/CLI byte comparisons under
+`artifacts/reproducibility-index/`. Review independently checked actual equality,
+lengths and reported digests. Its separate-build-directory/same-checkout scope
+qualifies no relocated source, native app/signing or remote CI execution.
 
 ## Operation-budget checkpoint
 

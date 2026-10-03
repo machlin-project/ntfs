@@ -90,6 +90,16 @@ each actual image against both reports. The independent utility does not compare
 external `$I30` visited slots; that new product check executes inside the diagnostic.
 Windows, view-store, native installation, authorization and recovery remain open.
 The preceding Release reproducibility report predates this changed core source.
+A subsequent current-source check passes both ordinary Release/O3 builds and
+all eight full archive/CLI byte comparisons in
+`artifacts/reproducibility-index/report.json`, with bounded launcher output in
+`artifacts/plan-index-reproducibility-complete.log`. Review independently re-read
+all actual product pairs and verified equality, lengths and reported digests.
+The source revision stays unchanged during the check; compiler/SDK, revision and
+selected options remain in its generated report. This qualifies separate build
+directories in one checkout/toolchain. Relocated sources, native app/signing and
+remote CI still require their own execution. The inventory adds diagnostic cost;
+current mounted accounting overhead and broader performance remain unmeasured.
 
 The operation-budget continuation passes all 60 sanitized core suites in
 `artifacts/plan-operation-suite-complete.log`, both freestanding 2-KiB-frame

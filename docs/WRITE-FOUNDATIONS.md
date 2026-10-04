@@ -71,8 +71,15 @@ prefix. Original historical packets independently establish the observed 40-byte
 prefix, including nonzero stale slot bytes. Compact forms lacking it are corrupt;
 successful framing still authorizes no physical LCN or recovery action.
 
-These are checkpoint framing contracts. Table-dump record
-binding, cross-table references, current page/copy history,
+`ntfs/checkpoint.h` now composes selected-client RESTART binding, exact dump
+LSN/client/action/body checks and complete versioned allocated/free framing.
+It publishes borrowed spans only after the whole packet passes, without I/O or
+allocation. An absent anchor ignores dump input and returns NOT_FOUND; foreign
+identities/LSNs are STALE. LOGFILE.md records the admission/error contract and
+explicit synthetic owner projections used with exact historical packets.
+
+These are checkpoint snapshot/framing contracts. Cross-table references,
+current page/copy history,
 transaction analysis and redo/undo remain separate work. A valid table or stored
 committed state cannot authorize replay or a writable mount.
 

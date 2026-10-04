@@ -4,7 +4,8 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
-Private USA output and native restart-table/entry framing are now implemented;
+Private USA output, native restart-table/entry framing and composed selected-client
+checkpoint-dump binding are now implemented;
 [WRITE-FOUNDATIONS.md](WRITE-FOUNDATIONS.md) defines their exact admission and
 publication contracts. They add no device-write capability. Current physical
 history, complete checkpoint ownership/analysis and native durability acceptance
@@ -62,6 +63,11 @@ Selected-client record binding now checks the exact assembled framing, RESTART
 type, active index/sequence, exact NTFS client name and stored restart LSN before
 prefix interpretation. This cached snapshot match establishes no native page
 provenance or current written history and cannot advance writable qualification.
+The composed checkpoint decoder also checks the exact table anchor, dump identity,
+action/body length, complete free topology and every allocated versioned entry.
+Original historical packets pass under explicit synthetic selected-owner
+projections; unchanged original owners refuse those old checkpoints. Cross-table
+target membership, current page/copy history and native analysis remain required.
 
 The future product transaction module owns private snapshots, MFT/$Bitmap reservations,
 attribute-list growth, directory B-tree changes, $Secure references and rollback.

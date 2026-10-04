@@ -8,7 +8,62 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Empty-LCN update storage and lossless journal name framing
+## Selected-checkpoint dump snapshot binding
+
+The composed cached decoder binds one exact dump to the selected-client RESTART
+record. Anchor consistency/geometry/order, dump LSN/client/type/action, linked-LSN
+geometry and exact body lengths gate complete table free topology and every
+allocated versioned entry. Names require exact whole-list framing. Absent anchors
+ignore dump input and return NOT_FOUND; foreign identities are STALE; errors zero
+output. Borrowed body/entry spans publish only after the whole packet passes.
+No I/O/allocation occurs. Cross-table targets, complete current written page/copy
+history, volume semantics, analysis and native recovery remain separate.
+
+All 100 fatal-ASan/UBSan suites, style, both 2-KiB freestanding targets and clean
+universal Release pass. The independent C/CLI author supplies 147 exact cases,
+including client 0/1, extended headers, absent/inconsistent/future anchors, identity,
+every selected prefix truncation, action/span/layout failures, complete topology,
+stale free entries, names and a large OAT. Guarded aligned/unaligned tests verify
+input/source immutability, repeatability, zero errors and exact no-callback counters.
+Main verifies all 294 packet files and 147 numeric golden files. Four composed fuzz
+suites exercise normal and fault cases; 441 binding seeds use three fault variants.
+
+Historical readonly acquisition returns ten nonempty old checkpoints and 26 exact
+dumps. Positive binding uses explicit synthetic selected-owner projections; both
+restart copies use the selected original template, four named fields change and
+USA is resealed. Bytes after those two pages stay exact, including all checkpoints
+and dumps. Core/CLI pass 26 present/fourteen absent projected cases, ten historical
+STALE cases under unchanged original owners and twelve absent cases under unchanged
+original current owners/checkpoints. Main checks all 124 packets/62 numeric oracles,
+directly compares all 62 checkpoint files and 26 dumps to retained originals, and
+compares every projected journal tail to its original. Original hashes stay intact.
+No original current nonempty history, authoring-OS or Windows qualification follows.
+
+Fresh journal fuzz replays all 1,524 authored inputs and exits zero, reporting
+100,879 executions in 61 seconds and 589 MiB peak fuzzer RSS. Its 365 new units
+are campaign coverage evidence, without a native product throughput/memory claim.
+The older build directory has one additional superseded seed; fresh generation
+excludes it. All ten compiled source fingerprints remain unchanged, and main
+rechecks them against actual files.
+
+FSKit reports 54 local component PASS groups/eleven runtime SKIPs/zero failures.
+Actual app, embedded/standalone extension and core archive contain both architecture
+slices; the build log compiles checkpoint.c on each. Actual product hashes match
+the reviewed files. Executable linker ad hoc metadata is present; strict deep
+bundle verification refuses unsigned code. App/extensions require macOS 26.5 with
+SDK 27.0; the prepared macOS guest is 26.4 and needs runtime preparation before an
+installed test. No extension was installed. The user confirmed the displayed
+Windows license terms and installation resumed; actual installed Windows/chkdsk
+and native recovery/writing acceptance remain pending.
+
+Evidence is artifacts/checkpoint-binding/{initial,fuzz-focused,native,final}/,
+artifacts/checkpoint-binding/review.json,
+artifacts/historical-checkpoint-observation/restart-assembled/ and
+artifacts/fuzz-checkpoint-binding/. Universal products are
+artifacts/fskit-checkpoint-binding/. Continue cross-table membership, current
+history/analysis, writable ownership and native mutations under WRITES.md.
+
+## Preceding empty-LCN update storage and lossless journal name framing
 
 The update decoder now accepts stored empty LCN vectors with their reserved first
 slot retained as opaque capacity. Data offsets remain absolute, after the complete

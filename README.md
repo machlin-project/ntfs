@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 94 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 100 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -37,7 +37,9 @@ Empty-LCN journal payloads now retain the reserved first slot as opaque storage,
 with absolute checked data offsets. Lossless attribute-name entry/full-dump decoding
 validates byte lengths, unpadded storage and exact terminators without allocation.
 Original historical payloads, names and complete table entries pass independent
-framing comparisons; current checkpoint ownership and native recovery remain open.
+framing comparisons. Exact dump records now bind to the selected-client checkpoint
+snapshot, checking anchors, client identity, actions and every allocated entry.
+Cross-table membership, complete current physical history and native recovery remain open.
 
 The core now inventories complete FILE_NAME storage separately as physical
 names, primary names and DOS aliases. Listed extensions have checked sequences

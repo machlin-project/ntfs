@@ -26,9 +26,60 @@ physical/current-history provenance.
 Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
 restart-table free topology and client-versioned open-attribute/dirty-page plus
 transaction entries, plus lossless byte-counted attribute-name entries and complete
-name dumps. It does not yet bind table-dump records or cross-table references to
-qualified current history. Those independent
-decoders do not advance native replay or writable admission.
+name dumps. A composed decoder now binds exact dump records to a selected-client
+restart snapshot and checks every allocated entry. Cross-table references and
+qualified current history remain separate. These decoders do not advance native
+replay or writable admission.
+
+## Selected-checkpoint dump binding
+
+`ntfs/checkpoint.h` exposes `ntfs_logfile_checkpoint_table_decode`. It accepts an
+immutable selected journal owner, one exact assembled client RESTART record, a
+named table kind and one exact assembled dump record. The cached restart binder
+first checks the active NTFS client index/sequence, stored restart LSN and exact
+common framing. Its zero/zero anchor returns NOT_FOUND without inspecting the
+table pointer or size; inconsistent fields are CORRUPT. A present anchor must
+address the selected circular geometry and precede the checkpoint.
+
+The dump must match that anchor LSN and client identity, have UPDATE type and the
+matching dump opcode. Nonzero previous/undo-next links must address the selected
+geometry. The update requires an empty LCN vector, no undo operation/data and an
+exact advertised redo-body length. Identity/LSN mismatches return STALE; unsupported
+action or entry-layout families return UNSUPPORTED. Underlying framing failures
+retain their decoder result. Complete restart-table free topology and every
+allocated versioned entry are checked before publishing a result; stale free
+payloads stay opaque. A name dump requires the exact whole-list terminator.
+
+The output includes the client version, checkpoint/table LSNs, a body span relative
+to the supplied complete table record and typed metadata with spans relative to
+that body. Caller-owned buffers outlive these borrowed spans. Decoding performs no
+I/O or allocation, accepts byte alignment, keeps disjoint inputs immutable and
+zeros the output on every error. Native admission remains necessary before cached
+use. This establishes snapshot identity and packet framing, without current written
+page/continuation provenance, cross-table target membership, volume bounds,
+transaction analysis or recovery.
+
+The independent author supplies 147 cases across client 0/1, ordinary/extended
+record headers, absent/inconsistent/future anchors, foreign identities, every
+selected prefix truncation, action/body mismatches, complete free topology, stale
+free entries, names and a maximum redo-length-fitting OAT. Core and CLI compare
+exact numeric oracles; guarded aligned/unaligned calls arm the next read/allocation
+failure and prove no callback occurs. The composed fuzz envelope has named lengths
+for a logical source and both exact records. Structured mutations separately reach
+restart pages, client fields, the dump envelope and complete table bodies; generic
+mutations still damage all gates. Three fault variants produce 441 binding seeds.
+
+Original historical observation acquired ten nonempty RESTART records and their
+26 exact open-attribute/name/dirty-page dumps. All old checkpoints are STALE under
+their unchanged original selected owner. Three original current checkpoints have
+twelve absent anchors. Positive binding uses ten explicitly synthetic owner
+projections: the selected original restart page is copied to both slots, four named
+LSN/length fields change and USA is resealed. Every byte after those two restart
+pages, including the historical records, stays exact. Those projections pass
+26 present and fourteen absent bindings. They provide no original current nonempty
+checkpoint, authoring-OS, native recovery, Windows or writable qualification.
+Evidence is `artifacts/checkpoint-binding/native/` and
+`artifacts/historical-checkpoint-observation/restart-assembled/`.
 
 ## Empty LCN vectors and attribute-name packets
 
@@ -347,6 +398,12 @@ source reads or allocations. Its JSON has the same prefix fields and zero-error
 contract as `client-restart`, with its own scope and `recovery_qualified: false`.
 Both inputs are opened read-only and remain unchanged. Packet and source transport
 errors exit two; discovery/binding/decoder reports exit zero or one as usual.
+`checkpoint-table JOURNAL CHECKPOINT_RECORD KIND TABLE_RECORD|-` reports the
+composed cached binding, body span and complete typed table/name metadata. KIND is
+`open-attributes`, `attribute-names`, `dirty-pages` or `transactions`; `-` supplies
+no dump for an absent anchor. The report preserves the requested kind separately
+from its zero-on-error decoded fields and keeps `recovery_qualified: false`.
+Input files remain read-only; malformed transport arguments exit two.
 
 ```sh
 .build/ntfs-logfile restart EXPORTED_RESTART_PAGE LOGICAL_LOGFILE_BYTES

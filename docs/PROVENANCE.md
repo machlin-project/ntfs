@@ -1,5 +1,15 @@
 # Code provenance
 
+The composed selected-checkpoint dump binder is original repository code over the
+existing exact-record, cached-client, update-span and complete table/entry decoders.
+Dump opcode/anchor/layout facts use the original Linux-NTFS field tables already
+referenced below. Its publication/error ordering and no-I/O/allocation checks are
+repository-owned. Independent fixtures author whole selected sources and both
+records. Historical qualification preserves exact original records; positive
+bindings use explicitly synthetic restart-page projections with named fields and
+independent USA resealing. No foreign recovery/table-binding algorithm is imported;
+these packets do not establish current native history or recovery.
+
 The build environment uses ZERO_AR_DATE for deterministic Apple archive timestamps.
 Apple's [archive writer](https://github.com/apple-oss-distributions/cctools/blob/main/ar/archive.c)
 and [libtool/ranlib implementation](https://github.com/apple-oss-distributions/cctools/blob/main/misc/libtool.c)

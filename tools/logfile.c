@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/logfile.h>
 #include <ntfs/logfile_tables.h>
+#include <ntfs/checkpoint.h>
 #include "image.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -368,6 +369,77 @@ client_restart_record(const char *path, const char *packet_path)
 	return result == NTFS_OK ? 0 : 1;
 }
 
+static int
+checkpoint_table(
+    const char *path, const char *checkpoint_path, const char *kind_name, const char *table_path)
+{
+	static const char *const kinds[] = {
+	    "open-attributes", "attribute-names", "dirty-pages", "transactions"};
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_checkpoint_table value = {0};
+	uint8_t *checkpoint, *table = NULL;
+	size_t checkpoint_bytes, table_bytes = 0, kind;
+	enum ntfs_result result;
+
+	for (kind = 0; kind < sizeof(kinds) / sizeof(kinds[0]); kind++) {
+		if (strcmp(kind_name, kinds[kind]) == 0) {
+			break;
+		}
+	}
+	if (kind == sizeof(kinds) / sizeof(kinds[0])) {
+		fprintf(stderr, "Unknown checkpoint table kind\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	checkpoint = read_packet(checkpoint_path, NTFS_LOGFILE_MAX_RECORD_BYTES, &checkpoint_bytes);
+	if (checkpoint == NULL) {
+		fprintf(stderr, "Cannot read bounded checkpoint record\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	if (strcmp(table_path, "-") != 0) {
+		table = read_packet(table_path, NTFS_LOGFILE_MAX_RECORD_BYTES, &table_bytes);
+		if (table == NULL) {
+			free(checkpoint);
+			fprintf(stderr, "Cannot read bounded table record\n");
+			return LOGFILE_ARGUMENT_ERROR;
+		}
+	}
+	if (ntfs_image_open(path, &image) != 0) {
+		free(table);
+		free(checkpoint);
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
+	if (result == NTFS_OK) {
+		result = ntfs_logfile_checkpoint_table_decode(source,
+		    (enum ntfs_logfile_checkpoint_kind)kind, checkpoint, checkpoint_bytes, table,
+		    table_bytes, &value);
+	}
+	printf(
+	    "{\"schema_version\":%u,\"scope\":\"checkpoint-table\",\"code\":%d,"
+	    "\"result\":\"%s\",\"recovery_qualified\":false,\"requested_kind\":\"%s\",\"kind\":%u,"
+	    "\"client_major\":%" PRIu32 ",\"client_minor\":%" PRIu32 ",\"checkpoint_lsn\":%" PRIu64
+	    ",\"table_lsn\":%" PRIu64,
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), kind_name,
+	    (unsigned)value.kind, value.client_major, value.client_minor, value.checkpoint_lsn,
+	    value.table_lsn);
+	span("body", value.body);
+	printf(",\"table\":{\"entry_bytes\":%u,\"entry_count\":%u,\"allocated_count\":%u,"
+	       "\"free_goal\":%" PRIu32 ",\"first_free\":%" PRIu32 ",\"last_free\":%" PRIu32,
+	    value.table.entry_bytes, value.table.entry_count, value.table.allocated_count,
+	    value.table.free_goal, value.table.first_free, value.table.last_free);
+	span("entries", value.table.entries);
+	printf("},\"names\":{\"entry_count\":%" PRIu32, value.names.entry_count);
+	span("entries", value.names.entries);
+	printf("}}\n");
+	free(table);
+	free(checkpoint);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK ? 0 : 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -388,6 +460,12 @@ main(int argc, char **argv)
 
 	if (argc < 3) {
 		goto usage;
+	}
+	if (strcmp(argv[1], "checkpoint-table") == 0) {
+		if (argc != 6) {
+			goto usage;
+		}
+		return checkpoint_table(argv[2], argv[3], argv[4], argv[5]);
 	}
 	if (argc == 3 &&
 	    (strcmp(argv[1], "journal") == 0 || strcmp(argv[1], "volume-journal") == 0)) {
@@ -521,6 +599,7 @@ usage:
 	    "       ntfs-logfile attribute-names NAMES_PACKET\n"
 	    "       ntfs-logfile client-restart CLIENT_PACKET\n"
 	    "       ntfs-logfile client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD\n"
+	    "       ntfs-logfile checkpoint-table JOURNAL CHECKPOINT_RECORD KIND TABLE_RECORD|-\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

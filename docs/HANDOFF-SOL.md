@@ -23,6 +23,32 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
+`ntfs/checkpoint.h` now binds each exact checkpoint dump to the selected-client
+RESTART record, checking anchor geometry/order, record client/LSN/action/body and
+every allocated versioned entry after complete free-topology validation. All 147
+independent C/CLI cases pass with no I/O/allocation, zero errors and guarded immutable
+aligned/unaligned inputs. Four composed fuzz suites and 441 new three-variant seeds
+exercise source, checkpoint, dump-envelope and whole-body mutations.
+Original observation acquired ten historical checkpoints and 26 exact dumps;
+their original current owners reject the old checkpoints with STALE. Ten explicitly
+synthetic owner projections provide 26 positive/fourteen absent bindings without
+changing any bytes after the restart pages. Three unchanged original current
+owners/checkpoints supply twelve absent bindings. All 62 C/CLI native-packet cases
+pass. Preserve that evidence boundary: no original current nonempty history or
+recovery is qualified. Review artifacts/checkpoint-binding/{initial,fuzz-focused,
+native,final}/, artifacts/checkpoint-binding/review.json and LOGFILE.md. All 100
+fatal-sanitizer suites, style, both 2-KiB targets, 54 component PASS groups/eleven
+runtime SKIPs and clean universal Release pass. Fresh fuzz replays 1,524 inputs,
+reporting 100,879 runs in 61 seconds and 589 MiB fuzzer RSS. Main compares actual
+packets/oracles, immutable journal tails, source fingerprints and product hashes;
+checkpoint.c compiles on both architectures. Strict deep bundle verification
+refuses unsigned code. Actual app/extension minimum OS is 26.5, while the prepared
+guest is 26.4; prepare a compatible runtime before installed acceptance.
+
+Next implement cross-table target membership using physical OAT keys, then qualify
+current page/copy history, analysis and writable ownership. Snapshot binding alone
+cannot authorize recovery or mutations.
+
 The current update decoder accepts empty LCN vectors with one reserved opaque slot
 and absolute data offsets. Lossless attribute-name entry/full-dump decoding checks
 byte lengths, unpadded entries and exact string/list terminators. Ninety-one authored
@@ -32,7 +58,8 @@ name vectors, 33 original historical payloads, nine original dumps/23 entries an
 substitute that self-reference when binding names or dirty-page targets.
 LOGFILE.md and WRITE-FOUNDATIONS.md retain the complete primitive boundaries.
 
-All 94 fatal-sanitizer suites, both 2-KiB targets, style, 54 FSKit component PASS
+The preceding empty-LCN/name checkpoint passed all 94 fatal-sanitizer suites,
+both 2-KiB targets, style, 54 FSKit component PASS
 groups/eleven runtime SKIPs and clean universal Release pass. Fresh journal fuzz
 replays 1,083 inputs, reporting 96,306 executions in 61 seconds and 520 MiB fuzzer
 RSS. Actual changed-core compilation and all product architecture slices are
@@ -41,8 +68,8 @@ artifacts/logfile-names/review.json and {checked,final,native}/, with campaign a
 products in artifacts/{fuzz,fskit}-logfile-names/. Keep the initial test-author END
 code mistake separately. The older .build seed directory retains one superseded
 Boolean-rule seed; it does not belong to the fresh campaign.
-Next bind complete checkpoint dump records and cross-table references to the
-selected client, then qualify current history/analysis and writable ownership.
+The composed record binding above follows this primitive checkpoint; cross-table
+references, current history/analysis and writable ownership remain open.
 These passing historical framing checks provide no recovery or mutation admission.
 
 Completed LFS 1.1 tail-copy routing now uses both slots and exact shared record
@@ -94,8 +121,9 @@ The separate machlin-ntfs-windows UTM guest was created through its documented
 configuration API, with thin imported 64-GiB/8-GiB NVMe disks, TPM, actual secure
 ARM64 firmware and disabled sharing. The user's finalized official ISO has valid
 ARM64 EFI and EFI BCD contents. Actual Windows Setup booted and selected Pro;
-installation is currently at unaccepted Microsoft license terms, requiring the
-CUA tool's action-time confirmation. See artifacts/windows-write-vm/ for exact
+The user supplied the CUA-required action-time confirmation for the displayed
+Microsoft terms; Sol accepted them and resumed installation. See
+artifacts/windows-write-vm/ for exact
 media/config/firmware/gate evidence. This is installer preparation, not an installed
 Windows boot, chkdsk result or recovery acceptance. Only one agent operates each VM.
 

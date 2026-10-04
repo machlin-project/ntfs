@@ -22,6 +22,7 @@ from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
 from logfile_tables_fixtures import author as generate_logfile_tables
 from logfile_names_fixtures import author as generate_logfile_names
+from checkpoint_fixtures import author as generate_checkpoint_bindings
 from record_protect_fixtures import author as generate_record_protection
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
@@ -34,6 +35,8 @@ LOGFILE_TABLE_KINDS = {0: 9, 1: 10, 2: 11, 3: 12}
 LOGFILE_PROTECTED_RECORD_KIND = 13
 LOGFILE_LEGACY_RECORD_KIND = 14
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
+LOGFILE_CHECKPOINT_TABLE_KIND = 17
+LOGFILE_CHECKPOINT_HEADER = struct.Struct('<IB')
 BITS_PER_BYTE = 8
 LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
@@ -311,6 +314,18 @@ def generate(output):
         envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_NAME_KINDS[case['kind']], 0, 0)
         assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
         (log_seeds / ('name-' + case['name'] + '.seed')).write_bytes(envelope + payload)
+    binding_packets = output / 'checkpoint-bindings'
+    for case in generate_checkpoint_bindings(binding_packets):
+        source = (binding_packets / case['source']).read_bytes()
+        checkpoint = (binding_packets / (case['name'] + '.checkpoint')).read_bytes()
+        table = (binding_packets / (case['name'] + '.table')).read_bytes()
+        wrapper = LOGFILE_CHECKPOINT_HEADER.pack(len(checkpoint), case['kind'])
+        for suffix, argument in (('', 0), ('-read-fault', 1),
+                                 ('-allocation-fault', LOGFILE_ALLOCATION_FAULT)):
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CHECKPOINT_TABLE_KIND, argument, len(source))
+            payload = envelope + source + wrapper + checkpoint + table
+            assert len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+            (log_seeds / ('binding-' + case['name'] + suffix + '.seed')).write_bytes(payload)
     return seeds
 
 

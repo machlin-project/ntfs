@@ -380,6 +380,13 @@ selected header length and no additional callbacks or allocations. Foreign types
 names and stale identity/LSNs fail before payload interpretation, with zero output.
 This snapshot binding does not establish page/continuation provenance or current
 written history; native journal admission/drain remains separate.
+The independent `ntfs/checkpoint.h` composition then binds an exact dump record
+to that checkpoint's named anchor, selected geometry and client pair. It checks
+the action envelope, advertised body length, complete free topology and every
+allocated versioned entry before publishing borrowed spans. Absent anchors ignore
+dump input; every failure leaves zero metadata. No I/O or allocation occurs.
+Cross-table membership and complete current page/copy history remain owning-layer
+work before native transaction analysis, redo/undo or writable admission.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not

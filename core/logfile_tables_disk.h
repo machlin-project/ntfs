@@ -5,6 +5,14 @@
 
 #define NTFS_LOG_TABLE_ALLOCATED UINT32_MAX
 
+enum {
+	NTFS_LOG_OP_NOOP = 0x00,
+	NTFS_LOG_OP_OPEN_ATTRIBUTE_TABLE_DUMP = 0x1d,
+	NTFS_LOG_OP_ATTRIBUTE_NAMES_DUMP = 0x1e,
+	NTFS_LOG_OP_DIRTY_PAGE_TABLE_DUMP = 0x1f,
+	NTFS_LOG_OP_TRANSACTION_TABLE_DUMP = 0x20
+};
+
 /* Native NTFS checkpoint layouts; live pointer fields remain opaque bytes. */
 struct ntfs_disk_log_table {
 	uint8_t entry_bytes[sizeof(uint16_t)], entries[sizeof(uint16_t)];

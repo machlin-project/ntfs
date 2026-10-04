@@ -5,6 +5,14 @@ adapter. They do not qualify NTFS mounts. Inspect both `../ext4/docs/FSKIT.md`
 and the relevant implementation history with ordinary Git; source revisions
 remain in Git and native artifact identities remain in generated reports.
 
+Current NTFS legacy installation independently confirms public enabled discovery and
+exact synthetic reading through direct mount -F on two fixtures. It also reproduces
+the noowners limitation and a failed separate nomount/diskutil route: successful probe
+and module staging precede kDAReturnNotReady at mount approval. These are scoped NTFS
+observations, not adoption of ext4's owners-on automount acceptance. Explicit NTFS
+extraction selection and ownership-preserving admission remain separate work; see
+NATIVE-INSTALLATION.md. Permission capabilities were not changed to bypass the failure.
+
 | Ext4 finding and history subject | NTFS application | Evidence still required |
 | --- | --- | --- |
 | `Fix FSKit discovery and native ownership acceptance`: `usableButLimited` prevented Disk Arbitration recognition, and an underscore in the short name was truncated by its `_fskit` handling | Probe uses `usable`, short/type name `machlinntfs`, subtype zero; read-only policy is separate | Actual Disk Arbitration image discovery, mount point, ownership flags and registration; direct mounting alone is insufficient |

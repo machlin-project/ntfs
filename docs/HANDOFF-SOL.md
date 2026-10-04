@@ -30,17 +30,34 @@ public FSClient helper observes NTFS with `enabled: true` after ordinary By Cate
 was needed. This is distinct from PlugInKit election. Ext4 remains enabled and idle.
 
 The standalone `tests/mounted_read.c` checker and both complete-filename fixture
-images are prepared. Main compares all two image/nine oracle hashes and verifies
+images are staged. Main compares all two image/nine oracle hashes and verifies
 the checker signature. Strict compilation, usage and host non-NTFS identity refusal
-pass. Actual guest mount/read/metadata/mmap/refusal checks remain pending. It admits
+pass. Separate standard and NTFS 3.0 guest runs now pass the whole checker. It admits
 only statfs type machlinntfs plus native read-only flags before mutation probes.
 Use only task-owned read-only attachments, actual returned device IDs and explicit
-extraction options through the public mount -F client. The native admission/option
-path is unqualified. No images are attached or mounted yet, and Windows remains
-at the account-password screen by explicit user request. Do not resume Windows.
+extraction options through the public mount -F client. Actual option propagation,
+two directory streams, all nine contents, case lookup, read-only mmap and write/create
+refusals pass. Both runs detach without force, retain unchanged image hashes and leave
+no task mount. Main reviews all raw checker and cleanup commands.
+
+The installed access-admission matrix also rejects missing extraction with EACCES,
+unknown mode with ENOTSUP and duplicate selection with EINVAL; each leaves no mount.
+A single valid request then passes the whole checker on that same attachment. Main
+checks all twenty actual commands and cleanup; review native-read/attempt-4-access-admission/.
+This closes native configuration refusal/retry on the legacy runtime, not Windows ACLs.
+
+Both mounts still report noowners despite requested owners; diskutil global permissions
+are disabled. Returned IDs do not qualify native ownership or isolation. A single
+documented Disk Arbitration route with per-attachment owners-on fails at mount approval
+with kDAReturnNotReady after successful probe/staging. Its checker never runs; cleanup
+passes and no policy/capability is changed. Review native-read/{attempt-1,attempt-2-ntfs30,
+client-options,attempt-3-diskarbitration}/ under the guest artifacts. Next diagnose
+ownership-preserving admission without weakening native authorization. Windows remains
+at the account-password screen by explicit user request. Do not continue account
+setup or cold-boot the Windows VM.
 
 Read NATIVE-INSTALLATION.md and review
-artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation}/.
+artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation,native-read}/.
 Sol retains VM preparation/UI ownership; hand a verified enabled guest to Luna for
 prepared CLI runs. Only one worker may operate this VM at a time.
 

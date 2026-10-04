@@ -4,8 +4,9 @@ The delivered scope is a bounded read-only core and FSKit development product.
 Local core, adapter component, app builds with linker ad hoc signing and
 independent-image checks passed. The current personally signed Release is installed
 and enabled in the compatible macOS VM; public FSClient confirms the installed path.
-Installed native mounts, Windows interoperability and commercial release
-qualification remain open. The requested 60% is not a measured completion claim;
+Initial installed reading passes on two synthetic fixtures. Broader native behavior,
+ownership enforcement, Windows interoperability and commercial release remain open.
+The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
 ## Compatible guest development installation
@@ -22,22 +23,51 @@ guest and observes `org.machlin.ntfs.filesystem` with `enabled: true` after ordi
 By Category → File System Extensions enablement and manual console unlock. No
 authentication dialog or credential entry was needed. Ext4 remains enabled,
 its device service enabled and its endpoints empty. No host installation, policy
-change, reboot, disk attachment, mount, formatting or Windows operation occurred.
+change, reboot, formatting or Windows operation occurred during installation.
 
 A new standalone POSIX checker is prepared for the complete-filename standard and
 NTFS 3.0 images. Main verifies both exact image bytes and nine independent expected
 content files against original manifests, and independently verifies its signature.
 Compilation with strict warnings, no-argument usage and host non-NTFS identity
-rejection pass. Actual filesystem type/read-only flags, native metadata, two
-interleaved directory streams, irregular exact reads/EOF, read-only mmap, case lookup
-and write refusals remain pending guest execution. Apple built-in NTFS mounts must
-fail the checker before mutation probes. These transfer helpers do not replace the
-117 sanitized suites or the remaining installed/runtime qualification.
+rejection pass. Sol stages all thirteen exact files in a fresh guest task directory;
+main compares the guest manifest with the actual reviewed share inputs. Both helpers
+retain strict signatures and FSClient enabled identity.
+
+Luna separately attaches each image read-only without mounting, parses its actual
+single raw-volume device and mounts it with the public `mount -F -t machlinntfs`
+client and explicit `rdonly,owners,ntfs-access=extract` options. The checker passes
+both images: actual machlinntfs/read-only identity, returned native modes/IDs, two
+interleaved directory streams, all nine exact file bodies, guarded irregular reads,
+unchanged EOF, read-only mmap, case-insensitive inode reuse and write/create refusal.
+Writable opens and creation return EROFS. Native read-only refusal does not establish
+that mutations reached adapter handlers. Main checks all raw checker rows, actual
+attachment/mount commands and postcleanup commands for both runs. Each exact returned
+device detaches without force; both image hashes are unchanged and no task mount remains.
+
+A separate same-attachment native configuration matrix refuses missing extraction
+with EACCES, unknown mode with ENOTSUP and duplicate selection with EINVAL. Each
+client returns failure and leaves the mount absent. One subsequent valid extraction
+request mounts and passes the nine-file checker on that same attachment, verifying
+native refusal/retry without poisoning it. Main reviews all twenty raw commands and
+postcleanup evidence. This qualifies explicit extraction admission, not Windows ACLs.
+
+Both successful mounts report `noowners`; diskutil reports global permissions disabled
+despite the requested `owners` option. Returned 501:20 IDs cannot establish preserved
+extension ownership or user isolation. A single documented Disk Arbitration attempt
+with per-attachment `-owners on` and diskutil readOnly/mountOptions/mountPoint fails
+before mounting. Probe and module staging succeed, then mount approval returns the
+SDK's `kDAReturnNotReady`. No checker, fallback or retry runs; cleanup and unchanged
+bytes pass. This records the refusal, not its cause. No persistent ownership policy
+or capability claim was changed to make the reading checker pass.
 
 See [NATIVE-INSTALLATION.md](NATIVE-INSTALLATION.md). Evidence is
 artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation}/.
-This qualifies development signing, installation, discovery and enabled admission.
-Mounted behavior, Windows recovery and commercial release remain separate.
+Actual mounted runs and main reviews are in native-read/{attempt-1,attempt-2-ntfs30}/;
+client documentation and the failed ownership route are in native-read/{client-options,
+attempt-3-diskarbitration}/. Native configuration rejection/retry is in
+native-read/attempt-4-access-admission/. This qualifies development signing, enabled installation
+and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
+namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
 ## Private protected journal page encoding
 

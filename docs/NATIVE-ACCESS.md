@@ -69,6 +69,27 @@ native caller UID/GID values in handlers that provide it; those values alone do
 not supply Windows group membership, restricting SIDs or privilege state.
 Neither protocol family currently enforces the Windows DACL evaluator.
 
+## Current installed observation
+
+On stock macOS 26.5.2, the personally signed legacy adapter mounts both complete-
+filename standard and NTFS 3.0 synthetic images through explicit public read-only
+extraction options. The native checker passes returned owner modes/IDs, two directory
+streams, all nine exact contents, case lookup, read-only mmap and write/create refusal.
+This establishes option propagation and scoped same-caller reading only.
+
+The installed legacy client also rejects missing extraction with EACCES, unknown
+mode with ENOTSUP and duplicate selection with EINVAL, publishing no mount in each
+case. A subsequent valid request on the same read-only attachment passes the full
+checker. Explicit configuration refusal/retry therefore has actual native evidence;
+it does not imply Windows identity, DACL or ownership enforcement.
+
+Both mounts have noowners despite requesting owners; diskutil global permissions
+are disabled. Matching 501:20 IDs do not prove preserved extension credentials or
+user isolation. A separate Disk Arbitration owners-on route fails mount approval with
+kDAReturnNotReady after successful probe/staging. No capability or persistent policy
+was changed to bypass that result. NATIVE-INSTALLATION.md and ACCEPTANCE.md record
+the exact reading and failed-route evidence. Windows DACL enforcement remains absent.
+
 ## Qualification still required
 
 Component tests cover guarded parser output and exact argument bounds; missing,

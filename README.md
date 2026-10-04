@@ -64,8 +64,10 @@ attributes and all three single-edge reparse guards; see
 
 A fresh personally signed development build is now installed and discovered in the
 isolated stock macOS 26.5.2 guest. Ordinary File System Extensions enablement succeeds;
-public FSClient reports the exact installed NTFS module enabled. Exact native reading checks
-are prepared, but no image is mounted yet. [Native installation](docs/NATIVE-INSTALLATION.md)
+public FSClient reports the exact installed NTFS module enabled. Both complete-filename
+standard and NTFS 3.0 fixtures pass installed reading, directory, mmap and write-refusal
+checks through the public client. Both mounts ignore ownership despite requesting
+`owners`; native isolation remains unqualified. [Native installation](docs/NATIVE-INSTALLATION.md)
 keeps development signing, discovery, enabled admission and mounted behavior distinct.
 
 Fully checked counts now also survive temporary node closure in a bounded volume
@@ -121,7 +123,7 @@ reparse hard links and cloud content remain open. WOF file-provider streams
 read XPRESS4K/8K/16K and LZX32K with bounded storage/table validation. The FSKit app and extension
 build unsigned from current source; a prior personally signed Release passed strict
 signature verification. Direct adapter tests and independent NTFS-3G image
-comparisons pass. Native installation and Windows-authored corpus acceptance
+comparisons pass. Broader installed behavior and Windows-authored corpus acceptance
 are still required. Core and FSKit tests
 run with `make test` and `python3 scripts/test_fskit.py`; build the app with
 `make fskit`. See development prerequisites and exact evidence below.

@@ -73,6 +73,13 @@ acceptance merely because they compile. [NATIVE-INSTALLATION.md](NATIVE-INSTALLA
 records exact discovery/enablement, fixture and native mount gates. VM execution
 uses the absolute lab directory and a single designated operator.
 
+The first installed legacy reading runs now pass on both complete-filename standard
+and NTFS 3.0 images using public mount -F and explicit read-only extraction options.
+Their observed noowners flags remain an ownership qualification gap. The documented
+Disk Arbitration owners-on candidate fails at mount approval and is retained separately;
+do not silently retry it as a passing mount or change persistent ownership policy.
+NATIVE-INSTALLATION.md records the successful route, cleanup and exact limits.
+
 `scripts/check_core.py` additionally compiles arm64 and x86_64 objects on macOS
 without libc assumptions and with a 2 KiB frame limit. `scripts/test_fskit.py`
 exercises the real adapter against a bounded fake resource in-process; it neither

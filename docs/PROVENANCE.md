@@ -1,5 +1,12 @@
 # Code provenance
 
+The build environment uses ZERO_AR_DATE for deterministic Apple archive timestamps.
+Apple's [archive writer](https://github.com/apple-oss-distributions/cctools/blob/main/ar/archive.c)
+and [libtool/ranlib implementation](https://github.com/apple-oss-distributions/cctools/blob/main/misc/libtool.c)
+describe this tool policy. No tool implementation is copied; completed products
+are compared without normalization. This is build-tool provenance, independent
+of NTFS format and filesystem implementation sources.
+
 The NTFS core is an original implementation in this repository. Its design uses
 published Microsoft descriptions, NTFS-3G's reverse-engineered format information,
 independently authored fixtures and Apple SDK interfaces. NTFS-3G layout comments

@@ -463,10 +463,14 @@ python3 scripts/check_reproducible.py --output artifacts/reproducibility-next
 ```
 
 The new output contains two ordinary Meson build directories, bounded combined
-setup/compile logs and a JSON report. Compiled product sources must be committed;
+setup/compile logs and a JSON report. Compiled product sources and the checker,
+bounded-tool and environment helpers must be committed;
 ordinary Git checks them before and after the run and requires an unchanged
 revision. Each build explicitly selects Release/O3, no sanitizers and the same
-compiler/SDK and selected options. Eight archives/CLI products undergo full byte
+compiler/SDK and selected options. The shared tool environment fixes ZERO_AR_DATE=1
+for Apple archive member/symbol-table timestamps; the report records this selected
+policy without forwarding ambient environment values. Products are not rewritten.
+Eight archives/CLI products undergo full byte
 comparison and SHA-256 checks. This qualifies distinct build directories in the
 same checkout; relocated sources, FSKit app/signing and other toolchains remain
 separate. The prepared CI matrix runs the same check, but remote execution has

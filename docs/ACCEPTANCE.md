@@ -53,8 +53,8 @@ before launching any stage while resolving snapshot paths; preserve its separate
 prelaunch error. One private-header comment was clarified during qualification;
 before/after snapshots retain that comment-only delta. No executable source changed
 during the campaign, app build or corpus comparison.
-The subsequent Release rebuild changes the archive digest; forty additional
-paired controls qualify that sealed product, preserving the original reports.
+The subsequent Release rebuild changes archive timestamps and the digest; forty
+additional paired controls qualify that sealed product, preserving the original reports.
 The sealing supervisor's separate logging failure occurs after the passing style
 stage and before the Release command; its wrapper error and actual later Release
 exit are retained independently. Accepted CLI/core/component products are under

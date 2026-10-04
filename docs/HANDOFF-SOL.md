@@ -46,7 +46,8 @@ actual-file review are documented in PERFORMANCE.md.
 
 The 144 paired measurements qualify repeated hard-link/alias counts, with all
 original inventory oracles passing and unchanged native/workload/public headers.
-Forty sealed-product controls follow the comment-triggered archive rebuild;
+Forty sealed-product controls follow the archive rebuild; differing timestamp bytes
+were subsequently identified by the two-directory comparison.
 preserve both original and sealed archive reports. Accepted portable/component
 products are under artifacts/count-cache-accepted/.
 They do not qualify unique-object throughput, pressure behavior or installed I/O.

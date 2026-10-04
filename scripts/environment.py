@@ -1,4 +1,4 @@
-"""Only tool discovery, locale and user-directory variables reach build tools.
+"""Isolate build tools and fix archive timestamps for ordinary Release builds.
 
 Meson records its environment in test reports. Never forward ambient cloud,
 payment, signing-service or API credentials into those reports.
@@ -9,7 +9,9 @@ def tool_environment():
     allowed = ('PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'TMP', 'TEMP',
                'SystemRoot', 'DEVELOPER_DIR', 'TOOLCHAINS')
     environment = {name: os.environ[name] for name in allowed if name in os.environ}
-    environment.update({'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8', 'TERM': 'dumb'})
+    # Apple ar and ranlib honor this without rewriting completed products.
+    environment.update({'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8', 'TERM': 'dumb',
+                        'ZERO_AR_DATE': '1'})
     return environment
 
 

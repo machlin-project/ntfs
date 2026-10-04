@@ -55,8 +55,10 @@ claimed. These results qualify this targeted reuse, not installed FSKit, macOS 2
 runtime, Windows compatibility, unique-file throughput or the wider optimization
 program. Unique-object/capacity/pressure controls remain future measurement work.
 
-Rebuilding after the private-header comment clarification changes the archive
-digest, so the sealed Release has forty additional paired controls under
+The rebuild after the private-header comment clarification has a different archive
+digest. A later two-directory comparison identifies archive timestamps as the
+source of differing bytes, not an executable-source change. The sealed Release
+therefore retains forty additional paired controls under
 artifacts/directory-count-cache-sealed-{large,small}/. All pass unchanged source,
 input, policy and inventory guards. Sealed large/fresh wall median is 70.878 ms
 (69.826–72.928) versus 2,768 ms before; small sequential/interleaved/views medians

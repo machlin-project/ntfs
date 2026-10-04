@@ -21,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('libntfs.a', 'libntfs-posix.a', 'ntfs-inspect', 'ntfs-validate',
             'ntfs-dacl-evaluate', 'ntfs-logfile', 'ntfs-workload', 'ntfs-benchmark')
 TARGETS = PRODUCTS[2:]
-SOURCE_PATHS = ('meson.build', 'core', 'include', 'adapters/posix', 'tools')
+SOURCE_PATHS = ('meson.build', 'core', 'include', 'adapters/posix', 'tools',
+                'scripts/check_reproducible.py', 'scripts/environment.py',
+                'scripts/bounded_tool.py')
 HASH_IO_BYTES = 1024 * 1024
 MAX_BUILD_LOG_BYTES = 4 * HASH_IO_BYTES
 LOG_IO_BYTES = 65536
@@ -44,7 +46,7 @@ def clean_product_sources():
     value = run_tool(['git', 'status', '--porcelain', '--untracked-files=normal',
                       '--', *SOURCE_PATHS])
     if value:
-        raise ValueError('Commit product-source changes before comparing release builds')
+        raise ValueError('Commit build-source changes before comparing release builds')
 
 
 def run_logged(command, log, environment, timeout):
@@ -130,6 +132,7 @@ def main():
         clean_product_sources()
         report['git_head_before'] = run_tool(['git', 'rev-parse', 'HEAD']).decode().strip()
         environment = tool_environment()
+        report['archive_environment'] = {'ZERO_AR_DATE': environment['ZERO_AR_DATE']}
         if sys.platform == 'darwin':
             compiler = run_tool(['xcrun', '--find', 'clang']).decode().strip()
             sdk = run_tool(['xcrun', '--show-sdk-path']).decode().strip()

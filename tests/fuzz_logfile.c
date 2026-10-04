@@ -3,6 +3,7 @@
 #include "logfile_tables_disk.h"
 #include <ntfs/checkpoint.h>
 #include <ntfs/logfile.h>
+#include <ntfs/logfile_encode.h>
 #include <ntfs/logfile_tables.h>
 #include <ntfs/record.h>
 #include "fuzz_device.h"
@@ -31,6 +32,8 @@ enum {
 	FUZZ_ATTRIBUTE_NAMES,
 	FUZZ_CHECKPOINT_TABLE,
 	FUZZ_CHECKPOINT_SNAPSHOT,
+	FUZZ_RECORD_ENCODE,
+	FUZZ_UPDATE_ENCODE,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -51,6 +54,7 @@ enum {
 
 enum {
 	FUZZ_CLIENT_VERSION_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
+	FUZZ_ENCODE_SHORT_SHIFT = sizeof(uint16_t) * NTFS_BITS_PER_BYTE,
 	FUZZ_NULL_WORKSPACE_SHIFT = FUZZ_BUDGET_SHIFT + sizeof(uint16_t) * NTFS_BITS_PER_BYTE
 };
 
@@ -593,6 +597,113 @@ fuzz_checkpoint_snapshot(const uint8_t *configuration, size_t configuration_size
 	assert(memcmp(name_workspace[0], name_workspace[1], sizeof(name_workspace[0])) == 0);
 }
 
+static void
+fuzz_encode(const uint8_t *packet, size_t size, uint64_t argument, bool record_kind)
+{
+	struct ntfs_logfile_record record, record_copy, decoded_record;
+	struct ntfs_logfile_update update, decoded_update, normalized;
+	struct ntfs_logfile_update_input input = {0}, input_copy;
+	uint8_t *buffers[2], *encoded;
+	uint32_t measured = FUZZ_GUARD_VALUE, repeated_measure = FUZZ_GUARD_VALUE;
+	size_t bytes, allocation, capacity, index;
+	enum ntfs_result expected, result, measure_result;
+	bool short_capacity = ((argument >> FUZZ_ENCODE_SHORT_SHIFT) & 1u) != 0;
+
+	if (record_kind) {
+		if (ntfs_logfile_record_decode(packet, size, (uint16_t)argument, &record) !=
+		    NTFS_OK) {
+			return;
+		}
+		memcpy(&record_copy, &record, sizeof(record));
+		bytes = NTFS_LOGFILE_RECORD_HEADER_BYTES + record.data.length;
+		expected = record.data.offset == NTFS_LOGFILE_RECORD_HEADER_BYTES
+		    ? NTFS_OK
+		    : NTFS_UNSUPPORTED;
+	} else {
+		if (ntfs_logfile_update_decode(packet, size, &update) != NTFS_OK) {
+			return;
+		}
+		input.target_vcn = update.target_vcn;
+		input.redo_operation = update.redo_operation;
+		input.undo_operation = update.undo_operation;
+		input.target_attribute = update.target_attribute;
+		input.record_offset = update.record_offset;
+		input.attribute_offset = update.attribute_offset;
+		input.cluster_index = update.cluster_index;
+		input.attribute_flags = update.attribute_flags;
+		input.lcns =
+		    (struct ntfs_logfile_buffer){packet + update.lcns.offset, update.lcns.length};
+		input.redo =
+		    (struct ntfs_logfile_buffer){packet + update.redo.offset, update.redo.length};
+		input.undo =
+		    (struct ntfs_logfile_buffer){packet + update.undo.offset, update.undo.length};
+		memcpy(&input_copy, &input, sizeof(input));
+		measure_result = ntfs_logfile_update_measure(&input, &measured);
+		assert(ntfs_logfile_update_measure(&input, &repeated_measure) == measure_result);
+		assert(measured == repeated_measure);
+		assert(measure_result == NTFS_OK || measure_result == NTFS_RANGE);
+		if (measure_result != NTFS_OK) {
+			assert(measured == FUZZ_GUARD_VALUE);
+		}
+		bytes = measure_result == NTFS_OK ? measured : 0;
+		expected = measure_result;
+	}
+	assert(bytes <= NTFS_LOGFILE_MAX_RECORD_BYTES);
+	allocation = bytes + 2 * FUZZ_GUARD_BYTES + 1;
+	capacity = bytes;
+	if (short_capacity && bytes != 0) {
+		capacity--;
+		expected = NTFS_RANGE;
+	}
+	for (index = 0; index < 2; index++) {
+		buffers[index] = malloc(allocation);
+		assert(buffers[index] != NULL);
+		memset(buffers[index], FUZZ_GUARD_VALUE, allocation);
+		encoded = buffers[index] + FUZZ_GUARD_BYTES + index;
+		if (record_kind) {
+			result = ntfs_logfile_record_encode(&record, packet + record.data.offset,
+			    record.data.length, encoded, capacity);
+			assert(memcmp(&record, &record_copy, sizeof(record)) == 0);
+		} else {
+			result = ntfs_logfile_update_encode(&input, encoded, capacity);
+			assert(memcmp(&input, &input_copy, sizeof(input)) == 0);
+		}
+		assert(result == expected);
+		guard(buffers[index], result == NTFS_OK ? bytes + index : 0, allocation);
+		if (index != 0) {
+			assert(buffers[index][FUZZ_GUARD_BYTES] == FUZZ_GUARD_VALUE);
+		}
+		if (result != NTFS_OK) {
+			continue;
+		}
+		if (record_kind) {
+			assert(ntfs_logfile_record_decode(encoded, bytes,
+				   NTFS_LOGFILE_RECORD_HEADER_BYTES, &decoded_record) == NTFS_OK);
+			assert(memcmp(&record, &decoded_record, sizeof(record)) == 0);
+			assert(memcmp(encoded + decoded_record.data.offset,
+				   packet + record.data.offset, record.data.length) == 0);
+		} else {
+			assert(
+			    ntfs_logfile_update_decode(encoded, bytes, &decoded_update) == NTFS_OK);
+			normalized = update;
+			normalized.redo = decoded_update.redo;
+			normalized.undo = decoded_update.undo;
+			normalized.lcns = decoded_update.lcns;
+			assert(memcmp(&normalized, &decoded_update, sizeof(normalized)) == 0);
+			assert(memcmp(encoded + decoded_update.lcns.offset, input.lcns.data,
+				   input.lcns.bytes) == 0);
+			assert(memcmp(encoded + decoded_update.redo.offset, input.redo.data,
+				   input.redo.bytes) == 0);
+			assert(memcmp(encoded + decoded_update.undo.offset, input.undo.data,
+				   input.undo.bytes) == 0);
+		}
+	}
+	assert(
+	    memcmp(buffers[0] + FUZZ_GUARD_BYTES, buffers[1] + FUZZ_GUARD_BYTES + 1, bytes) == 0);
+	free(buffers[1]);
+	free(buffers[0]);
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -622,6 +733,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	configuration = data + sizeof(*header);
 	packet = configuration + configuration_size;
 	packet_size = size - sizeof(*header) - configuration_size;
+	if (kind == FUZZ_RECORD_ENCODE || kind == FUZZ_UPDATE_ENCODE) {
+		fuzz_encode(packet, packet_size, argument, kind == FUZZ_RECORD_ENCODE);
+		assert(memcmp(data, original, size) == 0);
+		return 0;
+	}
 	if (kind == FUZZ_CHECKPOINT_SNAPSHOT) {
 		fuzz_checkpoint_snapshot(
 		    configuration, configuration_size, packet, packet_size, argument);

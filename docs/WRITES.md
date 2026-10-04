@@ -4,12 +4,19 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
-Private USA output, native restart-table/entry framing, composed selected-client
-checkpoint-dump binding and complete name/dirty target membership are implemented;
+Private logical LFS/update packet encoding, USA output, native restart-table/entry
+framing, composed selected-client checkpoint-dump binding and complete name/dirty
+target membership are implemented;
 [WRITE-FOUNDATIONS.md](WRITE-FOUNDATIONS.md) defines their exact admission and
 publication contracts. They add no device-write capability. Current physical
 history, complete checkpoint ownership/analysis and native durability acceptance
 remain prerequisites for the writable owner and mutations below.
+
+Logical packet measurement now prepares exact buffer reservations and wire-width
+admission. Canonical private serialization preserves opaque operations/targets and
+borrowed content while clearing only reserved storage/padding. These helpers do not
+resolve native addresses, select live history, plan pages/flags or commit an NTFS
+transaction. Their exact-byte/native-input checks cannot enable a writable owner.
 
 Completed LFS 1.1 observation also admits final circular bytes only inside the
 declared written prefix while allowing earlier unfinished segments beyond their

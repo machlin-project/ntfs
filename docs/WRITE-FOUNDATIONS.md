@@ -1,4 +1,4 @@
-# Private metadata encoding and checkpoint framing
+# Private metadata and journal encoding
 
 Device writes remain disabled. These original C primitives prepare native write
 and recovery implementation without giving the immutable read environment a
@@ -10,6 +10,48 @@ selected completed tail segment and the final circular segment. Earlier unfinish
 circular segments are not capped by NextRecordOffset. Independent separate-transfer,
 wrap and historical-byte checks qualify this framing rule only; current history and
 continuation provenance remain required. See LOGFILE.md and ACCEPTANCE.md.
+
+## Logical journal output
+
+`ntfs/logfile_encode.h` owns allocation-free logical LFS record and NTFS update
+serialization. It grants no device capability. Typed descriptions have normal C
+alignment; borrowed payload/vector buffers and encoded output require only byte
+alignment. Inputs remain immutable through the call. Used output must be disjoint
+from the description and every nonempty input; input buffers may alias each other.
+Checked address-range overflow and overlap return INVALID before publication.
+Every error preserves the whole output, including the measurement result; bytes
+after the exact encoded packet remain unchanged even when capacity shares storage
+with an input beyond that used packet.
+
+The LFS encoder accepts the known 48-byte common header and exact described payload
+length. Larger aligned header extensions, unknown record types and unknown flags
+return UNSUPPORTED. Invalid scalar framing/description returns INVALID; wire/policy/
+capacity refusals are RANGE. The nonzero LSN, scalar previous/undo order and client
+index checks match the packet decoder. Physical LSN geometry, active client identity,
+record liveness and MULTI_PAGE planning remain the future journal owner's contract.
+Known flags are preserved without guessing placement. Header padding is zero and
+no trailing alignment bytes are emitted.
+
+The update description borrows an exact little-endian LCN byte vector plus redo and
+undo bytes. Vector length must be divisible by sizeof(uint64_t); its derived count,
+redo/undo lengths and every nonempty data start must fit the native uint16_t fields.
+The measurement publishes an exact uint32_t byte count after the same admission as
+encoding, for later reservation/planning. Empty data spans use offset zero. Redo
+follows the stored vector prefix; undo follows aligned redo. An empty vector still
+reserves one zero LCN slot. Raw operation codes, flags, targets and LCN values confer
+no address/recovery interpretation. Scalar fields and borrowed content are preserved;
+reserved storage and inter-span padding are zero. Only padding/header storage is
+cleared, and each borrowed span is copied once. No whole-packet zeroing, allocation,
+callback or I/O is needed.
+
+Independent whole-packet goldens cover every known LFS flag combination, both types,
+unaligned payload lengths, empty/shared data, maximum vector/length/start fields and
+the record cap. Direct rejection tests cover NULL/overlap/address/width/offset/capacity
+boundaries and unchanged inputs/errors. Retained native input packets preserve their
+original bytes; canonical output placement is explicitly authored. No generated
+packet has yet been consumed by Windows recovery. ACCEPTANCE.md records current
+counts, fuzz and original-input comparisons. Physical WAL pages, ordering, native
+transaction semantics and durable publication still require WRITES.md acceptance.
 
 ## Protected metadata output
 

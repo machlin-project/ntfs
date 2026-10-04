@@ -23,7 +23,37 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest acceptance is the ending circular written-prefix correction: 108 fatal-
+Latest acceptance is private logical journal encoding: 113 fatal-sanitizer suites,
+five focused suites, style, both 2-KiB freestanding targets, 54 local FSKit PASS groups/
+eleven runtime SKIPs and clean unsigned universal Release. Read
+ntfs/logfile_encode.h and WRITE-FOUNDATIONS.md: measurement/serialization admit all
+wire widths, capacities and disjoint used ranges before publication, preserve errors/
+unused capacity and perform no allocation/I/O. The LFS common header is the only
+writer layout; physical geometry/identity/flags are owning-layer work. Update opcodes,
+targets and LCNs remain opaque. Canonical reserved/padding bytes are zero.
+
+All 135 synthetic C cases pass; the composed original-input run passes 210 cases
+including those same 135 plus 39 LFS records/36 NTFS payloads. Do not report all 210
+as native cases. Main checks 690 input/golden files and 345 numeric rows, directly
+compares all original inputs and independently reconstructs native canonical goldens.
+Two appended fuzz selectors preserve earlier numbering; 270 new inputs cover exact/
+short capacity. Fresh fuzz replays 2,246 seeds and completes 125,030 runs in 61 seconds
+with 658 MiB peak fuzzer RSS. Actual source/product hashes, fatal test rows and both
+architecture slices pass main review. New module compilation is confirmed in the
+core archive for each architecture. Strict verification rejects the unsigned bundle.
+Evidence: artifacts/logfile-encode/{initial,final}/, artifacts/logfile-encode/review.json
+and artifacts/{fuzz,fskit}-logfile-encode/. Device writing, physical WAL planning,
+current history, native analysis/recovery and installed mounts remain unqualified.
+
+The new macOS clone now has actual post-login 26.5.2/25F84/arm64/stock-Darwin/RPC
+verification. Inherited ext4 build 41 stays enabled with no active fixture/endpoints.
+Existing personal signing resources cover this guest's NTFS extension. Fresh signed
+build/installation remains pending; old signed products predate current source.
+Review artifacts/fskit-guest-26.5.2/{preparation/post-login,signing-inventory}/.
+The user explicitly chose to leave Windows at its account-password screen; do not
+resume that UI or read the private credential file without new steering.
+
+Preceding acceptance is the ending circular written-prefix correction: 108 fatal-
 sanitizer suites, ten focused suites, style, both 2-KiB freestanding targets,
 54 local FSKit PASS groups/eleven runtime SKIPs and clean unsigned universal Release.
 The completed LFS 1.1 observer now caps its final circular segment by

@@ -25,6 +25,7 @@ from logfile_names_fixtures import author as generate_logfile_names
 from checkpoint_fixtures import author as generate_checkpoint_bindings
 from checkpoint_snapshot_fixtures import author as generate_checkpoint_snapshots
 from record_protect_fixtures import author as generate_record_protection
+from logfile_encode_fixtures import author as generate_logfile_encoding, RECORD_KIND as LOGFILE_ENCODE_RECORD
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
@@ -39,6 +40,8 @@ LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 LOGFILE_CHECKPOINT_TABLE_KIND = 17
 LOGFILE_CHECKPOINT_HEADER = struct.Struct('<IB')
 LOGFILE_CHECKPOINT_SNAPSHOT_KIND = 18
+LOGFILE_RECORD_ENCODE_KIND = 19
+LOGFILE_UPDATE_ENCODE_KIND = 20
 LOGFILE_SNAPSHOT_KINDS = 4
 LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1))
 BITS_PER_BYTE = 8
@@ -47,6 +50,7 @@ LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 LOGFILE_ALLOCATION_FAULT = 1 << 8
 LOGFILE_RECORD_ALLOCATION_FAULT = 1 << 9
 LOGFILE_BUDGET_SHIFT = 16
+LOGFILE_ENCODE_SHORT_SHIFT = struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_NULL_WORKSPACE_SHIFT = LOGFILE_BUDGET_SHIFT + struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_READ_CALL_BUDGET = 32
 
@@ -346,6 +350,15 @@ def generate(output):
             payload = envelope + source + wrapper + checkpoint + b''.join(dumps)
             assert len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
             (log_seeds / ('snapshot-' + case['name'] + suffix + '.seed')).write_bytes(payload)
+    encode_packets = output / 'logfile-encoding'
+    for case in generate_logfile_encoding(encode_packets):
+        payload = (encode_packets / (case['name'] + '.input')).read_bytes()
+        kind = LOGFILE_RECORD_ENCODE_KIND if case['kind'] == LOGFILE_ENCODE_RECORD else LOGFILE_UPDATE_ENCODE_KIND
+        argument = case['header_bytes'] if case['kind'] == LOGFILE_ENCODE_RECORD else 0
+        for suffix, control in (('', 0), ('-short-capacity', 1 << LOGFILE_ENCODE_SHORT_SHIFT)):
+            envelope = LOGFILE_FUZZ_HEADER.pack(kind, argument | control, 0)
+            assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+            (log_seeds / ('encode-' + case['name'] + suffix + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

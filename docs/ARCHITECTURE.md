@@ -400,6 +400,18 @@ zero the whole snapshot, and source/record bytes remain immutable without callba
 Volume reference/type/LCN semantics and complete current page/copy history remain
 owning-layer work before native analysis, redo/undo or writable admission.
 
+Private logical journal encoders accept immutable typed descriptions and borrowed
+byte spans without callbacks or allocation. Wire widths and checked disjoint used
+output ranges gate every store; all errors and unused capacity stay unchanged.
+The LFS encoder writes only its known common header, leaving physical geometry,
+identity, flag planning and current history to the journal owner. The update encoder
+derives vector count and exact aligned data layout before serialization, allowing
+caller reservation through the same measurement admission. Reserved storage and
+inter-span padding are zero, and borrowed spans are copied once. Opaque target/opcode
+values authorize no physical action. WRITE-FOUNDATIONS.md defines the private
+packet/publication boundary; native transaction planning and device durability remain
+required under WRITES.md.
+
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not
 turn FSKit into a userspace syscall translator. No speculative kernel hooks are

@@ -15,13 +15,17 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 108 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 113 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
 
 Write foundations now include private USA-protected metadata output and native
 checkpoint-table/entry framing with complete bounded free-chain validation.
+Private logical LFS/NTFS update encoders now measure and serialize exact packets,
+with wire-width admission, checked overlap and unchanged errors. Independent goldens
+cover 135 authored cases and 75 retained original packet inputs; physical journal
+placement and native transaction semantics remain separate.
 Independent byte/topology vectors and journal fuzzing pass; these primitives add
 no device writes. [Their contracts](docs/WRITE-FOUNDATIONS.md) separate framing
 from current history, native transaction recovery and writable admission.

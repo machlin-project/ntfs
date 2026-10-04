@@ -8,7 +8,52 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Ending circular written-prefix admission
+## Private logical journal packet encoding
+
+`ntfs/logfile_encode.h` measures canonical NTFS update payloads and serializes them
+and common-header LFS records into private caller buffers. All wire widths, record
+policy, capacities, address ranges and used-output/input overlaps are admitted before
+publication. Errors and unused capacity stay unchanged. Borrowed byte buffers may be
+unaligned and may alias each other. Empty buffers permit NULL. Extended LFS headers
+and unknown LFS types/flags refuse; update operations/targets/LCNs remain opaque.
+Canonical reserved storage and inter-span padding are zero. No allocation or I/O
+occurs, and the immutable environment and all FSKit mutation refusals are unchanged.
+
+All 135 independently authored packet cases pass exact whole-byte checks, aligned/
+unaligned input/output, exact/extra/one-below capacities, zero/max fields, shared
+redo/undo, maximum LCN count, maximum redo/undo lengths, largest representable
+starts and the one-MiB LFS record cap. Direct malformed-description, NULL, address
+overflow, descriptor/data overlap, width/offset overflow and unused-capacity cases
+check unchanged publication and inputs. A second C run passes 210 cases comprising
+the same 135 synthetic cases plus 39 retained LFS records and 36 retained NTFS update
+payloads. Canonical placement/padding expectations are independently authored;
+these are original input packets, not Windows validation of generated output.
+Main verifies all 690 actual input/golden files and 345 numeric rows, compares every
+native input directly to original record/payload bytes and independently reconstructs
+its canonical golden from named wire fields and original spans.
+
+All 113 fatal-ASan/UBSan suites, five focused suites, style and both 2-KiB freestanding
+targets pass. Two appended fuzz selectors retain previous numbering; 270 new seeds
+cover exact and short output capacity. Fresh fuzz replays all 2,246 authored seeds
+and completes 125,030 runs in 61 seconds with 658 MiB peak fuzzer RSS. The persistent
+build corpus has one superseded seed excluded from the fresh campaign. Main checks
+raw result rows, actual corpus/binary hashes and all seven unchanged compiled-source
+fingerprints. FSKit reports 54 local PASS groups/eleven runtime SKIPs/zero failures.
+Clean unsigned Release builds four universal products and compiles the new module
+into the core archive for both architectures. Main checks actual product hashes,
+architecture slices and minimum OS 26.5/SDK 27.0. Strict bundle verification rejects
+the unsigned product; signing and installed acceptance remain separate.
+
+Evidence is artifacts/logfile-encode/{initial,final}/ and
+artifacts/logfile-encode/review.json, with products/campaign under
+artifacts/{fskit,fuzz}-logfile-encode/. The isolated macOS clone now has actual
+26.5.2/arm64/stock-kernel/RPC verification after user login. Existing personal
+extension provisioning covers that guest; new signed NTFS installation is pending.
+Windows is explicitly left at its account-password screen at the user's request.
+Physical journal placement, current-history qualification, operation/volume semantics,
+native analysis/recovery, writable ownership and mutations remain open under WRITES.md.
+
+## Preceding ending circular written-prefix admission
 
 Completed LFS 1.1 record observation now rejects an ending circular segment beyond
 NextRecordOffset. Earlier circular segments can extend beyond that field because

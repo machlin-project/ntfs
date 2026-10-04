@@ -1,5 +1,14 @@
 # Code provenance
 
+Private logical journal serialization is original repository code using the named
+LFS/NTFS update wire fields from the original Linux-NTFS research linked below.
+Its scalar/range/overlap admission, canonical private layout and atomic publication
+require no foreign encoder, journal writer or recovery implementation. The original
+Python author constructs complete packets and padding independently of C. Retained
+original records/payloads are immutable inputs; canonical output placement and zero
+padding are authored expectations. Native input comparisons establish format evidence
+only, not Windows consumption, native operation semantics or write/recovery acceptance.
+
 The ending circular-prefix admission correction and its separate-transfer/wrap
 fixtures are original repository code. The meaning of NextRecordOffset for an
 unfinished record and the distinction between transfers and records follow the

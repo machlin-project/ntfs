@@ -66,6 +66,12 @@ are 6.608/11.924/10.260 ms versus 11.468/20.276/14.121 ms. Reads, bytes, allocat
 and accounted memory retain the exact reductions above. Those controls qualify
 the rebuilt product separately; the earlier table retains its measured archive.
 
+The timestamp-only failure and actual member-payload comparison are retained in
+artifacts/reproducibility-count-cache/ and artifacts/archive-timestamp-diagnosis.json.
+After fixing the shared archive environment, all eight full Release product pairs
+match under artifacts/reproducibility-count-cache-fixed/. No measured binary is
+rewritten or replaced; the earlier timing reports retain their original archives.
+
 The runner defaults to an identical-core reference guard. Explicit --compare-core
 requires --reference and permits different retained core archives only while all
 adapter/workload/public-header hashes match. Input, toolchain, policy, machine,

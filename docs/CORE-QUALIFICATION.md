@@ -12,6 +12,14 @@ comparisons pass again. The 144 paired legacy measurements qualify targeted
 hard-link/alias reuse with explicit small-memory tradeoffs. ACCEPTANCE.md retains
 actual-file reviews, source scope and remaining Windows/native/recovery work.
 
+The current portable Release check matches all eight full product pairs under
+artifacts/reproducibility-count-cache-fixed/. Main verifies the actual bytes and
+zero archive timestamps in artifacts/count-cache-reproducibility-review.json.
+The initial failure is retained: only two archives' timestamp fields differed,
+while all member payloads and six CLI products matched. Fixed ZERO_AR_DATE is part
+of the shared build environment. The comparison qualifies two directories in the
+same checkout/toolchain; relocated-source and native-app reproducibility remain open.
+
 The preceding native continuation adopts complete primary counts in FSKit item/page
 attributes and all three reparse owning-context guards. Exact preparation covers
 153 selected native images with 1,127 count observations/3,265 filename bodies.

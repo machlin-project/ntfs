@@ -51,11 +51,23 @@ were subsequently identified by the two-directory comparison.
 preserve both original and sealed archive reports. Accepted portable/component
 products are under artifacts/count-cache-accepted/.
 They do not qualify unique-object throughput, pressure behavior or installed I/O.
-Measure those controls before broadening the optimization claim. Next portable
-journal work can connect selected active-client restart acquisition with the
+Measure those controls before broadening the optimization claim. Next metadata
+work can retain fully checked standard information and reparse presence across
+temporary node closure, with separate size validation, failure exclusion and
+capacity/memory measurements. Portable journal work can connect selected
+active-client restart acquisition with the
 existing physical circular observer and snapshot/prefix binder; active written
 history and tail/fast-copy routing still require their own contracts. Windows
 acquisition, native directory counts/authorization and installed runtime remain open.
+
+Fresh committed-source portable Release reproducibility now matches all eight
+actual full products under artifacts/reproducibility-count-cache-fixed/. Main
+checks each archive timestamp is zero; shared tool_environment fixes ZERO_AR_DATE=1
+without postprocessing products. Preserve the initial timestamp-only failure in
+artifacts/reproducibility-count-cache/ and the diagnosis/review in
+artifacts/{archive-timestamp-diagnosis,count-cache-reproducibility-review}.json.
+Six CLI files remain identical to the initial run. This qualifies two build
+directories in the same checkout/toolchain, not relocated/native app builds.
 
 ## Preceding native primary-count adoption
 

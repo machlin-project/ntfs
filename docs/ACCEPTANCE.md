@@ -60,6 +60,19 @@ stage and before the Release command; its wrapper error and actual later Release
 exit are retained independently. Accepted CLI/core/component products are under
 artifacts/count-cache-accepted/.
 
+The initial two-directory Release comparison fails only on timestamp fields in
+the two archives; all six CLI products and all archive member payloads match.
+Preserve artifacts/reproducibility-count-cache/ and
+artifacts/archive-timestamp-diagnosis.json. The shared build environment now fixes
+ZERO_AR_DATE=1. A fresh committed-source comparison passes all eight actual full
+product pairs under artifacts/reproducibility-count-cache-fixed/. Main also checks
+every archive member/symbol-table timestamp is zero and all six CLI products are
+unchanged from the initial check. Evidence is
+artifacts/plan-count-cache-reproducible-fixed.*.log and
+artifacts/count-cache-reproducibility-review.json. This qualifies the same
+checkout/toolchain in two build directories, not relocated sources or native app
+reproducibility. It changes build policy, not the accepted core implementation.
+
 Native directory link policy, installed enforcement, Windows corpus acquisition,
 journal history/recovery, unique-object/pressure measurements and commercial
 release remain open. The checkpoint does not complete the agreed no-VM plan.

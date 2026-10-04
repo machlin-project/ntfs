@@ -1,5 +1,16 @@
 # Core qualification and continuation
 
+Current journal continuation passes 124 fatal-sanitizer suites, style, both 2-KiB
+freestanding targets, 54 component groups/eleven runtime SKIPs and clean unsigned
+universal Release. The supported LFS 2.0 observer examines all 32 fast slots and
+admits only completed per-target prefixes under explicit shared credits. Seventy-two
+original record graphs and a fresh 2,482-seed campaign pass. Three exact packets
+from an unmodified Windows Recovery journal also pass physical-byte comparison,
+selected-client checkpoint binding and physical OAT-key membership. The separate
+Recovery volume is still rejected by core admission for an unsupported nonzero
+flag; no dirty-state, complete current-history, replay or durability claim follows.
+ACCEPTANCE.md and LOGFILE.md record exact evidence. Writable APIs remain absent.
+
 The current portable continuation retains checked base metadata across temporary
 node closure. Direct-mapped full-reference keys are independent of raw/count keys;
 only complete successful standard-information/reparse-presence checks publish.

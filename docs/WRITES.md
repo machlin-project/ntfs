@@ -28,6 +28,13 @@ declared written prefix while allowing earlier unfinished segments beyond their
 NextRecordOffset. Separate-transfer and wrap cases preserve the native distinction
 between I/O transfers and records. This closes an ending-prefix framing gap; it
 does not establish the complete current history or continuation provenance.
+The separate supported LFS 2.0 observer now examines all 32 fast slots and compares
+completed copies per target under shared credits. Its conservative conflict,
+prefix, fault and quota checks have synthetic qualification. Three unmodified
+Windows Recovery packets also pass fast-copy byte observation and selected-client
+checkpoint binding/membership with their original owner. This confirms that native
+snapshot profile, not the whole current history or Windows continuation ownership;
+LOGFILE.md and ACCEPTANCE.md define the narrower contract and acquisition limits.
 
 The next core implementation sequence is:
 
@@ -65,7 +72,7 @@ establish a post-crash journal history. Counted read-only stream binding is now
 implemented without admitting dirty mounts. Physical wrapped-record assembly now
 has bounded exact-byte/read/fault checks, but does not establish written/current
 history or qualify continuation provenance. Native journal admission/drain,
-tail/fast-page routing, active circular history, native client checkpoints,
+complete qualified tail/fast-copy history, active circular history, native client checkpoints,
 transaction analysis and native crash/durability qualification remain required.
 An executable in-memory reference model now exercises serialized ownership,
 WAL/commit/home/checkpoint ordering, partial writes and interrupted replay; see

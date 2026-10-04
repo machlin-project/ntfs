@@ -20,6 +20,8 @@ enum {
 	NTFS_LOGFILE_RECORD_DELETING = 0x0002,
 	NTFS_LOGFILE_RECORD_ADDING = 0x0004,
 	NTFS_LOGFILE_PAGE_RECORD_END = 0x00000001,
+	NTFS_LOGFILE_PAGE_CLIENT_RESTART = 0x00000002,
+	NTFS_LOGFILE_FAST_COPY_PAGES = 32,
 	/* Offset zero plus each possible second-copy page size, 512..65536. */
 	NTFS_LOGFILE_RESTART_PROBES = 9,
 	NTFS_LOGFILE_NO_PROBE = UINT16_MAX,
@@ -232,6 +234,27 @@ enum ntfs_result ntfs_logfile_read_circular_record(struct ntfs_logfile *, uint64
  * leaves that field at its start. The final RecordEnd/last_end_lsn witness is
  * still required. Errors preserve bytes and zero out. */
 enum ntfs_result ntfs_logfile_read_legacy_record(struct ntfs_logfile *, uint64_t lsn, void *,
+    size_t capacity, struct ntfs_logfile_record_view *);
+/* Observe a completed LFS 2.0 record with fast copies routed to their stored
+ * circular targets. The supported fast layout has 4-KiB system/log pages and a
+ * DWORD target after the nine-word USA capacity and its word padding. Larger
+ * data/header offsets remain valid; USA overlap with that target is UNSUPPORTED.
+ * All 32 slots are examined. Valid target copies are ordered by their common
+ * last-start LSN, not slot position or transfer count. Equal latest epochs must
+ * have equal last-end LSNs and complete written prefixes, ignoring USA, transfer
+ * fields and unused bytes. A newer circular page wins. Torn/malformed slots are
+ * unavailable; backend errors and shared read-credit refusals retain their result.
+ * An unresolved matching latest copy or conflicting prefix is UNSUPPORTED.
+ * Selected fast segments and the final circular segment must fit NextRecordOffset;
+ * the final RecordEnd/last_end_lsn witness is required. Incomplete fast segments
+ * are not assembled. Logical offsets remain circular; copy_pages_read counts
+ * selected fast segments. Temporary storage is at most 2 KiB of slot metadata,
+ * one log page and one exact staged record, with errors preserving bytes/zero view.
+ * At least 33 reads/132 KiB must be admitted before work; ordinary 32-read defaults
+ * therefore return RANGE. Additional selected/duplicate copies and continuations
+ * share that same budget. This is per-target immutable copy observation, not a
+ * complete current circular history, continuation provenance, recovery or writes. */
+enum ntfs_result ntfs_logfile_read_fast_record(struct ntfs_logfile *, uint64_t lsn, void *,
     size_t capacity, struct ntfs_logfile_record_view *);
 
 /* Independent immutable-byte primitives; no allocation, device I/O or writes.

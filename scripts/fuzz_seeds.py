@@ -18,6 +18,7 @@ from logfile_source_fixtures import author as generate_logfile_sources
 from logfile_volume_fixtures import author as generate_logfile_volumes
 from logfile_record_fixtures import author as generate_logfile_records
 from logfile_legacy_fixtures import author as generate_logfile_legacy
+from logfile_fast_fixtures import author as generate_logfile_fast
 from logfile_client_fixtures import author as generate_logfile_clients
 from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
@@ -45,6 +46,7 @@ LOGFILE_CHECKPOINT_SNAPSHOT_KIND = 18
 LOGFILE_RECORD_ENCODE_KIND = 19
 LOGFILE_UPDATE_ENCODE_KIND = 20
 LOGFILE_PAGE_ENCODE_KIND = 21
+LOGFILE_FAST_RECORD_KIND = 22
 LOGFILE_SNAPSHOT_KINDS = 4
 LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1))
 BITS_PER_BYTE = 8
@@ -59,6 +61,7 @@ LOGFILE_PAGE_MAJOR_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_PAGE_MINOR_SHIFT = (struct.calcsize('<I') + struct.calcsize('<H')) * BITS_PER_BYTE
 LOGFILE_NULL_WORKSPACE_SHIFT = LOGFILE_BUDGET_SHIFT + struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_READ_CALL_BUDGET = 32
+LOGFILE_FAST_READ_CALL_BUDGET = 2 * logfile_wire.FAST_PAGES + 1
 
 MAX_STRUCTURE_BYTES = 32768
 LZNT1_RAW_PAYLOAD = b'Independent raw chunk\n'
@@ -288,6 +291,32 @@ def generate(output):
             envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_LEGACY_RECORD_KIND, case['lsn'], control)
             assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
             filename = 'legacy-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    fast_records = output / 'logfile-fast'
+    for case in generate_logfile_fast(fast_records):
+        payload = (fast_records / case['path']).read_bytes()
+        controls = {'default': 0}
+        if case['faults']:
+            controls.update({'first-copy-read': 1,
+                'circular-read': logfile_wire.FAST_PAGES + 1,
+                'final-copy-read': case['reads'],
+                'comparison-allocation': LOGFILE_ALLOCATION_FAULT,
+                'record-allocation': LOGFILE_RECORD_ALLOCATION_FAULT})
+        if case['pages'] > 1 or case['reads'] == LOGFILE_FAST_READ_CALL_BUDGET:
+            # Admit bytes as well as calls. Whole call periods preserve the
+            # remainder while supplying sufficient byte credits for the source.
+            minimum = (case['reads'] * case['page_bytes'] + logfile_wire.USA_STRIDE - 1) // logfile_wire.USA_STRIDE
+            for name, calls in [('exact-calls', case['reads']), ('short-calls', case['reads'] - 1)]:
+                remainder = calls - 1
+                periods = (minimum - remainder + LOGFILE_FAST_READ_CALL_BUDGET - 1) // LOGFILE_FAST_READ_CALL_BUDGET
+                budget = remainder + periods * LOGFILE_FAST_READ_CALL_BUDGET
+                controls[name] = budget << LOGFILE_BUDGET_SHIFT
+            if case['reads'] == LOGFILE_FAST_READ_CALL_BUDGET:
+                controls['short-bytes'] = (minimum - 1) << LOGFILE_BUDGET_SHIFT
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_FAST_RECORD_KIND, case['lsn'], control)
+            assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+            filename = 'fast-' + case['path'].replace('.', '-') + '-' + name + '.seed'
             (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):

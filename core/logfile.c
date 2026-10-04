@@ -57,7 +57,7 @@ geometry(const struct ntfs_logfile_restart *r)
 	minimum = (uint64_t)NTFS_LFS_RESTART_PAGES * r->system_page_bytes +
 	    (uint64_t)NTFS_LFS_MIN_RECORD_PAGES * r->log_page_bytes;
 	circular = (uint64_t)NTFS_LFS_RESTART_PAGES * r->system_page_bytes +
-	    (uint64_t)(r->major == NTFS_LFS_MAJOR_FAST ? NTFS_LFS_FAST_PAGES
+	    (uint64_t)(r->major == NTFS_LFS_MAJOR_FAST ? NTFS_LOGFILE_FAST_COPY_PAGES
 						       : NTFS_LFS_LEGACY_TAIL_PAGES) *
 		r->log_page_bytes;
 	usable = r->file_bytes - r->file_bytes % r->log_page_bytes;
@@ -315,7 +315,7 @@ ntfs_logfile_restart_decode(const void *input, size_t size, uint64_t available_f
 	info.file_bytes = ntfs_u64(area->file_bytes);
 	info.usable_bytes = info.file_bytes - info.file_bytes % info.log_page_bytes;
 	info.circular_offset = (uint64_t)NTFS_LFS_RESTART_PAGES * info.system_page_bytes +
-	    (uint64_t)(info.major == NTFS_LFS_MAJOR_FAST ? NTFS_LFS_FAST_PAGES
+	    (uint64_t)(info.major == NTFS_LFS_MAJOR_FAST ? NTFS_LOGFILE_FAST_COPY_PAGES
 							 : NTFS_LFS_LEGACY_TAIL_PAGES) *
 		info.log_page_bytes;
 	info.client_count = ntfs_u16(area->clients);

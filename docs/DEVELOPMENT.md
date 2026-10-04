@@ -16,7 +16,26 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
-The current private page-encoding qualification runs `logfile-page-encode` and the
+The current completed fast-copy qualification runs `logfile-fast`, `logfile-fast-cli`
+and five `fuzz-logfile-fast` variants, then the full fatal-sanitizer suite. Its
+independent author is tests/logfile_fast_fixtures.py. Current results are 124 suites
+and 2,482 freshly replayed journal seeds, including all 2,378 preceding inputs
+unchanged. The CLI is `ntfs-logfile fast-record LOGICAL_JOURNAL_FILE DECIMAL_LSN`;
+it explicitly supplies more read credits than the ordinary source defaults.
+This is immutable per-target observation; LOGFILE.md and WRITES.md retain native
+current-history and recovery qualification as separate requirements. Preserve the
+initial fake-device lifetime-budget failure separately from passing corrected runs.
+
+The frozen Windows Recovery observation is retained under
+artifacts/windows-write-vm/recovery-partition-observation/. Main-authored runners
+acquire exact selected-client records and bind their checkpoint tables without
+altering the journal or projecting a different owner. Main review independently
+restores native page protection and compares complete packets/membership. Use
+the recorded bounded arguments and immutable input hashes for offline execution;
+do not force volume admission or treat these reads as Windows recovery acceptance.
+ACCEPTANCE.md records the actual nonzero-flag refusal and physical acquisition limits.
+
+The preceding private page-encoding qualification runs `logfile-page-encode` and the
 three `fuzz-logfile-page-encode` variants, then the full fatal-sanitizer suite. Its
 independent author is tests/logfile_page_encode_fixtures.py; regenerate seeds into a
 fresh directory for a campaign so superseded persistent build seeds are excluded.

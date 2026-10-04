@@ -18,6 +18,27 @@ struct legacy_copies {
 	uint8_t *comparison;
 };
 
+struct fast_copies {
+	struct ntfs_logfile_page_view pages[NTFS_LOGFILE_FAST_COPY_PAGES];
+	uint32_t targets[NTFS_LOGFILE_FAST_COPY_PAGES];
+	bool available[NTFS_LOGFILE_FAST_COPY_PAGES];
+	uint8_t *comparison;
+};
+
+struct record_copies {
+	struct legacy_copies *legacy;
+	struct fast_copies *fast;
+};
+
+enum { NTFS_LOGFILE_FAST_METADATA_BYTES = 2 * 1024 };
+
+_Static_assert(
+    sizeof(struct fast_copies) <= NTFS_LOGFILE_FAST_METADATA_BYTES, "fast-copy metadata policy");
+_Static_assert(sizeof(struct ntfs_disk_log_fast_page) ==
+	NTFS_LFS_FAST_USA_WORDS * sizeof(uint16_t) + sizeof(struct ntfs_disk_log_page) +
+	    sizeof(uint16_t) + sizeof(uint32_t),
+    "fast-page prefix layout");
+
 void
 ntfs_logfile_default_limits(struct ntfs_logfile_limits *limits)
 {
@@ -650,9 +671,198 @@ load_legacy_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfi
 }
 
 static enum ntfs_result
+fast_target(struct ntfs_logfile *source, uint32_t *target)
+{
+	const struct ntfs_disk_log_fast_page *header = (const void *)source->scratch;
+	uint32_t usa_end;
+
+	usa_end = ntfs_u16(header->common.mst.usa_offset) +
+	    (uint32_t)ntfs_u16(header->common.mst.usa_count) * NTFS_MST_WORD_BYTES;
+	if (usa_end > offsetof(struct ntfs_disk_log_fast_page, file_offset)) {
+		return NTFS_UNSUPPORTED;
+	}
+	*target = ntfs_u32(header->file_offset);
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+scan_fast_copies(
+    struct ntfs_logfile *source, struct ntfs_logfile_report *work, struct fast_copies *copies)
+{
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	struct ntfs_logfile_page_view *page;
+	struct ntfs_logfile_lsn location;
+	uint64_t offset;
+	uint32_t target;
+	unsigned index;
+	enum ntfs_result result;
+
+	for (index = 0; index < NTFS_LOGFILE_FAST_COPY_PAGES; index++) {
+		page = &copies->pages[index];
+		offset = (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes +
+		    (uint64_t)index * restart->log_page_bytes;
+		result = load_page(source, offset, work, page);
+		if (source->backend_failed ||
+		    (result != NTFS_OK && result != NTFS_CORRUPT && result != NTFS_NOT_FOUND)) {
+			return result;
+		}
+		if (result != NTFS_OK) {
+			continue;
+		}
+		result = fast_target(source, &target);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (target < restart->circular_offset || target % restart->log_page_bytes != 0 ||
+		    !ntfs_bounds(target, restart->log_page_bytes, restart->usable_bytes) ||
+		    ntfs_logfile_lsn_decode(restart, page->page.copy_value, &location) != NTFS_OK ||
+		    page->page.copy_value < page->page.last_end_lsn) {
+			continue;
+		}
+		if ((page->page.flags &
+			~(NTFS_LOGFILE_PAGE_RECORD_END | NTFS_LOGFILE_PAGE_CLIENT_RESTART)) != 0) {
+			return NTFS_UNSUPPORTED;
+		}
+		copies->targets[index] = target;
+		copies->available[index] = true;
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+reload_fast_copy(struct ntfs_logfile *source, struct ntfs_logfile_report *work,
+    const struct fast_copies *copies, unsigned index, struct ntfs_logfile_page_view *out)
+{
+	uint32_t target;
+	enum ntfs_result result;
+
+	result = load_page(source, copies->pages[index].offset, work, out);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = fast_target(source, &target);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (target != copies->targets[index] ||
+	    out->page.copy_value != copies->pages[index].page.copy_value ||
+	    out->page.last_end_lsn != copies->pages[index].page.last_end_lsn ||
+	    out->page.flags != copies->pages[index].page.flags ||
+	    out->page.page_count != copies->pages[index].page.page_count ||
+	    out->page.page_position != copies->pages[index].page.page_position ||
+	    out->page.next_record_offset != copies->pages[index].page.next_record_offset) {
+		return NTFS_STALE;
+	}
+	return NTFS_OK;
+}
+
+static bool
+same_fast_prefix(const struct ntfs_logfile_restart *restart, const struct ntfs_logfile_page *a,
+    const uint8_t *a_bytes, const struct ntfs_logfile_page *b, const uint8_t *b_bytes)
+{
+	return a->last_end_lsn == b->last_end_lsn &&
+	    same_written_prefix(restart, a, a_bytes, b, b_bytes);
+}
+
+static enum ntfs_result
+load_fast_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
+    struct fast_copies *copies, struct ntfs_logfile_page_view *out)
+{
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	const struct ntfs_logfile_page_view *candidate;
+	struct ntfs_logfile_page_view circular = {0}, selected = {0}, duplicate = {0};
+	struct ntfs_logfile_lsn location;
+	enum ntfs_result circular_result, result;
+	unsigned index, chosen = NTFS_LOGFILE_FAST_COPY_PAGES;
+
+	for (index = 0; index < NTFS_LOGFILE_FAST_COPY_PAGES; index++) {
+		if (copies->available[index] && copies->targets[index] == offset &&
+		    (chosen == NTFS_LOGFILE_FAST_COPY_PAGES ||
+			copies->pages[index].page.copy_value >
+			    copies->pages[chosen].page.copy_value)) {
+			chosen = index;
+		}
+	}
+	circular_result = load_page(source, offset, work, &circular);
+	if (source->backend_failed ||
+	    (circular_result != NTFS_OK && circular_result != NTFS_CORRUPT &&
+		circular_result != NTFS_NOT_FOUND)) {
+		return circular_result;
+	}
+	if (circular_result == NTFS_OK &&
+	    (circular.page.flags &
+		~(NTFS_LOGFILE_PAGE_RECORD_END | NTFS_LOGFILE_PAGE_CLIENT_RESTART)) != 0) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (circular_result == NTFS_OK &&
+	    (ntfs_logfile_lsn_decode(restart, circular.page.copy_value, &location) != NTFS_OK ||
+		circular.page.copy_value < circular.page.last_end_lsn)) {
+		circular_result = NTFS_CORRUPT;
+	}
+	if (chosen == NTFS_LOGFILE_FAST_COPY_PAGES ||
+	    (circular_result == NTFS_OK &&
+		circular.page.copy_value > copies->pages[chosen].page.copy_value)) {
+		if (circular_result == NTFS_OK) {
+			*out = circular;
+		}
+		return circular_result;
+	}
+	candidate = &copies->pages[chosen];
+	if (candidate->page.last_end_lsn == 0 ||
+	    (candidate->page.flags & NTFS_LOGFILE_PAGE_RECORD_END) == 0 ||
+	    candidate->page.next_record_offset < restart->page_data_offset) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (circular_result == NTFS_OK) {
+		ntfs_copy(copies->comparison, source->scratch, restart->log_page_bytes);
+	}
+	result = reload_fast_copy(source, work, copies, chosen, &selected);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (circular_result == NTFS_OK && circular.page.copy_value == selected.page.copy_value &&
+	    !same_fast_prefix(
+		restart, &circular.page, copies->comparison, &selected.page, source->scratch)) {
+		return NTFS_UNSUPPORTED;
+	}
+	ntfs_copy(copies->comparison, source->scratch, restart->log_page_bytes);
+	for (index = 0; index < NTFS_LOGFILE_FAST_COPY_PAGES; index++) {
+		if (index == chosen || !copies->available[index] ||
+		    copies->targets[index] != offset ||
+		    copies->pages[index].page.copy_value != selected.page.copy_value) {
+			continue;
+		}
+		result = reload_fast_copy(source, work, copies, index, &duplicate);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (!same_fast_prefix(restart, &selected.page, copies->comparison, &duplicate.page,
+			source->scratch)) {
+			return NTFS_UNSUPPORTED;
+		}
+	}
+	ntfs_copy(source->scratch, copies->comparison, restart->log_page_bytes);
+	*out = selected;
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+load_record_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
+    const struct record_copies *copies, struct ntfs_logfile_page_view *out)
+{
+	if (copies == NULL) {
+		return load_page(source, offset, work, out);
+	}
+	if (copies->legacy != NULL) {
+		return load_legacy_page(source, offset, work, copies->legacy, out);
+	}
+	return load_fast_page(source, offset, work, copies->fast, out);
+}
+
+static enum ntfs_result
 assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes, size_t capacity,
     struct ntfs_logfile_record_view *out, struct ntfs_logfile_report *work,
-    struct legacy_copies *copies)
+    const struct record_copies *copies)
 {
 	struct ntfs_logfile_record_view view = {0};
 	struct ntfs_logfile_page_view page;
@@ -679,9 +889,7 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 	if (capacity < restart->record_header_bytes) {
 		return NTFS_RANGE;
 	}
-	result = copies == NULL
-	    ? load_page(source, location.page_offset, work, &page)
-	    : load_legacy_page(source, location.page_offset, work, copies, &page);
+	result = load_record_page(source, location.page_offset, work, copies, &page);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -713,7 +921,7 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 		 * ending circular segment, and every selected completed tail segment,
 		 * must fit the page's declared written prefix. */
 		if (copies != NULL &&
-		    (page.storage == NTFS_LOGFILE_LEGACY_TAIL || copied + amount == total) &&
+		    (page.storage != NTFS_LOGFILE_CIRCULAR || copied + amount == total) &&
 		    !ntfs_bounds(record_offset, amount, page.page.next_record_offset)) {
 			result = NTFS_CORRUPT;
 			goto done;
@@ -721,7 +929,7 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 		ntfs_copy(staged + copied, source->scratch + record_offset, amount);
 		copied += amount;
 		view.pages_read++;
-		view.copy_pages_read += page.storage == NTFS_LOGFILE_LEGACY_TAIL;
+		view.copy_pages_read += page.storage != NTFS_LOGFILE_CIRCULAR;
 		view.last_page_offset = offset;
 		if (copied == total) {
 			break;
@@ -735,8 +943,7 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 			result = NTFS_RANGE;
 			goto done;
 		}
-		result = copies == NULL ? load_page(source, offset, work, &page)
-					: load_legacy_page(source, offset, work, copies, &page);
+		result = load_record_page(source, offset, work, copies, &page);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -784,6 +991,7 @@ ntfs_logfile_read_legacy_record(struct ntfs_logfile *source, uint64_t requested_
     size_t capacity, struct ntfs_logfile_record_view *out)
 {
 	struct legacy_copies copies = {0};
+	struct record_copies route = {.legacy = &copies};
 	struct ntfs_logfile_report work = {0};
 	struct ntfs_logfile_lsn location;
 	enum ntfs_result result;
@@ -813,9 +1021,62 @@ ntfs_logfile_read_legacy_record(struct ntfs_logfile *source, uint64_t requested_
 	result = scan_legacy_copies(source, &work, &copies);
 	if (result == NTFS_OK) {
 		result =
-		    assemble_record(source, requested_lsn, bytes, capacity, out, &work, &copies);
+		    assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route);
 	}
 	source->environment.release(
 	    source->environment.context, copies.comparison, source->restart.log_page_bytes);
+	return result;
+}
+
+enum ntfs_result
+ntfs_logfile_read_fast_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
+    size_t capacity, struct ntfs_logfile_record_view *out)
+{
+	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_lsn location;
+	struct record_copies route;
+	const struct ntfs_logfile_restart *restart;
+	struct fast_copies *copies;
+	size_t workspace_bytes;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL || bytes == NULL) {
+		return NTFS_INVALID;
+	}
+	restart = &source->restart;
+	if (restart->major != NTFS_LFS_MAJOR_FAST ||
+	    restart->system_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+	    restart->log_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+	    restart->page_data_offset < sizeof(struct ntfs_disk_log_fast_page)) {
+		return NTFS_UNSUPPORTED;
+	}
+	result = ntfs_logfile_lsn_decode(restart, requested_lsn, &location);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (capacity < restart->record_header_bytes ||
+	    source->limits.max_read_calls <= NTFS_LOGFILE_FAST_COPY_PAGES ||
+	    source->limits.max_read_bytes <
+		(uint64_t)(NTFS_LOGFILE_FAST_COPY_PAGES + 1) * restart->log_page_bytes) {
+		return NTFS_RANGE;
+	}
+	workspace_bytes = sizeof(*copies) + restart->log_page_bytes;
+	copies = source->environment.allocate(source->environment.context, workspace_bytes);
+	if (copies == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	ntfs_zero(copies, sizeof(*copies));
+	copies->comparison = (uint8_t *)(copies + 1);
+	route = (struct record_copies){.fast = copies};
+	result = scan_fast_copies(source, &work, copies);
+	if (result == NTFS_OK) {
+		result =
+		    assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route);
+	}
+	source->environment.release(source->environment.context, copies, workspace_bytes);
 	return result;
 }

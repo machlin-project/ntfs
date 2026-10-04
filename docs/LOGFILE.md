@@ -22,6 +22,8 @@ LFS version numbers do not establish the NTFS client's payload version.
 An already assembled client restart record can now be bound to selected active
 snapshot identity before common-prefix decoding. This does not establish its
 physical/current-history provenance.
+Separate completed-copy observers route legacy tails and modern fast slots with
+the contracts below. They do not select an entire current journal history.
 
 Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
 restart-table free topology and client-versioned open-attribute/dirty-page plus
@@ -335,6 +337,59 @@ checkpoint/analysis records are unchanged. The raw circular observation can insp
 bytes that the completed-record observation refuses; neither proves current history.
 Current acceptance and main-reviewed artifacts are recorded in ACCEPTANCE.md.
 
+## Completed modern fast-copy record observation
+
+`ntfs_logfile_read_fast_record` observes a completed record in the supported LFS 2.0
+profile: 4-KiB system/log pages with the DWORD circular target after the common
+header, nine-word USA capacity and word padding. Named wire fields derive its
+position; larger declared data and record headers remain supported. A USA array
+overlapping that target refuses with UNSUPPORTED. Other page profiles also refuse.
+
+All 32 slots are examined before selecting the latest valid matching copy by its
+common last-start LSN. Slot order and transfer count do not select an epoch. Torn
+or malformed pages and invalid targets/epochs are unavailable; actual backend
+errors retain their exact result. Valid unknown page flags refuse. The observed
+client-restart page marker is admitted as framing, not interpreted as NTFS recovery.
+A newer valid circular page wins. Equal latest fast/fast or fast/circular epochs
+require identical last-end LSN, flags, NextRecordOffset and complete restored
+written prefix. USA, transfer fields and unused capacity do not affect that
+comparison. Conflicts or an unresolved newest matching copy refuse with UNSUPPORTED.
+Selected copies are reread with semantic header/target checks; an observed change
+returns STALE, without comparing C structure padding.
+
+Every selected fast segment and the ending circular segment must fit the declared
+written prefix. The ending record-end/last-end witness remains required. Earlier
+unfinished circular segments can extend beyond NextRecordOffset, as in the legacy
+observer; unfinished fast segments are not assembled. Logical first/last offsets
+remain circular addresses, and copy_pages_read counts segments supplied by fast
+storage. No transfer counter establishes continuation provenance.
+
+One allocation holds at most 2 KiB of slot metadata plus one log page; assembly
+separately stages only the exact record. All reads, duplicate comparisons and
+continuations share the caller's limits. At least 33 reads/132 KiB are admitted
+before allocation or I/O; ordinary 32-read defaults therefore return RANGE. The
+CLI's explicit 65-read/512-KiB policy does not silently enlarge the core defaults.
+Errors preserve caller bytes, clear the view and release temporary storage.
+
+Seventy-two original graph cases include every slot, latest/equal/conflicting
+epochs, torn storage, USA boundaries, extended headers, unknown layouts/flags,
+written-prefix limits, two transfers and circular wrap. C also checks all read
+positions with five distinct partial backend failures, both temporary allocation
+failures, exact/short credits, zero-I/O default refusal and seven successful-read
+header changes followed by fresh retries. Whole record goldens, immutable sources
+and 104 new fuzz envelopes have separate main review; all 2,378 prior inputs remain
+unchanged. ACCEPTANCE.md records full host evidence.
+
+This is per-target completed-copy observation. It does not establish the complete
+current circular history, client/table liveness, continuation ownership or native
+recovery. Its 72 graph cases are synthetic. A separate unmodified Windows Recovery
+journal now supplies three complete native packets through one newer fast copy:
+the selected current restart, open-attributes dump and names dump. Direct main
+comparison with independently restored source bytes and selected-owner snapshot
+membership pass. This confirms that observed wire profile and per-target route;
+it does not establish full post-crash history or durability. ACCEPTANCE.md records
+the frozen acquisition, volume-admission refusal and remaining WRITES.md gates.
+
 ## NTFS client restart common prefix
 
 `ntfs_logfile_client_restart_decode` observes the 64-byte common prefix of an
@@ -581,8 +636,8 @@ in the full component/source suites. It does not truncate an 8-MiB volume or
 treat a geometry skip as a passed layout. Separate logical-source fuzz retains
 all of its original 1-MiB journals under the 2-MiB envelope.
 
-Next work must integrate native journal admission/drain ownership, route tail/fast-page
-copies and validate written/current circular history and continuation provenance,
+Next work must integrate native journal admission/drain ownership, qualify complete
+tail/fast-copy history and validate written/current circular history and continuation provenance,
 then qualify client sequence lifetimes and interpret complete NTFS checkpoint
 tables/extensions beyond the common prefix. Compare original
 Windows 1.1/2.0 packets, including LCN-less records and interrupted writes. Add

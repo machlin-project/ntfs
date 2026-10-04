@@ -69,7 +69,98 @@ native-read/attempt-4-access-admission/. This qualifies development signing, ena
 and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
 namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
-## Private protected journal page encoding
+## Completed LFS 2.0 fast-copy observation
+
+`ntfs_logfile_read_fast_record` examines all 32 slots in the supported 4-KiB LFS 2.0
+profile and routes completed copies per circular target. Last-start LSN orders valid
+epochs; equal latest written prefixes must agree, and newer circular data wins.
+Torn/malformed storage is unavailable, while backend failures retain their exact
+status. Unknown layouts/flags and unresolved/conflicting latest copies refuse.
+Selected fast/ending circular bytes must fit the declared written prefix, with an
+ending record witness. This is per-target observation, not complete current history
+or continuation ownership. LOGFILE.md defines the public resource/error contract.
+
+All 72 independent C/CLI graph cases pass with exact record bytes and unchanged
+sources. They cover every slot, equal/conflicting epochs, transfer/USA/unused-byte
+differences, source/header geometry, prefix boundaries, separate transfers and wrap.
+The C sweep injects five distinct partial backend statuses at every physical read
+of selected profiles, including all 32 equal-copy rereads; both allocation faults,
+fresh retries, exact/short credits, default-policy refusal and seven successful-read
+header changes also pass. Main independently reconstructs all 72 complete record
+goldens, checks source hashes and every one of 104 new fuzz envelopes, and confirms
+all 2,378 preceding seed bytes are unchanged.
+
+All 124 fatal-ASan/UBSan suites, style and both 2-KiB freestanding targets pass.
+Fresh fuzz replays all 2,482 authored seeds and completes 53,467 runs in 61 seconds
+with 641 MiB peak fuzzer RSS. FSKit reports 54 local PASS groups, eleven runtime
+SKIPs and zero failures. The clean unsigned Release contains four universal
+products targeting macOS 26.5 with SDK 27.0; both core source files compile for
+arm64 and x86_64. Strict bundle verification rejects unsigned packaging as expected.
+All eleven compiled-source fingerprints remain unchanged across qualification.
+The installed signed build 3 remains the preceding logical-encoder source.
+
+The initial C sweep exhausted its fake-device lifetime quota after hundreds of
+independent operations. Diagnostics preserve the actual 4,097 reads against that
+device's 4,096 limit. The test now resets that callback quota per operation; core
+limits were not enlarged. Only corrected focused/final results pass. Evidence is
+artifacts/logfile-fast/{initial,diagnosis,focused-r1,final}/, the main review and
+artifacts/{fuzz,fskit}-logfile-fast/. Modern native history, analysis/recovery,
+writable ownership/mutations and Windows durability remain open under WRITES.md.
+
+## Windows-authored modern snapshot observation
+
+The installed Windows 11 ARM64 VM remains at its empty account-password page.
+A reversible memory pause permitted an independent APFS copy of its system qcow2;
+full source/copy hashes agree, and the same process and page resume after 13.37
+seconds. This establishes a frozen physical capture, not flushed or clean NTFS
+state. Offline raw conversion passes full virtual-byte comparison. Both GPT
+header/array CRCs, equal partition arrays and disjoint bounds pass; the retained
+protective-MBR size discrepancy is not used to derive partition ranges.
+
+The Windows system partition has the `-FVE-FS-` OEM identity and is not exported
+as NTFS. No BitLocker keys, account credentials or setup actions are used. The
+separate Windows Recovery GPT partition has the standard Recovery GUID and NTFS
+identity. Its 894,435,328-byte range is exported from the frozen raw copy, compared
+byte for byte, hashed and made read-only. Original physical input remains unchanged.
+Microsoft documents the separate Recovery partition layout in
+[its GPT deployment guidance](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/configure-uefigpt-based-hard-drive-partitions?view=windows-11).
+
+The core's existing admission refuses this NTFS 3.1 volume because its volume
+flags are `0x0080`; its error text says Windows recovery is required. The actual
+dirty bit `0x0001` is not set, so that result does not prove a dirty volume or a
+repair requirement. The observed flag remains unsupported and is not cleared.
+A pinned standalone `ntfscat` export uses only its ordinary read-only path, without
+force, recovery or mounting. It exports the original 4,800,512-byte `$LogFile`;
+the image and journal remain unchanged. This observation does not admit the
+Recovery volume to our core or installed driver.
+
+The logical journal selects the newer valid LFS 2.0 restart copy with 4-KiB pages,
+44 sequence bits, a 48-byte record header and 64-byte data offset. Its current
+NTFS client restart record and both nonzero checkpoint anchors are acquired
+through actual fast storage: one selected copy segment and 34 physical reads
+per record. The circular target has an older epoch. Main independently restores
+the native USA words, derives the LSN addresses from native restart bytes and
+compares all three complete packets directly with the newest matching fast page.
+
+The unmodified selected client-1.0 restart binds its own open-attributes and name
+dumps. The 344-byte open table has eight 40-byte entries, two allocated physical
+keys and a complete six-entry free chain. Its 18-byte names dump contains `$I30`
+at allocated key 64. Composed snapshot decoding passes with present mask 3, one
+named attribute and no dirty-page or transaction anchors. These use the original
+selected owner, without the synthetic owner projections of historical checks.
+The restart payload's additional 48 bytes remain opaque; clean hint is false.
+
+Evidence and independent main review are in
+artifacts/windows-write-vm/logfile-acquisition-paused-oobe/ and
+artifacts/windows-write-vm/recovery-partition-observation/ (export, logical-journal,
+selected-restart-record-r1, selected-checkpoint-tables and native-record-review.json).
+The first restart wrapper failed at Python parsing before opening any target;
+its failure is retained separately, and only the reviewed replacement passes.
+This qualifies native immutable record bytes and selected snapshot membership.
+Full current history, continuation provenance, flag meaning, analysis/recovery,
+Windows consumption of generated output and device durability remain open.
+
+## Preceding private protected journal page encoding
 
 `ntfs_logfile_page_encode` constructs complete private common-header LFS 1.1 RCRD
 pages and USA protection using disjoint caller workspace/output. All scalar geometry,

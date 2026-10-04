@@ -247,11 +247,12 @@ journal(const char *path, bool volume_source)
 }
 
 static int
-circular_record(const char *path, uint64_t lsn, bool legacy_copies)
+circular_record(const char *path, uint64_t lsn, bool legacy_copies, bool fast_copies)
 {
 	struct ntfs_image image;
 	struct ntfs_logfile *source = NULL;
 	struct ntfs_logfile_record_view view;
+	struct ntfs_logfile_limits limits;
 	uint8_t *bytes = NULL;
 	size_t i;
 	enum ntfs_result result;
@@ -260,11 +261,21 @@ circular_record(const char *path, uint64_t lsn, bool legacy_copies)
 		fprintf(stderr, "Cannot open read-only regular-file source\n");
 		return LOGFILE_ARGUMENT_ERROR;
 	}
-	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
+	ntfs_logfile_default_limits(&limits);
+	if (fast_copies) {
+		/* One full slot scan plus the normal record budget and an equal-copy
+		 * comparison. The core never raises caller credits internally. */
+		limits.max_read_calls += NTFS_LOGFILE_FAST_COPY_PAGES + 1;
+		limits.max_read_bytes *= 2;
+	}
+	result = ntfs_logfile_open(&image.environment, &limits, NULL, &source);
 	if (result == NTFS_OK) {
 		bytes = malloc(NTFS_LOGFILE_MAX_RECORD_BYTES);
 		if (bytes == NULL) {
 			result = NTFS_NO_MEMORY;
+		} else if (fast_copies) {
+			result = ntfs_logfile_read_fast_record(
+			    source, lsn, bytes, NTFS_LOGFILE_MAX_RECORD_BYTES, &view);
 		} else if (legacy_copies) {
 			result = ntfs_logfile_read_legacy_record(
 			    source, lsn, bytes, NTFS_LOGFILE_MAX_RECORD_BYTES, &view);
@@ -276,7 +287,10 @@ circular_record(const char *path, uint64_t lsn, bool legacy_copies)
 	printf("{\"schema_version\":%u,\"scope\":\"%s\",\"code\":%d,"
 	       "\"result\":\"%s\",\"recovery_qualified\":false,\"requested_lsn\":%" PRIu64
 	       ",\"record\":",
-	    LOGFILE_DIAGNOSTIC_VERSION, legacy_copies ? "legacy-record" : "circular-record",
+	    LOGFILE_DIAGNOSTIC_VERSION,
+	    fast_copies		? "fast-record"
+		: legacy_copies ? "legacy-record"
+				: "circular-record",
 	    (int)result, ntfs_result_string(result), lsn);
 	if (result == NTFS_OK) {
 		printf("{");
@@ -575,11 +589,13 @@ main(int argc, char **argv)
 	    (strcmp(argv[1], "journal") == 0 || strcmp(argv[1], "volume-journal") == 0)) {
 		return journal(argv[2], strcmp(argv[1], "volume-journal") == 0);
 	}
-	if (strcmp(argv[1], "circular-record") == 0 || strcmp(argv[1], "legacy-record") == 0) {
+	if (strcmp(argv[1], "circular-record") == 0 || strcmp(argv[1], "legacy-record") == 0 ||
+	    strcmp(argv[1], "fast-record") == 0) {
 		if (argc != 4 || !number(argv[3], UINT64_MAX, &argument)) {
 			goto usage;
 		}
-		return circular_record(argv[2], argument, strcmp(argv[1], "legacy-record") == 0);
+		return circular_record(argv[2], argument, strcmp(argv[1], "legacy-record") == 0,
+		    strcmp(argv[1], "fast-record") == 0);
 	}
 	if (strcmp(argv[1], "active-client") == 0) {
 		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
@@ -710,6 +726,7 @@ usage:
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
 	    "       ntfs-logfile legacy-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
+	    "       ntfs-logfile fast-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
 	    "       ntfs-logfile active-client LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n");
 done:
 	free(restart_scratch);

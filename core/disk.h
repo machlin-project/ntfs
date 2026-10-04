@@ -203,7 +203,8 @@ enum {
 	NTFS_LFS_MINOR_FAST = 0,
 	NTFS_LFS_RESTART_PAGES = 2,
 	NTFS_LFS_LEGACY_TAIL_PAGES = 2,
-	NTFS_LFS_FAST_PAGES = 32,
+	NTFS_LFS_FAST_PAGE_BYTES = 4096,
+	NTFS_LFS_FAST_USA_WORDS = NTFS_LFS_FAST_PAGE_BYTES / NTFS_MST_STRIDE + 1,
 	NTFS_LFS_MIN_RECORD_PAGES = 48,
 	NTFS_LFS_CLIENT_NAME_BYTES = 128,
 	NTFS_LFS_LSN_OFFSET_SHIFT = 3,
@@ -247,6 +248,14 @@ struct ntfs_disk_log_page {
 	uint8_t page_count[sizeof(uint16_t)], page_position[sizeof(uint16_t)];
 	uint8_t next_record_offset[sizeof(uint16_t)], reserved[3 * sizeof(uint16_t)];
 	uint8_t last_end_lsn[sizeof(uint64_t)];
+};
+
+/* LFS 2.0 fast copies store a DWORD target beyond the common header and
+ * 4-KiB protection-array capacity. The actual USA still has its stored offset. */
+struct ntfs_disk_log_fast_page {
+	struct ntfs_disk_log_page common;
+	uint8_t usa_capacity[NTFS_LFS_FAST_USA_WORDS * sizeof(uint16_t)];
+	uint8_t padding[sizeof(uint16_t)], file_offset[sizeof(uint32_t)];
 };
 
 struct ntfs_disk_log_record {

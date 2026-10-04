@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 117 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 124 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -40,8 +40,14 @@ preserves backend errors and shares read credits across copies and continuations
 The final circular segment must fit its declared written prefix; earlier unfinished
 segments can extend beyond NextRecordOffset. Separate I/O transfers and circular
 wrap have independent exact-byte and rejection checks.
-Original NIST checkpoint and analysis bytes now read through this API. Modern fast
-storage, complete current history and replay still need qualification; see
+Original NIST checkpoint and analysis bytes now read through this API. A separate
+immutable LFS 2.0 observer now examines all 32 fast slots and selects completed
+copies per circular target, rejecting equal-epoch conflicts and preserving shared
+I/O credits/backend errors. Seventy-two independent graphs and exact record oracles
+pass; this does not establish complete current history or continuation provenance.
+Three complete packets from an unmodified Windows Recovery journal also pass
+fast-copy byte comparison and selected-client checkpoint membership with their
+original owner. Complete modern history and replay still need qualification; see
 [journal contracts](docs/LOGFILE.md).
 
 Empty-LCN journal payloads now retain the reserved first slot as opaque storage,

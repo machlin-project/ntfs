@@ -10,6 +10,13 @@ selected completed tail segment and the final circular segment. Earlier unfinish
 circular segments are not capped by NextRecordOffset. Independent separate-transfer,
 wrap and historical-byte checks qualify this framing rule only; current history and
 continuation provenance remain required. See LOGFILE.md and ACCEPTANCE.md.
+The modern LFS 2.0 observer now selects completed fast copies per circular target
+with bounded 32-slot examination and equal-epoch written-prefix checks. This is
+immutable reading; it does not expand the private page encoder's LFS 1.1 profile
+or establish complete current history, native recovery or writable admission.
+Native Windows Recovery snapshot packets now confirm that observation profile
+and selected-client table membership. No generated packet or page has gained
+Windows-consumption or durable-publication evidence from those reads.
 
 ## Logical journal output
 

@@ -67,7 +67,58 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest acceptance is private common-header LFS 1.1 RCRD page encoding: 117 fatal-
+Latest core acceptance is per-target completed LFS 2.0 fast-copy observation:
+124 fatal-sanitizer suites, style, both 2-KiB freestanding targets and 54 FSKit PASS
+groups/eleven runtime SKIPs/zero failures. Clean unsigned Release supplies four
+universal products for macOS 26.5/SDK 27.0, with both journal core files compiled
+for arm64/x86_64. Strict unsigned verification still refuses; no new product was
+installed. Main checks eleven unchanged source fingerprints and raw host results.
+
+Read ntfs/logfile.h and LOGFILE.md. The fast-record API supports the qualified
+4-KiB LFS 2.0 wire profile. It examines all 32 slots, orders valid copies
+by common last-start LSN and requires equal latest epochs to agree on complete
+written prefixes. It preserves backend statuses and shared credits; default 32-read
+limits refuse before work. Unknown/conflicting/unresolved layouts do not become
+current history. Do not use this per-target observer as recovery or write admission.
+
+All 72 whole-record C/CLI oracles pass, including slot/epoch/prefix/wrap/profile
+cases, five partial backend statuses across selected read matrices, both allocation
+faults, exact/short/default credits and seven changed-header refusals/retries. Main
+reconstructs complete goldens and checks all 104 appended fuzz envelopes; all 2,378
+prior seeds remain unchanged. Fresh fuzz replays 2,482 inputs and completes 53,467
+runs in 61 seconds at 641 MiB peak RSS. Preserve the initial fake-device lifetime
+quota failure and diagnosis separately; only corrected runs pass. Evidence:
+artifacts/logfile-fast/{initial,diagnosis,focused-r1,final}/ and the main review,
+plus artifacts/{fuzz,fskit}-logfile-fast/.
+
+Native observation now uses an unmodified Windows Recovery journal from a frozen
+physical capture. Sol paused only guest memory for 13.37 seconds, copied the exact
+system qcow2 and resumed the same process/password page. Full copy hashes and
+offline raw virtual-byte comparison pass. This is not a guest flush or clean-state
+proof. GPT bounds select the separate Recovery partition; the system partition's
+`-FVE-FS-` identity prevents ordinary NTFS extraction. Do not access BitLocker keys
+or continue account setup without the pending user handoff.
+
+The Recovery image and its ordinary read-only `ntfscat -i 2` journal export are
+frozen and unchanged. Core volume admission refuses flags `0x0080`; the actual
+dirty bit is clear, so do not infer Windows repair is needed from that error text.
+Do not clear flags, force admission, mount or repair the frozen image. Its original
+LFS 2.0 selected owner binds three exact fast-routed packets and its client-1.0
+snapshot: eight OAT entries/two allocated, one `$I30` name at physical allocated
+key 64, no dirty/transaction anchors. Main independently compares complete packets
+with restored native source bytes and checks the complete free chain/membership.
+The current restart's 48-byte extension stays opaque and its clean hint is false.
+Full current-history/continuation, analysis and recovery qualification remain open.
+
+Review artifacts/windows-write-vm/{logfile-acquisition-paused-oobe,
+recovery-partition-observation}/ and native-record-review.json. Prepared observation
+runners and raw command records are retained there. Only main designs new queries
+or diagnoses failures; Luna executes bounded offline commands with unchanged-source
+checks. Windows GUI setup remains pending the user's manual account handoff, then
+prepare a separate unencrypted disposable NTFS test volume for Windows/chkdsk.
+Keep VM management with Sol, prepared CLI runs with Luna and one VM operator.
+
+Preceding acceptance is private common-header LFS 1.1 RCRD page encoding: 117 fatal-
 sanitizer suites, six focused suites, style, both 2-KiB freestanding targets and
 54 FSKit PASS groups/eleven runtime SKIPs/zero failures. The clean unsigned Release
 contains four universal products and compiles the encoder for both architectures;

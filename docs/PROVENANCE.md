@@ -1,5 +1,27 @@
 # Code provenance
 
+The supported LFS 2.0 fast-copy layout uses wire-format facts from
+[Suhanov's original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/)
+and the common-header/target field getters in
+[the original reverse parser](https://github.com/msuhanov/dfir_ntfs/blob/master/dfir_ntfs/LogFile.py).
+The DWORD target follows common-header/USA capacity/padding; last-start LSN orders
+copies, and the observed page flag includes a client-restart marker. These facts
+do not supply a native recovery algorithm. The original repository observer uses
+per-target completed-prefix selection, bounded metadata/I/O, explicit conflicts
+and unchanged-error staging. No foreign parser, forensic routing or filesystem
+implementation is imported. The independent wire/graph author, fault tests and
+resealed slot mutator are original. Synthetic observations do not qualify current
+Windows history; this is not source-isolated clean-room work.
+
+Separate native inputs now come from the user-authorized installed Windows VM's
+frozen Recovery partition, selected through independently checked GPT bounds.
+The physical copy, extracted partition and ordinary read-only standalone ntfscat
+export remain generated local artifacts; no Windows binaries or foreign filesystem
+implementation are added to source. Three unmodified current selected-owner packets
+pass repository decoders and an original independent USA/LSN/whole-byte/membership
+review. This is native format evidence, not imported recovery logic or complete
+post-crash history. ACCEPTANCE.md records the acquisition and admission limits.
+
 Private common-header LFS 1.1 RCRD page construction is original repository code
 over the named common page fields in the original Linux-NTFS research linked below
 and the existing original USA protection primitive. The independent author specifies

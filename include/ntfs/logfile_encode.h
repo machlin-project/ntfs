@@ -23,6 +23,14 @@ struct ntfs_logfile_update_input {
 	struct ntfs_logfile_buffer lcns, redo, undo;
 };
 
+struct ntfs_logfile_page_input {
+	uint32_t bytes;
+	uint16_t major, minor, data_offset, prior_update_sequence;
+	struct ntfs_logfile_page page;
+	/* Complete restored data region, including any caller-owned unused bytes. */
+	struct ntfs_logfile_buffer data;
+};
+
 /* Encode one private logical LFS packet with the known common header. data.offset
  * must name that header and data.length must equal payload_bytes. Extended headers
  * and unknown types/flags are UNSUPPORTED; invalid descriptions are INVALID.
@@ -48,7 +56,24 @@ enum ntfs_result ntfs_logfile_update_measure(
 enum ntfs_result ntfs_logfile_update_encode(
     const struct ntfs_logfile_update_input *, void *output, size_t capacity);
 
-/* All three operations perform complete admission before publication. Used output
+/* Construct one private common-header LFS 1.1 RCRD page and generate USA protection.
+ * Modern/unknown versions and unknown page flags are UNSUPPORTED. Page size is a
+ * bounded power of two; data_offset must leave the complete canonical USA and room
+ * for a common record header. data.bytes must exactly fill the remaining region.
+ * Transfer position/count and nonzero next-record boundaries have scalar framing
+ * checks. copy_value and last_end_lsn are opaque: routing, LSN geometry, completion,
+ * transfer planning and durable native publication belong to the journal owner.
+ * Reserved header/padding is zero; all borrowed data is preserved, including tails.
+ * prior_update_sequence advances under record_protect's reserved-value rules.
+ * Caller workspace and output each need bytes capacity. Used workspace/output must
+ * be disjoint from each other, the description and borrowed data; unused capacity
+ * may alias inputs. Borrowed bytes may be unaligned. Complete admission precedes
+ * publication; errors preserve output. Workspace contents are disposable. No
+ * allocation, callback or device I/O occurs. This does not plan a native WAL page. */
+enum ntfs_result ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *, void *workspace,
+    size_t workspace_bytes, void *output, size_t capacity);
+
+/* All operations perform complete admission before publication. Used output
  * must be disjoint from the descriptor and every nonempty borrowed input; overlap
  * or address-range overflow returns INVALID. Every error preserves the entire
  * output, and unused capacity remains unchanged. No allocation, callback or I/O

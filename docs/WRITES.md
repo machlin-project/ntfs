@@ -4,7 +4,8 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
-Private logical LFS/update packet encoding, USA output, native restart-table/entry
+Private logical LFS/update packet encoding, common-header LFS 1.1 RCRD page encoding,
+USA output, native restart-table/entry
 framing, composed selected-client checkpoint-dump binding and complete name/dirty
 target membership are implemented;
 [WRITE-FOUNDATIONS.md](WRITE-FOUNDATIONS.md) defines their exact admission and
@@ -17,6 +18,10 @@ admission. Canonical private serialization preserves opaque operations/targets a
 borrowed content while clearing only reserved storage/padding. These helpers do not
 resolve native addresses, select live history, plan pages/flags or commit an NTFS
 transaction. Their exact-byte/native-input checks cannot enable a writable owner.
+The page serializer now supplies canonical private headers and protected sector tails
+using caller workspace. It preserves opaque LSN/copy fields and the complete borrowed
+body, rejecting modern layouts and unknown flags. It does not choose page placement,
+live history, transfers, flush ordering or a durable native journal publication.
 
 Completed LFS 1.1 observation also admits final circular bytes only inside the
 declared written prefix while allowing earlier unfinished segments beyond their

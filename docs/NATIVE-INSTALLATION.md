@@ -13,9 +13,10 @@ report build 3 and minimum macOS 26.5. The embedded development profile includes
 this guest and the FSKit entitlement. This is not distribution signing or notarization.
 
 Normal app launch and LaunchServices/PlugInKit registration discover the installed
-extension. The public FSClient query currently reports its exact installed path and
-`enabled: false`. The console has subsequently locked, so the ordinary File System
-Extensions switch awaits manual unlock. No disk image is attached or mounted, and
+extension. After manual console unlock, ordinary By Category → File System Extensions
+enablement succeeds without an authentication dialog. The public FSClient query
+reports its exact installed path and `enabled: true`; ext4 stays enabled and idle.
+No disk image is attached or mounted, and
 the Windows VM stays at its account-password screen at the user's request.
 
 Evidence is under `artifacts/fskit-guest-26.5.2/`: `signed/review/`, `installation/`,
@@ -36,7 +37,7 @@ The prepared arm64 helper targets macOS 26.5 and is personally development-signe
 Its exact guest copy and strict signature were verified before the actual guest query.
 A PlugInKit election marker or an ext4-only inventory cannot replace this result.
 
-After manual unlock, enable only Machlin NTFS in System Settings → General → Login
+For a new installation, enable only Machlin NTFS in System Settings → General → Login
 Items & Extensions → By Category → File System Extensions. Query FSClient again
 and require the reviewed installed path with `enabled: true`. Preserve ext4 and
 unrelated guests. Unknown authentication prompts require manual credential entry.

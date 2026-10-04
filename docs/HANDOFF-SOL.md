@@ -25,9 +25,9 @@ product hashes/signatures; the installed app and extension preserve all eight
 bundle-file hashes, strict signatures, build numbers and minimum OS. Existing
 personal extension provisioning covers the exact guest. Normal app launch and
 LaunchServices/PlugInKit discovery succeed at the installed path. A new signed
-public FSClient helper observes NTFS with `enabled: false`; this is distinct from
-PlugInKit election. The guest console locked again and awaits manual unlock before
-the ordinary File System Extensions switch. Ext4 remains enabled and idle.
+public FSClient helper observes NTFS with `enabled: true` after ordinary By Category
+→ File System Extensions enablement. No authentication dialog or credential entry
+was needed. This is distinct from PlugInKit election. Ext4 remains enabled and idle.
 
 The standalone `tests/mounted_read.c` checker and both complete-filename fixture
 images are prepared. Main compares all two image/nine oracle hashes and verifies
@@ -50,7 +50,31 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest acceptance is private logical journal encoding: 113 fatal-sanitizer suites,
+Latest acceptance is private common-header LFS 1.1 RCRD page encoding: 117 fatal-
+sanitizer suites, six focused suites, style, both 2-KiB freestanding targets and
+54 FSKit PASS groups/eleven runtime SKIPs/zero failures. The clean unsigned Release
+contains four universal products and compiles the encoder for both architectures;
+strict bundle verification still rejects unsigned packaging. Main verifies seven
+unchanged source fingerprints and actual products. The installed signed build 3
+predates this private page helper; no newer unsigned bundle was installed.
+
+Read ntfs/logfile_encode.h and WRITE-FOUNDATIONS.md. The page helper admits all
+geometry/capacity/used-range checks before stores, constructs canonical header/USA
+padding, preserves the complete restored body and protects tails using disjoint
+caller workspace/output. Each buffer needs one complete page through the 64-KiB
+policy; no allocation/I/O occurs. Modern layouts and unknown flags refuse. Copy/LSN
+values remain opaque and do not select history, routing, completion or WAL transfers.
+Native journal planning, durability and recovery remain open.
+
+All 44 whole-page C goldens pass; main separately reconstructs their complete bytes
+and checks 132 packet files, 44 numeric rows and 132 new fuzz envelopes. Fresh fuzz
+replays 2,378 seeds and completes 116,265 runs in 61 seconds with 686 MiB peak RSS.
+These are synthetic canonical page outputs, not Windows output/recovery acceptance.
+The initial test-compilation signature error is retained under initial/; only corrected
+focused/final runs pass. Evidence: artifacts/logfile-page-encode/{initial,initial-r1,final}/,
+artifacts/logfile-page-encode/review.json and artifacts/{fuzz,fskit}-logfile-page-encode/.
+
+Preceding acceptance is private logical journal encoding: 113 fatal-sanitizer suites,
 five focused suites, style, both 2-KiB freestanding targets, 54 local FSKit PASS groups/
 eleven runtime SKIPs and clean unsigned universal Release. Read
 ntfs/logfile_encode.h and WRITE-FOUNDATIONS.md: measurement/serialization admit all
@@ -75,7 +99,7 @@ current history, native analysis/recovery and installed mounts remain unqualifie
 The new macOS clone now has actual post-login 26.5.2/25F84/arm64/stock-Darwin/RPC
 verification. Inherited ext4 build 41 stays enabled with no active fixture/endpoints.
 Existing personal signing resources cover this guest's NTFS extension. Fresh signed
-build/installation remains pending; old signed products predate current source.
+build 3 is installed and enabled as recorded above; it predates the new page helper.
 Review artifacts/fskit-guest-26.5.2/{preparation/post-login,signing-inventory}/.
 The user explicitly chose to leave Windows at its account-password screen; do not
 resume that UI or read the private credential file without new steering.

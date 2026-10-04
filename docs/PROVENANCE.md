@@ -1,5 +1,13 @@
 # Code provenance
 
+Private common-header LFS 1.1 RCRD page construction is original repository code
+over the named common page fields in the original Linux-NTFS research linked below
+and the existing original USA protection primitive. The independent author specifies
+complete restored inputs, canonical header/padding and saved sector tails; main
+reconstructs all complete goldens separately from the C implementation. No foreign
+page encoder, routing or journal writer is imported. These synthetic packets preserve
+opaque LSN/copy fields and establish neither native history nor Windows recovery.
+
 Private logical journal serialization is original repository code using the named
 LFS/NTFS update wire fields from the original Linux-NTFS research linked below.
 Its scalar/range/overlap admission, canonical private layout and atomic publication

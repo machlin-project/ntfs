@@ -53,6 +53,43 @@ packet has yet been consumed by Windows recovery. ACCEPTANCE.md records current
 counts, fuzz and original-input comparisons. Physical WAL pages, ordering, native
 transaction semantics and durable publication still require WRITES.md acceptance.
 
+## Private protected journal pages
+
+`ntfs_logfile_page_encode` constructs one common-header LFS 1.1 RCRD page from a typed
+description and the complete restored data region, including caller-owned unused
+bytes. It has no allocation, callback or device I/O. Modern/unknown versions and
+unknown flags return UNSUPPORTED. Page size must be a power of two from the fixed
+512-byte protection stride through the named 64-KiB policy. The canonical USA follows
+the complete named common page header; the aligned data offset must leave that whole
+array and room for a common logical record header. The borrowed length must exactly
+fill the remaining page. Transfer position/count must be consistently zero or in
+range; a nonzero next-record boundary must be aligned inside the data region.
+
+These are scalar framing checks. `copy_value` and `last_end_lsn` remain opaque, even
+at their maximum wire values. The helper neither validates physical LSN geometry nor
+selects routing, completion, record fragments, current history or I/O transfers.
+Those decisions belong to the native journal owner before device publication.
+
+Workspace and output each require one complete page and byte alignment suffices.
+Their used ranges must be disjoint from each other, the description and borrowed
+data; unused capacity may alias inputs. Admission checks address overflow, capacities
+and all geometry before stores. Every error preserves output; workspace is disposable.
+Canonical reserved header/USA padding is zero, and the complete restored body is
+copied once to workspace. `ntfs_record_protect` then saves every restored sector tail
+and advances the supplied prior sequence while skipping reserved values. Inputs and
+unused capacities stay unchanged. Constant stack use preserves the freestanding
+2-KiB frame budget; the caller owns both page-sized buffers.
+
+Forty-four independent whole-page goldens cover 512-byte, 4-KiB, 16-KiB and 64-KiB
+pages, sequence boundaries and 24 transfer/flag/next-record combinations. Tests check
+aligned/unaligned bytes, exact/extra/one-below capacities, restoration of every tail,
+repeatability, descriptor/data/buffer aliasing, address/width/version refusals and
+unchanged errors. Main independently reconstructs all complete golden pages from
+named fields and restored bodies, checks all 132 packet files and compares 132 new
+fuzz envelopes. These are synthetic canonical output cases, not Windows-generated or
+Windows-consumed pages. ACCEPTANCE.md records final evidence and the retained initial
+test-compilation failure. WAL planning and recovery remain required under WRITES.md.
+
 ## Protected metadata output
 
 `ntfs/record.h` exposes `ntfs_record_protect` for a complete private, already

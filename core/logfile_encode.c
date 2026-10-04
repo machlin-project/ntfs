@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 #include <ntfs/logfile_encode.h>
+#include <ntfs/record.h>
 
 struct update_layout {
 	uint32_t bytes;
@@ -203,4 +204,65 @@ ntfs_logfile_update_encode(
 		ntfs_copy(encoded + layout.undo.offset, input->undo.data, layout.undo.length);
 	}
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *workspace,
+    size_t workspace_bytes, void *output, size_t capacity)
+{
+	struct ntfs_disk_log_page *header = workspace;
+	uint8_t *restored = workspace;
+	size_t bytes, data_offset, usa_count, usa_bytes;
+
+	if (!valid_range(input, sizeof(*input)) || workspace == NULL || output == NULL) {
+		return NTFS_INVALID;
+	}
+	if (input->major != NTFS_LFS_MAJOR_LEGACY || input->minor != NTFS_LFS_MINOR_LEGACY ||
+	    (input->page.flags & ~NTFS_LOGFILE_PAGE_RECORD_END) != 0) {
+		return NTFS_UNSUPPORTED;
+	}
+	bytes = input->bytes;
+	data_offset = input->data_offset;
+	if (bytes > NTFS_LOGFILE_MAX_PAGE_BYTES || bytes > NTFS_PROTECTED_RECORD_MAX_BYTES ||
+	    capacity < bytes || workspace_bytes < bytes) {
+		return NTFS_RANGE;
+	}
+	if (bytes < NTFS_MST_STRIDE || (bytes & (bytes - 1)) != 0) {
+		return NTFS_INVALID;
+	}
+	usa_count = bytes / NTFS_MST_STRIDE + 1;
+	usa_bytes = usa_count * NTFS_MST_WORD_BYTES;
+	if (data_offset < sizeof(*header) + usa_bytes || data_offset % NTFS_WIRE_ALIGNMENT != 0 ||
+	    !ntfs_bounds(data_offset, sizeof(struct ntfs_disk_log_record), bytes) ||
+	    input->data.bytes != bytes - data_offset ||
+	    input->page.page_position > input->page.page_count ||
+	    ((input->page.page_position == 0) != (input->page.page_count == 0)) ||
+	    (input->page.next_record_offset != 0 &&
+		(input->page.next_record_offset < data_offset ||
+		    input->page.next_record_offset > bytes ||
+		    input->page.next_record_offset % NTFS_WIRE_ALIGNMENT != 0))) {
+		return NTFS_INVALID;
+	}
+	if (!separate(input, sizeof(*input), output, bytes) ||
+	    !separate(input->data.data, input->data.bytes, output, bytes) ||
+	    !separate(input, sizeof(*input), workspace, bytes) ||
+	    !separate(input->data.data, input->data.bytes, workspace, bytes) ||
+	    !separate(workspace, bytes, output, bytes)) {
+		return NTFS_INVALID;
+	}
+	/* These size limits place the canonical USA wholly before the first stride
+	 * tail. The protection helper needs no further fallible input admission. */
+	ntfs_zero(restored, data_offset);
+	ntfs_copy(header->mst.magic, "RCRD", sizeof(header->mst.magic));
+	ntfs_put_u16(header->mst.usa_offset, sizeof(*header));
+	ntfs_put_u16(header->mst.usa_count, (uint16_t)usa_count);
+	ntfs_put_u64(header->copy_value, input->page.copy_value);
+	ntfs_put_u32(header->flags, input->page.flags);
+	ntfs_put_u16(header->page_count, input->page.page_count);
+	ntfs_put_u16(header->page_position, input->page.page_position);
+	ntfs_put_u16(header->next_record_offset, input->page.next_record_offset);
+	ntfs_put_u64(header->last_end_lsn, input->page.last_end_lsn);
+	ntfs_put_u16(restored + sizeof(*header), input->prior_update_sequence);
+	ntfs_copy(restored + data_offset, input->data.data, input->data.bytes);
+	return ntfs_record_protect(workspace, bytes, output, capacity);
 }

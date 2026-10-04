@@ -34,6 +34,7 @@ enum {
 	FUZZ_CHECKPOINT_SNAPSHOT,
 	FUZZ_RECORD_ENCODE,
 	FUZZ_UPDATE_ENCODE,
+	FUZZ_PAGE_ENCODE,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -55,6 +56,9 @@ enum {
 enum {
 	FUZZ_CLIENT_VERSION_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
 	FUZZ_ENCODE_SHORT_SHIFT = sizeof(uint16_t) * NTFS_BITS_PER_BYTE,
+	FUZZ_PAGE_WORKSPACE_SHORT_SHIFT = FUZZ_ENCODE_SHORT_SHIFT + 1,
+	FUZZ_PAGE_MAJOR_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
+	FUZZ_PAGE_MINOR_SHIFT = (sizeof(uint32_t) + sizeof(uint16_t)) * NTFS_BITS_PER_BYTE,
 	FUZZ_NULL_WORKSPACE_SHIFT = FUZZ_BUDGET_SHIFT + sizeof(uint16_t) * NTFS_BITS_PER_BYTE
 };
 
@@ -704,6 +708,84 @@ fuzz_encode(const uint8_t *packet, size_t size, uint64_t argument, bool record_k
 	free(buffers[0]);
 }
 
+static void
+fuzz_page_encode(const uint8_t *packet, size_t size, uint64_t argument)
+{
+	const struct ntfs_disk_log_page *header = (const void *)packet, *restored;
+	struct ntfs_logfile_page_input input = {0}, copy;
+	uint8_t *buffers[2], *work[2], *encoded, *workspace;
+	enum ntfs_result results[2];
+	size_t allocation, capacity, workspace_bytes, index;
+
+	if (size < sizeof(*header) || (uint16_t)argument > size) {
+		return;
+	}
+	input.bytes = (uint32_t)size;
+	input.data_offset = (uint16_t)argument;
+	input.major = (uint16_t)(argument >> FUZZ_PAGE_MAJOR_SHIFT);
+	input.minor = (uint16_t)(argument >> FUZZ_PAGE_MINOR_SHIFT);
+	input.page.copy_value = ntfs_u64(header->copy_value);
+	input.page.last_end_lsn = ntfs_u64(header->last_end_lsn);
+	input.page.flags = ntfs_u32(header->flags);
+	input.page.page_count = ntfs_u16(header->page_count);
+	input.page.page_position = ntfs_u16(header->page_position);
+	input.page.next_record_offset = ntfs_u16(header->next_record_offset);
+	input.data =
+	    (struct ntfs_logfile_buffer){packet + input.data_offset, size - input.data_offset};
+	if (ntfs_bounds(sizeof(*header), NTFS_MST_WORD_BYTES, size)) {
+		input.prior_update_sequence = ntfs_u16(packet + sizeof(*header));
+	}
+	memcpy(&copy, &input, sizeof(copy));
+	capacity = size < NTFS_LOGFILE_MAX_PAGE_BYTES ? size : NTFS_LOGFILE_MAX_PAGE_BYTES;
+	workspace_bytes = capacity;
+	if ((argument & (UINT64_C(1) << FUZZ_ENCODE_SHORT_SHIFT)) != 0) {
+		capacity--;
+	}
+	if ((argument & (UINT64_C(1) << FUZZ_PAGE_WORKSPACE_SHORT_SHIFT)) != 0) {
+		workspace_bytes--;
+	}
+	allocation = NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES + 1;
+	for (index = 0; index < sizeof(results) / sizeof(results[0]); index++) {
+		buffers[index] = malloc(allocation);
+		work[index] = malloc(allocation);
+		assert(buffers[index] != NULL && work[index] != NULL);
+		memset(buffers[index], FUZZ_GUARD_VALUE, allocation);
+		memset(work[index], FUZZ_GUARD_VALUE, allocation);
+		encoded = buffers[index] + FUZZ_GUARD_BYTES + index;
+		workspace = work[index] + FUZZ_GUARD_BYTES + index;
+		results[index] =
+		    ntfs_logfile_page_encode(&input, workspace, workspace_bytes, encoded, capacity);
+		assert(memcmp(&input, &copy, sizeof(copy)) == 0);
+		guard(buffers[index], results[index] == NTFS_OK ? size + index : 0, allocation);
+		guard(work[index], results[index] == NTFS_OK ? size + index : 0, allocation);
+		if (index != 0) {
+			assert(buffers[index][FUZZ_GUARD_BYTES] == FUZZ_GUARD_VALUE &&
+			    work[index][FUZZ_GUARD_BYTES] == FUZZ_GUARD_VALUE);
+		}
+		if (results[index] != NTFS_OK) {
+			continue;
+		}
+		memcpy(workspace, encoded, size);
+		assert(ntfs_fixup(workspace, size, "RCRD") == NTFS_OK);
+		restored = (const void *)workspace;
+		assert(ntfs_u64(restored->copy_value) == input.page.copy_value &&
+		    ntfs_u64(restored->last_end_lsn) == input.page.last_end_lsn &&
+		    ntfs_u32(restored->flags) == input.page.flags &&
+		    ntfs_u16(restored->page_count) == input.page.page_count &&
+		    ntfs_u16(restored->page_position) == input.page.page_position &&
+		    ntfs_u16(restored->next_record_offset) == input.page.next_record_offset);
+		assert(
+		    memcmp(workspace + input.data_offset, input.data.data, input.data.bytes) == 0);
+	}
+	assert(results[0] == results[1]);
+	assert(memcmp(buffers[0] + FUZZ_GUARD_BYTES, buffers[1] + FUZZ_GUARD_BYTES + 1,
+		   NTFS_LOGFILE_MAX_PAGE_BYTES) == 0);
+	for (index = 0; index < sizeof(results) / sizeof(results[0]); index++) {
+		free(work[index]);
+		free(buffers[index]);
+	}
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -733,6 +815,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	configuration = data + sizeof(*header);
 	packet = configuration + configuration_size;
 	packet_size = size - sizeof(*header) - configuration_size;
+	if (kind == FUZZ_PAGE_ENCODE) {
+		fuzz_page_encode(packet, packet_size, argument);
+		assert(memcmp(data, original, size) == 0);
+		return 0;
+	}
 	if (kind == FUZZ_RECORD_ENCODE || kind == FUZZ_UPDATE_ENCODE) {
 		fuzz_encode(packet, packet_size, argument, kind == FUZZ_RECORD_ENCODE);
 		assert(memcmp(data, original, size) == 0);

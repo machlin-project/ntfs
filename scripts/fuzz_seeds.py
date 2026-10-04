@@ -13,6 +13,7 @@ from stat_fixtures import change_flags, UNKNOWN_COMPRESSION_FORMAT
 from wof_fixtures import generate as generate_wof
 from lzx_fixtures import author as generate_lzx
 from logfile_fixtures import author as generate_logfile
+import logfile_fixtures as logfile_wire
 from logfile_source_fixtures import author as generate_logfile_sources
 from logfile_volume_fixtures import author as generate_logfile_volumes
 from logfile_record_fixtures import author as generate_logfile_records
@@ -26,6 +27,7 @@ from checkpoint_fixtures import author as generate_checkpoint_bindings
 from checkpoint_snapshot_fixtures import author as generate_checkpoint_snapshots
 from record_protect_fixtures import author as generate_record_protection
 from logfile_encode_fixtures import author as generate_logfile_encoding, RECORD_KIND as LOGFILE_ENCODE_RECORD
+from logfile_page_encode_fixtures import author as generate_logfile_page_encoding
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
@@ -42,6 +44,7 @@ LOGFILE_CHECKPOINT_HEADER = struct.Struct('<IB')
 LOGFILE_CHECKPOINT_SNAPSHOT_KIND = 18
 LOGFILE_RECORD_ENCODE_KIND = 19
 LOGFILE_UPDATE_ENCODE_KIND = 20
+LOGFILE_PAGE_ENCODE_KIND = 21
 LOGFILE_SNAPSHOT_KINDS = 4
 LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1))
 BITS_PER_BYTE = 8
@@ -51,6 +54,9 @@ LOGFILE_ALLOCATION_FAULT = 1 << 8
 LOGFILE_RECORD_ALLOCATION_FAULT = 1 << 9
 LOGFILE_BUDGET_SHIFT = 16
 LOGFILE_ENCODE_SHORT_SHIFT = struct.calcsize('<H') * BITS_PER_BYTE
+LOGFILE_PAGE_WORKSPACE_SHORT_SHIFT = LOGFILE_ENCODE_SHORT_SHIFT + 1
+LOGFILE_PAGE_MAJOR_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
+LOGFILE_PAGE_MINOR_SHIFT = (struct.calcsize('<I') + struct.calcsize('<H')) * BITS_PER_BYTE
 LOGFILE_NULL_WORKSPACE_SHIFT = LOGFILE_BUDGET_SHIFT + struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_READ_CALL_BUDGET = 32
 
@@ -359,6 +365,16 @@ def generate(output):
             envelope = LOGFILE_FUZZ_HEADER.pack(kind, argument | control, 0)
             assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
             (log_seeds / ('encode-' + case['name'] + suffix + '.seed')).write_bytes(envelope + payload)
+    page_packets = output / 'logfile-page-encoding'
+    for case in generate_logfile_page_encoding(page_packets):
+        payload = (page_packets / (case['name'] + '.input')).read_bytes()
+        argument = (case['data_offset'] | (logfile_wire.LEGACY_MAJOR << LOGFILE_PAGE_MAJOR_SHIFT)
+                    | (logfile_wire.LEGACY_MINOR << LOGFILE_PAGE_MINOR_SHIFT))
+        for suffix, control in (('', 0), ('-short-capacity', 1 << LOGFILE_ENCODE_SHORT_SHIFT),
+                                ('-short-workspace', 1 << LOGFILE_PAGE_WORKSPACE_SHORT_SHIFT)):
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_PAGE_ENCODE_KIND, argument | control, 0)
+            assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+            (log_seeds / ('page-encode-' + case['name'] + suffix + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

@@ -412,6 +412,17 @@ values authorize no physical action. WRITE-FOUNDATIONS.md defines the private
 packet/publication boundary; native transaction planning and device durability remain
 required under WRITES.md.
 
+The private page encoder constructs only common-header LFS 1.1 RCRD pages. A complete
+restored data region and typed scalar fields are admitted before touching either used
+buffer. Caller workspace and output each hold one page, bounded by the 64-KiB policy,
+and remain disjoint from each other, the description and borrowed bytes. Canonical
+header/USA padding is cleared; the body is copied once into workspace, then the
+existing protection primitive copies and seals the output. This uses constant stack
+space and no allocation or I/O. Transfer count/position and next-record boundaries
+have scalar checks; copy_value and last_end_lsn stay opaque. Modern layouts, unknown
+flags, physical placement, completion/history decisions and persistence remain the
+owning journal planner's work. WRITE-FOUNDATIONS.md records the complete contract.
+
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not
 turn FSKit into a userspace syscall translator. No speculative kernel hooks are

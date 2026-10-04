@@ -3,7 +3,7 @@
 The delivered scope is a bounded read-only core and FSKit development product.
 Local core, adapter component, app builds with linker ad hoc signing and
 independent-image checks passed. The current personally signed Release is installed
-and discovered in the compatible macOS VM; actual FSClient admission remains disabled.
+and enabled in the compatible macOS VM; public FSClient confirms the installed path.
 Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
@@ -18,8 +18,9 @@ extension signatures. The installed app and extension match all eight bundle-fil
 hashes and both report build 3/minimum macOS 26.5; their strict signatures pass.
 Normal launch and LaunchServices/PlugInKit registration succeed at the exact installed
 path. A separate personally signed helper queries only the public FSClient API in the
-guest and observes `org.machlin.ntfs.filesystem` with `enabled: false`. The console
-has locked again; normal GUI enablement awaits manual unlock. Ext4 remains enabled,
+guest and observes `org.machlin.ntfs.filesystem` with `enabled: true` after ordinary
+By Category → File System Extensions enablement and manual console unlock. No
+authentication dialog or credential entry was needed. Ext4 remains enabled,
 its device service enabled and its endpoints empty. No host installation, policy
 change, reboot, disk attachment, mount, formatting or Windows operation occurred.
 
@@ -31,14 +32,53 @@ rejection pass. Actual filesystem type/read-only flags, native metadata, two
 interleaved directory streams, irregular exact reads/EOF, read-only mmap, case lookup
 and write refusals remain pending guest execution. Apple built-in NTFS mounts must
 fail the checker before mutation probes. These transfer helpers do not replace the
-113 sanitized suites or the remaining installed/runtime qualification.
+117 sanitized suites or the remaining installed/runtime qualification.
 
 See [NATIVE-INSTALLATION.md](NATIVE-INSTALLATION.md). Evidence is
 artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation}/.
-This qualifies a development installation and disabled discovery, not an enabled
-module, mounted result, Windows recovery or commercial release.
+This qualifies development signing, installation, discovery and enabled admission.
+Mounted behavior, Windows recovery and commercial release remain separate.
 
-## Private logical journal packet encoding
+## Private protected journal page encoding
+
+`ntfs_logfile_page_encode` constructs complete private common-header LFS 1.1 RCRD
+pages and USA protection using disjoint caller workspace/output. All scalar geometry,
+wire widths, capacities and used-range overlaps are admitted before publication;
+errors and unused capacity remain unchanged. Reserved header/padding is zero and the
+complete restored body is preserved. Modern/unknown layouts and flags refuse. Copy
+and LSN fields remain opaque; this does not plan physical WAL transfers or native
+durable publication. WRITE-FOUNDATIONS.md defines the exact buffer/geometry contract.
+
+All 44 independently authored whole-page goldens pass, covering four page sizes
+through 64 KiB, reserved/wrapping USA sequences and 24 transfer/flag/next-boundary
+combinations. C checks byte alignment, exact/extra/one-below capacities, every restored
+tail, repeatability, scalar/version/address/overlap refusals and immutable inputs/errors.
+Main independently reconstructs all 44 complete goldens, checks all 132 actual packet
+files and 44 numeric rows, and compares every one of 132 appended fuzz envelopes.
+All output cases are synthetic; no generated page has been consumed by Windows.
+
+All 117 fatal-ASan/UBSan suites, six focused suites, style and both 2-KiB freestanding
+targets pass. Fresh fuzz replays all 2,378 authored seeds, including the preceding
+2,246 and 132 new page cases, and completes 116,265 runs in 61 seconds with 686 MiB
+peak fuzzer RSS. The persistent build corpus retains one superseded seed outside the
+fresh campaign. Main checks raw fatal result rows, actual source/product hashes,
+universal product slices and exact page/seed bytes. All seven compiled-source files
+remain unchanged across qualification. FSKit reports 54 local PASS groups, eleven
+runtime SKIPs and zero failures. Clean unsigned Release builds all four universal
+products and compiles the encoder into both core archive slices, targeting macOS
+26.5 with SDK 27.0. Strict bundle verification rejects the unsigned product as expected.
+
+The initial build stopped because the new test called restart_decode without its
+file-size argument. That test error was corrected before focused/final qualification;
+the original failed build remains retained under initial/. It is not a passing run.
+Evidence is artifacts/logfile-page-encode/{initial,initial-r1,final}/ and
+artifacts/logfile-page-encode/review.json, with fresh products/campaign under
+artifacts/{fskit,fuzz}-logfile-page-encode/. Installed signed build 3 remains the
+preceding accepted logical-encoder source; the newer unsigned bundle was not installed.
+Physical current history, native analysis/recovery, writable ownership, mutations and
+Windows durability qualification remain open under WRITES.md.
+
+## Preceding private logical journal packet encoding
 
 `ntfs/logfile_encode.h` measures canonical NTFS update payloads and serializes them
 and common-header LFS records into private caller buffers. All wire widths, record

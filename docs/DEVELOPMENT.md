@@ -16,6 +16,14 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+The current private page-encoding qualification runs `logfile-page-encode` and the
+three `fuzz-logfile-page-encode` variants, then the full fatal-sanitizer suite. Its
+independent author is tests/logfile_page_encode_fixtures.py; regenerate seeds into a
+fresh directory for a campaign so superseded persistent build seeds are excluded.
+Current results are 117 suites and 2,378 freshly replayed journal seeds. Retain whole
+packet goldens, failed initial builds and final source/product evidence separately;
+ACCEPTANCE.md and WRITE-FOUNDATIONS.md define their exact scope.
+
 The optional offline public-corpus comparison uses existing NIST DFR-15/16/17
 partitions and ignored standalone NTFS-3G tools. Obtain archives from the NIST
 links in PROVENANCE.md; their documented single type-07 partition starts at byte

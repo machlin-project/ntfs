@@ -18,6 +18,7 @@ enum {
 	WORKLOAD_MAX_PAGE_ENTRIES = 1024,
 	WORKLOAD_MAX_ROUNDS = 100,
 	WORKLOAD_MAX_SAMPLES = 1000000,
+	WORKLOAD_MAX_RECORD_CACHE_ENTRIES = NTFS_DEFAULT_RECORD_CACHE_ENTRIES,
 	WORKLOAD_READERS = 2,
 	WORKLOAD_VIRTUAL_ENTRIES = 2,
 	WORKLOAD_CURRENT_ENTRY = 0,
@@ -33,6 +34,7 @@ enum {
 	ARG_SECOND_PAGE,
 	ARG_ROUNDS,
 	ARG_WARMUP,
+	ARG_RECORD_CACHE,
 	ARG_COUNT
 };
 
@@ -341,17 +343,22 @@ main(int argc, char **argv)
 		FSItem *root;
 		NSError *error = nil;
 		size_t pages[WORKLOAD_READERS], rounds, warmup, round, capacity, count = 0;
+		size_t recordCache = 0;
 		uint64_t *samples, entries = 0, ignored = 0, start, wall, cpu;
 		uint64_t reads, readBytes, allocations, baselineBytes;
 
-		if (argc != ARG_COUNT ||
+		if ((argc != ARG_RECORD_CACHE && argc != ARG_COUNT) ||
 		    !parse_decimal(argv[ARG_FIRST_PAGE], WORKLOAD_MAX_PAGE_ENTRIES, &pages[0]) ||
 		    !parse_decimal(argv[ARG_SECOND_PAGE], WORKLOAD_MAX_PAGE_ENTRIES, &pages[1]) ||
 		    !parse_decimal(argv[ARG_ROUNDS], WORKLOAD_MAX_ROUNDS, &rounds) ||
 		    !parse_decimal(argv[ARG_WARMUP], WORKLOAD_MAX_ROUNDS, &warmup) ||
+		    (argc == ARG_COUNT &&
+			!parse_decimal(argv[ARG_RECORD_CACHE], WORKLOAD_MAX_RECORD_CACHE_ENTRIES,
+			    &recordCache)) ||
 		    pages[0] == 0 || pages[1] == 0 || rounds == 0) {
 			fputs("usage: ntfs-fskit-directory-workload IMAGE MANIFEST "
-			      "sequential|interleaved|views PAGE_A PAGE_B ROUNDS WARMUP\n",
+			      "sequential|interleaved|views PAGE_A PAGE_B ROUNDS WARMUP "
+			      "[RECORD_CACHE]\n",
 			    stderr);
 			return 2;
 		}
@@ -374,7 +381,7 @@ main(int argc, char **argv)
 		resource = [[DirectoryResource alloc] initWithReader:reader];
 		environment = [resource environment];
 		ntfs_default_limits(&limits);
-		limits.record_cache_entries = 0;
+		limits.record_cache_entries = (uint32_t)recordCache;
 		assert(ntfs_mount(&environment, &limits, &core) == NTFS_OK);
 		volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
 		assert(volume != nil);

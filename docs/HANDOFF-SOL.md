@@ -17,7 +17,46 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Native primary-count adoption
+## Bounded filename-count reuse
+
+The core now memoizes only complete successful counts within the configured record
+cache array. Each count payload retains its own full sequence-bearing reference;
+raw-record eviction does not discard it. Round-robin replacement bounds retention,
+zero entries disables volume reuse and default retention adds 1 KiB without a
+separate allocation or public ABI change. Fresh-node base/header checks, per-slot
+work, cold publication precharge and hot ancestor admission remain mandatory.
+Failures never publish; node-local reuse retains its original contract.
+
+Qualification is 73 fatal-sanitizer suites, the expanded DOS/eviction/owner/sequence/
+exact-boundary/fault/retry test, 54 native component groups/eleven genuine macOS-27
+runtime SKIPs, both 2-KiB freestanding targets and clean universal Release. Image
+fuzz replays 440 authored seeds and exits zero; the last periodic observation is
+51,898 executions at 71 seconds with zero OOM/timeout/crash counters. All three
+original NIST partitions pass full diagnostics and 11,380 external comparison
+commands again, including all 1,133 user paths and three separate roots.
+
+Evidence uses artifacts/plan-count-cache-{checked,boundaries,matrix,final}-*,
+artifacts/count-cache-{checked,boundaries}-testlog.json,
+artifacts/fuzz-count-cache-reviewed/, artifacts/nist-corpus-count-cache-reviewed/,
+artifacts/count-cache-app-products.json and artifacts/count-cache-review.json.
+Preserve the prelaunch supervisor path failure and the recorded comment-only
+source-snapshot delta. Retained app products are under artifacts/fskit-count-cache/;
+linker ad hoc signatures grant no distribution authority. Performance reports and
+actual-file review are documented in PERFORMANCE.md.
+
+The 144 paired measurements qualify repeated hard-link/alias counts, with all
+original inventory oracles passing and unchanged native/workload/public headers.
+Forty sealed-product controls follow the comment-triggered archive rebuild;
+preserve both original and sealed archive reports. Accepted portable/component
+products are under artifacts/count-cache-accepted/.
+They do not qualify unique-object throughput, pressure behavior or installed I/O.
+Measure those controls before broadening the optimization claim. Next portable
+journal work can connect selected active-client restart acquisition with the
+existing physical circular observer and snapshot/prefix binder; active written
+history and tail/fast-copy routing still require their own contracts. Windows
+acquisition, native directory counts/authorization and installed runtime remain open.
+
+## Preceding native primary-count adoption
 
 FSKit now uses ntfs_node_link_counts for item/page linkCount and all three
 single-edge reparse guards. Separate DOS aliases no longer add native links or
@@ -42,12 +81,13 @@ and component binaries are under artifacts/fskit-primary-accepted/. The app rema
 under artifacts/fskit-primary-counts/ with linker ad hoc signing and no distribution
 authority.
 
-Next optimization: avoid repeating the complete filename inventory for temporary
-nodes referencing the same immutable inode. The two current-only large-directory
+At that checkpoint the next optimization was to avoid repeating the complete
+filename inventory for temporary nodes referencing the same immutable inode.
+The two current-only large-directory
 runs are correct but cost about 2.59 seconds and 5 GB of requested bytes per 2,000
 names with record caching disabled. Exact observations are under
 artifacts/directory-primary-counts-cold/. Require bounded owning-layer reuse,
-ancestor admission, failure/retry and measured comparison. Native directory
+ancestor admission, failure/retry and measured comparison, now recorded above. Native directory
 link policy, Windows observations and installed acceptance remain open.
 
 ## Preceding selected native filename groundwork

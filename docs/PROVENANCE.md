@@ -44,6 +44,14 @@ storage oracles, not claims of whole-namespace validity. The new NIST comparison
 retains original per-record info and descriptor exports alongside counts. No
 foreign filesystem counting or hard-link implementation is copied or linked.
 
+The bounded volume filename-count memo is original code over this core's checked
+inventories and existing cache allocation. Independent full-reference payloads and
+round-robin replacement require no foreign cache implementation or new dependency.
+Reopened-node tests use the independently authored exact filename storage; native
+measurements compare retained complete core versions against unchanged adapter,
+workload, public headers and original name/reference/size oracles. Their synthetic
+hard-link scope grants no Windows or installed-driver qualification.
+
 The selected native filename-storage writer is original Python over this
 repository's existing independently authored index payloads and named wire fields.
 It supplies exact filenames rather than inferring names from the C implementation.

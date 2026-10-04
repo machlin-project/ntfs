@@ -31,6 +31,21 @@ through explicit detach/end. [OPERATION-BUDGETS.md](OPERATION-BUDGETS.md) define
 API version 2, accounting/error/lifetime contracts and excluded native memory.
 These policies do not supply a synchronous-I/O deadline or full RSS bound.
 
+Complete filename counts have a volume-owned bounded memo in the existing record
+cache array. Each payload has its own full sequence-bearing reference, independent
+of the raw record stored in that slot. Raw-record replacement cannot discard the
+checked count. A round-robin cursor replaces count payloads only after a complete
+successful inventory; failures publish nothing. A fresh node still validates its
+base record and physical header before reuse. The immutable media and serialized
+owner contract bounds validity to this mounted volume. Node-local reuse remains
+available when record caching is disabled.
+The payload adds sixteen bytes per configured slot on both supported architectures,
+or 1 KiB at the default 64 entries, without a separate allocation or public ABI
+change. Zero record-cache entries disables volume reuse. Lookup charges every
+inspected payload and cold publication is precharged before inventory I/O;
+operation and ancestor admission remain mandatory on hits. NATIVE-NAMESPACE.md
+and PERFORMANCE.md record the semantics and measured scope.
+
 Each nonresident stream retains one mapping-array index for read locality.
 Raw storage and cold LZNT1 unit fills recheck the current run and its immediate
 successor before the binary-search fallback. Bounds and VCN membership are

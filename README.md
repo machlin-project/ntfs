@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 72 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 73 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -27,6 +27,13 @@ All 1,133 documented NIST user paths and three separate roots match NTFS-3G's
 exported filename namespaces. FSKit now uses checked primary counts for item/page
 attributes and all three single-edge reparse guards; see
 [native namespace policy](docs/NATIVE-NAMESPACE.md).
+
+Fully checked counts now also survive temporary node closure in a bounded volume
+memo keyed by the complete reference. Default retention adds 1 KiB, and failed or
+quota-refused inventories publish nothing. Paired legacy component workloads show
+targeted hard-link/alias gains while preserving complete cold checks, DOS separation
+and work admission. [Performance evidence](docs/PERFORMANCE.md) records scope and
+memory tradeoffs; unique-file and installed throughput remain unqualified.
 
 Eight selected synthetic namespace images now retain complete filename bodies,
 including 2,000 long names stored in real MFT extensions. Exact body/stream

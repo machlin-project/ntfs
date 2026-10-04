@@ -28,8 +28,17 @@ dos_aliases. POSIX, Win32 and combined Win32/DOS namespaces count as primary;
 DOS-only namespace entries do not add primary names. Header disagreement,
 duplicate/missing locations and malformed filename bodies fail with zero output.
 Successful immutable counts are cached on the node under ordinary operation
-admission. Parent/index reachability remains the whole-volume validator's scope;
-the inventory does not define native directory link policy.
+admission. With record caching enabled, the mounted volume also retains at most
+record_cache_entries complete count payloads. Full sequence-bearing references
+remain independent of raw-record replacement; only successful inventories publish
+and round-robin count replacement bounds retention. A newly opened node validates
+its base record and physical header before reuse. Different owners never share a
+payload. Zero cache entries disables this volume reuse without disabling node-local
+reuse. Payload scans and publication consume work credits; hits require no new
+inventory allocations or reads, but still obey every ancestor budget and native
+resource admission. Failed or quota-refused inventories leave no reusable result.
+Parent/index reachability remains the whole-volume validator's scope; the
+inventory does not define native directory link policy.
 
 FSKit now exports checked primary_names as linkCount for adopted items and
 attribute-requested directory entries. Adoption validates complete filename

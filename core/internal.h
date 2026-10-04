@@ -76,9 +76,17 @@ struct ntfs_stream {
 	struct ntfs_wof_stream *wof;
 };
 
+/* Counts retain an independent full reference when raw record slots are reused.
+ * Zero is unused: checked nodes always have a nonzero sequence number. */
+struct ntfs_link_count_cache {
+	uint64_t reference;
+	struct ntfs_link_counts counts;
+};
+
 struct ntfs_record_cache {
 	uint64_t number, stamp;
 	uint8_t *bytes;
+	struct ntfs_link_count_cache links;
 };
 
 struct ntfs_volume {
@@ -89,6 +97,7 @@ struct ntfs_volume {
 	uint8_t *upcase;
 	uint64_t mft_lcn, mirror_lcn, clock;
 	struct ntfs_record_cache *cache;
+	uint32_t next_link_cache;
 	uint32_t children;
 	struct ntfs_io_statistics stats;
 	uint64_t live_bytes;

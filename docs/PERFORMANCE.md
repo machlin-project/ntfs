@@ -1,6 +1,78 @@
 # Performance contracts
 
-The native primary-count adoption now has a current-only cost observation under
+## Bounded filename-count reuse
+
+Temporary FSKit enumeration nodes previously repeated a complete FILE_NAME
+inventory for every name of the same inode. A bounded volume-owned memo now
+retains fully checked physical/primary/DOS counts by full reference. Its payloads
+reuse the existing record-cache allocation independently of raw-record replacement;
+the default 64 entries add 1 KiB. Cold checks, operation admission and zero failure
+outputs remain mandatory. ARCHITECTURE.md describes replacement and ownership.
+
+The matched reports are artifacts/directory-count-cache-paired-{cold,warm,small}/
+report.json; the initial three-pair probe is directory-count-cache-paired-large/.
+All 104 original runs pass independent original name/reference/type/size oracles.
+Main verifies retained binaries, both core archives and all 26 unchanged native,
+workload and public-header sources in artifacts/count-cache-benchmark-review.json.
+Both versions use 64 raw-record cache entries, the same Release/O3 core policy,
+O2 native/workload compiler, SDK, input bytes and arguments. Paired repetitions
+alternate execution order. Each process owns a new immutable memory-reader volume.
+
+Both inventories contain many names of one inode: 2,000 for large and twelve for
+small. This specifically measures repeated hard-link/alias inventory work, not
+2,000 independently owned files. Large uses pages 8/16 and one measured scan;
+cold has zero full-scan warmups and seven repetitions, warm has one warmup and
+five repetitions per profile. Small uses pages 1/2, 100 measured rounds, one
+warmup and nine repetitions per profile. Source and host caches are already warm;
+zero warmup is fresh core state, not cold physical media. Interleaved advances two
+attribute-requested scans; views alternates names-only and attribute-requested scans.
+
+| Inventory/state | Profile | Reference/current wall median, ms | Reference/current CPU median, ms |
+| --- | --- | ---: | ---: |
+| Large/fresh | Sequential | 2,770.089 / 71.028 | 2,753.213 / 70.683 |
+| Large/warm | Sequential | 2,802.321 / 70.394 | 2,782.926 / 69.943 |
+| Large/warm | Interleaved | 5,390.137 / 135.332 | 5,358.512 / 134.611 |
+| Large/warm | Views | 2,702.689 / 101.469 | 2,686.365 / 100.891 |
+| Small/warm | Sequential | 11.666 / 7.040 | 11.562 / 6.981 |
+| Small/warm | Interleaved | 20.347 / 11.939 | 20.186 / 11.832 |
+| Small/warm | Views | 14.368 / 10.395 | 14.282 / 10.346 |
+
+Fresh large wall ranges are 2,745.435–2,779.825 ms before and 69.556–72.483 ms
+after. Its p50/p95/p99 request medians fall from 11.006/11.528/11.710 ms to
+0.275/0.329/0.385 ms. Reads fall from 4,508,019 to 7,524, requested bytes from
+5,047,707,648 to 296,479,744 and allocations from 4,528,334 to 23,342. Baseline
+accounted owner storage increases by 1,024 bytes; peak storage falls from 360,416
+to 345,568 bytes as temporary inventory scratch disappears. Warm large profiles
+reduce accounted peaks by 31,656 bytes. RSS stays around 24.6 MB; no RSS benefit
+is established. Full per-run latency ranges and counters remain in the reports.
+
+Small sequential ranges are 11.426–13.383 ms before and 6.655–7.866 ms after.
+Interleaved ranges are 19.808–20.994 / 11.550–12.203 ms; views ranges are
+14.214–14.836 / 10.263–10.818 ms. Reads/bytes remain identical; allocations fall
+from 40,400/70,600/43,500 to 22,000/38,600/29,900 for sequential/interleaved/views.
+Small peak accounted storage increases by 408 bytes, with no native RSS advantage
+claimed. These results qualify this targeted reuse, not installed FSKit, macOS 27
+runtime, Windows compatibility, unique-file throughput or the wider optimization
+program. Unique-object/capacity/pressure controls remain future measurement work.
+
+Rebuilding after the private-header comment clarification changes the archive
+digest, so the sealed Release has forty additional paired controls under
+artifacts/directory-count-cache-sealed-{large,small}/. All pass unchanged source,
+input, policy and inventory guards. Sealed large/fresh wall median is 70.878 ms
+(69.826–72.928) versus 2,768 ms before; small sequential/interleaved/views medians
+are 6.608/11.924/10.260 ms versus 11.468/20.276/14.121 ms. Reads, bytes, allocations
+and accounted memory retain the exact reductions above. Those controls qualify
+the rebuilt product separately; the earlier table retains its measured archive.
+
+The runner defaults to an identical-core reference guard. Explicit --compare-core
+requires --reference and permits different retained core archives only while all
+adapter/workload/public-header hashes match. Input, toolchain, policy, machine,
+prior passing report and actual retained-binary checks remain in force. Both
+binaries are rerun with the current matrix; prior matrix length may differ.
+
+## Preceding primary-count cost observation
+
+The native primary-count adoption has a current-only cost observation under
 artifacts/directory-primary-counts-cold/report.json. Both independently checked
 2,000-entry hard-link/alias scans pass with pages 8/16, one measured sequential
 round, zero warmup rounds and two fresh-process repetitions. The core is Release/O3,
@@ -11,10 +83,9 @@ Median wall/CPU is 2,594.169/2,577.514 ms per scan; p50/p95/p99 request medians 
 10.322/10.730/10.875 ms. Each run has 251 requests, 4,508,019 reads,
 5,047,707,648 requested bytes and 4,528,274 allocations. Peak accounted core
 storage is 293,344 bytes and measured RSS is about 24.60 MB. This is an observed
-cost, not a paired speedup. Each temporary entry node currently repeats the
-complete 2,000-name inventory. The next separate optimization must bound reuse
-under immutable volume ownership, full references, work admission and existing
-allocation/fault policies; it must not weaken complete cold verification.
+cost, not a paired speedup. At that checkpoint each temporary entry node repeated
+the complete 2,000-name inventory. The bounded reuse above is a separate measured
+change; disabled record caching still retains this complete cold path.
 
 The core operation-accounting guards now have a paired retained-Release comparison
 across ordinary/fragmented/resident/sparse/LZNT1/WOF reading and metadata. It
@@ -24,10 +95,10 @@ simplification for small cached resident reads; repeated opens remain mixed.
 Earlier optimization percentages below cannot be assigned to the guarded product.
 Compound native pages have a current-source baseline below; installed I/O and
 broader workloads remain separate.
-Existing directory references
-require an identical core archive, so an older pre-accounting archive is not a
-valid matched reference for that runner. Keep its check intact and establish a
-new current-source baseline. OPERATION-BUDGETS.md distinguishes work units,
+Ordinary directory comparisons require an identical core archive; complete core
+comparisons now have the explicit stricter native-source mode described above.
+Earlier binaries with different native/workload/public-header sources remain
+ineligible for that mode. OPERATION-BUDGETS.md distinguishes work units,
 cumulative allocation attempts, live core/pool bytes and excluded native/RSS
 memory. Broader and installed optimization acceptance remains separate.
 

@@ -301,11 +301,14 @@ listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_
 enum ntfs_result
 ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 {
+	struct ntfs_volume *v;
+	struct ntfs_link_count_cache *cached;
 	const struct ntfs_disk_record *header;
 	struct ntfs_link_counts counts = {0};
 	uint8_t *list = NULL;
 	size_t bytes = 0;
 	uint16_t physical;
+	uint32_t index;
 	enum ntfs_result result;
 
 	if (node == NULL) {
@@ -319,10 +322,32 @@ ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 		*out = node->link_counts;
 		return NTFS_OK;
 	}
+	v = node->volume;
 	header = (const void *)node->record;
 	physical = ntfs_u16(header->links);
 	if (physical == 0) {
 		return NTFS_CORRUPT;
+	}
+	for (index = 0; v->cache != NULL && index < v->limits.record_cache_entries; index++) {
+		cached = &v->cache[index].links;
+		result = ntfs_work(v, sizeof(*cached));
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (cached->reference == node->reference) {
+			if (cached->counts.physical_names != physical) {
+				return NTFS_CORRUPT;
+			}
+			counts = cached->counts;
+			goto verified;
+		}
+	}
+	if (v->cache != NULL) {
+		/* Charge publication before cold I/O. Failed inventories never publish. */
+		result = ntfs_work(v, sizeof(*cached));
+		if (result != NTFS_OK) {
+			return result;
+		}
 	}
 	result = ntfs_attribute_list_read(node, &list, &bytes);
 	if (result == NTFS_NOT_FOUND) {
@@ -337,6 +362,16 @@ ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 	if (counts.physical_names != physical || counts.primary_names == 0) {
 		return NTFS_CORRUPT;
 	}
+	if (v->cache != NULL) {
+		cached = &v->cache[v->next_link_cache].links;
+		cached->counts = counts;
+		cached->reference = node->reference;
+		v->next_link_cache++;
+		if (v->next_link_cache == v->limits.record_cache_entries) {
+			v->next_link_cache = 0;
+		}
+	}
+verified:
 	node->link_counts = counts;
 	node->link_counts_verified = true;
 	*out = counts;

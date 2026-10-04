@@ -8,7 +8,63 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Native primary filename counts
+## Bounded volume filename-count reuse
+
+Complete successful filename counts now survive temporary node closure in a
+bounded mounted-volume memo. Full references include sequences; count keys are
+independent of raw-record keys/replacement. Only complete successful inventories
+publish, with round-robin replacement and no extra allocation. Zero record-cache
+entries disables volume reuse. Default retention adds 1 KiB to accounted mounted
+storage; the public ABI is unchanged. Fresh nodes still validate the base record
+and physical header, and both cold publication and every hit obey work/ancestor
+admission. No failed or quota-refused inventory becomes reusable.
+
+All 73 fatal-sanitizer suites and 54 FSKit component PASS groups/eleven genuine
+macOS-27 runtime SKIPs pass. Expanded focused coverage additionally checks DOS
+separation, exact/one-below cold work and nested hot work, disabled/single/default
+capacity, raw/count replacement, sequence/owner isolation, partial I/O and required
+allocation failures, fresh retry and zero tracked storage after unmount. Both
+2-KiB freestanding targets and the clean universal Release pass; links.c compiles
+for arm64 and x86_64. App signatures remain linker ad hoc without distribution
+authority.
+
+The fresh image campaign replays all 440 authored seeds and exits zero. Its last
+periodic sample is 51,898 executions at 71 seconds, with OOM/timeout/crash counters
+zero; terminal exit zero is also at 71 seconds, without an exact terminal total.
+The independent NIST comparison passes all three complete diagnostics, 1,133
+documented user paths, three separate roots and 11,380 bounded commands. Original
+image hashes and external filename/metadata/security/stream oracles remain intact.
+Authoring OS, Windows observations and installed native acceptance stay separate.
+
+There are 144 passing paired legacy directory measurements, including fresh/warm
+large and repeated small inventories with three enumeration profiles. Main checks
+actual binaries, core archives and all unchanged native/workload/public-header
+hashes. PERFORMANCE.md records the ranges, memory tradeoffs and precise hard-link
+scope. This is targeted reuse evidence, not unique-file or installed throughput.
+
+Logs are artifacts/plan-count-cache-{checked,boundaries,matrix,final}-*; full/focused
+test logs are artifacts/count-cache-{checked,boundaries}-testlog.json. Fresh fuzz
+is under artifacts/fuzz-count-cache-reviewed/, external comparison under
+artifacts/nist-corpus-count-cache-reviewed/, app under artifacts/fskit-count-cache/
+and product metadata in artifacts/count-cache-app-products.json. Main actual-file
+reviews are artifacts/count-cache-benchmark-review.json and
+artifacts/count-cache-review.json. The initial qualification supervisor failed
+before launching any stage while resolving snapshot paths; preserve its separate
+prelaunch error. One private-header comment was clarified during qualification;
+before/after snapshots retain that comment-only delta. No executable source changed
+during the campaign, app build or corpus comparison.
+The subsequent Release rebuild changes the archive digest; forty additional
+paired controls qualify that sealed product, preserving the original reports.
+The sealing supervisor's separate logging failure occurs after the passing style
+stage and before the Release command; its wrapper error and actual later Release
+exit are retained independently. Accepted CLI/core/component products are under
+artifacts/count-cache-accepted/.
+
+Native directory link policy, installed enforcement, Windows corpus acquisition,
+journal history/recovery, unique-object/pressure measurements and commercial
+release remain open. The checkpoint does not complete the agreed no-VM plan.
+
+## Preceding native primary filename counts
 
 FSKit item and directory-page attributes now expose checked primary filename
 counts. Adoption and all three single-edge reparse guards use complete core

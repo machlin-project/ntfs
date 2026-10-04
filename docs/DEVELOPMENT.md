@@ -152,17 +152,23 @@ records the actual input/callback scope and workload-specific tradeoffs.
 
 The native directory workload checks every name, identity and requested size
 against independently authored namespace inventories. It measures the actual
-legacy protocol handler on an immutable memory reader, with no MFT record cache
-and separate warmup. Use a new artifact directory for each execution:
+legacy protocol handler on an immutable memory reader with separate warmup. Use
+the prepared native images, whose selected filename storage is complete. Record
+caching defaults to zero; --record-cache-entries profiles zero through the normal
+default 64. Use a new artifact directory for each execution:
 
 ```sh
 python3 scripts/build.py .build-release --release
-python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --build .build-release --output artifacts/directory-before --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+python3 scripts/benchmark_fskit_directory.py .build/native-fixtures/namespace-large.img .build/native-fixtures/namespace-large.json --build .build-release --output artifacts/directory-before --pages 8 16 --rounds 1 --warmup-rounds 1 --repetitions 5 --record-cache-entries 64
 # Retain that binary before changing the adapter, then compare both versions:
-python3 scripts/benchmark_fskit_directory.py .build/fixtures/namespace-large.img .build/fixtures/namespace-large.json --build .build-release --output artifacts/directory-after --reference artifacts/directory-before --pages 8 16 --rounds 10 --warmup-rounds 5 --repetitions 9
+python3 scripts/benchmark_fskit_directory.py .build/native-fixtures/namespace-large.img .build/native-fixtures/namespace-large.json --build .build-release --output artifacts/directory-after --reference artifacts/directory-before --pages 8 16 --rounds 1 --warmup-rounds 1 --repetitions 5 --record-cache-entries 64
 ```
 
-The reference requires identical inputs, workload, core and toolchain. Both
+The default reference requires identical inputs, workload, core and toolchain.
+For complete core-version comparisons, add --compare-core together with
+--reference: every adapter/workload/public-header hash must then remain identical,
+while retained core archives may differ. Machine, input, policy, compiler/SDK,
+passing-reference and actual-binary guards still apply. Both
 binaries run with the new invocation's parameters; their earlier measurement
 settings may differ. Reports retain both parameter sets, binaries, source/input
 digests, exact inventory outcomes and per-run counters. PERFORMANCE.md records

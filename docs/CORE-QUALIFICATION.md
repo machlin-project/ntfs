@@ -1,6 +1,18 @@
 # Core qualification and continuation
 
-The current native continuation adopts complete primary counts in FSKit item/page
+The current portable continuation retains complete filename counts by full
+sequence-bearing reference in a bounded mounted-volume memo. Independent raw/count
+keys, round-robin replacement, cold publication precharge, hot ancestor admission
+and success-only publication preserve the existing immutable contract. Default
+retention adds 1 KiB with no new allocation or public ABI change. All 73 sanitizer
+suites, expanded DOS/fault/eviction/exact-boundary checks, 54 component groups/eleven
+runtime SKIPs, both freestanding targets and universal Release pass. Fresh image
+fuzz replays 440 seeds and exits zero; all three NIST full diagnostics and external
+comparisons pass again. The 144 paired legacy measurements qualify targeted
+hard-link/alias reuse with explicit small-memory tradeoffs. ACCEPTANCE.md retains
+actual-file reviews, source scope and remaining Windows/native/recovery work.
+
+The preceding native continuation adopts complete primary counts in FSKit item/page
 attributes and all three reparse owning-context guards. Exact preparation covers
 153 selected native images with 1,127 count observations/3,265 filename bodies.
 All 72 fatal-sanitizer suites, 54 component groups/eleven runtime SKIPs, style and

@@ -8,6 +8,46 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
+## Private metadata output and native checkpoint framing
+
+Private USA output admits full capacity, disjoint ranges, magic and geometry before
+changing output, preserving input and every failed/unused output byte. Native
+restart-table decoding checks exact storage, allocation counts and complete free
+topology with linear work and constant scratch storage. Separate client-0/client-1
+open-attribute and dirty-page layouts plus transaction entries preserve raw fields
+and ignore stale free payloads. WRITE-FOUNDATIONS.md records exact contracts and
+the remaining checkpoint/history/recovery ownership. Device writes stay disabled.
+
+All 82 fatal-ASan/UBSan suites, 54 FSKit component PASS groups/eleven runtime SKIPs,
+style, both 2-KiB freestanding targets and clean universal Release pass. There are
+109 independent protected-byte vectors with 2,782 individual sector-tail corruptions
+and 380 independent table/entry vectors, including every free subset/order through
+four entries and the full 16-bit count. Main verifies all 951 actual packet/golden
+files or numeric oracles. Preserve the initial fixture-only Boolean text parsing
+failure separately from the corrected numeric author and raw-byte API review.
+
+Fresh journal fuzz replays all 903 authored inputs and exits zero. Its exact terminal
+statistics report 92,230 executions in 61 seconds and 527 MiB peak fuzzer RSS; this
+is a bounded test-process observation, not product memory or native throughput.
+Original NIST journal acquisition/restart diagnostics complete for all three sources
+without changing image hashes. Circular-only checkpoint reads correctly retain one
+corrupt-page and two stale-record refusals. Main finds the exact 160-byte restart
+records in valid legacy tail pages, demonstrating the next routing requirement;
+manual byte diagnosis establishes no qualified current history or recovery.
+All three original packets pass the selected-client restart binder. Their table
+references are empty; this qualifies snapshot identity and prefix framing only.
+Actual app, embedded/standalone extension and core archive contain both supported
+architecture slices. The executable has linker ad hoc metadata; strict deep bundle
+verification fails with "code object is not signed at all." No installed or signed
+distribution acceptance follows from this successful build.
+
+Evidence is artifacts/write-record-protect/, artifacts/write-checkpoint-tables/final/,
+artifacts/fuzz-write-foundations/ and artifacts/native-logfile-observation/. The
+initial table fixture failure remains in artifacts/write-checkpoint-tables/; the
+pre-review passing version is under checked/. Universal products are under
+artifacts/fskit-write-foundations/. Windows/native recovery, writable owner,
+actual FSKit mutations and installed commercial qualification remain open.
+
 ## Checked base metadata across temporary nodes
 
 An independently keyed payload in the existing record-cache allocation retains

@@ -395,6 +395,21 @@ sequence/name/LSN boundaries and complete-record limits. No foreign binding,
 registration or recovery implementation was imported; matching snapshot identity
 still requires native page/current-history qualification.
 
+The private USA encoder uses original Linux-NTFS fixup notes and LFS stride facts
+already used by the reader. Its endian stores, overlap/capacity admission,
+immutable-snapshot output and independent exact-byte/torn-tail fixtures are
+repository-owned. The maximum-sequence exclusion matches our reader policy; native
+write/durability qualification remains separate. No foreign writer code is imported.
+
+Native checkpoint layouts use the original Linux-NTFS field tables. A format
+search also displayed Linux NTFS3 table declarations and helper snippets; this
+is not source-isolated clean-room work. No foreign table/recovery code is copied
+or linked. Complete topology/count validation, constant-storage chain proof,
+typed immutable output and independent subset/permutation/vector fixtures are
+original implementation. Raw live pointers are ignored; the client-0 self-offset
+discrepancy and attribute-name packet ambiguity remain unresolved rather than
+being filled with a foreign implementation. See WRITE-FOUNDATIONS.md for exact scope.
+
 Directory case policy uses published standard-information field observations:
 disabled version numbering, a low-byte case indicator and separate upper storage
 bytes. CASE-POLICY.md separates those facts from the original core/adapter

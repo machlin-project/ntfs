@@ -28,6 +28,35 @@ ntfs_u64(const void *p)
 }
 
 void
+ntfs_put_u16(void *p, uint16_t value)
+{
+	uint8_t *bytes = p;
+
+	bytes[0] = (uint8_t)value;
+	bytes[1] = (uint8_t)(value >> NTFS_BITS_PER_BYTE);
+}
+
+void
+ntfs_put_u32(void *p, uint32_t value)
+{
+	uint8_t *bytes = p;
+
+	ntfs_put_u16(bytes, (uint16_t)value);
+	ntfs_put_u16(
+	    bytes + sizeof(uint16_t), (uint16_t)(value >> (sizeof(uint16_t) * NTFS_BITS_PER_BYTE)));
+}
+
+void
+ntfs_put_u64(void *p, uint64_t value)
+{
+	uint8_t *bytes = p;
+
+	ntfs_put_u32(bytes, (uint32_t)value);
+	ntfs_put_u32(
+	    bytes + sizeof(uint32_t), (uint32_t)(value >> (sizeof(uint32_t) * NTFS_BITS_PER_BYTE)));
+}
+
+void
 ntfs_copy(void *to, const void *from, size_t n)
 {
 	uint8_t *d = to;

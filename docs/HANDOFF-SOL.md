@@ -17,7 +17,49 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Current checked base metadata retention
+## Current write foundations and VM preparation
+
+The user expanded scope to complete native writes and authorized isolated VM work.
+Keep WRITES.md's native recovery/durability gate; this is authorization to implement
+and qualify writing, not evidence that mutations can already be enabled.
+
+Private USA output and native checkpoint-table/entry decoders are implemented.
+WRITE-FOUNDATIONS.md describes exact byte, topology, version and publication
+contracts. No device-write callback or FSKit mutation was enabled. Current evidence
+is 82 fatal-sanitizer suites, 54 component PASS groups/eleven runtime SKIPs, both
+2-KiB freestanding targets, style and clean universal Release. Exact authors cover
+109 protected-byte and 380 table/entry vectors. Fresh journal fuzz replays 903 inputs
+and reports an exact terminal 92,230 executions in 61 seconds. Preserve the initial
+fixture-only Boolean serialization failure and the later raw-byte API review.
+
+Review artifacts/write-checkpoint-tables/final/, artifacts/write-record-protect/,
+artifacts/fuzz-write-foundations/ and artifacts/native-logfile-observation/.
+The three unchanged original NIST journals have valid selected restart areas;
+circular-only checkpoint observation refuses their uncopied/stale regular storage.
+Exact restart packets occur in valid legacy tail copies. Main retained protected
+pages and derived original packets in tail-diagnosis.json; this manual observation
+does not establish current-history routing, checkpoint-table ownership or recovery.
+All three packets pass the selected-client restart binder with empty table references.
+Actual app, embedded/standalone extension and archive contain both architecture
+slices; strict bundle verification fails despite executable linker ad hoc metadata.
+The final/product-review/ report retains those separate build/signing outcomes.
+Next implement complete copy/current-history selection, bind native table records
+and analysis, then the writable owner/WAL/durability and mutation sequence.
+
+The isolated machlin-ntfs-write-lab macOS clone actually booted macOS 26.4 with
+guest RPC; its original source remains unchanged/stopped. Only the user-authorized
+lxnu-btrfs-kext-lab guest was gracefully shut down; btrfs-fskit-stock and unrelated
+UTM guests stayed intact. Preparation evidence is artifacts/write-vm-inventory/.
+The separate machlin-ntfs-windows UTM guest was created through its documented
+configuration API, with thin imported 64-GiB/8-GiB NVMe disks, TPM, actual secure
+ARM64 firmware and disabled sharing. The user's finalized official ISO has valid
+ARM64 EFI and EFI BCD contents. Actual Windows Setup booted and selected Pro;
+installation is currently at unaccepted Microsoft license terms, requiring the
+CUA tool's action-time confirmation. See artifacts/windows-write-vm/ for exact
+media/config/firmware/gate evidence. This is installer preparation, not an installed
+Windows boot, chkdsk result or recovery acceptance. Only one agent operates each VM.
+
+## Preceding checked base metadata retention
 
 Checked standard information and reparse presence now survive temporary node
 closure in an independently keyed payload inside the configured record cache.
@@ -28,7 +70,7 @@ metadata. Sizes/mappings remain separately validated. Capacity zero disables the
 volume memo; default 64 entries add 6,656 accounted bytes, one adds 104 bytes.
 There is no new allocation, public ABI or writable capability.
 
-Current qualification is 75 fatal-sanitizer suites, 54 component PASS groups/eleven
+That qualification is 75 fatal-sanitizer suites, 54 component PASS groups/eleven
 actual macOS-27 runtime SKIPs, style, both 2-KiB freestanding targets and universal
 Release. New selected-object authors cover 32 fitting and 256 competing independent
 resident files, with 290 exact inventories/bodies and 288 streams. Fresh fuzz

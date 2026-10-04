@@ -132,6 +132,9 @@ struct ntfs_attr_view {
 uint16_t ntfs_u16(const void *);
 uint32_t ntfs_u32(const void *);
 uint64_t ntfs_u64(const void *);
+void ntfs_put_u16(void *, uint16_t);
+void ntfs_put_u32(void *, uint32_t);
+void ntfs_put_u64(void *, uint64_t);
 void ntfs_copy(void *, const void *, size_t);
 void ntfs_zero(void *, size_t);
 bool ntfs_equal(const void *, const void *, size_t);

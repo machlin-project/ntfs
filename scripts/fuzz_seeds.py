@@ -19,6 +19,8 @@ from logfile_record_fixtures import author as generate_logfile_records
 from logfile_client_fixtures import author as generate_logfile_clients
 from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
+from logfile_tables_fixtures import author as generate_logfile_tables
+from record_protect_fixtures import author as generate_record_protection
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
@@ -26,6 +28,10 @@ LOGFILE_SOURCE_KIND = 5
 LOGFILE_CIRCULAR_RECORD_KIND = 6
 LOGFILE_CLIENT_RESTART_KIND = 7
 LOGFILE_CLIENT_RESTART_RECORD_KIND = 8
+LOGFILE_TABLE_KINDS = {0: 9, 1: 10, 2: 11, 3: 12}
+LOGFILE_PROTECTED_RECORD_KIND = 13
+BITS_PER_BYTE = 8
+LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 LOGFILE_ALLOCATION_FAULT = 1 << 8
 LOGFILE_BUDGET_SHIFT = 16
@@ -260,6 +266,21 @@ def generate(output):
         envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CLIENT_RESTART_RECORD_KIND, 0, len(source))
         assert len(envelope) + len(source) + len(packet) <= LOGFILE_FUZZ_INPUT_BYTES
         (log_seeds / ('restart-record-' + case['path'].replace('.', '-') + '.seed')).write_bytes(envelope + source + packet)
+    log_tables = output / 'logfile-tables'
+    generate_logfile_tables(log_tables)
+    for case in json.loads((log_tables / 'manifest.json').read_text())['cases']:
+        payload = (log_tables / (case['name'] + '.input')).read_bytes()
+        argument = case['major'] | (case['minor'] << LOGFILE_CLIENT_VERSION_SHIFT)
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_TABLE_KINDS[case['kind']], argument, 0)
+        assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+        (log_seeds / ('table-' + case['name'] + '.seed')).write_bytes(envelope + payload)
+    protect_packets = output / 'record-protection'
+    generate_record_protection(protect_packets)
+    for case in json.loads((protect_packets / 'manifest.json').read_text())['cases']:
+        payload = (protect_packets / (case['name'] + '.input')).read_bytes()
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_PROTECTED_RECORD_KIND, case['capacity'], 0)
+        assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+        (log_seeds / ('protect-' + case['name'] + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

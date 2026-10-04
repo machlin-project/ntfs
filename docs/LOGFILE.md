@@ -23,6 +23,12 @@ An already assembled client restart record can now be bound to selected active
 snapshot identity before common-prefix decoding. This does not establish its
 physical/current-history provenance.
 
+Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
+restart-table free topology and client-versioned open-attribute/dirty-page plus
+transaction entries. It does not yet bind table-dump records, attribute-name
+packets or cross-table references to qualified current history. Those independent
+decoders do not advance native replay or writable admission.
+
 ## Logical source ownership and copy reports
 
 `ntfs_logfile_open` takes an immutable logical `$LogFile` byte environment, not a

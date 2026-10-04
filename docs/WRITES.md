@@ -4,6 +4,12 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
+Private USA output and native restart-table/entry framing are now implemented;
+[WRITE-FOUNDATIONS.md](WRITE-FOUNDATIONS.md) defines their exact admission and
+publication contracts. They add no device-write capability. Current physical
+history, complete checkpoint ownership/analysis and native durability acceptance
+remain prerequisites for the writable owner and mutations below.
+
 The next core implementation sequence is:
 
 1. Establish selected current physical $LogFile history, acquire the owning NTFS

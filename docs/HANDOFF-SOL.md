@@ -23,6 +23,39 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
+The complete checkpoint decoder now composes all four dumps and checks name/dirty
+target membership against physical allocated OAT keys. Each present dump LSN is
+distinct. Duplicate name targets reject, repeated dirty targets are valid, and
+client-0 stored self-references remain opaque. Checked fixed-stride lookup plus a
+caller-owned bitset bounds work to linear traversal and scratch to 8 KiB. The 136
+original C/CLI graph cases check all presence masks, key boundaries/free entries,
+missing OATs, duplicates, LSN collisions, exact/short/NULL scratch, immutable
+aligned/unaligned packets, zero errors and armed no-callback counters. Four composed
+fuzz suites and 408 three-variant seeds retain the existing selector numbering.
+
+Independent historical observation finds all name/dirty targets allocated and name
+targets unique in ten original checkpoints. Native C/CLI each pass 23 cases: ten
+explicitly projected nonempty snapshots, ten STALE old checkpoints under unchanged
+original owners and three unchanged original current empty snapshots. Main compares
+all 816 authored and 138 native packet/workspace files plus 159 numeric goldens,
+every native checkpoint/26 unique dumps to retained originals, all thirteen copied
+journals and projected tails, source fingerprints and actual product hashes.
+No original current nonempty history, analysis, recovery or writing is qualified.
+
+Current acceptance is 106 fatal-sanitizer suites, thirteen focused suites, style,
+both 2-KiB freestanding targets, 54 local component PASS groups/eleven runtime SKIPs
+and clean unsigned universal Release. Fresh fuzz replays 1,932 authored inputs and
+reports 138,888 runs in 61 seconds with 637 MiB peak fuzzer RSS. All nine compiled
+source hashes stay fixed. Actual app/extension minimum OS remains 26.5 versus guest
+26.4; installed acceptance needs a compatible isolated runtime. Strict deep bundle
+verification rejects unsigned code. Review artifacts/checkpoint-snapshot/{initial,
+native,final}/, artifacts/checkpoint-snapshot/review.json, LOGFILE.md and the new
+artifacts/{fuzz,fskit}-checkpoint-snapshot/ products/campaign.
+
+Next qualify current page/copy/continuation history and volume semantics, then
+implement native analysis and writable ownership. Snapshot framing/membership alone
+cannot authorize replay or mutations.
+
 `ntfs/checkpoint.h` now binds each exact checkpoint dump to the selected-client
 RESTART record, checking anchor geometry/order, record client/LSN/action/body and
 every allocated versioned entry after complete free-topology validation. All 147
@@ -36,7 +69,8 @@ changing any bytes after the restart pages. Three unchanged original current
 owners/checkpoints supply twelve absent bindings. All 62 C/CLI native-packet cases
 pass. Preserve that evidence boundary: no original current nonempty history or
 recovery is qualified. Review artifacts/checkpoint-binding/{initial,fuzz-focused,
-native,final}/, artifacts/checkpoint-binding/review.json and LOGFILE.md. All 100
+native,final}/, artifacts/checkpoint-binding/review.json and LOGFILE.md. That preceding
+single-dump checkpoint passed all 100
 fatal-sanitizer suites, style, both 2-KiB targets, 54 component PASS groups/eleven
 runtime SKIPs and clean universal Release pass. Fresh fuzz replays 1,524 inputs,
 reporting 100,879 runs in 61 seconds and 589 MiB fuzzer RSS. Main compares actual
@@ -45,9 +79,8 @@ checkpoint.c compiles on both architectures. Strict deep bundle verification
 refuses unsigned code. Actual app/extension minimum OS is 26.5, while the prepared
 guest is 26.4; prepare a compatible runtime before installed acceptance.
 
-Next implement cross-table target membership using physical OAT keys, then qualify
-current page/copy history, analysis and writable ownership. Snapshot binding alone
-cannot authorize recovery or mutations.
+Whole-snapshot membership above follows this single-dump framing. Current page/copy
+history, volume semantics, analysis and writable ownership remain necessary.
 
 The current update decoder accepts empty LCN vectors with one reserved opaque slot
 and absolute data offsets. Lossless attribute-name entry/full-dump decoding checks
@@ -68,8 +101,8 @@ artifacts/logfile-names/review.json and {checked,final,native}/, with campaign a
 products in artifacts/{fuzz,fskit}-logfile-names/. Keep the initial test-author END
 code mistake separately. The older .build seed directory retains one superseded
 Boolean-rule seed; it does not belong to the fresh campaign.
-The composed record binding above follows this primitive checkpoint; cross-table
-references, current history/analysis and writable ownership remain open.
+Composed record binding and whole-snapshot membership above follow this primitive
+checkpoint; volume semantics, current history/analysis and writable ownership remain open.
 These passing historical framing checks provide no recovery or mutation admission.
 
 Completed LFS 1.1 tail-copy routing now uses both slots and exact shared record
@@ -121,11 +154,24 @@ The separate machlin-ntfs-windows UTM guest was created through its documented
 configuration API, with thin imported 64-GiB/8-GiB NVMe disks, TPM, actual secure
 ARM64 firmware and disabled sharing. The user's finalized official ISO has valid
 ARM64 EFI and EFI BCD contents. Actual Windows Setup booted and selected Pro;
-The user supplied the CUA-required action-time confirmation for the displayed
-Microsoft terms; Sol accepted them and resumed installation. See
-artifacts/windows-write-vm/ for exact
-media/config/firmware/gate evidence. This is installer preparation, not an installed
-Windows boot, chkdsk result or recovery acceptance. Only one agent operates each VM.
+the user approved its displayed Microsoft terms and installation reached account OOBE.
+The official UTM guest-tools downloader supplied signed ARM64 NetKVM storage;
+only the network driver family was selected and OOBE network became Connected.
+Actual desktop driver version/trust inventory remains unverified; no full guest-tools
+installer was run. The user approved local account ntfs-lab. Supported Windows Pro
+Work/school > Sign-in options > Domain join instead reached password creation without
+organization enrollment. A fresh private password is stored locally under
+artifacts/windows-write-vm/credentials/ with directory/file modes 0700/0600.
+Never read/print those credentials into tools, chat or logs.
+
+The computer-use credential policy requires user takeover for password entry,
+confirmation and submission. The pending user handoff leaves the VM at that screen;
+no agent operates its UI until the user reports completion. Then Sol alone should
+verify actual desktop boot/build/ARM64, disk mapping, network driver inventory and
+chkdsk availability before a CLI execution handoff. The 8-GiB test disk remains
+blank. See artifacts/windows-write-vm/ for media/config/firmware/account-gate evidence.
+Installed desktop, chkdsk results and recovery/writing acceptance remain open.
+Only one agent operates each VM.
 
 ## Preceding checked base metadata retention
 

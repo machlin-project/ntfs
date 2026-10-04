@@ -23,6 +23,7 @@ from logfile_restart_record_fixtures import author as generate_logfile_restart_r
 from logfile_tables_fixtures import author as generate_logfile_tables
 from logfile_names_fixtures import author as generate_logfile_names
 from checkpoint_fixtures import author as generate_checkpoint_bindings
+from checkpoint_snapshot_fixtures import author as generate_checkpoint_snapshots
 from record_protect_fixtures import author as generate_record_protection
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
@@ -37,12 +38,16 @@ LOGFILE_LEGACY_RECORD_KIND = 14
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 LOGFILE_CHECKPOINT_TABLE_KIND = 17
 LOGFILE_CHECKPOINT_HEADER = struct.Struct('<IB')
+LOGFILE_CHECKPOINT_SNAPSHOT_KIND = 18
+LOGFILE_SNAPSHOT_KINDS = 4
+LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1))
 BITS_PER_BYTE = 8
 LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 LOGFILE_ALLOCATION_FAULT = 1 << 8
 LOGFILE_RECORD_ALLOCATION_FAULT = 1 << 9
 LOGFILE_BUDGET_SHIFT = 16
+LOGFILE_NULL_WORKSPACE_SHIFT = LOGFILE_BUDGET_SHIFT + struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_READ_CALL_BUDGET = 32
 
 MAX_STRUCTURE_BYTES = 32768
@@ -326,6 +331,21 @@ def generate(output):
             payload = envelope + source + wrapper + checkpoint + table
             assert len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
             (log_seeds / ('binding-' + case['name'] + suffix + '.seed')).write_bytes(payload)
+    snapshot_packets = output / 'checkpoint-snapshots'
+    for case in generate_checkpoint_snapshots(snapshot_packets):
+        source = (snapshot_packets / case['source']).read_bytes()
+        checkpoint = (snapshot_packets / (case['name'] + '.checkpoint')).read_bytes()
+        dumps = [(snapshot_packets / f"{case['name']}.dump-{kind}").read_bytes()
+            for kind in range(LOGFILE_SNAPSHOT_KINDS)]
+        wrapper = LOGFILE_SNAPSHOT_HEADER.pack(len(checkpoint), *map(len, dumps))
+        control = (case['capacity'] + 1) << LOGFILE_BUDGET_SHIFT
+        if case['null_workspace']:
+            control |= 1 << LOGFILE_NULL_WORKSPACE_SHIFT
+        for suffix, fault in (('', 0), ('-read-fault', 1), ('-allocation-fault', LOGFILE_ALLOCATION_FAULT)):
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CHECKPOINT_SNAPSHOT_KIND, control | fault, len(source))
+            payload = envelope + source + wrapper + checkpoint + b''.join(dumps)
+            assert len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+            (log_seeds / ('snapshot-' + case['name'] + suffix + '.seed')).write_bytes(payload)
     return seeds
 
 

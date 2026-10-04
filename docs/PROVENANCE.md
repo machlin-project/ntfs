@@ -1,5 +1,15 @@
 # Code provenance
 
+Complete checkpoint membership is original repository code over those exact-record
+and table decoders. Physical OAT keys follow the original Linux-NTFS field tables;
+independent observation checks all targets in ten retained historical checkpoints.
+The checked fixed-stride lookup, bounded duplicate-name bitset, whole-snapshot
+publication ordering, independent graph author and composed fault/mutation wrappers
+are repository-owned. Positive historical tests retain exact original packets under
+explicit synthetic selected owners; unchanged original current owners reject old
+checkpoints. No foreign membership/recovery implementation was imported and no
+current nonempty native history or Windows recovery qualification follows.
+
 The composed selected-checkpoint dump binder is original repository code over the
 existing exact-record, cached-client, update-span and complete table/entry decoders.
 Dump opcode/anchor/layout facts use the original Linux-NTFS field tables already

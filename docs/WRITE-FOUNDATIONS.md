@@ -78,7 +78,13 @@ allocation. An absent anchor ignores dump input and returns NOT_FOUND; foreign
 identities/LSNs are STALE. LOGFILE.md records the admission/error contract and
 explicit synthetic owner projections used with exact historical packets.
 
-These are checkpoint snapshot/framing contracts. Cross-table references,
+The complete snapshot also validates distinct dump LSNs and allocated physical OAT
+targets for names and dirty pages. Duplicate name targets reject; several dirty
+entries may share one target. One caller-owned bit per OAT entry bounds duplicate
+checking to 8 KiB; errors zero the complete snapshot and no callbacks occur.
+LOGFILE.md defines workspace, absent-table and borrowed-span contracts.
+
+These are checkpoint framing/membership contracts. Volume references/types/LCNs,
 current page/copy history,
 transaction analysis and redo/undo remain separate work. A valid table or stored
 committed state cannot authorize replay or a writable mount.

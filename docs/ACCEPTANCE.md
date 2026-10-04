@@ -8,7 +8,60 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Selected-checkpoint dump snapshot binding
+## Complete checkpoint target membership
+
+The whole-snapshot decoder binds all four dump slots to one selected-client RESTART
+record, rejects reused anchor LSNs and checks every name/allocated dirty target
+against a physical allocated OAT key. Stored client-0 self-references remain opaque.
+Duplicate name targets reject; repeated dirty targets and equal names on different
+targets are valid. Checked fixed-stride lookup and one scratch bit per OAT entry
+give linear work and at most 8 KiB caller workspace. NULL/short required scratch
+fails before access, tail bytes stay unchanged, inputs remain immutable and errors
+zero the whole result without I/O/allocation. This does not validate volume references,
+current written/copy/continuation history, transaction analysis, recovery or writes.
+
+All 106 fatal-ASan/UBSan suites, thirteen focused suites, style and both 2-KiB
+freestanding targets pass. The original C/CLI graph author supplies 136 cases across
+four client/header owners, every presence mask, physical/free/interior/boundary keys,
+duplicate names, repeated dirty targets, missing OATs, LSN collisions and exact/short/
+NULL workspace. Main verifies all 816 actual packet/workspace files and 136 numeric
+goldens. Core tests check guarded aligned/unaligned inputs, independent exact scratch,
+repeatability and armed no-callback counters. Four composed fuzz suites and 408 new
+three-variant seeds cover whole snapshots without changing existing selectors.
+
+Native C/CLI each pass 23 cases: ten projected nonempty snapshots, ten historical
+STALE cases under unchanged original owners and three original current empty
+snapshots. Independent historical observation finds all name/dirty targets allocated
+and all name targets unique. Main verifies 138 packet/workspace files and 23 numeric
+goldens, directly compares every checkpoint and 26 unique dumps to retained original
+packets, checks all thirteen copied source journals and every projected tail against
+its original. Positive selected ownership remains explicitly synthetic; original
+current nonempty history and native Windows/recovery qualification are still absent.
+
+Fresh journal fuzz replays all 1,932 authored seeds and completes 138,888 runs in
+61 seconds with 637 MiB peak fuzzer RSS, exiting zero. The old build directory has
+one additional superseded seed; the fresh campaign excludes it. All nine compiled
+source fingerprints stay fixed after formatting/build and match actual reviewed files.
+FSKit reports 54 local PASS groups/eleven runtime SKIPs/zero failures. Clean unsigned
+Release builds app, embedded/standalone extension and core archive with both actual
+architecture slices; checkpoint.c compiles on each. Main verifies actual product
+hashes. Strict deep signature verification rejects unsigned code. The products
+require macOS 26.5; the isolated guest is 26.4, so installed acceptance remains open.
+
+Windows has installed to its isolated system disk and reached account OOBE. The user
+approved the displayed Microsoft terms and a local ntfs-lab account. Sol selected
+the supported Pro domain-join option; credential entry awaits the user's manual
+handoff required by the computer-use policy. Desktop/build/architecture, driver
+inventory, chkdsk, test-volume formatting and native write acceptance are unverified.
+The separate 8-GiB test disk remains blank.
+
+Evidence is artifacts/checkpoint-snapshot/{initial,native,final}/,
+artifacts/checkpoint-snapshot/review.json and artifacts/fuzz-checkpoint-snapshot/.
+Universal products are artifacts/fskit-checkpoint-snapshot/. Continue qualified
+current history and volume semantics, native analysis, writable ownership and
+mutations under WRITES.md.
+
+## Preceding selected-checkpoint dump snapshot binding
 
 The composed cached decoder binds one exact dump to the selected-client RESTART
 record. Anchor consistency/geometry/order, dump LSN/client/type/action, linked-LSN

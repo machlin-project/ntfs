@@ -30,6 +30,7 @@ enum {
 	FUZZ_ATTRIBUTE_NAME,
 	FUZZ_ATTRIBUTE_NAMES,
 	FUZZ_CHECKPOINT_TABLE,
+	FUZZ_CHECKPOINT_SNAPSHOT,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -48,7 +49,10 @@ enum {
 	FUZZ_PARTIAL_READ_DENOMINATOR = 2
 };
 
-enum { FUZZ_CLIENT_VERSION_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE };
+enum {
+	FUZZ_CLIENT_VERSION_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
+	FUZZ_NULL_WORKSPACE_SHIFT = FUZZ_BUDGET_SHIFT + sizeof(uint16_t) * NTFS_BITS_PER_BYTE
+};
 
 enum {
 	FUZZ_CHECKPOINT_SOURCE,
@@ -75,6 +79,21 @@ struct fuzz_logfile_header {
 struct fuzz_checkpoint_header {
 	uint8_t checkpoint_bytes[sizeof(uint32_t)], table_kind;
 };
+
+struct fuzz_snapshot_header {
+	uint8_t checkpoint_bytes[sizeof(uint32_t)];
+	uint8_t dump_bytes[NTFS_LOGFILE_CHECKPOINT_KINDS][sizeof(uint32_t)];
+};
+
+struct fuzz_snapshot_parts {
+	const uint8_t *checkpoint;
+	size_t checkpoint_bytes;
+	struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS];
+};
+
+_Static_assert(
+    sizeof(struct fuzz_snapshot_header) == (NTFS_LOGFILE_CHECKPOINT_KINDS + 1u) * sizeof(uint32_t),
+    "whole-checkpoint fuzz lengths have no padding");
 
 _Static_assert(sizeof(struct fuzz_checkpoint_header) == sizeof(uint32_t) + sizeof(uint8_t),
     "checkpoint fuzz envelope has no padding");
@@ -106,10 +125,18 @@ struct fuzz_checkpoint_output {
 	uint8_t after[FUZZ_GUARD_BYTES];
 };
 
+struct fuzz_snapshot_output {
+	uint8_t before[FUZZ_GUARD_BYTES];
+	struct ntfs_logfile_checkpoint_snapshot value;
+	uint8_t after[FUZZ_GUARD_BYTES];
+};
+
 static uint8_t scratch[2][NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES];
 static uint8_t configuration_scratch[NTFS_LOGFILE_MAX_PAGE_BYTES + 2 * FUZZ_GUARD_BYTES];
 static uint8_t record_scratch[2][NTFS_LOGFILE_MAX_RECORD_BYTES + 2 * FUZZ_GUARD_BYTES];
 static uint8_t original[FUZZ_INPUT_BYTES];
+static uint8_t name_workspace[2]
+			     [NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES + 2 * FUZZ_GUARD_BYTES];
 
 static void
 guard(const uint8_t *bytes, size_t used, size_t size)
@@ -457,6 +484,115 @@ fuzz_checkpoint_table(const uint8_t *configuration, size_t configuration_size,
 	    memcmp(&outputs[0].value, &outputs[1].value, sizeof(outputs[0].value)) == 0);
 }
 
+static bool
+snapshot_parts(const uint8_t *packet, size_t size, struct fuzz_snapshot_parts *parts)
+{
+	const struct fuzz_snapshot_header *header = (const void *)packet;
+	size_t offset, kind, bytes;
+
+	if (size < sizeof(*header)) {
+		return false;
+	}
+	bytes = ntfs_u32(header->checkpoint_bytes);
+	offset = sizeof(*header);
+	if (bytes > size - offset) {
+		return false;
+	}
+	parts->checkpoint = packet + offset;
+	parts->checkpoint_bytes = bytes;
+	offset += bytes;
+	for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+		bytes = ntfs_u32(header->dump_bytes[kind]);
+		if (bytes > size - offset) {
+			return false;
+		}
+		parts->dumps[kind] =
+		    (struct ntfs_logfile_checkpoint_dump){.data = packet + offset, .bytes = bytes};
+		offset += bytes;
+	}
+	return offset == size;
+}
+
+static void
+fuzz_checkpoint_snapshot(const uint8_t *configuration, size_t configuration_size,
+    const uint8_t *packet, size_t packet_size, uint64_t argument)
+{
+	struct fuzz_snapshot_parts parts;
+	struct fuzz_snapshot_output outputs[2];
+	struct ntfs_logfile_checkpoint_snapshot zero = {0};
+	struct ntfs_logfile *source;
+	struct fuzz_device device;
+	struct ntfs_environment environment;
+	size_t i, j, reads, allocations, memory, capacity;
+	uint16_t workspace_control;
+	bool null_workspace;
+	enum ntfs_result results[2];
+
+	if (!snapshot_parts(packet, packet_size, &parts)) {
+		return;
+	}
+	workspace_control = (uint16_t)(argument >> FUZZ_BUDGET_SHIFT);
+	capacity = workspace_control == 0
+	    ? NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES
+	    : (workspace_control - 1u) % (NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES + 1u);
+	null_workspace = (argument & (UINT64_C(1) << FUZZ_NULL_WORKSPACE_SHIFT)) != 0;
+	for (i = 0; i < sizeof(results) / sizeof(results[0]); i++) {
+		device = (struct fuzz_device){.data = configuration,
+		    .size = configuration_size,
+		    .fail_read = (argument & UINT8_MAX) % (NTFS_LOGFILE_DEFAULT_READ_CALLS + 1u),
+		    .fail_allocation = ((argument >> NTFS_BITS_PER_BYTE) & UINT8_MAX) %
+			(FUZZ_SOURCE_ALLOCATIONS + 1u)};
+		environment = fuzz_environment(&device);
+		memset(&outputs[i], FUZZ_GUARD_VALUE, sizeof(outputs[i]));
+		memset(name_workspace[i], FUZZ_GUARD_VALUE, sizeof(name_workspace[i]));
+		results[i] = ntfs_logfile_open(&environment, NULL, NULL, &source);
+		assert(device.reads <= NTFS_LOGFILE_DEFAULT_READ_CALLS);
+		if (results[i] == NTFS_OK) {
+			assert(source != NULL &&
+			    device.memory <= FUZZ_SOURCE_OWNER_BYTES +
+				    FUZZ_SOURCE_PAGE_BUFFERS * NTFS_LOGFILE_MAX_PAGE_BYTES);
+			reads = device.reads;
+			allocations = device.allocations;
+			memory = device.memory;
+			device.fail_read = reads + 1;
+			device.fail_allocation = allocations + 1;
+			results[i] = ntfs_logfile_checkpoint_decode(source, parts.checkpoint,
+			    parts.checkpoint_bytes, parts.dumps,
+			    null_workspace ? NULL : name_workspace[i] + FUZZ_GUARD_BYTES, capacity,
+			    &outputs[i].value);
+			assert(device.reads == reads && device.allocations == allocations &&
+			    device.memory == memory);
+			if (results[i] == NTFS_OK) {
+				for (j = 0; j < NTFS_LOGFILE_CHECKPOINT_KINDS; j++) {
+					if ((outputs[i].value.present_mask & (1u << j)) != 0) {
+						assert(outputs[i].value.tables[j].body.offset <=
+							parts.dumps[j].bytes &&
+						    outputs[i].value.tables[j].body.length <=
+							parts.dumps[j].bytes -
+							    outputs[i].value.tables[j].body.offset);
+					}
+				}
+			}
+			ntfs_logfile_close(source);
+		} else {
+			assert(source == NULL);
+			memset(&outputs[i].value, 0, sizeof(outputs[i].value));
+		}
+		assert(device.memory == 0);
+		if (results[i] != NTFS_OK) {
+			assert(memcmp(&outputs[i].value, &zero, sizeof(zero)) == 0);
+		}
+		guard(name_workspace[i], null_workspace ? 0 : capacity, sizeof(name_workspace[i]));
+		for (j = 0; j < FUZZ_GUARD_BYTES; j++) {
+			assert(outputs[i].before[j] == FUZZ_GUARD_VALUE &&
+			    outputs[i].after[j] == FUZZ_GUARD_VALUE);
+		}
+	}
+	assert(results[0] == results[1] &&
+	    memcmp(&outputs[0].value, &outputs[1].value, sizeof(outputs[0].value)) == 0);
+	assert(memcmp(name_workspace[0], name_workspace[1], sizeof(name_workspace[0])) == 0);
+}
+
 int
 LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
@@ -476,8 +612,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	memcpy(original, data, size);
 	argument = ntfs_u64(header->argument);
 	kind = header->kind % FUZZ_KINDS;
-	configuration_size =
-	    kind == FUZZ_PAGE || kind == FUZZ_CLIENT_RESTART_RECORD || kind == FUZZ_CHECKPOINT_TABLE
+	configuration_size = kind == FUZZ_PAGE || kind == FUZZ_CLIENT_RESTART_RECORD ||
+		kind == FUZZ_CHECKPOINT_TABLE || kind == FUZZ_CHECKPOINT_SNAPSHOT
 	    ? ntfs_u32(header->configuration_bytes)
 	    : 0;
 	if (configuration_size > size - sizeof(*header)) {
@@ -486,6 +622,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	configuration = data + sizeof(*header);
 	packet = configuration + configuration_size;
 	packet_size = size - sizeof(*header) - configuration_size;
+	if (kind == FUZZ_CHECKPOINT_SNAPSHOT) {
+		fuzz_checkpoint_snapshot(
+		    configuration, configuration_size, packet, packet_size, argument);
+		assert(memcmp(data, original, size) == 0);
+		return 0;
+	}
 	if (kind == FUZZ_CHECKPOINT_TABLE) {
 		fuzz_checkpoint_table(
 		    configuration, configuration_size, packet, packet_size, argument);
@@ -751,6 +893,7 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	const struct ntfs_disk_log_restart_area *area;
 	const struct ntfs_disk_log_table *table;
 	const struct fuzz_checkpoint_header *checkpoint;
+	struct fuzz_snapshot_parts parts;
 	const struct ntfs_disk_log_update *update;
 	unsigned kind, checkpoint_phase;
 	bool restored_page = false, record_page = false, source_kind;
@@ -760,8 +903,8 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		return size;
 	}
 	kind = envelope->kind % FUZZ_KINDS;
-	configuration_size =
-	    kind == FUZZ_PAGE || kind == FUZZ_CLIENT_RESTART_RECORD || kind == FUZZ_CHECKPOINT_TABLE
+	configuration_size = kind == FUZZ_PAGE || kind == FUZZ_CLIENT_RESTART_RECORD ||
+		kind == FUZZ_CHECKPOINT_TABLE || kind == FUZZ_CHECKPOINT_SNAPSHOT
 	    ? ntfs_u32(envelope->configuration_bytes)
 	    : 0;
 	if (configuration_size > size - sizeof(*envelope)) {
@@ -799,6 +942,28 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 			} else {
 				page += candidate_bytes;
 				page_bytes -= candidate_bytes;
+				checkpoint_dump = true;
+			}
+		}
+	}
+	if (kind == FUZZ_CHECKPOINT_SNAPSHOT) {
+		checkpoint_phase = (seed / FUZZ_GENERIC_PERIOD) % FUZZ_CHECKPOINT_PHASES;
+		if (checkpoint_phase == FUZZ_CHECKPOINT_SOURCE) {
+			page = data + sizeof(*envelope);
+			page_bytes = configuration_size;
+			source_kind = true;
+		} else {
+			if (!snapshot_parts(page, page_bytes, &parts)) {
+				return size;
+			}
+			if (checkpoint_phase == FUZZ_CHECKPOINT_CLIENT) {
+				page = (uint8_t *)parts.checkpoint;
+				page_bytes = parts.checkpoint_bytes;
+			} else {
+				position = (seed / (FUZZ_GENERIC_PERIOD * FUZZ_CHECKPOINT_PHASES)) %
+				    NTFS_LOGFILE_CHECKPOINT_KINDS;
+				page = (uint8_t *)parts.dumps[position].data;
+				page_bytes = parts.dumps[position].bytes;
 				checkpoint_dump = true;
 			}
 		}
@@ -842,7 +1007,8 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	}
 	mutation_end = page_bytes;
 	if ((kind == FUZZ_CLIENT_RESTART_RECORD ||
-		(kind == FUZZ_CHECKPOINT_TABLE && !checkpoint_dump)) &&
+		((kind == FUZZ_CHECKPOINT_TABLE || kind == FUZZ_CHECKPOINT_SNAPSHOT) &&
+		    !checkpoint_dump)) &&
 	    !source_kind) {
 		record_header_bytes =
 		    configured_record_header(data + sizeof(*envelope), configuration_size);
@@ -851,15 +1017,15 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 			mutation_end =
 			    record_header_bytes + sizeof(struct ntfs_disk_log_client_restart);
 			/* Preserve snapshot identity and version for deep field mutations. */
-			if (kind == FUZZ_CHECKPOINT_TABLE ||
+			if (kind == FUZZ_CHECKPOINT_TABLE || kind == FUZZ_CHECKPOINT_SNAPSHOT ||
 			    (seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD != 1) {
 				minimum = record_header_bytes +
 				    offsetof(struct ntfs_disk_log_client_restart, analysis_lsn);
 			}
 		}
 	}
-	if (kind == FUZZ_CHECKPOINT_TABLE && checkpoint_dump &&
-	    checkpoint_phase == FUZZ_CHECKPOINT_BODY) {
+	if ((kind == FUZZ_CHECKPOINT_TABLE || kind == FUZZ_CHECKPOINT_SNAPSHOT) &&
+	    checkpoint_dump && checkpoint_phase == FUZZ_CHECKPOINT_BODY) {
 		record_header_bytes =
 		    configured_record_header(data + sizeof(*envelope), configuration_size);
 		if (ntfs_bounds(record_header_bytes, sizeof(*update), page_bytes)) {

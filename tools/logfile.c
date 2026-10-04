@@ -369,6 +369,24 @@ client_restart_record(const char *path, const char *packet_path)
 	return result == NTFS_OK ? 0 : 1;
 }
 
+static void
+checkpoint_fields(const struct ntfs_logfile_checkpoint_table *value)
+{
+	printf("\"kind\":%u,\"client_major\":%" PRIu32 ",\"client_minor\":%" PRIu32
+	       ",\"checkpoint_lsn\":%" PRIu64 ",\"table_lsn\":%" PRIu64,
+	    (unsigned)value->kind, value->client_major, value->client_minor, value->checkpoint_lsn,
+	    value->table_lsn);
+	span("body", value->body);
+	printf(",\"table\":{\"entry_bytes\":%u,\"entry_count\":%u,\"allocated_count\":%u,"
+	       "\"free_goal\":%" PRIu32 ",\"first_free\":%" PRIu32 ",\"last_free\":%" PRIu32,
+	    value->table.entry_bytes, value->table.entry_count, value->table.allocated_count,
+	    value->table.free_goal, value->table.first_free, value->table.last_free);
+	span("entries", value->table.entries);
+	printf("},\"names\":{\"entry_count\":%" PRIu32, value->names.entry_count);
+	span("entries", value->names.entries);
+	printf("}");
+}
+
 static int
 checkpoint_table(
     const char *path, const char *checkpoint_path, const char *kind_name, const char *table_path)
@@ -416,28 +434,108 @@ checkpoint_table(
 		    (enum ntfs_logfile_checkpoint_kind)kind, checkpoint, checkpoint_bytes, table,
 		    table_bytes, &value);
 	}
-	printf(
-	    "{\"schema_version\":%u,\"scope\":\"checkpoint-table\",\"code\":%d,"
-	    "\"result\":\"%s\",\"recovery_qualified\":false,\"requested_kind\":\"%s\",\"kind\":%u,"
-	    "\"client_major\":%" PRIu32 ",\"client_minor\":%" PRIu32 ",\"checkpoint_lsn\":%" PRIu64
-	    ",\"table_lsn\":%" PRIu64,
-	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), kind_name,
-	    (unsigned)value.kind, value.client_major, value.client_minor, value.checkpoint_lsn,
-	    value.table_lsn);
-	span("body", value.body);
-	printf(",\"table\":{\"entry_bytes\":%u,\"entry_count\":%u,\"allocated_count\":%u,"
-	       "\"free_goal\":%" PRIu32 ",\"first_free\":%" PRIu32 ",\"last_free\":%" PRIu32,
-	    value.table.entry_bytes, value.table.entry_count, value.table.allocated_count,
-	    value.table.free_goal, value.table.first_free, value.table.last_free);
-	span("entries", value.table.entries);
-	printf("},\"names\":{\"entry_count\":%" PRIu32, value.names.entry_count);
-	span("entries", value.names.entries);
-	printf("}}\n");
+	printf("{\"schema_version\":%u,\"scope\":\"checkpoint-table\",\"code\":%d,"
+	       "\"result\":\"%s\",\"recovery_qualified\":false,\"requested_kind\":\"%s\",",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), kind_name);
+	checkpoint_fields(&value);
+	printf("}\n");
 	free(table);
 	free(checkpoint);
 	ntfs_logfile_close(source);
 	ntfs_image_close(&image);
 	return result == NTFS_OK ? 0 : 1;
+}
+
+enum {
+	LOGFILE_SNAPSHOT_SOURCE_ARGUMENT = 2,
+	LOGFILE_SNAPSHOT_CHECKPOINT_ARGUMENT = LOGFILE_SNAPSHOT_SOURCE_ARGUMENT + 1,
+	LOGFILE_SNAPSHOT_DUMPS_ARGUMENT = LOGFILE_SNAPSHOT_CHECKPOINT_ARGUMENT + 1,
+	LOGFILE_SNAPSHOT_WORKSPACE_ARGUMENT =
+	    LOGFILE_SNAPSHOT_DUMPS_ARGUMENT + NTFS_LOGFILE_CHECKPOINT_KINDS,
+	LOGFILE_SNAPSHOT_ARGUMENTS = LOGFILE_SNAPSHOT_WORKSPACE_ARGUMENT + 1
+};
+
+static int
+checkpoint_snapshot(char **argv)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_checkpoint_snapshot value = {0};
+	struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS] = {0};
+	uint8_t *checkpoint = NULL, *workspace = NULL,
+		*packets[NTFS_LOGFILE_CHECKPOINT_KINDS] = {0};
+	size_t checkpoint_bytes, kind;
+	uint64_t capacity = 0;
+	bool null_workspace, opened = false;
+	enum ntfs_result result;
+	int status = LOGFILE_ARGUMENT_ERROR;
+
+	null_workspace = strcmp(argv[LOGFILE_SNAPSHOT_WORKSPACE_ARGUMENT], "-") == 0;
+	if (!null_workspace &&
+	    !number(argv[LOGFILE_SNAPSHOT_WORKSPACE_ARGUMENT],
+		NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES, &capacity)) {
+		fprintf(stderr, "Invalid checkpoint name workspace capacity\n");
+		goto done;
+	}
+	checkpoint = read_packet(argv[LOGFILE_SNAPSHOT_CHECKPOINT_ARGUMENT],
+	    NTFS_LOGFILE_MAX_RECORD_BYTES, &checkpoint_bytes);
+	if (checkpoint == NULL) {
+		fprintf(stderr, "Cannot read bounded checkpoint record\n");
+		goto done;
+	}
+	for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+		if (strcmp(argv[LOGFILE_SNAPSHOT_DUMPS_ARGUMENT + kind], "-") != 0) {
+			packets[kind] = read_packet(argv[LOGFILE_SNAPSHOT_DUMPS_ARGUMENT + kind],
+			    NTFS_LOGFILE_MAX_RECORD_BYTES, &dumps[kind].bytes);
+			if (packets[kind] == NULL) {
+				fprintf(stderr, "Cannot read bounded checkpoint dump\n");
+				goto done;
+			}
+			dumps[kind].data = packets[kind];
+		}
+	}
+	if (!null_workspace) {
+		workspace = malloc(capacity == 0 ? 1 : (size_t)capacity);
+		if (workspace == NULL) {
+			goto done;
+		}
+	}
+	if (ntfs_image_open(argv[LOGFILE_SNAPSHOT_SOURCE_ARGUMENT], &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		goto done;
+	}
+	opened = true;
+	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
+	if (result == NTFS_OK) {
+		result = ntfs_logfile_checkpoint_decode(source, checkpoint, checkpoint_bytes, dumps,
+		    workspace, (size_t)capacity, &value);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"checkpoint-snapshot\",\"code\":%d,"
+	       "\"result\":\"%s\",\"recovery_qualified\":false,\"present_mask\":%" PRIu32
+	       ",\"client_major\":%" PRIu32 ",\"client_minor\":%" PRIu32
+	       ",\"checkpoint_lsn\":%" PRIu64 ",\"named_attributes\":%" PRIu32
+	       ",\"dirty_pages\":%" PRIu32 ",\"tables\":[",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), value.present_mask,
+	    value.client_major, value.client_minor, value.checkpoint_lsn, value.named_attributes,
+	    value.dirty_pages);
+	for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+		printf("%s{", kind == 0 ? "" : ",");
+		checkpoint_fields(&value.tables[kind]);
+		printf("}");
+	}
+	printf("]}\n");
+	status = result == NTFS_OK ? 0 : 1;
+done:
+	ntfs_logfile_close(source);
+	if (opened) {
+		ntfs_image_close(&image);
+	}
+	for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+		free(packets[kind]);
+	}
+	free(workspace);
+	free(checkpoint);
+	return status;
 }
 
 int
@@ -460,6 +558,12 @@ main(int argc, char **argv)
 
 	if (argc < 3) {
 		goto usage;
+	}
+	if (strcmp(argv[1], "checkpoint-snapshot") == 0) {
+		if (argc != LOGFILE_SNAPSHOT_ARGUMENTS) {
+			goto usage;
+		}
+		return checkpoint_snapshot(argv);
 	}
 	if (strcmp(argv[1], "checkpoint-table") == 0) {
 		if (argc != 6) {
@@ -600,6 +704,8 @@ usage:
 	    "       ntfs-logfile client-restart CLIENT_PACKET\n"
 	    "       ntfs-logfile client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD\n"
 	    "       ntfs-logfile checkpoint-table JOURNAL CHECKPOINT_RECORD KIND TABLE_RECORD|-\n"
+	    "       ntfs-logfile checkpoint-snapshot JOURNAL CHECKPOINT OPEN|- NAMES|- DIRTY|- "
+	    "TX|- WORKSPACE_BYTES|-\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

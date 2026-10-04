@@ -385,8 +385,13 @@ to that checkpoint's named anchor, selected geometry and client pair. It checks
 the action envelope, advertised body length, complete free topology and every
 allocated versioned entry before publishing borrowed spans. Absent anchors ignore
 dump input; every failure leaves zero metadata. No I/O or allocation occurs.
-Cross-table membership and complete current page/copy history remain owning-layer
-work before native transaction analysis, redo/undo or writable admission.
+The complete snapshot then checks distinct dump LSNs and name/dirty targets against
+allocated physical OAT keys. Checked fixed-stride lookup is constant work; duplicate
+name targets use a caller-owned bitset, at most 8 KiB. The full walk is linear in
+supplied bytes. Client-0 opaque stored self-references are never lookup keys. Errors
+zero the whole snapshot, and source/record bytes remain immutable without callbacks.
+Volume reference/type/LCN semantics and complete current page/copy history remain
+owning-layer work before native analysis, redo/undo or writable admission.
 
 Future LXNU integration can reuse freestanding algorithms through a new owning
 adapter. It must preserve native object lifetime and authorization, and must not

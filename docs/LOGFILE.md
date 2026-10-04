@@ -26,9 +26,10 @@ physical/current-history provenance.
 Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
 restart-table free topology and client-versioned open-attribute/dirty-page plus
 transaction entries, plus lossless byte-counted attribute-name entries and complete
-name dumps. A composed decoder now binds exact dump records to a selected-client
-restart snapshot and checks every allocated entry. Cross-table references and
-qualified current history remain separate. These decoders do not advance native
+name dumps. Composed decoders bind exact dump records to a selected-client
+restart snapshot, check every allocated entry and validate name/dirty targets
+against physical allocated OAT keys. Volume references and qualified current
+history remain separate. These decoders do not advance native
 replay or writable admission.
 
 ## Selected-checkpoint dump binding
@@ -80,6 +81,54 @@ pages, including the historical records, stays exact. Those projections pass
 checkpoint, authoring-OS, native recovery, Windows or writable qualification.
 Evidence is `artifacts/checkpoint-binding/native/` and
 `artifacts/historical-checkpoint-observation/restart-assembled/`.
+
+## Complete checkpoint target membership
+
+`ntfs_logfile_checkpoint_decode` composes all four dump bindings from one exact
+selected-client RESTART record and publishes one borrowed snapshot. Every present
+anchor must have a distinct LSN. Name entries and allocated dirty-page entries
+must address an allocated open-attribute entry by its physical table-relative
+byte key. Client-0's opaque stored self-reference is never substituted. Several
+dirty entries may share a target. Supported snapshots refuse two name entries
+for one target with CORRUPT; identical names on different targets and unnamed open
+entries remain valid. Nonempty names/dirty entries require a present OAT with
+allocated targets. Free dirty payloads stay opaque.
+
+Key lookup is constant work over checked fixed-stride storage. The full walk is
+linear in supplied table/name bytes; duplicate-name checking uses one caller-owned
+bit per OAT entry. Required scratch is ceil(entry_count / 8), at most 8 KiB. A NULL
+required workspace returns INVALID; short storage returns RANGE before scratch
+access. An empty name list needs no workspace. Admitted scratch may change on
+failure; bytes beyond its required prefix remain untouched. All source/record bytes
+remain immutable and errors leave the complete output zero, without I/O/allocation.
+The presence mask distinguishes absent zero views; table spans retain the same
+record/body provenance and externally serialized caller lifetime as the single-dump
+API. Inputs, mutable workspace and output are disjoint and accept byte alignment.
+
+Membership does not validate MFT sequences/types, volume geometry, physical LCNs,
+stored LSN/transaction semantics or current page/continuation provenance. It cannot
+authorize analysis, replay or a writable mount. Independent historical observation
+finds all name/dirty targets allocated and name targets unique in ten original
+old checkpoints; their positive selected-owner qualification remains explicitly
+synthetic, with stale refusal under unchanged original current owners.
+
+The independent author supplies 136 graphs across four client/header owners,
+every table-presence mask, free/interior/header/out-of-range keys, duplicate names,
+repeated dirty targets, missing OATs, colliding LSNs and exact/short/NULL scratch.
+Guarded core tests compare thirty numeric fields, the independent workspace oracle,
+aligned/unaligned immutable packets, repeat calls and armed no-callback counters.
+CLI reports compare the same numeric oracles. A composed fuzz wrapper preserves
+named source/checkpoint/four-dump lengths and separately mutates the source, client,
+record envelope and table bodies; 408 seeds cover three fault variants per graph.
+
+Native C/CLI qualification passes ten projected nonempty graphs, ten historical
+STALE cases under unchanged original owners and three original current empty
+snapshots. All 23 checkpoint files and 26 unique dumps compare directly to retained
+originals. The thirteen copied sources match their preceding qualification inputs;
+every projected journal byte after its two restart pages matches its original.
+Evidence is artifacts/checkpoint-snapshot/{initial,native,final}/ and review.json.
+These cases establish membership, without original current nonempty history or
+Windows/recovery/writing qualification.
 
 ## Empty LCN vectors and attribute-name packets
 

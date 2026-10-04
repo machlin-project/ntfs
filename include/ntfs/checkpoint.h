@@ -11,7 +11,8 @@ enum ntfs_logfile_checkpoint_kind {
 	NTFS_LOGFILE_CHECKPOINT_OPEN_ATTRIBUTES,
 	NTFS_LOGFILE_CHECKPOINT_ATTRIBUTE_NAMES,
 	NTFS_LOGFILE_CHECKPOINT_DIRTY_PAGES,
-	NTFS_LOGFILE_CHECKPOINT_TRANSACTIONS
+	NTFS_LOGFILE_CHECKPOINT_TRANSACTIONS,
+	NTFS_LOGFILE_CHECKPOINT_KINDS
 };
 
 struct ntfs_logfile_checkpoint_table {
@@ -47,6 +48,44 @@ struct ntfs_logfile_checkpoint_table {
 enum ntfs_result ntfs_logfile_checkpoint_table_decode(const struct ntfs_logfile *,
     enum ntfs_logfile_checkpoint_kind, const void *checkpoint_record, size_t checkpoint_bytes,
     const void *table_record, size_t table_bytes, struct ntfs_logfile_checkpoint_table *);
+
+enum { NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES = 8 * 1024 };
+
+struct ntfs_logfile_checkpoint_dump {
+	const void *data;
+	size_t bytes;
+};
+
+struct ntfs_logfile_checkpoint_snapshot {
+	uint32_t client_major, client_minor, present_mask;
+	uint32_t named_attributes, dirty_pages;
+	uint64_t checkpoint_lsn;
+	struct ntfs_logfile_checkpoint_table tables[NTFS_LOGFILE_CHECKPOINT_KINDS];
+};
+
+/* Bind all four dumps and check their cross-table targets in linear work.
+ * Each present anchor must use a distinct LSN. Names and allocated dirty pages
+ * must address allocated OAT entries by physical table-relative byte key; the
+ * client-0 stored self-reference is opaque and is never a lookup key. One target
+ * may have several dirty entries. Duplicate names for one target are CORRUPT;
+ * repeated names on different targets are allowed. Unnamed open entries are valid.
+ * A nonempty name or dirty table requires a present OAT with allocated targets.
+ * The caller supplies one dump slot for each kind; absent anchors ignore its data.
+ * A checked name list uses ceil(OAT entry_count / 8) bytes of mutable caller scratch,
+ * at most NAME_WORKSPACE_BYTES. No names require no scratch. NULL/short needed
+ * scratch returns INVALID/RANGE; its contents are unspecified after admission,
+ * but bytes beyond the needed prefix remain untouched. Scratch, input and output
+ * are disjoint. Inputs remain immutable, byte alignment is sufficient, errors
+ * zero output, and decoding allocates/reads nothing. Absent table views are zero;
+ * present_mask selects usable borrowed views with the table_decode span contract.
+ * This checks snapshot identity, framing and membership. It does not validate
+ * volume references/types/LCNs/geometry, transaction/LSN semantics, current page
+ * provenance, analysis, recovery or writable admission. Native admission and
+ * externally serialized immutable buffer/source lifetime remain necessary. */
+enum ntfs_result ntfs_logfile_checkpoint_decode(const struct ntfs_logfile *,
+    const void *checkpoint_record, size_t checkpoint_bytes,
+    const struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS],
+    void *name_workspace, size_t workspace_bytes, struct ntfs_logfile_checkpoint_snapshot *);
 
 #ifdef __cplusplus
 }

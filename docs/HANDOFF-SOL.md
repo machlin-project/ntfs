@@ -17,7 +17,53 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Bounded filename-count reuse
+## Current checked base metadata retention
+
+Checked standard information and reparse presence now survive temporary node
+closure in an independently keyed payload inside the configured record cache.
+Direct-mapped lookup verifies the complete reference; raw/count eviction is separate.
+Only successful full checks publish, with cold publication precharge, fresh base
+header checks and ancestor admission. Failed collisions keep prior successful
+metadata. Sizes/mappings remain separately validated. Capacity zero disables the
+volume memo; default 64 entries add 6,656 accounted bytes, one adds 104 bytes.
+There is no new allocation, public ABI or writable capability.
+
+Current qualification is 75 fatal-sanitizer suites, 54 component PASS groups/eleven
+actual macOS-27 runtime SKIPs, style, both 2-KiB freestanding targets and universal
+Release. New selected-object authors cover 32 fitting and 256 competing independent
+resident files, with 290 exact inventories/bodies and 288 streams. Fresh fuzz
+replays 443 inputs and exits zero; last periodic execution count is 48,037 at
+71 seconds, not an exact terminal total. All three original NIST diagnostics and
+11,380 comparison commands pass again. Eight full portable Release products
+reproduce exactly across two build directories. Both native binary slice sets pass;
+strict signature verification fails for unsigned bundles despite linker ad hoc
+binary metadata. Nothing here qualifies installed mounts or distribution signing.
+
+Review artifacts/metadata-memo-review.json and its linked actual-file, benchmark,
+reproducibility and app-product reviews. Stage logs use
+artifacts/plan-metadata-memo-{checked,final}-*; retained portable/component products
+are in artifacts/metadata-memo-products/, universal products in
+artifacts/fskit-metadata-memo/. Preserve the initial test-only resident-allocation
+expectation failure and the corrected reviewer partition-length assertion.
+Source remains unchanged throughout final qualification.
+
+The 254 paired runs and 28 reference-only controls qualify this targeted reuse.
+Large fresh-core median falls from 71 to 42 ms relative to the preceding count memo;
+the 32-object fitting controls improve about 10%. Pressure sequential median for
+256 objects is about 1.4% slower, with overlapping ranges and mixed other profiles.
+Document the extra memory and this tradeoff; PERFORMANCE.md retains exact tables.
+No installed throughput or RSS benefit is established.
+
+Next core work is writable groundwork: acquire selected-client restart records
+from qualified current physical history, then validate checkpoint tables and native
+transaction/recovery analysis. WRITES.md orders this work before any write API.
+The existing circular observer, wrapped assembly and snapshot/prefix binder do not
+establish active written history; tail/fast-copy routing and native recovery remain
+open. Windows acquisition, native directory counts/authorization and installed
+runtime also remain open. No VM is required for the next portable implementation
+and fault-model work; native recovery acceptance still requires Windows evidence.
+
+## Preceding bounded filename-count reuse
 
 The core now memoizes only complete successful counts within the configured record
 cache array. Each count payload retains its own full sequence-bearing reference;
@@ -50,11 +96,10 @@ Forty sealed-product controls follow the archive rebuild; differing timestamp by
 were subsequently identified by the two-directory comparison.
 preserve both original and sealed archive reports. Accepted portable/component
 products are under artifacts/count-cache-accepted/.
-They do not qualify unique-object throughput, pressure behavior or installed I/O.
-Measure those controls before broadening the optimization claim. Next metadata
-work can retain fully checked standard information and reparse presence across
-temporary node closure, with separate size validation, failure exclusion and
-capacity/memory measurements. Portable journal work can connect selected
+Those preceding runs do not qualify unique-object throughput, pressure behavior
+or installed I/O. The current metadata continuation above adds scoped independent
+object/capacity controls and retains fully checked standard information/reparse
+presence across temporary closure. Portable journal work can connect selected
 active-client restart acquisition with the
 existing physical circular observer and snapshot/prefix binder; active written
 history and tail/fast-copy routing still require their own contracts. Windows

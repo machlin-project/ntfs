@@ -1,6 +1,34 @@
 # Core qualification and continuation
 
-The current portable continuation retains complete filename counts by full
+The current portable continuation retains checked base metadata across temporary
+node closure. Direct-mapped full-reference keys are independent of raw/count keys;
+only complete successful standard-information/reparse-presence checks publish.
+Cold precharge, fresh header validation, ancestor work admission and separate
+stream-size/mapping validation remain mandatory. Default retention adds 6,656
+accounted bytes beyond the preceding filename-count memo, with no public ABI change.
+Disabled/single/default capacities, competing objects, rejected collisions,
+sequence/owner isolation, faults and exact work boundaries pass.
+
+Current acceptance is 75 fatal-sanitizer suites, 54 native component groups/eleven
+runtime SKIPs, both 2-KiB freestanding targets and universal Release. New synthetic
+controls check 290 inventories/filename bodies and 288 resident streams across
+32 fitting and 256 competing independent files. Fresh fuzz replays 443 seeds and
+exits zero; all three original NIST diagnostics/comparisons pass again. Main actual
+file review includes every retained info/security/data oracle. Eight full portable
+Release product pairs match in two build directories. App build and universal
+slices pass; strict bundle signature verification remains failed for these unsigned
+bundles. No installed or Windows acceptance follows from these checks.
+
+There are 254 paired legacy measurements and 28 reference-only controls. Large
+fresh-core wall median falls from 71 to 42 ms relative to the already count-cached
+core. Thirty-two fitting objects improve about 10% in these repeated synthetic
+scans. The 256-object pressure sequential median is about 1.4% slower, with
+overlapping ranges; no general throughput or RSS gain is claimed. Exact evidence
+is in artifacts/metadata-memo-review.json and its linked reviews, with measurements
+in PERFORMANCE.md. The next writable groundwork is native current-history and
+recovery qualification under WRITES.md; writable APIs remain disabled.
+
+The preceding portable continuation retains complete filename counts by full
 sequence-bearing reference in a bounded mounted-volume memo. Independent raw/count
 keys, round-robin replacement, cold publication precharge, hot ancestor admission
 and success-only publication preserve the existing immutable contract. Default
@@ -12,7 +40,7 @@ comparisons pass again. The 144 paired legacy measurements qualify targeted
 hard-link/alias reuse with explicit small-memory tradeoffs. ACCEPTANCE.md retains
 actual-file reviews, source scope and remaining Windows/native/recovery work.
 
-The current portable Release check matches all eight full product pairs under
+The preceding portable Release check matches all eight full product pairs under
 artifacts/reproducibility-count-cache-fixed/. Main verifies the actual bytes and
 zero archive timestamps in artifacts/count-cache-reproducibility-review.json.
 The initial failure is retained: only two archives' timestamp fields differed,

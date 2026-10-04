@@ -4,6 +4,25 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
+The next core implementation sequence is:
+
+1. Establish selected current physical $LogFile history, acquire the owning NTFS
+   client restart record, and validate complete checkpoint tables and native
+   transaction analysis. Existing read-only packet observers and the reference
+   durability model are groundwork; they do not close this recovery contract.
+2. Implement the separate writable owner, reservations/credits, native log planning,
+   redo/undo recovery and durable barrier/poison contracts. Keep writes disabled
+   while these contracts lack native recovery acceptance.
+3. Qualify bounded writes to existing initialized file ranges without allocation
+   or size changes, with explicit partial-write and fsync semantics. Interrupt
+   writes/barriers and verify recovery, metadata and data against Windows/chkdsk.
+4. Expand to allocation, resize, creation, deletion and rename, with dedicated
+   namespace/security/lifetime and crash tests for each mutation family.
+
+Portable history/table decoders, transaction planning and injected failure models
+can be implemented without a VM. Synthetic evidence cannot replace native NTFS
+history acquisition, Windows recovery roundtrips or actual device durability checks.
+
 A writable owner must exclusively claim the device, reject Windows hibernation
 and Fast Startup state, validate volume/log versions and process native NTFS
 $LogFile restart areas and redo/undo records. $UsnJrnl is a change journal, not a

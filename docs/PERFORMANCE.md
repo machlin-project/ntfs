@@ -1,6 +1,70 @@
 # Performance contracts
 
-## Bounded filename-count reuse
+## Checked base metadata across temporary nodes
+
+The current bounded memo retains checked standard information and reparse presence
+by full reference in the existing record-cache allocation. Direct-mapped lookup
+and independent raw/count/metadata keys avoid an associative scan. Stream sizes,
+maps and content remain outside this payload. Default 64-entry retention adds
+6,656 accounted bytes beyond the preceding count memo, without another allocation.
+Capacity one adds 104 bytes; zero disables volume retention and adds no storage.
+
+Seven reports under artifacts/directory-metadata-paired-* contain 254 paired runs;
+six artifacts/directory-metadata-before-* reports retain 28 reference-only runs.
+Main verifies all actual binaries, archives, 26 unchanged native/workload/public
+headers, input bytes and every run log in artifacts/metadata-memo-benchmark-review.json.
+The reference core already contains the checked filename-count memo. Its archive
+comes from the preceding passing portable reproducibility build; the benchmark
+git_head field identifies the current compiler caller, not that archive's source.
+The review binds each actual core archive to its own qualification report.
+
+Both cores use the same Release/O3 policy, O2 native/workload compiler, SDK and
+arguments. Paired order alternates. Each repetition has a fresh process/owner with
+an immutable memory reader and external serialization; source/host caches are warm.
+Zero warmup measures fresh core state, not cold media. Large has 2,000 names of one
+inode, pages 8/16 and one measured scan; warm uses one warmup and seven pairs per
+profile, fresh uses zero warmup and seven sequential pairs. Small has twelve names
+of one inode, pages 1/2, 100 rounds and nine pairs/profile. Independent-object controls
+have 32 fitting files/100 rounds or 256 competing files/30 rounds, pages 8/16,
+one warmup and nine pairs/profile. Disabled/single-entry pressure uses sequential
+only. These selected synthetic layouts do not qualify whole-volume consistency.
+
+| Inventory/state | Profile | Reference/current wall median, ms | Reference/current CPU median, ms |
+| --- | --- | ---: | ---: |
+| Large/fresh | Sequential | 71.224 / 41.964 | 70.875 / 41.804 |
+| Large/warm | Sequential | 69.717 / 40.631 | 69.362 / 40.453 |
+| Large/warm | Interleaved | 135.218 / 77.771 | 134.162 / 77.283 |
+| Large/warm | Views | 100.826 / 43.338 | 100.354 / 43.051 |
+| Small/warm | Sequential | 6.721 / 5.720 | 6.681 / 5.692 |
+| Small/warm | Interleaved | 11.812 / 9.953 | 11.779 / 9.857 |
+| Small/warm | Views | 10.616 / 8.628 | 10.515 / 8.575 |
+| 32 independent/fitting | Sequential | 5.146 / 4.659 | 5.065 / 4.610 |
+| 32 independent/fitting | Interleaved | 9.754 / 8.790 | 9.724 / 8.742 |
+| 32 independent/fitting | Views | 8.656 / 7.752 | 8.635 / 7.696 |
+| 256 independent/pressure | Sequential | 15.968 / 16.198 | 15.880 / 16.036 |
+| 256 independent/pressure | Interleaved | 30.638 / 30.201 | 30.391 / 30.046 |
+| 256 independent/pressure | Views | 26.361 / 26.283 | 26.266 / 26.107 |
+| 256 independent/cache zero | Sequential | 15.365 / 15.254 | 15.248 / 15.119 |
+| 256 independent/cache one | Sequential | 15.026 / 14.807 | 14.931 / 14.797 |
+
+Large fresh wall ranges are 69.933–72.158 / 41.043–43.439 ms. Reads fall from 7,524
+to 5,276, requested bytes from 296,479,744 to 151,456,768 and allocations from
+23,342 to 16,598. Baseline/peak accounted storage rises by exactly 6,656 bytes,
+from 140,456/345,568 to 147,112/352,224 bytes. Warm profiles retain lower I/O and
+allocation counts; all per-run percentiles, ranges and counters remain in reports.
+Small sequential allocations fall from 22,000 to 15,100 with unchanged I/O;
+interleaved/views fall from 38,600/29,900 to 26,600/17,600.
+
+The fitting 32-object controls improve median wall time about 9.5–10.4%, with
+overlapping ranges and unchanged I/O/allocation counts. The pressure sequential
+median is 1.44% slower (about 0.23 ms): ranges 15.599–16.485 / 15.736–17.244 ms
+overlap. Other pressure profiles have small reductions, and counters remain
+identical; there is no blanket pressure speedup. Default retention always adds
+6,656 accounted bytes in this matrix, including peak storage. Single retention
+adds 104 bytes and disabled retention adds zero. No RSS benefit, installed FSKit,
+macOS-27 runtime, physical-media throughput or general unique-file gain is established.
+
+## Preceding bounded filename-count reuse
 
 Temporary FSKit enumeration nodes previously repeated a complete FILE_NAME
 inventory for every name of the same inode. A bounded volume-owned memo now
@@ -53,7 +117,8 @@ from 40,400/70,600/43,500 to 22,000/38,600/29,900 for sequential/interleaved/vie
 Small peak accounted storage increases by 408 bytes, with no native RSS advantage
 claimed. These results qualify this targeted reuse, not installed FSKit, macOS 27
 runtime, Windows compatibility, unique-file throughput or the wider optimization
-program. Unique-object/capacity/pressure controls remain future measurement work.
+program. The subsequent metadata section above adds scoped independent-object,
+capacity and pressure controls; it retains the pressure tradeoff explicitly.
 
 The rebuild after the private-header comment clarification has a different archive
 digest. A later two-directory comparison identifies archive timestamps as the

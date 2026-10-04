@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 73 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 75 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -33,7 +33,17 @@ memo keyed by the complete reference. Default retention adds 1 KiB, and failed o
 quota-refused inventories publish nothing. Paired legacy component workloads show
 targeted hard-link/alias gains while preserving complete cold checks, DOS separation
 and work admission. [Performance evidence](docs/PERFORMANCE.md) records scope and
-memory tradeoffs; unique-file and installed throughput remain unqualified.
+memory tradeoffs; installed throughput remains unqualified.
+
+Checked base metadata now also survives temporary node closure, independently of
+raw-record and filename-count replacement. It retains standard information and
+checked reparse presence; stream sizes and mappings keep their separate validation.
+The default metadata payload adds 6,656 accounted bytes. Matched controls cover
+many names of one inode, 32 independent files fitting retention and 256 competing
+files, including disabled/single-entry policies. Large fresh-core enumeration falls
+from 71 to 42 ms; pressure sequential median increases about 1.4%. These are scoped
+component observations. [The writable sequence](docs/WRITES.md) starts with native
+journal history/recovery qualification before bounded existing-file writes.
 
 Eight selected synthetic namespace images now retain complete filename bodies,
 including 2,000 long names stored in real MFT extensions. Exact body/stream

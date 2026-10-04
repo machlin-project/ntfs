@@ -8,7 +8,66 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Bounded volume filename-count reuse
+## Checked base metadata across temporary nodes
+
+An independently keyed payload in the existing record-cache allocation retains
+only fully checked standard information and reparse presence. A direct-mapped
+lookup compares the full sequence-bearing reference; raw/count eviction does not
+evict metadata. Successful publication follows complete cold validation and work
+precharge. Failed collisions retain the previous successful payload. Capacity zero
+disables volume retention, one retains one payload, and the default 64 entries add
+6,656 accounted bytes beyond the preceding count memo. No public ABI changes.
+Every fresh node still validates its base record/header; stream sizes and mappings
+remain separately checked, including on metadata hits.
+
+All 75 fatal-ASan/UBSan suites, 54 FSKit component PASS groups/eleven genuine
+macOS-27 runtime SKIPs, style and both 2-KiB freestanding targets pass. New checks
+cover capacity, independent eviction, sequence/owner/DOS isolation, exact and
+one-below hot/cold work with ancestor admission, three required allocation faults,
+one partial-read fault, retry, hidden reparse rejection and complete cleanup.
+Invalid stream sizes continue to fail independently. Two independently authored
+selected-object images contain 32 fitting and 256 competing resident files; CLI
+oracles check 290 inventories, 290 exact filename bodies and 288 exact streams.
+These synthetic layouts do not qualify whole-volume consistency or Windows writes.
+
+Fresh image fuzz replays all 443 authored seeds and exits zero at 71 seconds.
+The last periodic observation is 48,037 executions at 71 seconds, with zero
+OOM/timeout/crash counters; there is no exact terminal total. Three original NIST
+partitions again pass complete diagnostics and 11,380 external commands, covering
+1,133 documented user objects, three roots, 1,079 readable stream oracles and one
+explicit symbolic-link data refusal. Main verifies all retained info/security/data
+oracles and original acquisition hashes. Each partition file has 314,572,800 bytes;
+the decoded volume extent is 314,572,288 bytes. Authoring OS remains unestablished.
+
+The clean universal Release compiles node.c for arm64/x86_64, and both app/extension
+binaries contain both slices. The binaries carry linker ad hoc metadata; strict
+bundle signature verification fails with "code object is not signed at all."
+This is a passing build with an explicit signing limitation, not signed deployment
+or installed runtime acceptance. Eight full portable Release product pairs match
+across two build directories, with actual archive timestamps zero.
+
+Seven matched reports contain 254 paired measurements; six reference-only reports
+contain 28 baseline runs. All inventory oracles and unchanged native/workload/public
+header guards pass. Targeted large fresh-core wall median falls from 71.224 to
+41.964 ms. The 256-object pressure sequential median rises about 1.44%, with
+overlapping ranges and mixed other profiles. PERFORMANCE.md retains exact counters,
+ranges and accounted memory; no RSS or general unique-file throughput benefit is
+established.
+
+Full test evidence is artifacts/metadata-memo-checked-testlog.json; bounded stage
+logs are artifacts/plan-metadata-memo-{checked,final}-*. Fresh reports are under
+artifacts/{fuzz,nist-corpus}-metadata-memo-reviewed/, universal products under
+artifacts/fskit-metadata-memo/ and portable reproducibility under
+artifacts/reproducibility-metadata-memo/. Main reviews are
+artifacts/metadata-memo-{review,actual-files-review,benchmark-review,
+reproducibility-review,app-products}.json. Six portable/component products are
+retained under artifacts/metadata-memo-products/. Preserve the initial test-only
+resident physical-allocation expectation failure and the corrected reviewer input
+length assertion separately. No compiled source or source revision changes during
+final qualification. Native journal recovery, writable ownership, Windows
+roundtrips, native directory-count/authorization policy and installed runtime remain open.
+
+## Preceding bounded volume filename-count reuse
 
 Complete successful filename counts now survive temporary node closure in a
 bounded mounted-volume memo. Full references include sequences; count keys are

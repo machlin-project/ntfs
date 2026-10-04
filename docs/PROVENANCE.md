@@ -7,6 +7,13 @@ describe this tool policy. No tool implementation is copied; completed products
 are compared without normalization. This is build-tool provenance, independent
 of NTFS format and filesystem implementation sources.
 
+The direct-mapped base-metadata memo and admission/replacement code are original
+implementation over this core's already checked standard information and reparse
+presence. Independent-object controls use the original wire author, separate MFT
+and index extents, exact per-object resident bytes and complete selected filenames.
+No foreign cache or filesystem implementation is imported. Their scope remains
+synthetic selected-object qualification, independent of Windows/full-volume tests.
+
 The NTFS core is an original implementation in this repository. Its design uses
 published Microsoft descriptions, NTFS-3G's reverse-engineered format information,
 independently authored fixtures and Apple SDK interfaces. NTFS-3G layout comments

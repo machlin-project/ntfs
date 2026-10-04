@@ -158,7 +158,7 @@ The accounting deliberately includes cached and memory-only paths:
 | Directory indexes | Checked frame spans, seek/traversal transitions, visited-table scans, collision probes and rehash steps; diagnostic-only complete bitmap bit scans and visited-block membership probes |
 | ADS catalogs | Record/list spans, each name comparison including its minimum UTF-16 span, sort/uniqueness/base lookup and copied entry size |
 | Filename counts | Result size on node-local reuse; every inspected full-reference volume-cache payload; cold publication precharge before existing complete record/list/sort/body validation |
-| Metadata and reparse | Cold record or cached stat size; actual original-byte and UTF-16 copies |
+| Metadata and reparse | Original cold record or node-local stat size; one full-reference volume-metadata payload probe and cold publication precharge; actual original-byte and UTF-16 copies |
 | Security | Index-frame spans, descriptor hash/validation/copy/duplicate comparison spans, bounded token group scans and each owned DACL SID comparison; whole-store cursor transitions, visited/bitmap membership, locator growth/heap sorting, interval checks and FILE-ID binary probes; per-file diagnostic decoding precharges descriptor bytes to both work planes and shares one operation with the owning node open |
 | Free clusters | Bitmap byte scans, with the fixed bits-per-byte loop |
 
@@ -178,6 +178,17 @@ The original complete cold inventory and per-node hit charges remain intact.
 tests/links_cache.c checks exact/one-below cold and nested hot work, stale references,
 different owners, raw/count replacement, DOS separation, read/allocation failures,
 fresh retry, disabled/single/default capacities and zero tracked storage at unmount.
+
+The direct-mapped volume base-metadata memo shares that required array and adds
+sizeof(struct ntfs_stat) per configured slot. It has one charged probe per fresh
+node and precharges replacement before cold I/O. Failures and quota refusal never
+publish, including on a collision with previously valid metadata. Stream sizes
+and mappings keep their independent validation/work contract. The public
+metadata_volume_cache tests cover exact/one-below cold/hot and enclosing work,
+disabled/single/default retention, 32 fitting/256 competing independent objects,
+raw/count independence, failed collision, partial I/O/allocation retry, hidden
+reparse/unsupported policy refusal and complete cleanup. The earlier metadata
+test explicitly disables volume caching to retain its cold node-local fault sweep.
 
 ## FSKit physical accounting
 

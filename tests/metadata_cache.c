@@ -12,6 +12,7 @@ static size_t
 exercise(struct fuzz_device *device, size_t fail_allocation, bool fail_read)
 {
 	struct ntfs_environment env = fuzz_environment(device);
+	struct ntfs_limits limits;
 	struct ntfs_volume *volume;
 	struct ntfs_node *root;
 	struct ntfs_stat before, after;
@@ -20,7 +21,10 @@ exercise(struct fuzz_device *device, size_t fail_allocation, bool fail_read)
 
 	device->fail_allocation = 0;
 	device->fail_read = 0;
-	assert(ntfs_mount(&env, NULL, &volume) == NTFS_OK);
+	/* Isolate node-local reuse from mount's already checked temporary root. */
+	ntfs_default_limits(&limits);
+	limits.record_cache_entries = 0;
+	assert(ntfs_mount(&env, &limits, &volume) == NTFS_OK);
 	assert(ntfs_root(volume, &root) == NTFS_OK);
 	allocations = device->allocations;
 	reads = device->reads;

@@ -104,7 +104,8 @@ def main():
                   'warmup_rounds': args.warmup_rounds,
                   'profiles': list(args.profiles), 'record_cache_entries': args.record_cache_entries}
     report = {'schema': 1, 'status': 'running', 'scope': 'real legacy FSKit directory component; '
-              'immutable memory reader, external serialization, synthetic hard-link/alias inventory',
+              'immutable memory reader, external serialization, synthetic namespace inventory',
+              'inventory_unique_references': len({entry['reference'] for entry in expected}),
               'machine': platform.machine(), 'platform': platform.platform(),
               'installed_mount_qualified': False, 'modern_runtime_qualified': False,
               'inputs': inputs, 'parameters': parameters,

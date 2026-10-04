@@ -174,6 +174,16 @@ settings may differ. Reports retain both parameter sets, binaries, source/input
 digests, exact inventory outcomes and per-run counters. PERFORMANCE.md records
 the memory tradeoff and the limits of this synthetic component profile.
 
+Independent-object controls are authored by tests/metadata_objects_fixtures.py
+under .build/metadata-objects-fixtures. metadata-objects-{fit,pressure}.img/.json
+contain 32/256 distinct resident files, with complete selected filename bodies and
+exact stream oracles. They qualify selected objects, not a whole volume or Windows
+authoring. Use them with the same directory runner and profile capacities 0/1/64;
+inventory_unique_references records the distinction from many names of one inode.
+The metadata-volume-cache and metadata-objects-cli suites exercise those inputs.
+The image fuzz campaign adds their two valid and one rejected-collision images,
+authored directly inside its existing bounded geometry.
+
 Use `--target all` for the image, whole-volume diagnostic and ten standalone parser/decision targets, or select
 `mapping-pairs`, `attribute-list`, `index-root`, `index-block`, `lznt1`, `reparse`,
 `security`, `access`, `wof` or `logfile`. The time budget applies per target. Each campaign retains its own

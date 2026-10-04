@@ -241,6 +241,22 @@ of individual streams still undergo complete attribute validation; stat does not
 cache a readable stream or bypass content checks. FSKit admission
 checks continue to gate cached operations after permanent revocation.
 
+Checked base metadata also survives temporary node closure in the existing
+volume record-cache allocation. A direct-mapped slot uses record number modulo
+configured capacity for constant-cost lookup, while metadata.reference carries
+the complete sequence-bearing key. Raw bytes, filename counts and metadata have
+independent keys and replacement. A hit compares the newly checked base header's
+physical links and directory flag before node-local publication. Only complete
+successful standard-information/presence validation replaces a payload; even a
+failed colliding object retains the previous checked value. Zero reference marks
+an unused slot because checked nodes require a nonzero sequence.
+No stream size/mapping, decoded reparse packet or readable content is retained in
+this memo. Record-cache capacity zero disables it while preserving node-local
+reuse. Each configured slot adds sizeof(struct ntfs_stat) to mounted storage,
+without a separate allocation. The original cold/node-local charges remain,
+plus one payload lookup and cold publication precharge. The owner remains
+immutable and externally serialized; this is not a concurrency change.
+
 The standalone security decoder in `ntfs/security.h` owns MS-DTYP byte framing.
 It returns original control bits, lossless SID values, checked component spans,
 and distinct absent/NULL/empty ACL states. It validates known ACE layouts, optional

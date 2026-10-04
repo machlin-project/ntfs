@@ -87,6 +87,9 @@ struct ntfs_record_cache {
 	uint64_t number, stamp;
 	uint8_t *bytes;
 	struct ntfs_link_count_cache links;
+	/* Independent full-reference key in metadata.reference; zero is unused.
+	 * Sizes remain zero: only checked base metadata and presence are retained. */
+	struct ntfs_stat metadata;
 };
 
 struct ntfs_volume {

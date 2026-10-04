@@ -86,6 +86,11 @@ try:
                 # stream, while preserving ordinary ADS with the same name.
                 paths.extend(sorted(seeds.glob('validation-bad-*.img')))
                 paths.extend(journal_volume_images(seeds, MAX_INPUT_BYTES))
+                metadata_seeds = seeds / 'metadata-objects'
+                subprocess.run([sys.executable, str(root / 'tests/metadata_objects_fixtures.py'),
+                                str(metadata_seeds), '--image-bytes', str(MAX_INPUT_BYTES)],
+                               cwd=root, env=env, check=True)
+                paths.extend(sorted(metadata_seeds.glob('*.img')))
             sources = [root / ('tests/fuzz_validation.c' if target == 'validation' else 'tests/fuzz.c'), root / 'tests/fuzz_mutator.c']
             flags = []
         else:

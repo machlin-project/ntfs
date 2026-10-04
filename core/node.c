@@ -82,6 +82,8 @@ ntfs_node_close(struct ntfs_node *node)
 enum ntfs_result
 ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 {
+	struct ntfs_volume *v;
+	struct ntfs_stat *cached = NULL;
 	const struct ntfs_disk_record *r;
 	const struct ntfs_disk_standard *si;
 	const struct ntfs_disk_standard_policy *policy;
@@ -89,6 +91,7 @@ ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 	struct ntfs_attr_view a;
 	const uint8_t *value;
 	size_t length;
+	uint32_t cache_index;
 	bool reparse_present;
 	enum ntfs_result result;
 
@@ -104,8 +107,34 @@ ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 		*st = node->metadata;
 		return NTFS_OK;
 	}
-	ntfs_zero(st, sizeof(*st));
+	v = node->volume;
 	r = (const void *)node->record;
+	if (v->cache != NULL) {
+		/* Direct mapping bounds lookup without scanning the record cache.
+		 * Raw record and filename-count replacement use independent keys. */
+		cache_index =
+		    (node->reference & NTFS_REFERENCE_RECORD_MASK) % v->limits.record_cache_entries;
+		cached = &v->cache[cache_index].metadata;
+		result = ntfs_work(v, sizeof(*cached));
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (cached->reference == node->reference) {
+			if (cached->links != ntfs_u16(r->links) ||
+			    cached->directory !=
+				((ntfs_u16(r->flags) & NTFS_RECORD_DIRECTORY) != 0)) {
+				return NTFS_CORRUPT;
+			}
+			*st = *cached;
+			goto verified;
+		}
+		/* Reserve publication work before cold I/O; failures publish nothing. */
+		result = ntfs_work(v, sizeof(*cached));
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
+	ntfs_zero(st, sizeof(*st));
 	st->reference = node->reference;
 	st->links = ntfs_u16(r->links);
 	st->directory = (ntfs_u16(r->flags) & NTFS_RECORD_DIRECTORY) != 0;
@@ -154,6 +183,10 @@ ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 			return NTFS_CORRUPT;
 		}
 	}
+	if (cached != NULL) {
+		*cached = *st;
+	}
+verified:
 	node->metadata = *st;
 	node->metadata_verified = true;
 	return NTFS_OK;

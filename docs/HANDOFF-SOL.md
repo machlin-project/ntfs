@@ -17,7 +17,40 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Selected native filename groundwork
+## Native primary-count adoption
+
+FSKit now uses ntfs_node_link_counts for item/page linkCount and all three
+single-edge reparse guards. Separate DOS aliases no longer add native links or
+another reparse owning context. Two genuine primary names remain unsupported
+for readlink projection. No raw-count fallback exists. Item adoption checks the
+complete storage before publication; names-only pages retain classification.
+
+The trusted preparation author supplies exact filenames for 153 selected native
+images, preserving I30 keys and ordinary attribute bytes. The CLI checks 1,127
+inventories/3,265 exact bodies, and main verifies all original/prepared hashes.
+There are 72 fatal-sanitizer suites, 54 component PASS groups/eleven actual
+macOS-27 runtime SKIPs, style and a clean universal Release. Four count mutations,
+ordinary DOS-bearing hard links, five source/intermediate DOS link vectors,
+320 allocation/69 read fault positions and 56 core/physical boundaries pass.
+Current evidence uses artifacts/plan-fskit-primary-*,
+artifacts/fskit-primary-checked-testlog.json,
+artifacts/fskit-primary-fixtures-review.json and
+artifacts/fskit-primary-filename-storage-cases.json. Preserve the omitted-data,
+omitted-base-name and first x86_64 compiler failures separately.
+Main actual-file review is artifacts/fskit-primary-review.json; accepted CLI/archive
+and component binaries are under artifacts/fskit-primary-accepted/. The app remains
+under artifacts/fskit-primary-counts/ with linker ad hoc signing and no distribution
+authority.
+
+Next optimization: avoid repeating the complete filename inventory for temporary
+nodes referencing the same immutable inode. The two current-only large-directory
+runs are correct but cost about 2.59 seconds and 5 GB of requested bytes per 2,000
+names with record caching disabled. Exact observations are under
+artifacts/directory-primary-counts-cold/. Require bounded owning-layer reuse,
+ancestor admission, failure/retry and measured comparison. Native directory
+link policy, Windows observations and installed acceptance remain open.
+
+## Preceding selected native filename groundwork
 
 Eight basic/namespace images now have complete selected filename storage authored
 from the exact original structured index names. They retain their original stream
@@ -35,8 +68,9 @@ artifacts/filename-storage-review.json. These are selected-object storage fixtur
 not whole-volume diagnostic or Windows-authored images. The trusted writer assumes
 a complete initialized base MFT mapping and resident volume bitmap.
 
-Continue the owning-layer adapter migration described below. Remaining native
-fixture families need equivalent exact filename bodies before strict adoption.
+At that checkpoint, the owning-layer adapter migration and remaining native
+fixture families still needed complete filename bodies. The current section above
+records their selected native adoption.
 Core and adapter implementation sources are unchanged by this fixture checkpoint;
 the prior component/universal-build evidence retains its scope.
 
@@ -70,7 +104,7 @@ at 70 seconds; terminal exit is zero at 71 seconds. Evidence is under
 artifacts/fuzz-link-counts-reviewed/. Earlier validation fuzz, performance and
 reproducibility retain their original scope.
 
-Next owning-layer work: migrate FSKit linkCount and all three single-edge reparse
+At that checkpoint, the next owning-layer work was to migrate FSKit linkCount and all three single-edge reparse
 guards from stat.links to checked primary counts. Existing native fixtures can
 omit FILE_NAME storage; author complete names/parents/listed extensions before
 enabling strict inventory use. Do not fall back to raw header counts or invent

@@ -1,5 +1,21 @@
 # Performance contracts
 
+The native primary-count adoption now has a current-only cost observation under
+artifacts/directory-primary-counts-cold/report.json. Both independently checked
+2,000-entry hard-link/alias scans pass with pages 8/16, one measured sequential
+round, zero warmup rounds and two fresh-process repetitions. The core is Release/O3,
+the adapter/workload O2, with no sanitizer or MFT record cache. Input/host caches
+are already warm; this is not cold-device or installed-mount performance.
+
+Median wall/CPU is 2,594.169/2,577.514 ms per scan; p50/p95/p99 request medians are
+10.322/10.730/10.875 ms. Each run has 251 requests, 4,508,019 reads,
+5,047,707,648 requested bytes and 4,528,274 allocations. Peak accounted core
+storage is 293,344 bytes and measured RSS is about 24.60 MB. This is an observed
+cost, not a paired speedup. Each temporary entry node currently repeats the
+complete 2,000-name inventory. The next separate optimization must bound reuse
+under immutable volume ownership, full references, work admission and existing
+allocation/fault policies; it must not weaken complete cold verification.
+
 The core operation-accounting guards now have a paired retained-Release comparison
 across ordinary/fragmented/resident/sparse/LZNT1/WOF reading and metadata. It
 measures complete reader versions with the same workload, compiler, SDK, inputs

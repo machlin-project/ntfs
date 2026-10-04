@@ -8,7 +8,58 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Selected native filename fixtures
+## Native primary filename counts
+
+FSKit item and directory-page attributes now expose checked primary filename
+counts. Adoption and all three single-edge reparse guards use complete core
+inventories, with no physical-header fallback. Separate DOS aliases no longer
+inflate native linkCount or reject a uniquely owned symlink/junction. A source
+with two primary names plus a DOS alias remains unsupported. Names-only pages
+retain their classification contract without requiring filename counts.
+
+All 72 fatal-sanitizer suites, 54 FSKit component PASS groups/eleven genuine
+macOS-27 runtime SKIPs and style pass. The clean universal Release builds both
+architectures; both binaries are linker ad hoc signed with no distribution
+authority. Four independent FILE-header mutations refuse lookup and
+attribute pages while preserving names-only inventories, repeated refusal,
+single replies and cleanup. Listed source/intermediate DOS cases join the
+fault sweeps: 320 allocation/69 partial-full read positions across six profiles
+and 56 exact/one-below core/physical boundaries. Ordinary hard-link held/page
+attributes agree with the original primary-name oracle, including separate DOS
+storage. Existing lifecycle, revocation, remount, content and ADS checks pass.
+
+The trusted native author completes 153 selected images from their exact original
+I30 keys. The CLI checks 1,127 inventories and 3,265 filename-body hashes; all
+selected source/output hashes are independently reviewed. Ordinary attribute
+payloads remain byte-identical. This CLI has no separate stream-byte oracle;
+content correctness is checked by the actual native component. The preceding
+eight-image author retains its 23 original stream-byte oracles. Unselected
+whole-volume diagnostics and nested expected-data directories remain original.
+
+Evidence is artifacts/plan-fskit-primary-checked-*,
+artifacts/fskit-primary-checked-testlog.json,
+artifacts/plan-fskit-primary-final-*,
+artifacts/plan-fskit-primary-app-initialized-*,
+artifacts/fskit-primary-app-products.json,
+artifacts/fskit-primary-fixtures-review.json and
+artifacts/fskit-primary-filename-storage-cases.json. The first component attempt
+failed because preparation omitted the expected-data directory; the second
+omitted the exact namespace.img name. The first universal attempt rejected an
+uninitialized-local warning on x86_64. Retain their separate first/oracles/app
+logs. The fixes preserve error checks and add no fallback or raised quota.
+Main actual-file review is artifacts/fskit-primary-review.json; retained diagnostic,
+core archive and component products are under artifacts/fskit-primary-accepted/.
+
+The current-only large-directory measurement passes both independent inventory
+runs but exposes repeated complete filename scans: about 2.59 seconds, 4,508,019
+reads and 5,047,707,648 requested bytes per 2,000 entries with record caching
+disabled. PERFORMANCE.md records the precise scope and next optimization.
+This checkpoint changes no portable core implementation; prior freestanding,
+fuzz and public-corpus reports retain their source scope. Installed logical counts,
+native directory link policy, Windows observations, recovery and release remain
+unqualified.
+
+## Preceding selected native filename fixtures
 
 The original Python author now supplies complete selected FILE_NAME bodies for
 eight basic/namespace images, using the exact structured names used by their
@@ -77,9 +128,9 @@ never compiled. The first new corpus run lost its output connection and failed
 with BrokenPipe after two profiles; the reviewed independent supervisor completed
 all three with actual exit zero. These failures remain separate artifacts.
 
-FSKit linkCount and single-edge reparse guards still consume ntfs_stat.links.
-Migrate them to checked primary counts and author complete native filename
-fixtures before claiming DOS-alias support there. Windows/native logical counts,
+At that checkpoint FSKit linkCount and single-edge reparse guards still consumed
+ntfs_stat.links. The native migration above closes those component paths.
+Windows/native logical counts,
 owning authorization, installed mounts, native recovery and commercial release
 remain unqualified.
 

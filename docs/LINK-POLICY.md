@@ -60,7 +60,10 @@ Installed native loop handling, junction ownership across volumes and Windows-
 authored semantics remain separate qualification.
 
 Native readlink bytes are inode-scoped. This implementation requires exactly one
-stored hard-link edge for a projected reparse object. Multiply linked reparse
+checked primary FILE_NAME for a projected reparse object, including intermediate
+symlinks/junctions. A separately stored DOS alias does not add an owning context.
+The complete physical inventory must still match the FILE header; malformed or
+incomplete storage refuses before adoption or attribute packing. Multiply linked reparse
 objects are explicitly UNSUPPORTED, because alias/case/root-relative translation
 may depend on the containing edge. Ordinary hard-link identity and per-link name
 projection are unchanged. Supporting context-dependent reparse hard links requires

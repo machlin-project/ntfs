@@ -31,11 +31,16 @@ Successful immutable counts are cached on the node under ordinary operation
 admission. Parent/index reachability remains the whole-volume validator's scope;
 the inventory does not define native directory link policy.
 
-FSKit currently exports ntfs_stat.links and uses that field for single-edge
-reparse admission. Migrating both uses and qualifying complete native fixtures is
-the next adapter task. The core's 43 inventory verdicts and external NIST filename
-oracles do not qualify installed link counts. See CORE-QUALIFICATION.md and
-HANDOFF-SOL.md for accepted evidence and remaining native contracts.
+FSKit now exports checked primary_names as linkCount for adopted items and
+attribute-requested directory entries. Adoption validates complete filename
+storage before publishing an item. All three single-edge reparse guards use the
+same primary count; a separate DOS alias does not add another owning context.
+Corrupt or incomplete storage remains an error, with no raw-header fallback.
+Names-only enumeration retains its metadata classification contract and does not
+require the filename inventory. Complete selected native fixtures qualify these
+component paths, including ordinary hard links with a separate DOS alias and
+DOS-bearing symlink/junction chains. Installed counts, native directory link
+policy and Windows observations remain unqualified; see ACCEPTANCE.md.
 
 ## Filename projection
 

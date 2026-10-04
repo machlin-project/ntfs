@@ -19,4 +19,4 @@ command += [str(adapter / name) for name in ('NTFSResource.m', 'NTFSNames.m', 'N
 command += [str(root / 'tests' / name) for name in ('fskit_lifecycle.m', 'fskit_enumeration.m', 'fskit_content.m', 'fskit_links.m', 'fskit_pressure.m', 'fskit_read_path.m', 'fskit_operation.m', 'fskit_lookup.m', 'fskit_maintenance.m', 'fskit_access.m')]
 command += [str(root / '.build/libntfs.a'), '-o', str(executable)]
 subprocess.run(command, cwd=root, env=env, check=True)
-subprocess.run([str(executable), str(root / '.build/fixtures/standard.img')], cwd=root, env=env, check=True)
+subprocess.run([str(executable), str(root / '.build/native-fixtures/standard.img')], cwd=root, env=env, check=True)

@@ -213,6 +213,7 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 	 * Files may have many parents; only directories use this reference. */
 	uint64_t parentReference;
 	struct ntfs_stat stat;
+	struct ntfs_link_counts links;
 }
 @property(strong) NTFSVolume *owner;
 @end
@@ -1145,6 +1146,7 @@ item_id(uint64_t reference)
 		  error:(NSError **)error
 {
 	struct ntfs_stat stat;
+	struct ntfs_link_counts links = {0};
 	struct ntfs_reparse *snapshot = NULL;
 	struct ntfs_reparse_info reparseInfo;
 	struct ntfs_wof_info wofInfo;
@@ -1158,6 +1160,9 @@ item_id(uint64_t reference)
 	result = ntfs_node_metadata(node, &stat);
 	if (result == NTFS_OK && !stat.reparse) {
 		result = ntfs_node_stat(node, &stat);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_node_link_counts(node, &links);
 	}
 	state = self.lifecycle;
 	if (result == NTFS_OK && state != NTFSVolumeLoaded && state != NTFSVolumeActive) {
@@ -1183,7 +1188,7 @@ item_id(uint64_t reference)
 				}
 			} else {
 				/* Only readlink projection depends on a unique owning edge. */
-				result = stat.links != 1
+				result = links.primary_names != 1
 				    ? NTFS_UNSUPPORTED
 				    : ntfs_native_link_target(_core, snapshot, stat.reference,
 					  containingPath, _linkPolicy, _maximumDirectoryEntries,
@@ -1271,6 +1276,7 @@ item_id(uint64_t reference)
 	item = [[NTFSItem alloc] init];
 	item->node = node;
 	item->stat = stat;
+	item->links = links;
 	item->parentReference = path != nil ? parentReference : 0;
 	item->directoryPath = path;
 	item->reparse = snapshot;
@@ -1547,11 +1553,15 @@ item_id(uint64_t reference)
 			*error = ntfs_error(NTFS_STALE);
 			return nil;
 		}
-		return [self attributesForStat:&value->stat symbolicLink:value->linkTarget != nil];
+		return [self attributesForStat:&value->stat
+				    linkCounts:&value->links
+				  symbolicLink:value->linkTarget != nil];
 	}
 }
 
-- (FSItemAttributes *)attributesForStat:(const struct ntfs_stat *)stat symbolicLink:(BOOL)link
+- (FSItemAttributes *)attributesForStat:(const struct ntfs_stat *)stat
+			     linkCounts:(const struct ntfs_link_counts *)links
+			   symbolicLink:(BOOL)link
 {
 	FSItemAttributes *attrs = [[FSItemAttributes alloc] init];
 
@@ -1564,7 +1574,7 @@ item_id(uint64_t reference)
 	attrs.type =
 	    link ? FSItemTypeSymlink : (stat->directory ? FSItemTypeDirectory : FSItemTypeFile);
 	attrs.fileID = item_id(stat->reference);
-	attrs.linkCount = stat->links;
+	attrs.linkCount = links->primary_names;
 	attrs.size = stat->size;
 	attrs.allocSize = stat->allocated_size;
 	attrs.inhibitKernelOffloadedIO = YES;
@@ -1953,6 +1963,7 @@ item_id(uint64_t reference)
 	struct ntfs_node *node = NULL;
 	struct ntfs_reparse *snapshot = NULL;
 	struct ntfs_stat stat;
+	struct ntfs_link_counts links;
 	struct ntfs_reparse_info reparseInfo;
 	struct ntfs_wof_info wofInfo;
 	FSFileName *name;
@@ -2106,6 +2117,9 @@ item_id(uint64_t reference)
 					if (result == NTFS_OK && attributes && !stat.reparse) {
 						result = ntfs_node_stat(node, &stat);
 					}
+					if (result == NTFS_OK && attributes) {
+						result = ntfs_node_link_counts(node, &links);
+					}
 					type = FSItemTypeUnknown;
 					if (result == NTFS_OK && stat.reparse) {
 						result = ntfs_reparse_open(node, &snapshot);
@@ -2135,7 +2149,7 @@ item_id(uint64_t reference)
 									}
 								}
 							} else if (attributes) {
-								result = stat.links != 1
+								result = links.primary_names != 1
 								    ? NTFS_UNSUPPORTED
 								    : ntfs_native_link_target(_core,
 									  snapshot, stat.reference,
@@ -2171,6 +2185,7 @@ item_id(uint64_t reference)
 					if (attributes) {
 						attrs = [self
 						    attributesForStat:&stat
+							   linkCounts:&links
 							 symbolicLink:type == FSItemTypeSymlink];
 					}
 				}

@@ -48,7 +48,7 @@ def author(output):
                          'lookup_cases': list(lookup_cases),
                          'streams': [{'reference': f'{reference:016x}', 'hex': content.hex()}
                                      for reference, content in streams.items()],
-                         'mft_record_slots': writer.next_record,
+                         'mft_record_slots': writer.mft_record_slots,
                          'new_extension_records': writer.next_record - writer.original_records,
                          'source_sha256': original_digest,
                          'sha256': hashlib.sha256(image).hexdigest()})

@@ -51,6 +51,16 @@ Original body hashes, stream bytes and source-image hashes form its construction
 oracles. Its trusted synthetic-input scope and unsupported author geometries are
 explicit; it imports no foreign filesystem writer or recovery implementation.
 
+The native preparation author reads exact keys from the original trusted I30
+roots and allocated index blocks, including separator keys. It retains their
+namespace, parent reference and UTF-16 bytes and compares every ordinary
+attribute payload before/after filename placement. Unselected diagnostic images
+and nested expected-data directories remain linked to their originals. Its
+153 prepared images are selected-object storage fixtures, not a new full-volume
+or Windows corpus. Five additional DOS-bearing link cases and independent
+FILE-header mutations qualify the adapter's primary-count boundary. This work
+imports no foreign implementation.
+
 Primary references:
 
 - [Microsoft MFT overview](https://learn.microsoft.com/en-us/windows/win32/devnotes/master-file-table)

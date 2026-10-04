@@ -297,6 +297,7 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 	struct ntfs_node *parent = NULL, *child = NULL;
 	struct ntfs_dirent entry;
 	struct ntfs_stat stat;
+	struct ntfs_link_counts links;
 	NSMutableData *raw, *output = [NSMutableData data];
 	const uint16_t *units;
 	NTFSDirectoryPath *path = source, *root;
@@ -437,12 +438,16 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 						NSUInteger destinationDepth = 0;
 						BOOL destinationDangling = NO;
 
-						result = stat.links != 1
-						    ? NTFS_UNSUPPORTED
-						    : resolve_link_directory(volume, child,
-							  stat.reference, path, policy, resolution,
-							  &destination, &destinationDepth,
-							  &destinationDangling);
+						result = ntfs_node_link_counts(child, &links);
+						if (result == NTFS_OK) {
+							result = links.primary_names != 1
+							    ? NTFS_UNSUPPORTED
+							    : resolve_link_directory(volume, child,
+								  stat.reference, path, policy,
+								  resolution, &destination,
+								  &destinationDepth,
+								  &destinationDangling);
+						}
 						if (result == NTFS_OK) {
 							path = destination;
 							depth = destinationDepth;

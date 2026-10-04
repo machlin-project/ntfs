@@ -153,6 +153,7 @@ test_result_and_resource_admission(void)
 @property NSUInteger capacity;
 @property NSMutableArray<NSString *> *names;
 @property FSDirectoryCookie lastCookie;
+@property NSNumber *expectedLinkCount;
 @end
 @implementation TestPacker
 
@@ -165,6 +166,10 @@ test_result_and_resource_admission(void)
 	assert(
 	    (type == FSItemTypeFile || type == FSItemTypeDirectory) && itemID != FSItemIDInvalid);
 	assert(attributes != nil && attributes.type == type && attributes.fileID == itemID);
+	if (self.expectedLinkCount != nil) {
+		assert([attributes isValid:FSItemAttributeLinkCount] &&
+		    attributes.linkCount == self.expectedLinkCount.unsignedIntegerValue);
+	}
 	if (self.names.count == self.capacity) {
 		return NO;
 	}
@@ -709,6 +714,7 @@ test_namespace(NSData *image, NSArray<NSDictionary *> *names, BOOL caseSensitive
 		packer = [[TestPacker alloc] init];
 		packer.capacity = TEST_DIRECTORY_BATCH_CAPACITY;
 		packer.names = [NSMutableArray array];
+		packer.expectedLinkCount = @(names.count);
 		assert([volume enumerate:root
 				  cookie:cookie
 				verifier:cookie == 0 ? 0 : volume.directoryVerifier

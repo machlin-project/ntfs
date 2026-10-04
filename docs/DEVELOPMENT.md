@@ -86,12 +86,12 @@ EOF have explicit ownership checks. The
 content component additionally exercises six encoded-stream metadata variants and
 ten explicit corruption/unsupported rejections, requested-size pages, independent
 ADS, zero-byte read errors, remount and revocation without default-content I/O.
-The link component authors 76 native path/storage verdicts and checks root option
+The link component authors 81 native path/storage verdicts and checks root option
 binding, unique-edge identity, intermediate within-owner chains, requested
 metadata/names-only pages, aliases, original-wire xattrs, remount/revocation and
-all 205 allocation/44 read fault positions across listed/reserved and chain lookup
+all 320 allocation/69 read fault positions across listed/reserved and chain lookup
 and reopened snapshots. Every read position receives partial and full failed
-transfers. Two chain profiles additionally exercise 28 exact/one-below core and
+transfers. Four listed source/chain profiles additionally exercise 56 exact/one-below core and
 rounded-physical ancestor boundaries, checking the specific exhausted dimension,
 allocation versus read/work errors, successful scope closure and fresh retry.
 Core reparse tests

@@ -135,6 +135,7 @@ class FilenameStorage:
         assert self.mft_info['size'] == sum(count * f.CLUSTER for count, _ in self.runs)
         assert all(lcn is not None for _, lcn in self.runs)
         self.original_records = self.mft_info['size'] // f.RECORD
+        self.mft_record_slots = self.original_records
         self.next_record = self.original_records
         self.records = {}
         self.parts = {}
@@ -252,9 +253,12 @@ class FilenameStorage:
         if self.next_record > self.original_records:
             extra = (self.next_record - self.original_records) * f.RECORD
             lcn, count = self.allocate(extra)
+            f.put_data(self.image, lcn, bytes(count * f.CLUSTER))
             runs.append((count, lcn))
+            initialized = self.original_records * f.RECORD + count * f.CLUSTER
+            self.mft_record_slots = initialized // f.RECORD
             header = attr_header(self.mft_data)
-            replacement = f.nonresident(f.DATA, runs, self.next_record * f.RECORD, header['instance'])
+            replacement = f.nonresident(f.DATA, runs, initialized, header['instance'])
             current_header, values = (record_parts(self.records[f.MFT_RECORD])
                                       if f.MFT_RECORD in self.records
                                       else (self.mft_header, self.mft_values))

@@ -1,6 +1,18 @@
 # Core qualification and continuation
 
-Selected native fixture groundwork now adds complete filename bodies to eight
+The current native continuation adopts complete primary counts in FSKit item/page
+attributes and all three reparse owning-context guards. Exact preparation covers
+153 selected native images with 1,127 count observations/3,265 filename bodies.
+All 72 fatal-sanitizer suites, 54 component groups/eleven runtime SKIPs, style and
+the clean universal Release pass. Ordinary DOS-bearing hard links, source and
+intermediate link contexts, four physical-count mutations, 320 allocation/69 read
+fault positions and 56 core/physical boundaries retain exact replies and cleanup.
+Portable implementation sources remain unchanged. Public corpus/fuzz/freestanding
+evidence retains its original source scope. See ACCEPTANCE.md for actual logs,
+PERFORMANCE.md for the expensive complete-inventory observation, and HANDOFF-SOL.md
+for next work. Installed/Windows counts and native directory link policy remain open.
+
+The preceding selected native fixture groundwork adds complete filename bodies to eight
 basic/namespace images. Exact structured index names become resident filenames
 in the base or checked listed extensions, while original stream bytes remain
 unchanged. The large case has 2,000 real filename extension records and 2,064 MFT
@@ -8,7 +20,7 @@ slots. Current qualification is 71 fatal-sanitizer suites, 33 selected inventori
 2,077 exact filename bodies, 23 streams and retained stale-index rejection.
 Main verifies every source/image hash. Evidence is artifacts/filename-storage-review.json
 and artifacts/filename-storage-reviewed/. Whole-volume/Windows qualification,
-remaining native fixture families and adapter primary-count adoption remain open.
+at that checkpoint the remaining native fixture families and adapter adoption were open.
 
 The preceding filename-inventory continuation adds an owning core API for complete
 physical/primary/DOS counts, including resident/nonresident attribute lists and
@@ -16,7 +28,7 @@ sequence-checked extensions. Forty-three independently authored inventories,
 23 allocation/24 partial-full read fault positions, twelve cold budget boundaries
 and hot-cache ancestor refusal/retry pass. These inventories qualify filename
 storage; they do not qualify the whole parent/index graph or native directory
-link policy. The adapter still uses physical header counts and needs migration.
+link policy. At that checkpoint the adapter still used physical header counts.
 
 That checkpoint passed all 70 fatal-sanitizer suites, both 2-KiB freestanding
 targets, style, 46 FSKit component groups/eleven runtime SKIPs and the clean

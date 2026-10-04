@@ -44,7 +44,8 @@ def author(output, source):
     def save(label, substitute, expected=None, *, code='ok', relative=True,
              roots=(), nested=False, target='fragmented.bin', storage='resident',
              junction=False, opaque=False, hidden=False, dos=False, sensitive=False,
-             intermediate=False, cycle=False, links=1, maximum=None, raw_override=None):
+             intermediate=False, cycle=False, links=1, source_dos=False,
+             maximum=None, raw_override=None):
         image = bytearray(source)
         tag = f.REPARSE_TAG_MOUNT_POINT if junction else f.REPARSE_TAG_SYMLINK
         display = 'P' * PRINT_PADDING_UNITS if storage in ('fragmented', 'listed') else 'display only'
@@ -100,7 +101,8 @@ def author(output, source):
         else:
             common.append(f.resident(f.REPARSE_POINT, raw, f.REPARSE_INSTANCE))
         f.put_record(image, SOURCE_RECORD,
-                     f.file_record(SOURCE_RECORD, common, directory=junction, links=links))
+                     f.file_record(SOURCE_RECORD, common, directory=junction,
+                                   links=links + int(source_dos)))
         folder_name = '~folder' if label.startswith('shared-scan-') else 'Folder'
         local_name = '~local' if label.startswith('shared-scan-') else 'Local.TXT'
         root_links = [(folder_name, FOLDER_RECORD, f.NAMESPACE_WIN32),
@@ -113,6 +115,9 @@ def author(output, source):
             root_links.append(('hello.txt', SOURCE_RECORD, f.NAMESPACE_WIN32))
         if links > 1:
             root_links.append(('other-link', SOURCE_RECORD, f.NAMESPACE_WIN32))
+        if source_dos:
+            assert not nested
+            root_links.append(('HELLO~1', SOURCE_RECORD, f.NAMESPACE_DOS))
         root_links.sort(key=lambda link: order(link[0]))
         f.put_record(image, f.ROOT_RECORD,
                      f.directory_record(f.entry(child=ROOT_CHILD_VCN), allocation_clusters=ROOT_INDEX_CLUSTERS,
@@ -158,6 +163,11 @@ def author(output, source):
                           inventory_code=code if raw_override is not None else 'ok'))
 
     save('relative', 'fragmented.bin', 'fragmented.bin')
+    save('source-dos', 'fragmented.bin', 'fragmented.bin', source_dos=True)
+    save('source-dos-listed', 'fragmented.bin', 'fragmented.bin',
+         source_dos=True, storage='listed')
+    save('source-dos-hardlinked', 'fragmented.bin', code='unsupported',
+         source_dos=True, links=2)
     save('canonical', 'FRAGMENTED.BIN', 'fragmented.bin')
     save('unicode', 'Ωmega.txt', 'Ωmega.txt', target='Ωmega.txt')
     save('dots', '.\\Folder\\..\\fragmented.bin', './Folder/../fragmented.bin')
@@ -224,7 +234,7 @@ def author_chains(output, source):
     def save(label, targets, substitute, expected=None, *, code='ok', roots=(),
              junction=False, destination='Destination', leaf='Local.TXT', nested=False,
              sensitive=False, links=1, maximum=None, storage='resident', opaque=False,
-             malformed=False):
+             malformed=False, first_dos=False):
         image = bytearray(source)
         prefix_clusters = f.MFT_COUNT * f.RECORD // f.CLUSTER
         extension_clusters = (CHAIN_MFT_RECORDS - f.MFT_COUNT) * f.RECORD // f.CLUSTER
@@ -305,7 +315,10 @@ def author_chains(output, source):
                                           len(packet), f.REPARSE_INSTANCE))
             else:
                 attrs.append(f.resident(f.REPARSE_POINT, packet, f.REPARSE_INSTANCE))
-            record(number, attrs, directory=junction, links=links)
+            record(number, attrs, directory=junction, links=links + int(first_dos and index == 0))
+        dos_name = 'H00~1'
+        if first_dos:
+            root_links.append((dos_name, CHAIN_FIRST_RECORD))
         if links > 1:
             root_links.append(('Other', CHAIN_FIRST_RECORD))
         f.put_record(image, CHAIN_DESTINATION_RECORD, f.directory_record(
@@ -314,12 +327,17 @@ def author_chains(output, source):
         root_links.sort(key=lambda edge: order(edge[0]))
         median = len(root_links) // 2
         pivot = root_links[median]
+
+        def root_edge(name, number, child=None):
+            namespace = f.NAMESPACE_DOS if first_dos and name == dos_name else f.NAMESPACE_WIN32
+            return f.entry(name, number, child=child, namespace=namespace)
+
         f.put_record(image, f.ROOT_RECORD, f.directory_record(
-                     f.entry(pivot[0], pivot[1], child=ROOT_CHILD_VCN)
+                     root_edge(pivot[0], pivot[1], child=ROOT_CHILD_VCN)
                      + f.entry(child=ROOT_CHILD_VCN + 1), allocation_clusters=CHAIN_INDEX_PAGES))
         for page, edges in enumerate((root_links[:median], root_links[median + 1:])):
             f.put_data(image, f.INDEX_LCN + page,
-                       f.index_block(page, [f.entry(name, number) for name, number in edges]))
+                       f.index_block(page, [root_edge(name, number) for name, number in edges]))
         filename = 'native-link-chain-' + label + '.img'
         (output / filename).write_bytes(image)
         cases.append(dict(image=filename, target=expected, code=code, roots=list(roots),
@@ -329,6 +347,9 @@ def author_chains(output, source):
                           inventory_code='corrupt' if malformed else 'ok'))
 
     save('relative', ['Destination'], 'H00\\local.txt', 'H00/Local.TXT')
+    save('dos', ['Destination'], 'H00\\local.txt', 'H00/Local.TXT', first_dos=True)
+    save('dos-junction-listed', ['\\??\\C:\\Destination'], 'H00\\local.txt', 'H00/Local.TXT',
+         first_dos=True, junction=True, roots=('C:',), storage='listed')
     save('junction', ['\\??\\C:\\Destination'], 'H00\\local.txt', 'H00/Local.TXT',
          junction=True, roots=('C:',))
     save('two-hop', ['H01', 'Destination'], 'H00\\local.txt', 'H00/Local.TXT')

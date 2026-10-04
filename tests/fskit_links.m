@@ -13,6 +13,12 @@ enum {
 	TEST_LINK_DATA_END_LCN = 131,
 	TEST_LINK_READ_BYTES = 32,
 	TEST_LINK_BUFFER_FILL = 0xa6,
+	TEST_LINK_PRIMARY_COUNT = 1,
+	TEST_LINK_DOS_PHYSICAL_COUNT = 2,
+	TEST_LINK_MFT_LCN = 4,
+	TEST_LINK_SOURCE_RECORD = 24,
+	TEST_LINK_FIRST_CHAIN_RECORD = 40,
+	TEST_LINK_BYTE_BITS = 8,
 	TEST_LINK_PAGE_CAPACITY = 1,
 	TEST_LINK_CHAIN_RECORDS = 63,
 	TEST_LINK_ROOT_BASE_ENTRIES = 3,
@@ -20,6 +26,12 @@ enum {
 	/* One page per authored edge/prefix entry, then an empty EOF page. */
 	TEST_LINK_PAGE_LIMIT =
 	    TEST_LINK_CHAIN_RECORDS + TEST_LINK_ROOT_BASE_ENTRIES + TEST_LINK_ROOT_DOT_ENTRIES + 1
+};
+
+/* Independently authored FILE prefix; mutations leave attributes and USA intact. */
+struct test_link_record_prefix {
+	uint8_t magic[sizeof(uint32_t)], usa_offset[sizeof(uint16_t)], usa_count[sizeof(uint16_t)];
+	uint8_t lsn[sizeof(uint64_t)], sequence[sizeof(uint16_t)], links[sizeof(uint16_t)];
 };
 
 static NSString *const reparseXattr = @"org.machlin.ntfs.reparse";
@@ -82,6 +94,10 @@ static NSString *const reparseXattr = @"org.machlin.ntfs.reparse";
 		assert(attributes.type == type && attributes.fileID == itemID &&
 		    [attributes isValid:FSItemAttributeSize] &&
 		    [attributes isValid:FSItemAttributeAllocSize]);
+		if (type == FSItemTypeSymlink) {
+			assert([attributes isValid:FSItemAttributeLinkCount] &&
+			    attributes.linkCount == TEST_LINK_PRIMARY_COUNT);
+		}
 	}
 	if (self.rows.count == TEST_LINK_PAGE_CAPACITY) {
 		return NO;
@@ -334,7 +350,7 @@ link_pages(NTFSVolume *volume, FSItem *parent, BOOL attributes, BOOL modern, NSI
 		packer.rows = [NSMutableArray array];
 		packer.cookie = cookie;
 		request.wantedAttributes = FSItemAttributeType | FSItemAttributeFileID |
-		    FSItemAttributeSize | FSItemAttributeAllocSize;
+		    FSItemAttributeSize | FSItemAttributeAllocSize | FSItemAttributeLinkCount;
 		if (modern) {
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 			if (@available(macOS 27.0, *)) {
@@ -384,10 +400,8 @@ link_pages(NTFSVolume *volume, FSItem *parent, BOOL attributes, BOOL modern, NSI
 }
 
 static void
-link_case(NSString *fixtures, NSDictionary *test, BOOL modern)
+link_case_image(NSData *image, NSDictionary *test, BOOL modern)
 {
-	NSData *image = [NSData
-	    dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:test[@"image"]]];
 	TestReader *reader;
 	FaultResource *resource;
 	FSItem *root, *parent, *item;
@@ -441,6 +455,7 @@ link_case(NSString *fixtures, NSDictionary *test, BOOL modern)
 		assert(reader.reads == reads);
 		attributes = [volume attributes:item error:&error];
 		assert(error == nil && attributes.type == FSItemTypeSymlink &&
+		    attributes.linkCount == TEST_LINK_PRIMARY_COUNT &&
 		    attributes.size == [expected lengthOfBytesUsingEncoding:NSUTF8StringEncoding] &&
 		    attributes.allocSize == [test[@"allocated"] unsignedLongLongValue]);
 		assert([[volume xattrNamed:[FSFileName nameWithString:reparseXattr]
@@ -485,6 +500,53 @@ link_case(NSString *fixtures, NSDictionary *test, BOOL modern)
 	}
 	[volume invalidate];
 	assert(resource.liveAllocations == 0 && [reader.image isEqualToData:image]);
+}
+
+static void
+link_case(NSString *fixtures, NSDictionary *test, BOOL modern)
+{
+	NSData *image = [NSData
+	    dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:test[@"image"]]];
+
+	link_case_image(image, test, modern);
+}
+
+static void
+link_count_corruption(NSString *fixtures, NSDictionary *test, NSUInteger number, BOOL modern)
+{
+	const uint16_t counts[] = {TEST_LINK_PRIMARY_COUNT, TEST_LINK_DOS_PHYSICAL_COUNT + 1};
+	NSData *original = [NSData
+	    dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:test[@"image"]]];
+	NSMutableDictionary *verdict = [test mutableCopy];
+	size_t offset =
+	    (size_t)TEST_LINK_MFT_LCN * TEST_CLUSTER_BYTES + number * TEST_MFT_RECORD_BYTES;
+	size_t index, byte;
+
+	assert(original != nil && offset <= original.length &&
+	    sizeof(struct test_link_record_prefix) <= original.length - offset);
+	verdict[@"code"] = @"corrupt";
+	verdict[@"inventory_code"] = @"ok";
+	for (index = 0; index < sizeof(counts) / sizeof(counts[0]); index++) {
+		@autoreleasepool {
+			NSMutableData *changed = [original mutableCopy];
+			struct test_link_record_prefix *record =
+			    (void *)((uint8_t *)changed.mutableBytes + offset);
+			uint16_t physical = 0;
+
+			assert(memcmp(record->magic, "FILE", sizeof(record->magic)) == 0);
+			for (byte = 0; byte < sizeof(record->links); byte++) {
+				physical |= (uint16_t)record->links[byte]
+				    << (byte * TEST_LINK_BYTE_BITS);
+				record->links[byte] =
+				    (uint8_t)(counts[index] >> (byte * TEST_LINK_BYTE_BITS));
+			}
+			assert(physical == TEST_LINK_DOS_PHYSICAL_COUNT);
+			link_case_image(changed, verdict, modern);
+		}
+	}
+	printf("PASS: %s %s FILE header count mismatches refuse lookup/attributes, preserve "
+	       "names-only inventory, repeated refusal, exact replies and cleanup\n",
+	    modern ? "modern" : "legacy", [test[@"image"] UTF8String]);
 }
 
 static NSData *
@@ -744,7 +806,7 @@ ntfs_test_fskit_links(NSString *fixtures, BOOL modern)
 {
 	NSArray<NSDictionary *> *tests;
 	NSDictionary *test, *listed = nil, *drive = nil, *alias = nil, *chain = nil,
-			    *chainAlias = nil;
+			    *chainAlias = nil, *sourceDOS = nil, *chainDOS = nil;
 	NSArray<NSDictionary *> *faultTests;
 	BOOL metadata;
 	NSUInteger allocations, reads, fault;
@@ -780,13 +842,24 @@ ntfs_test_fskit_links(NSString *fixtures, BOOL modern)
 		if ([test[@"image"] isEqualToString:@"native-link-chain-alias.img"]) {
 			chainAlias = test;
 		}
+		if ([test[@"image"] isEqualToString:@"native-link-source-dos-listed.img"]) {
+			sourceDOS = test;
+		}
+		if ([test[@"image"] isEqualToString:@"native-link-chain-dos-junction-listed.img"]) {
+			chainDOS = test;
+		}
 	}
-	assert(drive != nil && listed != nil && alias != nil && chain != nil && chainAlias != nil);
+	assert(drive != nil && listed != nil && alias != nil && chain != nil && chainAlias != nil &&
+	    sourceDOS != nil && chainDOS != nil);
+	link_count_corruption(fixtures, sourceDOS, TEST_LINK_SOURCE_RECORD, modern);
+	link_count_corruption(fixtures, chainDOS, TEST_LINK_FIRST_CHAIN_RECORD, modern);
 	link_configuration(fixtures, drive, modern);
 	if (!modern) {
 		link_budgets(fixtures, chain);
 		link_budgets(fixtures, chainAlias);
-		faultTests = @[ listed, alias, chain, chainAlias ];
+		link_budgets(fixtures, sourceDOS);
+		link_budgets(fixtures, chainDOS);
+		faultTests = @[ listed, alias, chain, chainAlias, sourceDOS, chainDOS ];
 		for (test in faultTests) {
 			for (metadata = NO;; metadata = YES) {
 				link_fault(

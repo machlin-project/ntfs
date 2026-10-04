@@ -58,6 +58,12 @@ exported filename namespaces. FSKit now uses checked primary counts for item/pag
 attributes and all three single-edge reparse guards; see
 [native namespace policy](docs/NATIVE-NAMESPACE.md).
 
+A fresh personally signed development build is now installed and discovered in the
+isolated stock macOS 26.5.2 guest. Public FSClient reports the NTFS module disabled;
+ordinary GUI enablement awaits manual console unlock. Exact native reading checks
+are prepared, but no image is mounted yet. [Native installation](docs/NATIVE-INSTALLATION.md)
+keeps development signing, discovery, enabled admission and mounted behavior distinct.
+
 Fully checked counts now also survive temporary node closure in a bounded volume
 memo keyed by the complete reference. Default retention adds 1 KiB, and failed or
 quota-refused inventories publish nothing. Paired legacy component workloads show

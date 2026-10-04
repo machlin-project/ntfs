@@ -57,6 +57,14 @@ The current component has eleven macOS-27 runtime SKIPs, including extraction
 activation. Directory smoke reports qualify the migrated internal activation
 entry point and policy module list, with no optimization claim.
 
+The public read-only native module query is `tools/fskit_modules.swift`; the
+standalone installed reading checker is `tests/mounted_read.c`. Their prepared
+arm64 binaries target macOS 26.5 and have separate personal development signatures.
+They are not part of the sanitized core suite and must not be treated as installed
+acceptance merely because they compile. [NATIVE-INSTALLATION.md](NATIVE-INSTALLATION.md)
+records exact discovery/enablement, fixture and native mount gates. VM execution
+uses the absolute lab directory and a single designated operator.
+
 `scripts/check_core.py` additionally compiles arm64 and x86_64 objects on macOS
 without libc assumptions and with a 2 KiB frame limit. `scripts/test_fskit.py`
 exercises the real adapter against a bounded fake resource in-process; it neither

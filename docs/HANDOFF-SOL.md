@@ -17,6 +17,33 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
+## Current native development installation
+
+Fresh personally signed build 3 is installed in the isolated stock macOS 26.5.2
+guest after actual version/kernel/RPC verification. Main checks all four host
+product hashes/signatures; the installed app and extension preserve all eight
+bundle-file hashes, strict signatures, build numbers and minimum OS. Existing
+personal extension provisioning covers the exact guest. Normal app launch and
+LaunchServices/PlugInKit discovery succeed at the installed path. A new signed
+public FSClient helper observes NTFS with `enabled: false`; this is distinct from
+PlugInKit election. The guest console locked again and awaits manual unlock before
+the ordinary File System Extensions switch. Ext4 remains enabled and idle.
+
+The standalone `tests/mounted_read.c` checker and both complete-filename fixture
+images are prepared. Main compares all two image/nine oracle hashes and verifies
+the checker signature. Strict compilation, usage and host non-NTFS identity refusal
+pass. Actual guest mount/read/metadata/mmap/refusal checks remain pending. It admits
+only statfs type machlinntfs plus native read-only flags before mutation probes.
+Use only task-owned read-only attachments, actual returned device IDs and explicit
+extraction options through the public mount -F client. The native admission/option
+path is unqualified. No images are attached or mounted yet, and Windows remains
+at the account-password screen by explicit user request. Do not resume Windows.
+
+Read NATIVE-INSTALLATION.md and review
+artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation}/.
+Sol retains VM preparation/UI ownership; hand a verified enabled guest to Luna for
+prepared CLI runs. Only one worker may operate this VM at a time.
+
 ## Current write foundations and VM preparation
 
 The user expanded scope to complete native writes and authorized isolated VM work.

@@ -2,11 +2,41 @@
 
 The delivered scope is a bounded read-only core and FSKit development product.
 Local core, adapter component, app builds with linker ad hoc signing and
-independent-image checks passed. A preceding signed Release build passed
-signature verification.
+independent-image checks passed. The current personally signed Release is installed
+and discovered in the compatible macOS VM; actual FSClient admission remains disabled.
 Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
+
+## Compatible guest development installation
+
+The isolated macOS 26.5.2/arm64 guest has actual version, stock-kernel and RPC
+verification after user login. Fresh development build 3 uses a personal signing
+team and a valid extension provisioning profile authorizing this exact guest.
+Main independently verifies all four product hashes and strict app/embedded/standalone
+extension signatures. The installed app and extension match all eight bundle-file
+hashes and both report build 3/minimum macOS 26.5; their strict signatures pass.
+Normal launch and LaunchServices/PlugInKit registration succeed at the exact installed
+path. A separate personally signed helper queries only the public FSClient API in the
+guest and observes `org.machlin.ntfs.filesystem` with `enabled: false`. The console
+has locked again; normal GUI enablement awaits manual unlock. Ext4 remains enabled,
+its device service enabled and its endpoints empty. No host installation, policy
+change, reboot, disk attachment, mount, formatting or Windows operation occurred.
+
+A new standalone POSIX checker is prepared for the complete-filename standard and
+NTFS 3.0 images. Main verifies both exact image bytes and nine independent expected
+content files against original manifests, and independently verifies its signature.
+Compilation with strict warnings, no-argument usage and host non-NTFS identity
+rejection pass. Actual filesystem type/read-only flags, native metadata, two
+interleaved directory streams, irregular exact reads/EOF, read-only mmap, case lookup
+and write refusals remain pending guest execution. Apple built-in NTFS mounts must
+fail the checker before mutation probes. These transfer helpers do not replace the
+113 sanitized suites or the remaining installed/runtime qualification.
+
+See [NATIVE-INSTALLATION.md](NATIVE-INSTALLATION.md). Evidence is
+artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation}/.
+This qualifies a development installation and disabled discovery, not an enabled
+module, mounted result, Windows recovery or commercial release.
 
 ## Private logical journal packet encoding
 

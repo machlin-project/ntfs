@@ -58,8 +58,21 @@ transfer, VCN, LSN and LCN values still require qualified table ownership and vo
 geometry. Transaction entries preserve the four known stored states and raw LSN/
 undo fields; unknown allocated states refuse with UNSUPPORTED.
 
-These are checkpoint framing contracts. Attribute-name packets, table-dump record
-binding, cross-table references, LCN-less update layout, current page/copy history,
+Attribute-name entry and complete-dump framing now has a separate allocation-free
+linear decoder. Stored lengths count UTF-16LE bytes; each entry has a zero UTF-16
+terminator and no alignment padding. A complete dump ends with an exact four-byte
+zero header. Lossless name spans retain unpaired surrogates and embedded zero units.
+Duplicate/target membership and owning name semantics remain separate from framing.
+LOGFILE.md records the independently observed original packets and authored limits.
+
+The update decoder now admits empty LCN vectors while retaining the reserved first
+slot as opaque storage. Absolute redo/undo offsets must follow that complete stored
+prefix. Original historical packets independently establish the observed 40-byte
+prefix, including nonzero stale slot bytes. Compact forms lacking it are corrupt;
+successful framing still authorizes no physical LCN or recovery action.
+
+These are checkpoint framing contracts. Table-dump record
+binding, cross-table references, current page/copy history,
 transaction analysis and redo/undo remain separate work. A valid table or stored
 committed state cannot authorize replay or a writable mount.
 

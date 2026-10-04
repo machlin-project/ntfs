@@ -469,15 +469,7 @@ ntfs_logfile_update_decode(const void *input, size_t size, struct ntfs_logfile_u
 	if (size > NTFS_LOGFILE_MAX_RECORD_BYTES) {
 		return NTFS_RANGE;
 	}
-	/* This shared prefix suffices to identify an unsupported LCN-less
-	 * variant; do not first require its unresolved target-VCN layout. */
-	if (size < offsetof(struct ntfs_disk_log_update, lcns) + sizeof(header->lcns)) {
-		return NTFS_CORRUPT;
-	}
-	if (ntfs_u16(header->lcns) == 0) {
-		return NTFS_UNSUPPORTED;
-	}
-	if (size < sizeof(*header)) {
+	if (size < sizeof(struct ntfs_disk_log_update_storage)) {
 		return NTFS_CORRUPT;
 	}
 	info.redo_operation = ntfs_u16(header->redo_operation);
@@ -495,7 +487,11 @@ ntfs_logfile_update_decode(const void *input, size_t size, struct ntfs_logfile_u
 	info.target_vcn = ntfs_u64(header->target_vcn);
 	info.lcns = (struct ntfs_logfile_span){
 	    sizeof(*header), (uint32_t)info.lcn_count * sizeof(uint64_t)};
-	prefix = sizeof(*header) + info.lcns.length;
+	/* Published offsets are relative to the complete client payload. Original
+	 * checkpoint packets retain a reserved first slot with arbitrary stale bytes
+	 * when lcn_count is zero; it changes span admission, never the vector count. */
+	prefix = info.lcn_count == 0 ? sizeof(struct ntfs_disk_log_update_storage)
+				     : sizeof(*header) + info.lcns.length;
 	if (prefix > size || !update_span(info.redo, prefix, size) ||
 	    !update_span(info.undo, prefix, size)) {
 		return NTFS_CORRUPT;

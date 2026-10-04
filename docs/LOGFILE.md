@@ -2,7 +2,7 @@
 
 `ntfs/logfile.h` provides independent byte decoders for the common LFS 1.1/2.0
 restart prefix/area, complete client lists, LSN geometry, protected record pages,
-exact logical LFS records, an NTFS update payload with a nonempty LCN vector and
+exact logical LFS records, NTFS update payloads with empty or nonempty LCN vectors and
 the NTFS client's 64-byte common restart prefix for client formats 0.0/1.0.
 These byte primitives do not allocate, access a device, mutate input or provide
 a write capability.
@@ -25,9 +25,63 @@ physical/current-history provenance.
 
 Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
 restart-table free topology and client-versioned open-attribute/dirty-page plus
-transaction entries. It does not yet bind table-dump records, attribute-name
-packets or cross-table references to qualified current history. Those independent
+transaction entries, plus lossless byte-counted attribute-name entries and complete
+name dumps. It does not yet bind table-dump records or cross-table references to
+qualified current history. Those independent
 decoders do not advance native replay or writable admission.
+
+## Empty LCN vectors and attribute-name packets
+
+The stored NTFS update prefix reserves one LCN slot even when its declared count
+is zero. The fixed fields occupy 32 bytes and this stored prefix occupies 40 bytes;
+redo/undo offsets are absolute offsets from the client payload start. The unused
+slot is opaque capacity, excluded from the returned empty vector. Nonzero bytes
+there never become a physical address or require canonical zero padding. Compact
+or truncated forms lacking that storage return CORRUPT. Empty data spans may use
+offset zero; nonempty spans must begin after the complete stored prefix and satisfy
+the existing alignment/bounds checks. Extra unused capacity remains uninterpreted.
+
+This resolves the former address-base uncertainty for the observed subset of
+original NIST LFS 1.1 packets. All 33 successfully assembled historical open/table/
+name/dirty-page payloads use the 40-byte stored prefix and pass exact raw-field/span
+comparison. Every reserved slot is nonzero, with twelve distinct values. Three
+selected analysis payloads also decode with empty LCN/redo/undo spans; their
+additional sixteen bytes remain opaque. One historical dirty-page candidate still
+fails physical record assembly and remains a recorded refusal. These are historical
+framing observations with unestablished authoring OS, not qualified current tables,
+Windows acceptance or replay.
+
+`ntfs_logfile_attribute_name_decode` interprets a four-byte target/byte-length
+header, the declared lossless UTF-16LE name and a required zero UTF-16 terminator.
+It returns the consumed entry size and a borrowed span excluding the terminator.
+No alignment padding follows an entry. Unpaired surrogates and embedded zero units
+remain exact stored units. A zero target/zero length header returns END with zero
+output; this single-entry primitive leaves following bytes to its caller.
+
+`ntfs_logfile_attribute_names_decode` requires the complete exact dump through its
+final four-byte zero header. Missing/truncated endings, odd byte lengths, nonzero
+string terminators and trailing bytes return CORRUPT. Both primitives allocate/read
+nothing, accept unaligned immutable input and zero output on error. The 1-MiB
+record cap bounds the whole linear traversal with constant scratch storage. Returned
+target offsets, duplicate membership and attribute ownership still need cross-table
+validation. A successful dump establishes no current checkpoint binding.
+
+Independent fixtures cover 91 entry/dump packets, maximum name and packet lengths,
+174,762 minimum-size entries, unpaired/embedded-zero units, every selected prefix
+truncation, opaque following capacity and exact EOF. The original raw-byte name
+observations use 18/32/46-byte dumps of one/two/three unpadded entries. Standalone
+commands are `attribute-name ENTRY_PACKET` and `attribute-names NAMES_PACKET`;
+their borrowed-span reports carry `recovery_qualified:false`.
+
+The existing table/entry primitives also pass 288 vectors of exact original bytes
+from 24 historical packets: fifteen complete OAT/dirty-page tables, 81 allocated or
+free open entries and 192 allocated or free dirty entries. Every declared free chain
+matches the original topology and every exposed field matches an independent
+numeric oracle. Observed client-0 OAT storage uses 44-byte physical entries, while
+its opaque stored self-reference advances by a different stride. Name/dirty targets
+refer to physical table keys in this observed subset; a self-reference is not a
+replacement lookup key. Current checkpoint binding and broader version semantics
+remain unqualified. All original packet hashes remain unchanged.
 
 ## Logical source ownership and copy reports
 

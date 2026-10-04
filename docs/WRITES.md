@@ -36,7 +36,8 @@ replacement for $LogFile. An incompatible private journal would not give Windows
 a recovery contract and must not be presented as native NTFS write support.
 
 The read-only primitives in LOGFILE.md now validate bounded restart/client/page/
-LSN/record framing and nonempty-LCN update spans. They neither choose a complete
+LSN/record framing, empty/nonempty-LCN update spans and lossless name-dump framing.
+They neither choose a complete
 post-crash journal history nor execute recovery. Clean hints and structural parser
 success never satisfy writable ownership or permit a dirty mount. The separate
 logical-source owner selects only compatible supported restart copies, retaining

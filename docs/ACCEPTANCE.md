@@ -8,7 +8,51 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Completed legacy journal copy routing
+## Empty-LCN update storage and lossless journal name framing
+
+The update decoder now accepts stored empty LCN vectors with their reserved first
+slot retained as opaque capacity. Data offsets remain absolute, after the complete
+40-byte stored prefix. Compact/truncated forms reject; stale nonzero slot bytes
+never become addresses. Allocation-free attribute-name entry/full-dump decoders
+preserve UTF-16LE bytes with checked byte lengths, unpadded entries and exact string/
+list terminators. Missing endings/trailing bytes reject; membership and owning
+cross-table semantics remain separate. LOGFILE.md records the complete contracts.
+
+All 94 fatal-ASan/UBSan suites, style, both 2-KiB freestanding targets and clean
+universal Release pass. FSKit reports 54 component PASS groups/eleven runtime SKIPs.
+The 91 independent name vectors include maximum names/packets, 174,762 minimum
+entries, unpaired/embedded-zero units, complete selected truncation prefixes and
+unchanged unaligned input. Main verifies all 182 actual input/numeric-golden files.
+Preserve the initial fixture-only END-code mismatch and corrected author separately.
+Actual app, embedded/standalone extension and core archive contain both architecture
+slices; actual compilation includes both changed core modules on each architecture.
+Executable linker ad hoc metadata is present; strict deep bundle verification
+refuses unsigned code. This remains component/build evidence, not installed mounts.
+
+Fresh journal fuzz replays 1,083 authored inputs and exits zero; terminal counters
+report 96,306 executions in 61 seconds and 520 MiB peak fuzzer RSS. These are test
+process observations, not native product memory or throughput. The older build seed
+directory retains one superseded Boolean-rule seed; the fresh campaign excludes it.
+All fifteen compiled source fingerprints stay unchanged throughout qualification.
+
+All 33 successfully assembled original historical client payloads match raw fields/
+spans, including nonzero reserved slots. Three selected analysis payloads decode
+with empty spans and opaque sixteen-byte tails. Nine original name dumps and all
+23 entries match the retained raw-unit oracle through exact list ends. A further
+288 original table/entry vectors cover fifteen complete tables, 81 open-attribute
+entries and 192 dirty-page entries from 24 packets. Main verifies every actual
+input/numeric oracle and unchanged source hash. Historical framing grants no current
+table binding, authoring-OS, Windows or recovery qualification; the earlier failed
+historical dirty-page assembly remains retained. Device writes stay disabled.
+
+Evidence is artifacts/logfile-lcnless/{initial,native}/,
+artifacts/logfile-names/{initial,checked,final,native}/,
+artifacts/fuzz-logfile-names/ and artifacts/logfile-names/review.json.
+Universal products are artifacts/fskit-logfile-names/. The Windows installer remains
+at the EULA gate awaiting action-time confirmation; native recovery/writable ownership and
+actual FSKit mutations remain open.
+
+## Preceding completed legacy journal copy routing
 
 The immutable record owner now examines both LFS 1.1 tail slots, checks circular
 targets, selects newer completed copies and rejects divergent equal written

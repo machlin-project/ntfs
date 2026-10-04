@@ -21,6 +21,7 @@ from logfile_client_fixtures import author as generate_logfile_clients
 from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
 from logfile_tables_fixtures import author as generate_logfile_tables
+from logfile_names_fixtures import author as generate_logfile_names
 from record_protect_fixtures import author as generate_record_protection
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
@@ -32,6 +33,7 @@ LOGFILE_CLIENT_RESTART_RECORD_KIND = 8
 LOGFILE_TABLE_KINDS = {0: 9, 1: 10, 2: 11, 3: 12}
 LOGFILE_PROTECTED_RECORD_KIND = 13
 LOGFILE_LEGACY_RECORD_KIND = 14
+LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 BITS_PER_BYTE = 8
 LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
@@ -303,6 +305,12 @@ def generate(output):
         envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_PROTECTED_RECORD_KIND, case['capacity'], 0)
         assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
         (log_seeds / ('protect-' + case['name'] + '.seed')).write_bytes(envelope + payload)
+    name_packets = output / 'logfile-names'
+    for case in generate_logfile_names(name_packets):
+        payload = (name_packets / (case['name'] + '.input')).read_bytes()
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_NAME_KINDS[case['kind']], 0, 0)
+        assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+        (log_seeds / ('name-' + case['name'] + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

@@ -223,3 +223,81 @@ ntfs_logfile_transaction_decode(
 	*out = value;
 	return NTFS_OK;
 }
+
+enum ntfs_result
+ntfs_logfile_attribute_name_decode(
+    const void *input, size_t size, struct ntfs_logfile_attribute_name *out)
+{
+	const struct ntfs_disk_log_attribute_name *header = input;
+	const uint8_t *bytes = input;
+	struct ntfs_logfile_attribute_name value = {0};
+	uint16_t name_bytes;
+	size_t total;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (input == NULL) {
+		return NTFS_INVALID;
+	}
+	if (size > NTFS_LOGFILE_MAX_RECORD_BYTES) {
+		return NTFS_RANGE;
+	}
+	if (size < sizeof(*header)) {
+		return NTFS_CORRUPT;
+	}
+	value.target_attribute = ntfs_u16(header->target_attribute);
+	name_bytes = ntfs_u16(header->name_bytes);
+	if (value.target_attribute == 0) {
+		return name_bytes == 0 ? NTFS_END : NTFS_CORRUPT;
+	}
+	total = sizeof(*header) + (size_t)name_bytes + sizeof(uint16_t);
+	if (name_bytes % sizeof(uint16_t) != 0 || total > size ||
+	    ntfs_u16(bytes + sizeof(*header) + name_bytes) != 0) {
+		return NTFS_CORRUPT;
+	}
+	value.name_units = name_bytes / sizeof(uint16_t);
+	value.bytes = (uint32_t)total;
+	value.name = (struct ntfs_logfile_span){sizeof(*header), name_bytes};
+	*out = value;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_attribute_names_decode(
+    const void *input, size_t size, struct ntfs_logfile_attribute_names *out)
+{
+	struct ntfs_logfile_attribute_names value = {0};
+	struct ntfs_logfile_attribute_name entry;
+	const uint8_t *bytes = input;
+	size_t offset = 0;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (input == NULL) {
+		return NTFS_INVALID;
+	}
+	if (size > NTFS_LOGFILE_MAX_RECORD_BYTES) {
+		return NTFS_RANGE;
+	}
+	for (;;) {
+		result = ntfs_logfile_attribute_name_decode(bytes + offset, size - offset, &entry);
+		if (result == NTFS_END) {
+			if (size - offset != sizeof(struct ntfs_disk_log_attribute_name)) {
+				return NTFS_CORRUPT;
+			}
+			value.entries.length = (uint32_t)offset;
+			*out = value;
+			return NTFS_OK;
+		}
+		if (result != NTFS_OK) {
+			return result;
+		}
+		offset += entry.bytes;
+		value.entry_count++;
+	}
+}

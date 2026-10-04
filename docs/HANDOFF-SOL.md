@@ -23,6 +23,28 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
+The current update decoder accepts empty LCN vectors with one reserved opaque slot
+and absolute data offsets. Lossless attribute-name entry/full-dump decoding checks
+byte lengths, unpadded entries and exact string/list terminators. Ninety-one authored
+name vectors, 33 original historical payloads, nine original dumps/23 entries and
+288 original table/entry vectors pass framing checks with unchanged inputs. Physical
+44-byte client-0 OAT keys differ from their opaque stored self-reference; do not
+substitute that self-reference when binding names or dirty-page targets.
+LOGFILE.md and WRITE-FOUNDATIONS.md retain the complete primitive boundaries.
+
+All 94 fatal-sanitizer suites, both 2-KiB targets, style, 54 FSKit component PASS
+groups/eleven runtime SKIPs and clean universal Release pass. Fresh journal fuzz
+replays 1,083 inputs, reporting 96,306 executions in 61 seconds and 520 MiB fuzzer
+RSS. Actual changed-core compilation and all product architecture slices are
+reviewed; strict deep bundle verification still refuses unsigned code. Review
+artifacts/logfile-names/review.json and {checked,final,native}/, with campaign and
+products in artifacts/{fuzz,fskit}-logfile-names/. Keep the initial test-author END
+code mistake separately. The older .build seed directory retains one superseded
+Boolean-rule seed; it does not belong to the fresh campaign.
+Next bind complete checkpoint dump records and cross-table references to the
+selected client, then qualify current history/analysis and writable ownership.
+These passing historical framing checks provide no recovery or mutation admission.
+
 Completed LFS 1.1 tail-copy routing now uses both slots and exact shared record
 assembly. LOGFILE.md records selection, prefix conflict, unsupported partial-tail,
 error/publication and budget contracts. Twenty-five original core/CLI cases pass,

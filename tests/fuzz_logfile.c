@@ -26,6 +26,8 @@ enum {
 	FUZZ_TRANSACTION,
 	FUZZ_PROTECTED_RECORD,
 	FUZZ_LEGACY_RECORD,
+	FUZZ_ATTRIBUTE_NAME,
+	FUZZ_ATTRIBUTE_NAMES,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -69,6 +71,8 @@ union fuzz_output {
 	struct ntfs_logfile_open_attribute attribute;
 	struct ntfs_logfile_dirty_page dirty_page;
 	struct ntfs_logfile_transaction transaction;
+	struct ntfs_logfile_attribute_name attribute_name;
+	struct ntfs_logfile_attribute_names attribute_names;
 };
 
 struct fuzz_restart_output {
@@ -479,6 +483,16 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 			output_size = sizeof(outputs[i].transaction);
 			results[i] = ntfs_logfile_transaction_decode(
 			    packet, packet_size, &outputs[i].transaction);
+			break;
+		case FUZZ_ATTRIBUTE_NAME:
+			output_size = sizeof(outputs[i].attribute_name);
+			results[i] = ntfs_logfile_attribute_name_decode(
+			    packet, packet_size, &outputs[i].attribute_name);
+			break;
+		case FUZZ_ATTRIBUTE_NAMES:
+			output_size = sizeof(outputs[i].attribute_names);
+			results[i] = ntfs_logfile_attribute_names_decode(
+			    packet, packet_size, &outputs[i].attribute_names);
 			break;
 		}
 		guard(scratch[i], used, sizeof(scratch[i]));

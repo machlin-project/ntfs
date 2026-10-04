@@ -39,6 +39,17 @@ struct ntfs_logfile_transaction {
 	enum ntfs_logfile_transaction_state state;
 };
 
+struct ntfs_logfile_attribute_name {
+	uint16_t target_attribute, name_units;
+	uint32_t bytes;
+	struct ntfs_logfile_span name;
+};
+
+struct ntfs_logfile_attribute_names {
+	uint32_t entry_count;
+	struct ntfs_logfile_span entries;
+};
+
 /* Decode one exact immutable restart table, bounded by MAX_RECORD_BYTES.
  * Validate every allocation/link word, the declared allocation count and the
  * complete free chain, including termination, coverage and its stored tail.
@@ -76,6 +87,28 @@ enum ntfs_result ntfs_logfile_dirty_page_decode(const void *, size_t, uint32_t c
  * or I/O; they require disjoint input/output and accept byte alignment. */
 enum ntfs_result ntfs_logfile_transaction_decode(
     const void *, size_t, struct ntfs_logfile_transaction *);
+
+/* Decode one bounded attribute-name entry from a remaining immutable packet.
+ * name is a byte span of lossless little-endian UTF-16, excluding its required
+ * zero terminator; bytes includes prefix/name/terminator. Name length is stored
+ * in bytes, not UTF-16 units. No alignment padding follows an entry. A zero
+ * target and zero length form the four-byte list terminator and return END with
+ * zero output. A zero target with a name is CORRUPT. Extra following bytes are
+ * not interpreted by this entry primitive; names_decode validates the full list.
+ * Stored target offsets, duplicate membership and name semantics require owning
+ * table/attribute validation. No normalization or surrogate replacement occurs. */
+enum ntfs_result ntfs_logfile_attribute_name_decode(
+    const void *, size_t, struct ntfs_logfile_attribute_name *);
+
+/* Validate an exact complete name dump through its final four-byte terminator,
+ * with linear work and constant scratch. Entries excludes that final terminator.
+ * An empty dump has zero entries and the exact terminator. Missing terminators,
+ * odd/truncated names, nonzero string terminators and trailing bytes are CORRUPT.
+ * Both name decoders allocate/read nothing, accept byte alignment, preserve
+ * immutable disjoint input and zero output on error; MAX_RECORD_BYTES bounds work.
+ * Framing establishes no current checkpoint ownership or cross-table binding. */
+enum ntfs_result ntfs_logfile_attribute_names_decode(
+    const void *, size_t, struct ntfs_logfile_attribute_names *);
 
 #ifdef __cplusplus
 }

@@ -260,11 +260,12 @@ enum ntfs_result ntfs_logfile_record_decode(
     const void *, size_t size, uint16_t header_bytes, struct ntfs_logfile_record *);
 /* The complete NTFS update client payload, excluding the LFS record header.
  * Spans are relative to this payload, including its 32-byte fixed header.
- * Aligned redo/undo spans follow a nonempty LCN vector. LCN-less packets remain
- * unsupported pending qualification of their conflicting published offset bases.
- * The shared prefix through LCN count suffices for this rejection; no unresolved
- * target-VCN layout is presumed for a shorter LCN-less packet.
- * Their original client bytes remain available through the LFS record decoder.
+ * Aligned redo/undo spans follow the declared LCN vector. Stored headers reserve
+ * one LCN slot even for count zero: that slot is opaque unused capacity, excluded
+ * from the returned empty vector, and data spans must follow the stored prefix.
+ * Empty spans may use offset zero; nonempty spans are aligned absolute offsets
+ * from the client payload start. Compact/truncated forms without the reserved
+ * storage are CORRUPT. Original input and unused capacity remain uninterpreted.
  * Operation codes, target identifiers and LCNs are opaque format values; they
  * confer no writable address or recovery decision. Redo/undo may share bytes. */
 enum ntfs_result ntfs_logfile_update_decode(const void *, size_t, struct ntfs_logfile_update *);

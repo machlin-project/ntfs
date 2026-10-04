@@ -46,6 +46,10 @@ struct ntfs_disk_log_transaction {
 	uint8_t undo_bytes[sizeof(uint32_t)];
 };
 
+struct ntfs_disk_log_attribute_name {
+	uint8_t target_attribute[sizeof(uint16_t)], name_bytes[sizeof(uint16_t)];
+};
+
 _Static_assert(sizeof(struct ntfs_disk_log_table) == 24, "NTFS restart table header");
 _Static_assert(
     sizeof(struct ntfs_disk_log_open_attribute_base) == 44, "NTFS client-0 open attribute entry");
@@ -55,4 +59,5 @@ _Static_assert(
     sizeof(struct ntfs_disk_log_dirty_page_base) == 36, "NTFS client-0 dirty page prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_dirty_page) == 32, "NTFS client-1 dirty page prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_transaction) == 40, "NTFS transaction entry");
+_Static_assert(sizeof(struct ntfs_disk_log_attribute_name) == 4, "NTFS attribute name prefix");
 #endif

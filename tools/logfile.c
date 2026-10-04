@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/logfile.h>
+#include <ntfs/logfile_tables.h>
 #include "image.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -375,11 +376,14 @@ main(int argc, char **argv)
 	struct ntfs_logfile_record record = {0};
 	struct ntfs_logfile_update update = {0};
 	struct ntfs_logfile_client_restart client_restart = {0};
+	struct ntfs_logfile_attribute_name attribute_name = {0};
+	struct ntfs_logfile_attribute_names attribute_names = {0};
 	uint8_t *bytes = NULL, *scratch = NULL, *restart_bytes = NULL, *restart_scratch = NULL;
 	size_t size, restart_size, maximum;
 	uint64_t argument = 0, sequence;
 	enum ntfs_result result;
 	bool is_restart, is_page, is_record, is_update, is_client_restart;
+	bool is_attribute_name, is_attribute_names;
 	int status = LOGFILE_ARGUMENT_ERROR;
 
 	if (argc < 3) {
@@ -413,6 +417,8 @@ main(int argc, char **argv)
 	is_record = strcmp(argv[1], "record") == 0;
 	is_update = strcmp(argv[1], "update") == 0;
 	is_client_restart = strcmp(argv[1], "client-restart") == 0;
+	is_attribute_name = strcmp(argv[1], "attribute-name") == 0;
+	is_attribute_names = strcmp(argv[1], "attribute-names") == 0;
 	if ((is_restart && argc == 4) || (is_page && argc == 5)) {
 		if (!number(argv[argc - 1], NTFS_LOGFILE_MAX_FILE_BYTES, &argument)) {
 			goto usage;
@@ -421,7 +427,9 @@ main(int argc, char **argv)
 		if (!number(argv[3], UINT16_MAX, &argument)) {
 			goto usage;
 		}
-	} else if ((!is_update && !is_client_restart) || argc != 3) {
+	} else if ((!is_update && !is_client_restart && !is_attribute_name &&
+		       !is_attribute_names) ||
+	    argc != 3) {
 		goto usage;
 	}
 	maximum =
@@ -459,6 +467,10 @@ main(int argc, char **argv)
 		result = ntfs_logfile_record_decode(bytes, size, (uint16_t)argument, &record);
 	} else if (is_client_restart) {
 		result = ntfs_logfile_client_restart_decode(bytes, size, &client_restart);
+	} else if (is_attribute_name) {
+		result = ntfs_logfile_attribute_name_decode(bytes, size, &attribute_name);
+	} else if (is_attribute_names) {
+		result = ntfs_logfile_attribute_names_decode(bytes, size, &attribute_names);
 	} else {
 		result = ntfs_logfile_update_decode(bytes, size, &update);
 	}
@@ -477,6 +489,14 @@ main(int argc, char **argv)
 		record_fields(&record, true);
 	} else if (is_client_restart) {
 		client_restart_fields(&client_restart);
+	} else if (is_attribute_name) {
+		printf(",\"target_attribute\":%u,\"name_units\":%u,\"bytes\":%" PRIu32,
+		    attribute_name.target_attribute, attribute_name.name_units,
+		    attribute_name.bytes);
+		span("name", attribute_name.name);
+	} else if (is_attribute_names) {
+		printf(",\"entry_count\":%" PRIu32, attribute_names.entry_count);
+		span("entries", attribute_names.entries);
 	} else {
 		printf(",\"redo_operation\":%u,\"undo_operation\":%u,\"target_attribute\":%u,"
 		       "\"lcn_count\":%u,\"record_offset\":%u,\"attribute_offset\":%u,"
@@ -497,6 +517,8 @@ usage:
 	    "       ntfs-logfile page PAGE RESTART_PAGE FILE_BYTES\n"
 	    "       ntfs-logfile record PACKET HEADER_BYTES\n"
 	    "       ntfs-logfile update CLIENT_PACKET\n"
+	    "       ntfs-logfile attribute-name ENTRY_PACKET\n"
+	    "       ntfs-logfile attribute-names NAMES_PACKET\n"
 	    "       ntfs-logfile client-restart CLIENT_PACKET\n"
 	    "       ntfs-logfile client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"

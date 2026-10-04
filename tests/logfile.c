@@ -287,6 +287,7 @@ arguments(const char *directory)
 	assert(ntfs_logfile_record_decode(input, NTFS_LOGFILE_MAX_RECORD_BYTES + 1u,
 		   TEST_RECORD_BYTES, &record) == NTFS_RANGE);
 	assert(ntfs_logfile_update_decode(NULL, 0, &update) == NTFS_INVALID);
+	assert(ntfs_logfile_update_decode(input, 0, &update) == NTFS_CORRUPT);
 	assert(ntfs_logfile_update_decode(input, size, NULL) == NTFS_INVALID);
 	assert(ntfs_logfile_update_decode(input, NTFS_LOGFILE_MAX_RECORD_BYTES + 1u, &update) ==
 	    NTFS_RANGE);

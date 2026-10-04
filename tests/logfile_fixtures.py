@@ -55,6 +55,7 @@ TARGET_ATTRIBUTE_OFFSET = 24
 ATTRIBUTE_ACTS_ON_MFT = 0x0002
 LSN_SEQUENCE = 2
 PHYSICAL_LCN = 87134
+UNUSED_LCN_SLOT = 0x8877665544332211
 REDO = b'new data'
 UNDO = b'old data'
 SUCCESS = 'success'
@@ -184,8 +185,10 @@ def restart(major=LEGACY_MAJOR, minor=LEGACY_MINOR, system=PAGE_BYTES, log=PAGE_
     return data, expected
 
 
-def update(lcns=(PHYSICAL_LCN,), redo=REDO, undo=UNDO, shared=False):
-    prefix = UPDATE.size + len(lcns) * LSN_BYTES
+def update(lcns=(PHYSICAL_LCN,), redo=REDO, undo=UNDO, shared=False,
+           include_unused_slot=True, unused_slot=UNUSED_LCN_SLOT):
+    storage = lcns if lcns or not include_unused_slot else (unused_slot,)
+    prefix = UPDATE.size + len(storage) * LSN_BYTES
     undo_offset = prefix if shared else aligned(prefix + len(redo))
     size = max(prefix + len(redo), undo_offset + len(undo))
     data = bytearray(size)
@@ -194,7 +197,7 @@ def update(lcns=(PHYSICAL_LCN,), redo=REDO, undo=UNDO, shared=False):
         lcns=len(lcns), record_offset=TARGET_RECORD_OFFSET, attribute_offset=TARGET_ATTRIBUTE_OFFSET, cluster_index=0,
         attribute_flags=ATTRIBUTE_ACTS_ON_MFT, target_vcn=TARGET_VCN)
     data[:UPDATE.size] = UPDATE.pack(values)
-    data[UPDATE.size:prefix] = struct.pack(f'<{len(lcns)}Q', *lcns)
+    data[UPDATE.size:prefix] = struct.pack(f'<{len(storage)}Q', *storage)
     data[prefix:prefix + len(redo)] = redo
     data[undo_offset:undo_offset + len(undo)] = undo
     expected = {key: values[key] for key in ('redo_operation', 'undo_operation', 'target_attribute') if key in values}
@@ -393,7 +396,12 @@ def author(output):
 
     for name, options in (('base', {}), ('shared', dict(shared=True, undo=REDO)),
                           ('empty', dict(redo=b'', undo=b'')),
-                          ('two-lcns', dict(lcns=(PHYSICAL_LCN, PHYSICAL_LCN + 1)))):
+                          ('two-lcns', dict(lcns=(PHYSICAL_LCN, PHYSICAL_LCN + 1))),
+                          ('lcnless', dict(lcns=())),
+                          ('lcnless-shared', dict(lcns=(), shared=True, undo=REDO)),
+                          ('lcnless-empty', dict(lcns=(), redo=b'', undo=b'')),
+                          ('lcnless-zero-unused-slot', dict(lcns=(), unused_slot=0)),
+                          ('lcnless-maximum-unused-slot', dict(lcns=(), unused_slot=(1 << LSN_BITS) - 1))):
         data, fields = update(**options)
         add(name, 'update', data, fields=fields)
     data, _ = update()
@@ -408,10 +416,23 @@ def author(output):
     fields = update()[1]
     fields['redo_operation'] = NO_CLIENT
     add('opaque-operation', 'update', packet, fields=fields)
-    add('lcnless', 'update', update(lcns=())[0], UNSUPPORTED)
     lcnless = update(lcns=())[0]
-    add('lcnless-common-prefix', 'update', lcnless[:UPDATE.offsets['lcns'] + WORD_BYTES], UNSUPPORTED)
-    add('lcnless-short-target', 'update', lcnless[:UPDATE.offsets['target_vcn']], UNSUPPORTED)
+    add('lcnless-compact', 'update', update(lcns=(), include_unused_slot=False)[0], CORRUPT)
+    add('lcnless-common-prefix', 'update', lcnless[:UPDATE.offsets['lcns'] + WORD_BYTES], CORRUPT)
+    add('lcnless-short-target', 'update', lcnless[:UPDATE.offsets['target_vcn']], CORRUPT)
+    for size in range(1, UPDATE.size + LSN_BYTES):
+        add(f'lcnless-truncated-{size}', 'update', lcnless[:size], CORRUPT)
+    for field, value in (('redo_offset', UPDATE.size), ('undo_offset', UPDATE.size),
+                         ('redo_offset', UPDATE.size + LSN_BYTES + 1),
+                         ('redo_bytes', NO_CLIENT), ('undo_offset', len(lcnless) + ALIGNMENT)):
+        packet = bytearray(lcnless)
+        UPDATE.put(packet, field, value)
+        add(f'lcnless-bad-{field}-{value}', 'update', packet, CORRUPT)
+    packet, fields = update(lcns=(), redo=b'', undo=b'')
+    UPDATE.put(packet, 'redo_offset', 0)
+    UPDATE.put(packet, 'undo_offset', 0)
+    fields['redo']['offset'] = fields['undo']['offset'] = 0
+    add('lcnless-empty-zero-offsets', 'update', packet, fields=fields)
     add('short-prefix', 'update', data[:UPDATE.size - 1], CORRUPT)
     for name, options in (('base', {}), ('unpaired', dict(name=(0xd800, 0x0078))),
                           ('maximum-name', dict(name=tuple(range(CLIENT_NAME_BYTES // WORD_BYTES))))):

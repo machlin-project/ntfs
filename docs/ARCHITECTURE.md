@@ -337,8 +337,12 @@ see acceptance.
 Independent `ntfs/logfile.h` primitives decode immutable LFS 1.1/2.0 common
 restart/client/page/LSN/record framing with bounded caller scratch and no I/O or
 allocation. Client chains have complete membership/backlink and active-LSN
-checks. The NTFS update decoder validates nonempty LCN vectors and redo/undo spans;
-LCN-less updates remain explicitly unsupported. The separate NTFS client restart
+checks. The NTFS update decoder validates empty/nonempty LCN vectors and redo/undo
+spans; count-zero storage retains one opaque reserved slot before absolute data
+offsets. Independent original historical packets qualify that observed layout.
+Allocation-free name-entry/full-dump decoders preserve lossless UTF-16LE spans with
+byte-counted lengths, unpadded entries and exact string/list terminators. Membership
+and owning cross-table semantics remain separate. The separate NTFS client restart
 decoder retains the 64-byte common prefix for client formats 0.0/1.0, raw LSN/count
 pairs and an opaque extension span. Named-field publication into a zeroed output
 retains deterministic padding without copying a temporary structure. Table

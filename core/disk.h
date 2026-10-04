@@ -268,6 +268,13 @@ struct ntfs_disk_log_update {
 	uint8_t target_vcn[sizeof(uint64_t)];
 };
 
+/* Stored update headers reserve a first LCN slot even when the declared vector
+ * is empty. Its stale bytes remain opaque capacity, never a physical address. */
+struct ntfs_disk_log_update_storage {
+	struct ntfs_disk_log_update header;
+	uint8_t first_lcn[sizeof(uint64_t)];
+};
+
 /* NTFS client data, distinct from an LFS restart-page area. Additional fields
  * after this common prefix require separate interpretation and qualification. */
 struct ntfs_disk_log_client_restart {
@@ -423,6 +430,7 @@ _Static_assert(sizeof(struct ntfs_disk_log_restart_area) == 48, "LFS restart are
 _Static_assert(sizeof(struct ntfs_disk_log_client) == 160, "LFS client record");
 _Static_assert(sizeof(struct ntfs_disk_log_page) == 40, "LFS record page prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_record) == 48, "LFS logical record prefix");
+_Static_assert(sizeof(struct ntfs_disk_log_update_storage) == 40, "NTFS stored update prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_update) == 32, "NTFS log update prefix");
 _Static_assert(
     sizeof(struct ntfs_disk_log_client_restart) == 64, "NTFS client restart common prefix");

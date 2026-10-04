@@ -354,8 +354,15 @@ LOGFILE.md separates the original immutable-byte decoders and independent field/
 restored-byte fixtures from complete native journal/recovery work. NTFS-3G's
 declarative header and original Linux-NTFS/libfsntfs/Suhanov research supply format
 facts. Short NTFS-3G recovery offset helpers were also inspected for the conflicting
-LCN-less address-base fact; the product refuses that variant pending independent
-original-byte qualification. No foreign journal/replay/transaction algorithm was
+LCN-less address-base fact. Independent original NIST payloads now resolve the
+observed stored-prefix layout: absolute data offsets follow one reserved slot even
+for a zero vector count. All 33 successful historical packets retain nonzero stale
+slot bytes; no foreign parser expression supplies the oracle. Original historical
+name dumps independently establish byte-counted UTF-16LE names, unpadded entries
+and exact string/list terminators. Their new C framing and independent malformed/
+lossless/maximum packet authors are repository-owned. Historical framing does not
+establish current table ownership, authoring OS or Windows recovery. No foreign
+journal/replay/transaction algorithm was
 imported, and no NTFS-3G utility or library is linked to the product.
 The logical-source owner, compatible-copy comparison, partial diagnostic reports
 and private page-publication contracts are also original repository code. Its

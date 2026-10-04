@@ -245,7 +245,7 @@ journal(const char *path, bool volume_source)
 }
 
 static int
-circular_record(const char *path, uint64_t lsn)
+circular_record(const char *path, uint64_t lsn, bool legacy_copies)
 {
 	struct ntfs_image image;
 	struct ntfs_logfile *source = NULL;
@@ -261,23 +261,32 @@ circular_record(const char *path, uint64_t lsn)
 	result = ntfs_logfile_open(&image.environment, NULL, NULL, &source);
 	if (result == NTFS_OK) {
 		bytes = malloc(NTFS_LOGFILE_MAX_RECORD_BYTES);
-		result = bytes == NULL ? NTFS_NO_MEMORY
-				       : ntfs_logfile_read_circular_record(source, lsn, bytes,
-					     NTFS_LOGFILE_MAX_RECORD_BYTES, &view);
+		if (bytes == NULL) {
+			result = NTFS_NO_MEMORY;
+		} else if (legacy_copies) {
+			result = ntfs_logfile_read_legacy_record(
+			    source, lsn, bytes, NTFS_LOGFILE_MAX_RECORD_BYTES, &view);
+		} else {
+			result = ntfs_logfile_read_circular_record(
+			    source, lsn, bytes, NTFS_LOGFILE_MAX_RECORD_BYTES, &view);
+		}
 	}
-	printf("{\"schema_version\":%u,\"scope\":\"circular-record\",\"code\":%d,"
+	printf("{\"schema_version\":%u,\"scope\":\"%s\",\"code\":%d,"
 	       "\"result\":\"%s\",\"recovery_qualified\":false,\"requested_lsn\":%" PRIu64
 	       ",\"record\":",
-	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), lsn);
+	    LOGFILE_DIAGNOSTIC_VERSION, legacy_copies ? "legacy-record" : "circular-record",
+	    (int)result, ntfs_result_string(result), lsn);
 	if (result == NTFS_OK) {
 		printf("{");
 		record_fields(&view.record, false);
 		printf("},\"assembly\":{\"first_page_offset\":%" PRIu64
 		       ",\"last_page_offset\":%" PRIu64 ",\"bytes\":%" PRIu32
-		       ",\"pages_read\":%" PRIu32 ",\"read_calls\":%" PRIu32
-		       ",\"read_bytes\":%" PRIu64 ",\"wrapped\":%s},\"bytes_hex\":\"",
+		       ",\"pages_read\":%" PRIu32 ",\"copy_pages_read\":%" PRIu32
+		       ",\"read_calls\":%" PRIu32 ",\"read_bytes\":%" PRIu64
+		       ",\"wrapped\":%s},\"bytes_hex\":\"",
 		    view.first_page_offset, view.last_page_offset, view.bytes, view.pages_read,
-		    view.read_calls, view.read_bytes, view.wrapped ? "true" : "false");
+		    view.copy_pages_read, view.read_calls, view.read_bytes,
+		    view.wrapped ? "true" : "false");
 		for (i = 0; i < view.bytes; i++) {
 			printf("%02x", (unsigned)bytes[i]);
 		}
@@ -380,11 +389,11 @@ main(int argc, char **argv)
 	    (strcmp(argv[1], "journal") == 0 || strcmp(argv[1], "volume-journal") == 0)) {
 		return journal(argv[2], strcmp(argv[1], "volume-journal") == 0);
 	}
-	if (strcmp(argv[1], "circular-record") == 0) {
+	if (strcmp(argv[1], "circular-record") == 0 || strcmp(argv[1], "legacy-record") == 0) {
 		if (argc != 4 || !number(argv[3], UINT64_MAX, &argument)) {
 			goto usage;
 		}
-		return circular_record(argv[2], argument);
+		return circular_record(argv[2], argument, strcmp(argv[1], "legacy-record") == 0);
 	}
 	if (strcmp(argv[1], "active-client") == 0) {
 		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
@@ -493,6 +502,7 @@ usage:
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
+	    "       ntfs-logfile legacy-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
 	    "       ntfs-logfile active-client LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n");
 done:
 	free(restart_scratch);

@@ -8,7 +8,35 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Private metadata output and native checkpoint framing
+## Completed legacy journal copy routing
+
+The immutable record owner now examines both LFS 1.1 tail slots, checks circular
+targets, selects newer completed copies and rejects divergent equal written
+prefixes. Newer circular storage wins. Torn/malformed copies cannot conceal an
+actual backend error. Exact bytes, allocation failures, all read positions with
+five backend statuses, retry, null/capacity admission, wrap, exact/one-below credits
+and unchanged selected snapshots pass 25 independently authored core/CLI cases.
+This completed-copy observer does not qualify complete current history or replay;
+unresolved partial tails and LFS 2.0 routing still refuse explicitly.
+
+All 88 fatal-ASan/UBSan suites, style and both 2-KiB freestanding targets pass.
+FSKit reports 54 component PASS groups/eleven runtime SKIPs; clean Release builds.
+Actual app, embedded/standalone extension and core archive contain both architecture
+slices. Executable linker ad hoc metadata is present; strict deep app-bundle
+verification still refuses unsigned code. This is build evidence only.
+Fresh journal fuzz replays 942 authored inputs and exits zero. Its exact terminal
+count is 110,815 executions in 61 seconds, with 532 MiB peak fuzzer RSS; this is
+test-process evidence, not native product memory or throughput.
+
+All six original NIST selected checkpoint/analysis observations now succeed
+through the routed API; three checkpoint bodies match the independently retained
+original packets exactly. Each uses one logical/tail page, four physical reads and
+16,384 read bytes. All three source journal hashes and lengths remain unchanged.
+Authoring OS, full current history, native recovery and writes remain unqualified.
+Evidence is artifacts/logfile-legacy/{initial,final,native}/ and
+artifacts/fuzz-logfile-legacy/. The original circular-only refusals remain retained.
+
+## Preceding private metadata output and native checkpoint framing
 
 Private USA output admits full capacity, disjoint ranges, magic and geometry before
 changing output, preserving input and every failed/unused output byte. Native

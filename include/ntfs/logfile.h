@@ -19,6 +19,7 @@ enum {
 	NTFS_LOGFILE_RECORD_MULTI_PAGE = 0x0001,
 	NTFS_LOGFILE_RECORD_DELETING = 0x0002,
 	NTFS_LOGFILE_RECORD_ADDING = 0x0004,
+	NTFS_LOGFILE_PAGE_RECORD_END = 0x00000001,
 	/* Offset zero plus each possible second-copy page size, 512..65536. */
 	NTFS_LOGFILE_RESTART_PROBES = 9,
 	NTFS_LOGFILE_NO_PROBE = UINT16_MAX,
@@ -138,7 +139,7 @@ struct ntfs_logfile_page_view {
 struct ntfs_logfile_record_view {
 	struct ntfs_logfile_record record;
 	uint64_t first_page_offset, last_page_offset, read_bytes;
-	uint32_t bytes, pages_read, read_calls;
+	uint32_t bytes, pages_read, copy_pages_read, read_calls;
 	bool wrapped;
 };
 
@@ -212,6 +213,21 @@ enum ntfs_result ntfs_logfile_read_page(struct ntfs_logfile *, uint64_t offset, 
  * alignment padding only on success. Bytes/out/source must be disjoint. Errors
  * leave caller bytes unchanged and view zero; a different header LSN is STALE. */
 enum ntfs_result ntfs_logfile_read_circular_record(struct ntfs_logfile *, uint64_t lsn, void *,
+    size_t capacity, struct ntfs_logfile_record_view *);
+/* Assemble a diagnostic LFS 1.1 record with completed legacy tail copies routed
+ * to their declared circular page. Both tail slots are examined before choosing
+ * the newest matching last_end_lsn. Torn/malformed copies are unavailable; exact
+ * backend failures retain their result. Equal epochs require identical declared
+ * written prefixes, ignoring USA, transfer metadata and unused page capacity.
+ * A newer circular page wins. Unknown page flags or an unresolved matching tail
+ * without a completed/written prefix return UNSUPPORTED. LFS 2.0 routing remains
+ * UNSUPPORTED. This is immutable copy selection, not complete current history,
+ * continuation provenance, recovery or mutation admission.
+ * Logical page offsets remain circular addresses; copy_pages_read counts segments
+ * selected from tail storage. All physical reads, including the two-slot scan,
+ * share the operation's credits. Temporary storage adds one log_page_bytes
+ * allocation to the exact staged record. Errors preserve bytes and zero out. */
+enum ntfs_result ntfs_logfile_read_legacy_record(struct ntfs_logfile *, uint64_t lsn, void *,
     size_t capacity, struct ntfs_logfile_record_view *);
 
 /* Independent immutable-byte primitives; no allocation, device I/O or writes.

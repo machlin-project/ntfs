@@ -135,6 +135,38 @@ the known record flags remain metadata. Active client identity, checkpoint
 tables and transaction interpretation remain separate. Do not use this
 observation as an authoritative recovery input.
 
+## Completed legacy tail-copy record observation
+
+`ntfs_logfile_read_legacy_record` adds immutable LFS 1.1 copy routing to the same
+exact staged-record assembly. Both tail slots are read before selecting a matching
+circular target by increasing `last_end_lsn`. Targets must be aligned complete
+pages in the selected circular geometry. A torn or malformed copy is unavailable;
+an actual backend error aborts with its original result, including errors that share
+a decoder's structural status. There is no preference for the first or second slot.
+
+Equal-epoch copies must have the same flags, next-record boundary and restored
+declared written prefix. USA words, transfer counts/positions and unused capacity
+are outside that comparison. A newer valid circular page wins; divergent equal
+circular/tail prefixes refuse. The selected tail is reread with snapshot header
+checks, and every consumed tail byte must fit its declared written prefix.
+Unknown page flags, a matching tail without a completed written prefix and modern
+LFS 2.0 routing return UNSUPPORTED. A finished record additionally requires a
+record-end page whose last-end LSN covers the requested record.
+
+Returned first/last offsets remain logical circular addresses; `copy_pages_read`
+counts segments read from tail storage. The shared read credits include the
+two-slot scan, every circular observation and every selected-tail reread. One
+temporary actual-log-page allocation holds a comparison prefix in addition to the
+exact staged record; both release on every path. Cached selected restart/client
+bytes remain intact. Errors preserve every caller byte and zero the view.
+
+This is completed-copy observation, not a proof of the entire current history or
+continuation provenance. It does not bind checkpoint tables or authorize recovery.
+Full fast-page routing and native current-history/analysis remain prerequisites in
+[WRITES.md](WRITES.md). The original format notes describe legacy tail copies as
+backups that can retain bytes not yet moved to the regular area; see the
+[original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/).
+
 ## NTFS client restart common prefix
 
 `ntfs_logfile_client_restart_decode` observes the 64-byte common prefix of an

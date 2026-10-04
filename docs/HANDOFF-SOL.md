@@ -23,10 +23,28 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
+Completed LFS 1.1 tail-copy routing now uses both slots and exact shared record
+assembly. LOGFILE.md records selection, prefix conflict, unsupported partial-tail,
+error/publication and budget contracts. Twenty-five original core/CLI cases pass,
+including every read position with five backend results, allocation faults, retry,
+capacity/null admission, wrap and exact/one-below credits. All 88 fatal-sanitizer
+suites, style, both 2-KiB targets, 54 component PASS groups/eleven runtime SKIPs and
+clean Release pass. Fresh journal fuzz replays 942 inputs and reports an exact
+terminal 110,815 executions in 61 seconds. Review artifacts/logfile-legacy/ and
+artifacts/fuzz-logfile-legacy/.
+Both actual architecture slices are present in the app, embedded/standalone
+extension and archive. Strict deep bundle verification refuses unsigned code;
+final/product-review/product-review.json retains separate build/signing evidence.
+
+All six original selected checkpoint/analysis records now read through that API;
+checkpoint bytes match retained originals and all three journal hashes stay intact.
+This qualifies completed-copy observation, not complete current history or replay.
+Modern fast-page routing and native continuation/history qualification remain open.
+
 Private USA output and native checkpoint-table/entry decoders are implemented.
 WRITE-FOUNDATIONS.md describes exact byte, topology, version and publication
-contracts. No device-write callback or FSKit mutation was enabled. Current evidence
-is 82 fatal-sanitizer suites, 54 component PASS groups/eleven runtime SKIPs, both
+contracts. No device-write callback or FSKit mutation was enabled. That preceding
+qualification is 82 fatal-sanitizer suites, 54 component PASS groups/eleven runtime SKIPs, both
 2-KiB freestanding targets, style and clean universal Release. Exact authors cover
 109 protected-byte and 380 table/entry vectors. Fresh journal fuzz replays 903 inputs
 and reports an exact terminal 92,230 executions in 61 seconds. Preserve the initial
@@ -38,7 +56,7 @@ The three unchanged original NIST journals have valid selected restart areas;
 circular-only checkpoint observation refuses their uncopied/stale regular storage.
 Exact restart packets occur in valid legacy tail copies. Main retained protected
 pages and derived original packets in tail-diagnosis.json; this manual observation
-does not establish current-history routing, checkpoint-table ownership or recovery.
+does not establish complete current history, checkpoint-table ownership or recovery.
 All three packets pass the selected-client restart binder with empty table references.
 Actual app, embedded/standalone extension and archive contain both architecture
 slices; strict bundle verification fails despite executable linker ad hoc metadata.

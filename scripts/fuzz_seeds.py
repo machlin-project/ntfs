@@ -16,6 +16,7 @@ from logfile_fixtures import author as generate_logfile
 from logfile_source_fixtures import author as generate_logfile_sources
 from logfile_volume_fixtures import author as generate_logfile_volumes
 from logfile_record_fixtures import author as generate_logfile_records
+from logfile_legacy_fixtures import author as generate_logfile_legacy
 from logfile_client_fixtures import author as generate_logfile_clients
 from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
@@ -30,10 +31,12 @@ LOGFILE_CLIENT_RESTART_KIND = 7
 LOGFILE_CLIENT_RESTART_RECORD_KIND = 8
 LOGFILE_TABLE_KINDS = {0: 9, 1: 10, 2: 11, 3: 12}
 LOGFILE_PROTECTED_RECORD_KIND = 13
+LOGFILE_LEGACY_RECORD_KIND = 14
 BITS_PER_BYTE = 8
 LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 LOGFILE_ALLOCATION_FAULT = 1 << 8
+LOGFILE_RECORD_ALLOCATION_FAULT = 1 << 9
 LOGFILE_BUDGET_SHIFT = 16
 LOGFILE_READ_CALL_BUDGET = 32
 
@@ -247,6 +250,25 @@ def generate(output):
             (log_seeds / filename).write_bytes(envelope + payload)
             selection['fault_seeds'].append(filename)
     (output / 'logfile-record-selection.json').write_text(json.dumps(selection, indent=2) + '\n')
+    legacy_records = output / 'logfile-legacy'
+    for case in generate_logfile_legacy(legacy_records):
+        payload = (legacy_records / case['path']).read_bytes()
+        controls = {'default': 0}
+        if case['path'] == 'newer-second-slot.journal':
+            controls.update({'first-tail-read': 1, 'second-tail-read': 2, 'circular-read': 3,
+                'selected-copy-read': 4, 'comparison-allocation': LOGFILE_ALLOCATION_FAULT,
+                'record-allocation': LOGFILE_RECORD_ALLOCATION_FAULT})
+        elif case['pages'] > 1:
+            exact_calls = case['reads'] - 1
+            controls.update({'exact-calls': (exact_calls + LOGFILE_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT,
+                'short-calls': (exact_calls - 1 + LOGFILE_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT,
+                'short-bytes': exact_calls << LOGFILE_BUDGET_SHIFT,
+                'final-copy-read': case['reads']})
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_LEGACY_RECORD_KIND, case['lsn'], control)
+            assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+            filename = 'legacy-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):
         payload = (log_clients / case['path']).read_bytes()

@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 124 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 126 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -49,6 +49,10 @@ Three complete packets from an unmodified Windows Recovery journal also pass
 fast-copy byte comparison and selected-client checkpoint membership with their
 original owner. Complete modern history and replay still need qualification; see
 [journal contracts](docs/LOGFILE.md).
+
+Volume admission now reports DIRTY only for the actual dirty bit. Other nonzero
+flags remain unsupported; all 44 bit/version profiles and the unchanged Windows
+Recovery refusal pass. This corrects diagnostics without admitting flagged media.
 
 Empty-LCN journal payloads now retain the reserved first slot as opaque storage,
 with absolute checked data offsets. Lossless attribute-name entry/full-dump decoding

@@ -1,5 +1,14 @@
 # Code provenance
 
+The volume-admission correction uses the existing named dirty-bit format value
+and the original
+[libfsntfs volume-information research](https://github.com/libyal/libfsntfs/blob/main/documentation/New%20Technologies%20File%20System%20%28NTFS%29.asciidoc):
+the dirty bit is `0x0001`, while the observed `0x0080` has no qualified meaning here.
+The original classifier preserves refusal for every nonzero flag and distinguishes
+dirty evidence from unsupported state. Its complete bit/version image profiles,
+publication/cleanup tests and diagnostic comparisons are repository-owned.
+No foreign mount, recovery or flag-handling implementation is imported.
+
 The supported LFS 2.0 fast-copy layout uses wire-format facts from
 [Suhanov's original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/)
 and the common-header/target field getters in

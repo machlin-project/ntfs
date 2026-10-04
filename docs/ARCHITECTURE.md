@@ -294,6 +294,10 @@ the volume-wide FSKit capability strategy requiring native qualification.
 
 Mount verifies primary and mirrored MFT bootstrap records, volume version and
 flags, $UpCase, and the root index. It does not claim a full filesystem check.
+Volume-information version admission precedes flag classification. A set named
+dirty bit returns DIRTY; other nonzero flags remain UNSUPPORTED. Only zero flags
+can advance mounting. An unsupported flag is not interpreted as dirty state or
+as proof that Windows repair is required; no flag is cleared to admit a volume.
 The separate synchronous `ntfs_validate` API uses its own private mount and
 budgeted callback owner. It scans record allocation, complete supported attribute
 mappings, the required four-record mirror prefix/boot-anchor mapping, exact

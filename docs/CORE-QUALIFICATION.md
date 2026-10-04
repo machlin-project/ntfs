@@ -1,6 +1,14 @@
 # Core qualification and continuation
 
-Current journal continuation passes 124 fatal-sanitizer suites, style, both 2-KiB
+Current portable acceptance passes 126 fatal-sanitizer suites, style, both 2-KiB
+freestanding targets, 54 component groups/eleven runtime SKIPs and clean unsigned
+universal Release. Forty-four protected flag/version profiles qualify exact dirty
+versus unsupported refusal, unchanged publication/inputs, owner cleanup and clean
+reuse. The original Windows Recovery image now reports unsupported format for
+its unqualified nonzero flag; it is still not admitted. These diagnostic checks
+do not qualify native recovery or writable ownership. ACCEPTANCE.md records scope.
+
+Preceding journal continuation passes 124 fatal-sanitizer suites, style, both 2-KiB
 freestanding targets, 54 component groups/eleven runtime SKIPs and clean unsigned
 universal Release. The supported LFS 2.0 observer examines all 32 fast slots and
 admits only completed per-target prefixes under explicit shared credits. Seventy-two

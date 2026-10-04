@@ -135,8 +135,10 @@ load_information(struct ntfs_volume *v)
 		if (info->major != NTFS_VOLUME_MAJOR_VERSION ||
 		    info->minor > NTFS_VOLUME_MAX_MINOR_VERSION) {
 			result = NTFS_UNSUPPORTED;
-		} else if (v->info.volume_flags != 0) {
+		} else if ((v->info.volume_flags & NTFS_VOLUME_DIRTY) != 0) {
 			result = NTFS_DIRTY;
+		} else if (v->info.volume_flags != 0) {
+			result = NTFS_UNSUPPORTED;
 		}
 	}
 	if (result == NTFS_OK) {

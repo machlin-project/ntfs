@@ -4,6 +4,12 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
+Read-only mount admission also retains refusal for every nonzero volume-information
+flag. DIRTY now identifies the actual dirty bit; other unsupported flags return
+UNSUPPORTED and do not establish a Windows repair requirement. Unsupported versions
+still take precedence. This error distinction neither admits the observed Windows
+Recovery volume nor satisfies writable ownership or native recovery qualification.
+
 Private logical LFS/update packet encoding, common-header LFS 1.1 RCRD page encoding,
 USA output, native restart-table/entry
 framing, composed selected-client checkpoint-dump binding and complete name/dirty

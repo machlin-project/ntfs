@@ -16,9 +16,16 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+The current mount-refusal qualification runs `volume-flags` and `volume-flags-cli`
+over 44 independently authored protected images, then the complete 126-suite fatal-
+sanitizer run. DIRTY identifies the named dirty bit; all other nonzero flags stay
+unsupported and version admission keeps priority. Artifacts/volume-flags/ retains
+the pre-change diagnostic, final host evidence and unchanged original Recovery
+image refusal. No force/admission, native recovery or writable qualification follows.
+
 The current completed fast-copy qualification runs `logfile-fast`, `logfile-fast-cli`
 and five `fuzz-logfile-fast` variants, then the full fatal-sanitizer suite. Its
-independent author is tests/logfile_fast_fixtures.py. Current results are 124 suites
+independent author is tests/logfile_fast_fixtures.py. That checkpoint has 124 suites
 and 2,482 freshly replayed journal seeds, including all 2,378 preceding inputs
 unchanged. The CLI is `ntfs-logfile fast-record LOGICAL_JOURNAL_FILE DECIMAL_LSN`;
 it explicitly supplies more read credits than the ordinary source defaults.

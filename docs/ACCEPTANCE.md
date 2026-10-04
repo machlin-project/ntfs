@@ -69,7 +69,39 @@ native-read/attempt-4-access-admission/. This qualifies development signing, ena
 and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
 namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
-## Completed LFS 2.0 fast-copy observation
+## Volume flag refusal classification
+
+Mount now uses the existing named dirty bit to distinguish DIRTY from UNSUPPORTED.
+Unsupported versions still take precedence; every nonzero flag still refuses.
+The prior binary reports Windows recovery required for both an original synthetic
+`0x0080` image and the unchanged Windows Recovery partition, despite no dirty bit.
+The rebuilt binary repeats that exact native request and now returns only the
+unsupported-format diagnostic. Input size, mode, inode, timestamps and full hash
+remain unchanged. This qualifies refusal classification, not flag semantics,
+volume acceptance, recovery or repair.
+
+Forty-four original protected images cover clean NTFS 3.0/3.1, the dirty bit,
+all fifteen other individual bits alone/with dirty, both complete flag masks and
+major/minor refusal precedence. C checks 88 repeated exact verdicts plus 44 clean
+callback-reuse mounts, NULL error publication, root use/unmount, no retained owner
+allocation and unchanged source bytes. CLI checks exact diagnostics/clean fields
+and unchanged images. Main independently decodes all 44 protected volume records
+and checks their actual flag/version fields and complete input hashes.
+
+Both focused suites and all 126 fatal-ASan/UBSan suites pass, as do style and both
+2-KiB freestanding targets. FSKit retains 54 PASS groups/eleven runtime SKIPs/zero
+failures. Clean unsigned Release supplies four universal products with executables
+targeting macOS 26.5/SDK 27.0; mount.c compilation is observed for both architectures.
+Strict signature verification rejects the unsigned app as expected. Main reviews
+actual products, the frozen component executable and six unchanged source hashes.
+No new wire/fuzz path is added; the preceding sustained campaign retains its scope,
+and existing fuzz smokes pass in the full suite. No new product is installed.
+
+Evidence is artifacts/volume-flags/{baseline,final,native-refusal}/, separate outer
+execution records, independent-fixture-review.json and review.json. Original Windows
+Recovery flag meaning and full current-history/recovery/writable gates remain open.
+
+## Preceding completed LFS 2.0 fast-copy observation
 
 `ntfs_logfile_read_fast_record` examines all 32 slots in the supported 4-KiB LFS 2.0
 profile and routes completed copies per circular target. Last-start LSN orders valid
@@ -125,10 +157,11 @@ byte for byte, hashed and made read-only. Original physical input remains unchan
 Microsoft documents the separate Recovery partition layout in
 [its GPT deployment guidance](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/configure-uefigpt-based-hard-drive-partitions?view=windows-11).
 
-The core's existing admission refuses this NTFS 3.1 volume because its volume
+The preceding core admission refuses this NTFS 3.1 volume because its volume
 flags are `0x0080`; its error text says Windows recovery is required. The actual
 dirty bit `0x0001` is not set, so that result does not prove a dirty volume or a
-repair requirement. The observed flag remains unsupported and is not cleared.
+repair requirement. The classification correction above now returns UNSUPPORTED
+for the unchanged original image. The observed flag is not cleared or interpreted.
 A pinned standalone `ntfscat` export uses only its ordinary read-only path, without
 force, recovery or mounting. It exports the original 4,800,512-byte `$LogFile`;
 the image and journal remain unchanged. This observation does not admit the

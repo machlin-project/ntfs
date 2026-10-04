@@ -67,7 +67,17 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest core acceptance is per-target completed LFS 2.0 fast-copy observation:
+Latest portable acceptance is volume flag refusal classification: 126 fatal-sanitizer
+suites, style, both 2-KiB freestanding targets and 54 component groups/eleven runtime
+SKIPs/zero failures. Clean unsigned Release contains four universal products with
+mount.c compiled for both architectures. No new product is installed. DIRTY now
+requires the actual dirty bit; other nonzero flags remain UNSUPPORTED and unsupported
+versions retain priority. Forty-four original protected images, exact diagnostics,
+owner cleanup/clean callback reuse and main byte review pass. The original Recovery
+image's unchanged native request now reports unsupported format and still refuses.
+Review artifacts/volume-flags/{baseline,final,native-refusal}/ and review.json.
+
+Preceding core acceptance is per-target completed LFS 2.0 fast-copy observation:
 124 fatal-sanitizer suites, style, both 2-KiB freestanding targets and 54 FSKit PASS
 groups/eleven runtime SKIPs/zero failures. Clean unsigned Release supplies four
 universal products for macOS 26.5/SDK 27.0, with both journal core files compiled
@@ -100,8 +110,9 @@ proof. GPT bounds select the separate Recovery partition; the system partition's
 or continue account setup without the pending user handoff.
 
 The Recovery image and its ordinary read-only `ntfscat -i 2` journal export are
-frozen and unchanged. Core volume admission refuses flags `0x0080`; the actual
-dirty bit is clear, so do not infer Windows repair is needed from that error text.
+frozen and unchanged. Core volume admission refuses flags `0x0080` with UNSUPPORTED;
+the actual dirty bit is clear. The preceding misleading recovery diagnostic is
+retained in baseline evidence and does not prove a Windows repair requirement.
 Do not clear flags, force admission, mount or repair the frozen image. Its original
 LFS 2.0 selected owner binds three exact fast-routed packets and its client-1.0
 snapshot: eight OAT entries/two allocated, one `$I30` name at physical allocated

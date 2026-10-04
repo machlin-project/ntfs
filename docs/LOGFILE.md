@@ -303,6 +303,10 @@ declared written prefix. USA words, transfer counts/positions and unused capacit
 are outside that comparison. A newer valid circular page wins; divergent equal
 circular/tail prefixes refuse. The selected tail is reread with snapshot header
 checks, and every consumed tail byte must fit its declared written prefix.
+The ending circular segment must also fit NextRecordOffset; violations are CORRUPT.
+Earlier circular segments may extend beyond it: an unfinished record can leave that
+field at its own start. Page transfer counts/positions cannot substitute for record
+segmentation or continuation provenance.
 Unknown page flags, a matching tail without a completed written prefix and modern
 LFS 2.0 routing return UNSUPPORTED. A finished record additionally requires a
 record-end page whose last-end LSN covers the requested record.
@@ -320,6 +324,16 @@ Full fast-page routing and native current-history/analysis remain prerequisites 
 [WRITES.md](WRITES.md). The original format notes describe legacy tail copies as
 backups that can retain bytes not yet moved to the regular area; see the
 [original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/).
+
+The independent legacy author now supplies 37 exact C/CLI cases. Ending-prefix
+checks include zero/short boundaries, exact/unaligned endings, ten-page records
+whose pages belong to separate transfers, wrap and missing completion witnesses.
+Six new negative packets reproduced success in the preceding accepted CLI and now
+refuse with CORRUPT. Four retained historical completed two-page records preserve
+their original bytes; one unfinished native ending page remains STALE. Six original
+checkpoint/analysis records are unchanged. The raw circular observation can inspect
+bytes that the completed-record observation refuses; neither proves current history.
+Current acceptance and main-reviewed artifacts are recorded in ACCEPTANCE.md.
 
 ## NTFS client restart common prefix
 

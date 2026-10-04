@@ -5,6 +5,12 @@ and recovery implementation without giving the immutable read environment a
 write callback or changing FSKit mutation admission. The complete ownership and
 durability gate remains [WRITES.md](WRITES.md).
 
+The immutable LFS 1.1 owner also checks declared written-prefix admission for every
+selected completed tail segment and the final circular segment. Earlier unfinished
+circular segments are not capped by NextRecordOffset. Independent separate-transfer,
+wrap and historical-byte checks qualify this framing rule only; current history and
+continuation provenance remain required. See LOGFILE.md and ACCEPTANCE.md.
+
 ## Protected metadata output
 
 `ntfs/record.h` exposes `ntfs_record_protect` for a complete private, already

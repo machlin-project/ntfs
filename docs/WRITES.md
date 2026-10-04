@@ -11,6 +11,12 @@ publication contracts. They add no device-write capability. Current physical
 history, complete checkpoint ownership/analysis and native durability acceptance
 remain prerequisites for the writable owner and mutations below.
 
+Completed LFS 1.1 observation also admits final circular bytes only inside the
+declared written prefix while allowing earlier unfinished segments beyond their
+NextRecordOffset. Separate-transfer and wrap cases preserve the native distinction
+between I/O transfers and records. This closes an ending-prefix framing gap; it
+does not establish the complete current history or continuation provenance.
+
 The next core implementation sequence is:
 
 1. Establish selected current physical $LogFile history, acquire the owning NTFS

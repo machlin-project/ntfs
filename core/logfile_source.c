@@ -709,7 +709,11 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 		if (amount > total - copied) {
 			amount = (size_t)total - copied;
 		}
-		if (copies != NULL && page.storage == NTFS_LOGFILE_LEGACY_TAIL &&
+		/* A spanning record starts beyond the last completed prefix. Only its
+		 * ending circular segment, and every selected completed tail segment,
+		 * must fit the page's declared written prefix. */
+		if (copies != NULL &&
+		    (page.storage == NTFS_LOGFILE_LEGACY_TAIL || copied + amount == total) &&
 		    !ntfs_bounds(record_offset, amount, page.page.next_record_offset)) {
 			result = NTFS_CORRUPT;
 			goto done;

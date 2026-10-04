@@ -22,6 +22,7 @@ SECOND_USA_SEQUENCE = w.USA_SEQUENCE + 1
 WRITTEN_CONFLICT_BYTE = 0xe3
 ALTERNATE_TRANSFER_PAGES = 7
 ALTERNATE_TRANSFER_POSITION = 3
+UNALIGNED_FINAL_BYTES = w.WORD_BYTES
 
 
 def packet(lsn, payload, flags=0):
@@ -31,10 +32,12 @@ def packet(lsn, payload, flags=0):
 
 
 def protected_page(data, *, target, last_end, next_record, tail=False,
-                   flags=w.RECORD_END, sequence=w.USA_SEQUENCE, count=1, position=1):
+                   flags=w.RECORD_END, sequence=w.USA_SEQUENCE, count=1, position=1,
+                   last_start=None):
     logical = bytearray(data)
     logical[:w.PAGE.size] = w.PAGE.pack(dict(magic=b'RCRD', usa_offset=w.PAGE.size,
-        copy_value=target if tail else last_end, last_end_lsn=last_end,
+        copy_value=target if tail else (last_end if last_start is None else last_start),
+        last_end_lsn=last_end,
         flags=flags, page_count=count, page_position=position,
         next_record_offset=next_record))
     raw, _ = w.protect(logical, w.PAGE)
@@ -118,6 +121,23 @@ def author(output):
         copies=0, reads=3)
     add('no-valid-page', standard(bytes(page_bytes), bytes(page_bytes), bytes(page_bytes)),
         code=CORRUPT, copies=0, reads=3)
+
+    for label, end in (('circular-unwritten-payload', record_offset + w.RECORD.size),
+                       ('circular-empty-written-prefix', 0)):
+        page = protected_page(new_data, target=circular, last_end=requested,
+            next_record=end)
+        add(label, standard(bytes(page_bytes), bytes(page_bytes), page),
+            code=CORRUPT, copies=0, reads=w.LEGACY_TAIL_PAGES + 1)
+    for label, gap in (('circular-complete-at-page-end', 0),
+                       ('circular-complete-before-aligned-page-end', UNALIGNED_FINAL_BYTES)):
+        payload_bytes = page_bytes - record_offset - w.RECORD.size - gap
+        complete = packet(requested, bytes(i % PAYLOAD_MODULUS for i in range(payload_bytes)))
+        data = bytearray(old_data)
+        data[record_offset:record_offset + len(complete)] = complete
+        page = protected_page(data, target=circular, last_end=requested,
+            next_record=page_bytes)
+        add(label, standard(bytes(page_bytes), bytes(page_bytes), page),
+            record=complete, copies=0, reads=w.LEGACY_TAIL_PAGES + 1)
 
     changed_capacity = bytearray(new_data)
     changed_capacity[next_record:] = bytes([DIFFERENT_UNUSED_BYTE]) * (page_bytes - next_record)
@@ -203,6 +223,51 @@ def author(output):
         add('wrapped-tail-continuation' if wrapped else 'tail-continuation', source,
             query=lsn, record=record, pages=pages, copies=1, reads=w.LEGACY_TAIL_PAGES + pages + 1,
             first=first, last=offset, wrapped=wrapped)
+
+    # NextRecordOffset remains at the start of an unfinished record. Each page
+    # uses its own single-page transfer; transfer counts never identify a record.
+    for wrapped in (False, True):
+        first = SMALL_FILE_BYTES - page_bytes if wrapped else circular
+        earlier_lsn = w.lsn_at(first + w.PAGE_DATA_OFFSET, SMALL_FILE_BYTES)
+        earlier = packet(earlier_lsn, OLD_PAYLOAD)
+        start = w.aligned(w.PAGE_DATA_OFFSET + len(earlier))
+        lsn = w.lsn_at(first + start, SMALL_FILE_BYTES)
+        complete = packet(lsn, bytes(i % PAYLOAD_MODULUS for i in range(LARGE_PAYLOAD_BYTES)),
+            w.MULTI_PAGE)
+        for verdict, suffix in ((SUCCESS, 'complete'), (CORRUPT, 'unwritten-final'),
+                                (CORRUPT, 'short-final'), (STALE, 'unfinished-final')):
+            source = base(current=lsn)
+            offset, cursor, copied, pages = first, start, 0, 0
+            while copied < len(complete):
+                amount = min(page_bytes - cursor, len(complete) - copied)
+                final = copied + amount == len(complete)
+                data = bytearray([UNUSED_BYTE]) * page_bytes
+                if copied == 0:
+                    data[w.PAGE_DATA_OFFSET:w.PAGE_DATA_OFFSET + len(earlier)] = earlier
+                data[cursor:cursor + amount] = complete[copied:copied + amount]
+                next_free = w.aligned(cursor + amount) if final else cursor
+                if final and suffix == 'unwritten-final':
+                    next_free = cursor
+                elif final and suffix == 'short-final':
+                    next_free -= w.ALIGNMENT
+                flags = w.RECORD_END if final or copied == 0 else 0
+                last_end = lsn if final else (earlier_lsn if copied == 0 else 0)
+                if final and suffix == 'unfinished-final':
+                    flags, last_end = 0, 0
+                raw = protected_page(data, target=offset, last_end=last_end,
+                    next_record=next_free, flags=flags, last_start=lsn if copied == 0 else 0)
+                put(source, offset, raw)
+                pages += 1
+                copied += amount
+                if copied != len(complete):
+                    offset += page_bytes
+                    if offset == SMALL_FILE_BYTES:
+                        offset = circular
+                cursor = w.PAGE_DATA_OFFSET
+            prefix = 'circular-wrapped-split-' if wrapped else 'circular-split-'
+            add(prefix + suffix, source, code=verdict, query=lsn, record=complete,
+                pages=pages, copies=0, reads=w.LEGACY_TAIL_PAGES + pages,
+                first=first, last=offset, wrapped=wrapped)
 
     (output / 'manifest.json').write_text(json.dumps(dict(cases=cases), indent=2) + '\n')
     (output / 'cases.tsv').write_text('\n'.join(

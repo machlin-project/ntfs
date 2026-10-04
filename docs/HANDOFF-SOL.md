@@ -23,6 +23,32 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
+Latest acceptance is the ending circular written-prefix correction: 108 fatal-
+sanitizer suites, ten focused suites, style, both 2-KiB freestanding targets,
+54 local FSKit PASS groups/eleven runtime SKIPs and clean unsigned universal Release.
+The completed LFS 1.1 observer now caps its final circular segment by
+NextRecordOffset; earlier unfinished segments may extend beyond it. The final
+completion witness and every selected tail prefix still gate publication.
+Transfer count/position never define record fragments. All 37 C/CLI cases pass,
+including ten-page separate-transfer records, wrap and short/unwritten endings.
+Six previously successful bad packets now refuse with CORRUPT; four historical
+completed two-page packets and six checkpoint/analysis packets remain byte-identical.
+An unfinished historical final page retains its STALE refusal. Main checks all
+74 authored packets/37 numeric rows, three unchanged original journals, actual
+source/product hashes and raw fatal-sanitizer results. Fresh fuzz replays 1,976
+authored seeds and completes 121,654 runs in 61 seconds with 642 MiB peak fuzzer RSS.
+Review artifacts/logfile-written-prefix/{baseline,initial,final}/,
+artifacts/logfile-written-prefix/review.json and artifacts/{fuzz,fskit}-logfile-written-prefix/.
+The documented build harness passes; an earlier SDK-resolution failure from a direct
+Meson command is retained. Minimum OS stays 26.5 and strict bundle verification
+rejects the unsigned build. The isolated machlin-ntfs-fskit-26.5.2 clone reaches its
+login screen and awaits manual inherited-account login. Fresh guest version/kernel/
+RPC verification and signed NTFS installation remain pending; review
+artifacts/fskit-guest-26.5.2/preparation/. The source and unrelated guests are unchanged.
+Windows remains at the user's manual local-account credential handoff. This checkpoint
+qualifies framing only; current history, recovery, native writes and installed mounts
+remain open.
+
 The complete checkpoint decoder now composes all four dumps and checks name/dirty
 target membership against physical allocated OAT keys. Each present dump LSN is
 distinct. Duplicate name targets reject, repeated dirty targets are valid, and
@@ -42,7 +68,7 @@ every native checkpoint/26 unique dumps to retained originals, all thirteen copi
 journals and projected tails, source fingerprints and actual product hashes.
 No original current nonempty history, analysis, recovery or writing is qualified.
 
-Current acceptance is 106 fatal-sanitizer suites, thirteen focused suites, style,
+The preceding snapshot acceptance is 106 fatal-sanitizer suites, thirteen focused suites, style,
 both 2-KiB freestanding targets, 54 local component PASS groups/eleven runtime SKIPs
 and clean unsigned universal Release. Fresh fuzz replays 1,932 authored inputs and
 reports 138,888 runs in 61 seconds with 637 MiB peak fuzzer RSS. All nine compiled

@@ -226,7 +226,11 @@ enum ntfs_result ntfs_logfile_read_circular_record(struct ntfs_logfile *, uint64
  * Logical page offsets remain circular addresses; copy_pages_read counts segments
  * selected from tail storage. All physical reads, including the two-slot scan,
  * share the operation's credits. Temporary storage adds one log_page_bytes
- * allocation to the exact staged record. Errors preserve bytes and zero out. */
+ * allocation to the exact staged record. Every selected tail segment and the
+ * ending circular segment must fit NextRecordOffset; violations are CORRUPT.
+ * Earlier circular segments may extend beyond it because an unfinished record
+ * leaves that field at its start. The final RecordEnd/last_end_lsn witness is
+ * still required. Errors preserve bytes and zero out. */
 enum ntfs_result ntfs_logfile_read_legacy_record(struct ntfs_logfile *, uint64_t lsn, void *,
     size_t capacity, struct ntfs_logfile_record_view *);
 

@@ -8,7 +8,50 @@ Installed native mounts, Windows interoperability and commercial release
 qualification remain open. The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
-## Complete checkpoint target membership
+## Ending circular written-prefix admission
+
+Completed LFS 1.1 record observation now rejects an ending circular segment beyond
+NextRecordOffset. Earlier circular segments can extend beyond that field because
+it may retain the start of an unfinished record. Selected completed tail segments
+keep their existing prefix admission, and the final RecordEnd/last-end-LSN witness
+remains required. Transfer count/position describe an I/O transfer rather than a
+record's fragment sequence. Full current history and continuation provenance remain
+unqualified; this correction enables no recovery or writes.
+
+Before the correction, the accepted CLI returned success for six independently
+authored unwritten-prefix cases. Each now returns CORRUPT with no bytes or metadata.
+The legacy author now supplies 37 cases, including exact/unaligned ending lengths,
+ten-page records across separate transfers, wrap, short/unwritten final prefixes and
+missing completion witnesses. C and CLI match all exact packet/numeric oracles.
+Main verifies all 74 actual packet files and 37 numeric rows. Four historical
+completed two-page records remain byte-identical to original packets; one unfinished
+historical ending page retains its expected STALE refusal. Six preceding original
+checkpoint/analysis records retain all 792 bytes. The three source journals are unchanged.
+
+All 108 fatal-ASan/UBSan suites, ten focused suites, style and both 2-KiB freestanding
+targets pass. Fresh fuzz replays all 1,976 authored seeds and completes 121,654 runs
+in 61 seconds with 642 MiB peak fuzzer RSS. Main checks actual corpus and binary
+hashes, the raw test rows and all four unchanged compiled-source fingerprints.
+FSKit reports 54 local PASS groups/eleven runtime SKIPs/zero failures. Clean unsigned
+Release has both architecture slices in all four products and compiles the changed
+owner for each; actual product hashes and deployment fields are checked. Minimum OS
+is 26.5 with SDK 27.0. Strict deep bundle verification rejects unsigned code.
+
+Evidence is artifacts/logfile-written-prefix/{baseline,initial,final}/ and
+artifacts/logfile-written-prefix/review.json. The earlier direct Meson invocation
+failed to resolve the macOS SDK; its failure is retained separately. The documented
+build harness supplies the selected SDK and passes without reducing sanitizer checks.
+Products and the fresh campaign are artifacts/{fskit,fuzz}-logfile-written-prefix/.
+These are framing/component/build results, not installed mount or native recovery
+acceptance. An isolated clone of the retained stock 26.5.2 base reaches its actual
+login screen; inherited-account login, fresh version/kernel/RPC verification and
+signed NTFS installation remain pending. Source/unrelated guests are unchanged;
+one bounded backend cancellation/relaunch is recorded without claiming native
+shutdown. Review artifacts/fskit-guest-26.5.2/preparation/. Windows remains
+at the previously authorized local-account credential handoff; its separate test
+disk is blank and chkdsk/native write qualification remains open.
+
+## Preceding complete checkpoint target membership
 
 The whole-snapshot decoder binds all four dump slots to one selected-client RESTART
 record, rejects reused anchor LSNs and checks every name/allocated dirty target

@@ -368,6 +368,13 @@ caller bytes publish only after all framing/link-geometry checks succeed. The
 observation does not establish written/current history or route tail/fast copies.
 Those contracts, native client/transaction interpretation and recovery remain
 separate work. The mount policy still refuses dirty media.
+Completed LFS 1.1 observation additionally examines both tail slots, selects only
+compatible completed copies and shares credits across copy scans and record pages.
+Selected tail segments and the final circular segment must fit their declared
+written prefixes. Earlier unfinished circular segments may extend beyond
+NextRecordOffset. The final record-end/last-end-LSN witness remains mandatory.
+I/O transfer positions never identify record fragments; complete current history
+and continuation provenance remain separate from this immutable observation.
 Cached active-client lookup additionally matches a selected restart entry's
 index/sequence and bounded in-use membership with no allocation or callback.
 Inactive entries remain inspectable through the separate raw snapshot getter;

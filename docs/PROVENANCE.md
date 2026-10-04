@@ -1,5 +1,15 @@
 # Code provenance
 
+The ending circular-prefix admission correction and its separate-transfer/wrap
+fixtures are original repository code. The meaning of NextRecordOffset for an
+unfinished record and the distinction between transfers and records follow the
+[original Linux-NTFS field research](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html).
+Retained original historical pages independently exhibit these field relationships.
+Six authored bad packets reproduce the preceding accepted CLI's framing gap; exact
+historical completed/checkpoint bytes remain unchanged after the correction. No
+foreign assembly or recovery implementation is imported, and no native current
+history or write qualification follows.
+
 Complete checkpoint membership is original repository code over those exact-record
 and table decoders. Physical OAT keys follow the original Linux-NTFS field tables;
 independent observation checks all targets in ten retained historical checkpoints.

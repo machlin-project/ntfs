@@ -1,8 +1,12 @@
 # Writable ownership and recovery contract
 
-No writable API is implemented. The current read environment cannot write, and
-the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
-adding a pwrite callback to individual operations.
+The experimental separate [initialized-data overwrite owner](DATA-OVERWRITE.md)
+now physically writes already initialized ordinary file ranges on exclusively
+owned private images while preserving every metadata byte. Its actual Windows
+cold-boot/file/ADS/chkdsk roundtrip passes. This is not filesystem `write(2)`:
+timestamps and metadata transactions remain unimplemented. The immutable read
+environment cannot write, and the FSKit adapter still rejects mutations with
+EROFS. Do not enable individual FSKit writes by adding a pwrite callback.
 
 The [recovery-input owner](RECOVERY-INPUTS.md) now internally binds the owning
 checkpoint and complete retained oldest-to-endpoint packet interval, distinguishing
@@ -115,12 +119,16 @@ The next core implementation sequence is:
    client restart record, and validate complete checkpoint tables and native
    transaction analysis. Existing read-only packet observers and the reference
    durability model are groundwork; they do not close this recovery contract.
-2. Implement the separate writable owner, reservations/credits, native log planning,
-   redo/undo recovery and durable barrier/poison contracts. Keep writes disabled
-   while these contracts lack native recovery acceptance.
+2. Extend the separate writable owner with reservations/credits, native log planning
+   and redo/undo recovery. The experimental metadata-preserving owner already has
+   exclusive claim, full allocation checks, complete quiet native inputs and real
+   barrier/poison contracts. Keep metadata and product writes disabled while native
+   transaction recovery lacks acceptance.
 3. Qualify bounded writes to existing initialized file ranges without allocation
    or size changes, with explicit partial-write and fsync semantics. Interrupt
    writes/barriers and verify recovery, metadata and data against Windows/chkdsk.
+   The successful offline-image overwrite and injected callback-failure checks now
+   pass; actual power interruption, timestamp transactions and FSKit remain open.
 4. Expand to allocation, resize, creation, deletion and rename, with dedicated
    namespace/security/lifetime and crash tests for each mutation family.
 

@@ -11,6 +11,12 @@ handoff, not a production NTFS driver. Build, component tests and installed nati
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
+An experimental separate [data-overwrite owner](docs/DATA-OVERWRITE.md) now writes
+bounded initialized ordinary file ranges on private images. Complete byte comparison,
+169 fatal-sanitizer suites and a Windows cold-boot/file/ADS/chkdsk roundtrip pass.
+Metadata bytes remain unchanged; native metadata WAL, timestamps and writable FSKit
+behavior remain required before ordinary filesystem writing can be admitted.
+
 A new [recovery-input owner](docs/RECOVERY-INPUTS.md) internally acquires the owning
 checkpoint and exact retained client history through the completed endpoint,
 separates reused transaction lifetimes and binds checkpoint roots. Owned packets

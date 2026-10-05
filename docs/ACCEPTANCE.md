@@ -1,5 +1,29 @@
 # Acceptance
 
+## Initialized data overwrite continuation
+
+The separate experimental overwrite owner passes complete prewrite validation,
+exclusive claim, quiet native journal ownership, aligned fragmented data changes
+and mandatory persistence. All 169 fatal ASan/UBSan suites, style and 32
+freestanding objects per architecture pass. Eight complete original inputs and
+allocation/read/write/barrier fault sweeps qualify refusal, retry and poisoning.
+Four optional read-cache allocation failures retain exact successful results.
+
+On a private clone of the original locked plaintext Windows capture, 8193 bytes
+of an initialized file change and persist. Full-volume byte comparison proves no
+metadata or other data changes; allocation validation and all four mirror records
+still pass. A verified full GPT-disk candidate cold-boots in the isolated Windows
+VM: four file hashes and ADS match, file identity/ACL observation succeeds and
+read-only chkdsk finds no problems. The original test disk is restored with exact
+digest and actual baseline boot/partition/Guest Agent verification. Frozen inputs,
+tools, written images, post-Windows disk and failed initial attempts are retained
+under `artifacts/overwrite/`.
+
+[DATA-OVERWRITE.md](DATA-OVERWRITE.md) defines this narrower accepted scope.
+Metadata timestamps, native WAL/replay, actual power interruption and writable
+FSKit product behavior remain unqualified. This checkpoint does not complete the
+requested driver write scope.
+
 ## Original Windows clean journals and retained restart copies
 
 Guest Tools were installed in the dedicated Windows VM after explicit license

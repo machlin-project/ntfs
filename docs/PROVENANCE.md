@@ -1,5 +1,15 @@
 # Code provenance
 
+Retained journal target indexing, complete prefix comparison, shared-credit/memory
+admission and atomic cached lifetime are original repository code. The exact
+indexed reader reuses the original assembler; no foreign selection or recovery
+implementation is imported. Independent original physical declarations, equivalence
+groups, existing packet oracles and frozen Windows USA/source bytes supply evidence.
+This qualifies per-target observation without current-history or recovery authority.
+The single-process logfile fuzz harness keeps all original inputs and unchanged
+sanitizer/resource limits; its corpus-reload setting follows the documented
+[LLVM libFuzzer option](https://llvm.org/docs/LibFuzzer.html#options).
+
 Complete physical journal inventory, shared-credit preflight, error/visitor
 accounting and the declarative graph/fault author are original repository code.
 Named common/fast fields use the research already linked below. The distinction

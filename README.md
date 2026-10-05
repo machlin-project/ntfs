@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 131 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 138 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -59,7 +59,16 @@ graphs cover 14,729 ordered page observations. On the frozen Windows journal, al
 headers, 1,116 missing signatures and one invalid copy target. A separate native
 page window supplies four exact records, including the preceding restart packet.
 Physical coverage and observed LSN maxima do not select current history or enable
-recovery. Copy conflict resolution, continuity and native analysis remain next.
+recovery.
+
+An optional retained journal index now resolves complete competing prefixes per
+circular target under explicit memory and whole-operation read bounds. Failed
+preparation publishes nothing. Indexed record reads recheck selected protected
+pages without repeating copy-slot scans. Seventy-one original graphs supply
+14,922 target rows and 109 exact record results. On the frozen Windows journal,
+all 1,138 target decisions and four complete packets agree independently; one
+unrouted copy remains visible. Current endpoint, active-window continuity and
+native analysis/recovery still need qualification before writing can be enabled.
 
 Volume admission now reports DIRTY only for the actual dirty bit. Other nonzero
 flags remain unsupported; all 44 bit/version profiles and the unchanged Windows

@@ -42,6 +42,13 @@ checkpoint binding/membership with their original owner. This confirms that nati
 snapshot profile, not the whole current history or Windows continuation ownership;
 LOGFILE.md and ACCEPTANCE.md define the narrower contract and acquisition limits.
 
+An optional retained target index now compares all equally newest written prefixes,
+retains unresolved-copy evidence and supports exact indexed acquisition without
+repeating slot scans. Preparation/reload/fault checks do not select an authoritative
+current endpoint, active window or continuation owner. Those boundaries and subsequent
+native analysis remain required before recovery can advance this write gate. The
+original read environment has no write capability.
+
 Complete physical page inventory is now implemented under explicit whole-scan
 credits, without allocation or source mutation. All copy slots and circular pages
 remain observable, including structural errors and unsupported targets; backend

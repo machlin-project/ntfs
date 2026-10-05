@@ -111,8 +111,13 @@ try:
         if target in ('image', 'validation'):
             process_flags = [f'-fork={IMAGE_FUZZ_PROCESSES}', '-ignore_ooms=0',
                              '-ignore_timeouts=0', '-ignore_crashes=0']
+        if target == 'logfile':
+            # This one process owns its corpus. Periodic imports re-read whole
+            # already-authored journals and retain a second large input batch.
+            # Startup loading and the separate exhaustive replay remain intact.
+            process_flags.append('-reload=0')
         item = {'target': target, 'input_bytes': maximum, 'status': 'building',
-                'processes': IMAGE_FUZZ_PROCESSES if process_flags else 0,
+                'processes': IMAGE_FUZZ_PROCESSES if target in ('image', 'validation') else 0,
                 'rss_limit_mib': RSS_LIMIT_MIB, 'timeout_seconds': INPUT_TIMEOUT_SECONDS,
                 'log': str(campaign / 'run.log')}
         item['authored_seeds'] = len(paths)
@@ -120,6 +125,7 @@ try:
             item['declared_image_bytes'] = MAX_INPUT_BYTES
             item['reserved_boot_bytes'] = IMAGE_RESERVED_BOOT_BYTES
         if target == 'logfile':
+            item['external_corpus_reload'] = False
             item['circular_record_seeds'] = json.loads((seeds / 'logfile-record-selection.json').read_text())
         report['targets'].append(item)
         report_path.write_text(json.dumps(report, indent=2) + '\n')

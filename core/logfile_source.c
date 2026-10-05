@@ -2,6 +2,27 @@
 #include "internal.h"
 #include <ntfs/logfile.h>
 
+struct indexed_page_entry {
+	struct ntfs_logfile_indexed_page page;
+	struct ntfs_logfile_page_view circular;
+	uint64_t equal_candidates;
+	bool blocked;
+};
+
+struct page_index {
+	struct ntfs_logfile_page_index_report report;
+	struct ntfs_logfile_page_view copies[NTFS_LOGFILE_FAST_COPY_PAGES];
+	size_t allocation_bytes;
+	struct indexed_page_entry entries[];
+};
+
+struct index_builder {
+	struct page_index *index;
+	const struct ntfs_logfile_restart *restart;
+	uint64_t first_offset;
+	uint32_t copy_pages;
+};
+
 struct ntfs_logfile {
 	struct ntfs_environment environment;
 	struct ntfs_logfile_limits limits;
@@ -10,6 +31,7 @@ struct ntfs_logfile {
 	uint8_t *raw, *scratch, *selected;
 	bool backend_failed;
 	struct ntfs_stream *backing;
+	struct page_index *page_index;
 };
 
 struct legacy_copies {
@@ -28,14 +50,25 @@ struct fast_copies {
 struct record_copies {
 	struct legacy_copies *legacy;
 	struct fast_copies *fast;
+	bool indexed;
 };
 
-enum { NTFS_LOGFILE_FAST_METADATA_BYTES = 2 * 1024 };
+enum {
+	NTFS_LOGFILE_FAST_METADATA_BYTES = 2 * 1024,
+	NTFS_LOGFILE_INDEX_METADATA_BYTES = 4 * 1024,
+	NTFS_LOGFILE_PREFIX_PAIR_READS = 2
+};
 
 _Static_assert(
     sizeof(struct fast_copies) <= NTFS_LOGFILE_FAST_METADATA_BYTES, "fast-copy metadata policy");
 _Static_assert(NTFS_LOGFILE_MAX_FILE_BYTES / NTFS_MST_STRIDE <= UINT32_MAX,
     "physical inventory counter capacity");
+_Static_assert(sizeof(struct page_index) == offsetof(struct page_index, entries),
+    "page-index flexible-array placement");
+_Static_assert(sizeof(struct page_index) <= NTFS_LOGFILE_INDEX_METADATA_BYTES,
+    "page-index fixed metadata policy");
+_Static_assert(NTFS_LOGFILE_FAST_COPY_PAGES < sizeof(uint64_t) * NTFS_BITS_PER_BYTE,
+    "copy slots and circular candidate fit the index mask");
 _Static_assert(sizeof(struct ntfs_disk_log_fast_page) ==
 	NTFS_LFS_FAST_USA_WORDS * sizeof(uint16_t) + sizeof(struct ntfs_disk_log_page) +
 	    sizeof(uint16_t) + sizeof(uint32_t),
@@ -211,6 +244,7 @@ ntfs_logfile_close(struct ntfs_logfile *source)
 
 	if (source != NULL) {
 		backing = source->backing;
+		ntfs_logfile_clear_page_index(source);
 		if (source->raw != NULL) {
 			source->environment.release(source->environment.context, source->raw,
 			    source->limits.max_page_bytes);
@@ -825,6 +859,358 @@ ntfs_logfile_visit_pages(struct ntfs_logfile *source, ntfs_logfile_page_visitor 
 	return NTFS_OK;
 }
 
+static uint64_t
+index_epoch(const struct ntfs_logfile_restart *restart, const struct ntfs_logfile_page *page)
+{
+	return restart->major == NTFS_LFS_MAJOR_LEGACY ? page->last_end_lsn : page->copy_value;
+}
+
+static bool
+same_page_metadata(const struct ntfs_logfile_page_view *a, const struct ntfs_logfile_page_view *b)
+{
+	return a->offset == b->offset && a->storage == b->storage &&
+	    a->page.copy_value == b->page.copy_value &&
+	    a->page.last_end_lsn == b->page.last_end_lsn && a->page.flags == b->page.flags &&
+	    a->page.page_count == b->page.page_count &&
+	    a->page.page_position == b->page.page_position &&
+	    a->page.next_record_offset == b->page.next_record_offset;
+}
+
+static enum ntfs_result
+index_collect(void *context, const struct ntfs_logfile_page_observation *observation)
+{
+	struct index_builder *builder = context;
+	struct page_index *index = builder->index;
+	const struct ntfs_logfile_restart *restart = builder->restart;
+	struct indexed_page_entry *entry;
+	struct ntfs_logfile_page_view view = {0};
+	uint64_t target, epoch, bit;
+	uint32_t slot;
+	enum ntfs_result result;
+
+	result = observation->result == NTFS_OK ? observation->target_result : observation->result;
+	/* A legacy circular continuation can have no last-start witness. Its
+	 * protected physical address and last-end epoch remain observable; this
+	 * exception never routes a tail or qualifies continuation provenance. */
+	if (restart->major == NTFS_LFS_MAJOR_LEGACY &&
+	    observation->storage == NTFS_LOGFILE_CIRCULAR && observation->result == NTFS_OK &&
+	    result == NTFS_NOT_FOUND && observation->page.copy_value == 0) {
+		result = NTFS_OK;
+	}
+	if (observation->storage != NTFS_LOGFILE_CIRCULAR) {
+		if (result != NTFS_OK) {
+			index->report.unrouted_copies += observation->result != NTFS_NOT_FOUND;
+			index->report.unsupported_copies += result == NTFS_UNSUPPORTED;
+			return NTFS_OK;
+		}
+		slot = (uint32_t)((observation->offset - builder->first_offset) /
+		    restart->log_page_bytes);
+		target = observation->target_offset;
+	} else {
+		slot = builder->copy_pages;
+		target = observation->offset;
+	}
+	entry = &index->entries[(target - restart->circular_offset) / restart->log_page_bytes];
+	if (result != NTFS_OK) {
+		if (result == NTFS_UNSUPPORTED) {
+			entry->blocked = true;
+			entry->page.result = NTFS_UNSUPPORTED;
+		} else if (entry->equal_candidates == 0) {
+			entry->page.result = result;
+		}
+		return NTFS_OK;
+	}
+	view.offset = observation->offset;
+	view.storage = observation->storage;
+	view.page = observation->page;
+	if (observation->storage != NTFS_LOGFILE_CIRCULAR) {
+		index->copies[slot] = view;
+	} else {
+		entry->circular = view;
+	}
+	epoch = index_epoch(restart, &observation->page);
+	bit = UINT64_C(1) << slot;
+	if (entry->equal_candidates == 0 || epoch > entry->page.epoch_lsn) {
+		entry->page.selected = view;
+		entry->page.epoch_lsn = epoch;
+		entry->page.result = NTFS_OK;
+		entry->equal_candidates = bit;
+	} else if (epoch == entry->page.epoch_lsn) {
+		entry->equal_candidates |= bit;
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+index_reload(struct ntfs_logfile *source, const struct ntfs_logfile_page_view *expected,
+    uint64_t target, struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out)
+{
+	struct ntfs_logfile_page_observation observation = {0};
+	enum ntfs_result result;
+
+	result = load_page(source, expected->offset, work, out);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (!same_page_metadata(expected, out)) {
+		return NTFS_STALE;
+	}
+	observation.offset = out->offset;
+	observation.storage = out->storage;
+	observation.page = out->page;
+	result = observe_target(source, &observation);
+	if (source->restart.major == NTFS_LFS_MAJOR_LEGACY &&
+	    out->storage == NTFS_LOGFILE_CIRCULAR && result == NTFS_NOT_FOUND &&
+	    out->page.copy_value == 0) {
+		result = NTFS_OK;
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	return observation.target_offset == target ? NTFS_OK : NTFS_STALE;
+}
+
+static enum ntfs_result
+index_compare(struct ntfs_logfile *source, struct index_builder *builder,
+    struct indexed_page_entry *entry, struct ntfs_logfile_report *work, uint8_t *comparison)
+{
+	const struct ntfs_logfile_restart *restart = builder->restart;
+	struct ntfs_logfile_page_view canonical, duplicate, expected;
+	uint64_t bit, offset;
+	uint32_t slot;
+	bool loaded = false;
+	enum ntfs_result result;
+
+	if (entry->blocked) {
+		entry->page.result = NTFS_UNSUPPORTED;
+	}
+	if (entry->page.result != NTFS_OK) {
+		return NTFS_OK;
+	}
+	if (entry->page.selected.storage != NTFS_LOGFILE_CIRCULAR &&
+	    ((entry->page.selected.page.flags & NTFS_LOGFILE_PAGE_RECORD_END) == 0 ||
+		entry->page.selected.page.last_end_lsn == 0 ||
+		entry->page.selected.page.next_record_offset < restart->page_data_offset)) {
+		entry->page.result = NTFS_UNSUPPORTED;
+		return NTFS_OK;
+	}
+	if ((entry->equal_candidates & (entry->equal_candidates - 1u)) == 0) {
+		return NTFS_OK;
+	}
+	for (slot = 0; slot <= builder->copy_pages; slot++) {
+		bit = UINT64_C(1) << slot;
+		if ((entry->equal_candidates & bit) == 0) {
+			continue;
+		}
+		offset = slot == builder->copy_pages
+		    ? entry->page.target_offset
+		    : builder->first_offset + (uint64_t)slot * restart->log_page_bytes;
+		if (offset == entry->page.selected.offset) {
+			continue;
+		}
+		if (!loaded) {
+			result = index_reload(source, &entry->page.selected,
+			    entry->page.target_offset, work, &canonical);
+			if (result != NTFS_OK) {
+				return result;
+			}
+			ntfs_copy(comparison, source->scratch, restart->log_page_bytes);
+			loaded = true;
+		}
+		expected =
+		    slot == builder->copy_pages ? entry->circular : builder->index->copies[slot];
+		result =
+		    index_reload(source, &expected, entry->page.target_offset, work, &duplicate);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (index_epoch(restart, &duplicate.page) != entry->page.epoch_lsn) {
+			return NTFS_STALE;
+		}
+		builder->index->report.compared_prefixes++;
+		if (duplicate.page.last_end_lsn != canonical.page.last_end_lsn ||
+		    !same_written_prefix(
+			restart, &canonical.page, comparison, &duplicate.page, source->scratch)) {
+			entry->page.result = NTFS_UNSUPPORTED;
+			entry->page.prefix_conflict = true;
+		}
+	}
+	return NTFS_OK;
+}
+
+void
+ntfs_logfile_clear_page_index(struct ntfs_logfile *source)
+{
+	struct page_index *index;
+
+	if (source != NULL && source->page_index != NULL) {
+		index = source->page_index;
+		source->page_index = NULL;
+		source->environment.release(
+		    source->environment.context, index, index->allocation_bytes);
+	}
+}
+
+enum ntfs_result
+ntfs_logfile_prepare_page_index(
+    struct ntfs_logfile *source, uint64_t max_bytes, struct ntfs_logfile_page_index_report *out)
+{
+	struct ntfs_logfile_report work = {0};
+	struct index_builder builder;
+	struct page_index *index;
+	struct indexed_page_entry *entry;
+	const struct ntfs_logfile_restart *restart;
+	uint8_t *comparison;
+	uint64_t storage_pages, maximum_reads, required_bytes;
+	uint32_t copies, targets, ordinal;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL || max_bytes == 0) {
+		return NTFS_INVALID;
+	}
+	if (source->page_index != NULL) {
+		return NTFS_BUSY;
+	}
+	restart = &source->restart;
+	if (restart->major == NTFS_LFS_MAJOR_FAST &&
+	    (restart->system_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+		restart->log_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+		restart->page_data_offset < sizeof(struct ntfs_disk_log_fast_page))) {
+		return NTFS_UNSUPPORTED;
+	}
+	copies = restart->major == NTFS_LFS_MAJOR_FAST ? NTFS_LOGFILE_FAST_COPY_PAGES
+						       : NTFS_LFS_LEGACY_TAIL_PAGES;
+	targets = (uint32_t)((restart->usable_bytes - restart->circular_offset) /
+	    restart->log_page_bytes);
+	storage_pages = (uint64_t)targets + copies;
+	maximum_reads = storage_pages + (uint64_t)NTFS_LOGFILE_PREFIX_PAIR_READS * copies;
+	required_bytes =
+	    sizeof(*index) + (uint64_t)targets * sizeof(*entry) + restart->log_page_bytes;
+	out->required_bytes = required_bytes;
+	out->indexed_targets = targets;
+	if (required_bytes > max_bytes || required_bytes > SIZE_MAX ||
+	    maximum_reads > source->limits.max_read_calls ||
+	    maximum_reads * restart->log_page_bytes > source->limits.max_read_bytes) {
+		return NTFS_RANGE;
+	}
+	index = source->environment.allocate(source->environment.context, (size_t)required_bytes);
+	if (index == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	ntfs_zero(index, (size_t)required_bytes);
+	index->allocation_bytes = (size_t)required_bytes;
+	index->report = *out;
+	for (ordinal = 0; ordinal < targets; ordinal++) {
+		entry = &index->entries[ordinal];
+		entry->page.target_offset =
+		    restart->circular_offset + (uint64_t)ordinal * restart->log_page_bytes;
+		entry->page.result = NTFS_NOT_FOUND;
+	}
+	builder = (struct index_builder){
+	    index, restart, (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes, copies};
+	comparison = (uint8_t *)(index->entries + targets);
+	result =
+	    ntfs_logfile_visit_pages(source, index_collect, &builder, &index->report.inventory);
+	work.read_calls = index->report.inventory.read_calls;
+	work.read_bytes = index->report.inventory.read_bytes;
+	if (result == NTFS_OK) {
+		for (ordinal = 0; ordinal < targets; ordinal++) {
+			entry = &index->entries[ordinal];
+			result = index_compare(source, &builder, entry, &work, comparison);
+			if (result != NTFS_OK) {
+				break;
+			}
+			index->report.selected_pages += entry->page.result == NTFS_OK;
+			index->report.missing_targets += entry->page.result == NTFS_NOT_FOUND;
+			index->report.corrupt_targets += entry->page.result == NTFS_CORRUPT;
+			index->report.unsupported_targets += entry->page.result == NTFS_UNSUPPORTED;
+			index->report.prefix_conflicts += entry->page.prefix_conflict;
+		}
+	}
+	index->report.read_calls = work.read_calls;
+	index->report.read_bytes = work.read_bytes;
+	if (result == NTFS_OK) {
+		index->report.published = true;
+		index->report.retained_bytes = required_bytes;
+		source->page_index = index;
+	}
+	*out = index->report;
+	if (result != NTFS_OK) {
+		source->environment.release(
+		    source->environment.context, index, index->allocation_bytes);
+	}
+	return result;
+}
+
+enum ntfs_result
+ntfs_logfile_get_page_index_report(
+    const struct ntfs_logfile *source, struct ntfs_logfile_page_index_report *out)
+{
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	if (source->page_index == NULL) {
+		return NTFS_NOT_FOUND;
+	}
+	*out = source->page_index->report;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_get_indexed_page(
+    const struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_indexed_page *out)
+{
+	const struct ntfs_logfile_restart *restart;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	restart = &source->restart;
+	if (offset < restart->circular_offset || offset % restart->log_page_bytes != 0 ||
+	    !ntfs_bounds(offset, restart->log_page_bytes, restart->usable_bytes)) {
+		return NTFS_INVALID;
+	}
+	if (source->page_index == NULL) {
+		return NTFS_NOT_FOUND;
+	}
+	*out = source->page_index
+		   ->entries[(offset - restart->circular_offset) / restart->log_page_bytes]
+		   .page;
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+load_indexed_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
+    struct ntfs_logfile_page_view *out)
+{
+	struct ntfs_logfile_indexed_page indexed;
+	enum ntfs_result result;
+
+	if (source->page_index != NULL && source->page_index->report.unsupported_copies != 0) {
+		return NTFS_UNSUPPORTED;
+	}
+	result = ntfs_logfile_get_indexed_page(source, offset, &indexed);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (indexed.result != NTFS_OK) {
+		return indexed.result;
+	}
+	return index_reload(source, &indexed.selected, offset, work, out);
+}
+
 static enum ntfs_result
 scan_fast_copies(
     struct ntfs_logfile *source, struct ntfs_logfile_report *work, struct fast_copies *copies)
@@ -993,6 +1379,9 @@ load_record_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfi
 	if (copies == NULL) {
 		return load_page(source, offset, work, out);
 	}
+	if (copies->indexed) {
+		return load_indexed_page(source, offset, work, out);
+	}
 	if (copies->legacy != NULL) {
 		return load_legacy_page(source, offset, work, copies->legacy, out);
 	}
@@ -1124,6 +1513,16 @@ ntfs_logfile_read_circular_record(struct ntfs_logfile *source, uint64_t requeste
 	struct ntfs_logfile_report work = {0};
 
 	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, NULL);
+}
+
+enum ntfs_result
+ntfs_logfile_read_indexed_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
+    size_t capacity, struct ntfs_logfile_record_view *out)
+{
+	struct ntfs_logfile_report work = {0};
+	struct record_copies route = {.indexed = true};
+
+	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route);
 }
 
 enum ntfs_result

@@ -372,9 +372,16 @@ failure aborts before exposing failed bytes. Coverage, routing-valid observed LS
 maxima and partial progress have explicit counters. Complete coverage does not
 select competing copies, a current endpoint or continuation provenance. RSTR
 CurrentLsn remains a restart-time observation, not a bound on later log records.
-Future retained target indexing, complete prefix conflicts and ordered history
-belong in this journal owner, with separate bounds and admission; native analysis,
-recovery and persistence still require their owning contracts.
+An explicit optional retained index now owns complete per-target prefix comparison,
+unresolved-copy evidence and direct selected-page acquisition in this journal owner.
+One caller-bounded allocation contains target metadata and comparison scratch;
+whole-scan plus worst-case copy-read credits are admitted before work. Only a
+complete preparation publishes it; cached queries have no callbacks, and clear/close
+release it. Indexed record reads recheck selected protected headers/targets and
+reuse exact assembly. Legacy circular zero-start continuations retain observation
+without provenance. RSTR CurrentLsn does not limit candidate epochs. Ordered
+active-window/endpoint/continuation qualification remains separate; native analysis,
+recovery and persistence still require their owning contracts. See LOGFILE.md.
 Physical circular-record
 assembly locates the first header by LSN and joins adjacent protected payload
 pages through at most one wrap. One shared operation budget, a no-page-revisit

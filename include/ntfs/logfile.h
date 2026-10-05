@@ -158,6 +158,22 @@ struct ntfs_logfile_inventory {
 typedef enum ntfs_result (*ntfs_logfile_page_visitor)(
     void *, const struct ntfs_logfile_page_observation *);
 
+struct ntfs_logfile_indexed_page {
+	struct ntfs_logfile_page_view selected;
+	uint64_t target_offset, epoch_lsn;
+	enum ntfs_result result;
+	bool prefix_conflict;
+};
+
+struct ntfs_logfile_page_index_report {
+	struct ntfs_logfile_inventory inventory;
+	uint64_t required_bytes, retained_bytes, read_bytes;
+	uint32_t read_calls, indexed_targets, selected_pages, missing_targets, corrupt_targets;
+	uint32_t unsupported_targets, prefix_conflicts, compared_prefixes, unrouted_copies;
+	uint32_t unsupported_copies;
+	bool published;
+};
+
 struct ntfs_logfile_record_view {
 	struct ntfs_logfile_record record;
 	uint64_t first_page_offset, last_page_offset, read_bytes;
@@ -242,6 +258,39 @@ enum ntfs_result ntfs_logfile_read_page(struct ntfs_logfile *, uint64_t offset, 
  * provenance, recovery or writable admission. Ordinary defaults can refuse RANGE. */
 enum ntfs_result ntfs_logfile_visit_pages(struct ntfs_logfile *, ntfs_logfile_page_visitor,
     void *context, struct ntfs_logfile_inventory *);
+/* Prepare an optional owner-retained circular-target index from the complete
+ * physical inventory. Positive max_bytes bounds the one private allocation,
+ * including metadata and comparison scratch. Admission reserves the complete
+ * scan plus at most two reads per copy slot before allocation/I/O. The same
+ * operation credits cover every scan, reload and comparison; defaults refuse.
+ * Compatible legacy epochs use last-end LSN; modern epochs use last-start LSN.
+ * Protected legacy circular continuations can retain a zero last-start field;
+ * their physical address and last-end epoch select no continuation provenance.
+ * Every equally newest candidate must agree on flags, last-end, next-record
+ * boundary and complete restored written prefix. Conflicts remain UNSUPPORTED
+ * per target; unknown circular flags also block that target. Unroutable copy
+ * evidence remains in the report, never silently becoming current history.
+ * Selected copy pages require a completed nonempty prefix. A complete index can
+ * retain missing/corrupt/unsupported targets. Backend/reload/allocation errors
+ * publish nothing and permit retry. A second preparation returns BUSY without
+ * callbacks. Report is required, zeroed initially, and preserves partial work;
+ * required_bytes is measurable on a too-small positive memory bound, retained
+ * bytes are nonzero only after publication. Source/report are disjoint.
+ * Preparation does not qualify the active window, endpoint, continuations,
+ * recovery or writable admission. All calls remain serialized and immutable. */
+enum ntfs_result ntfs_logfile_prepare_page_index(
+    struct ntfs_logfile *, uint64_t max_bytes, struct ntfs_logfile_page_index_report *);
+/* Cached index queries have no allocation/I/O. A page query returns metadata
+ * with its separate result, including unresolved targets; function errors zero
+ * output. Target offsets are complete aligned circular pages. Report queries
+ * return the original preparation counters, not new work. An absent index is
+ * NOT_FOUND. Clear releases all retained index bytes without disturbing cached
+ * restart/client snapshots. Owner close also clears the index. */
+enum ntfs_result ntfs_logfile_get_indexed_page(
+    const struct ntfs_logfile *, uint64_t target_offset, struct ntfs_logfile_indexed_page *);
+enum ntfs_result ntfs_logfile_get_page_index_report(
+    const struct ntfs_logfile *, struct ntfs_logfile_page_index_report *);
+void ntfs_logfile_clear_page_index(struct ntfs_logfile *);
 /* Assemble an exact record from physical circular storage by its LSN. Only the
  * first segment has a record header; continuations begin at page_data_offset.
  * USA and common page/record framing are checked, including linked-LSN geometry.
@@ -294,6 +343,15 @@ enum ntfs_result ntfs_logfile_read_legacy_record(struct ntfs_logfile *, uint64_t
  * share that same budget. This is per-target immutable copy observation, not a
  * complete current circular history, continuation provenance, recovery or writes. */
 enum ntfs_result ntfs_logfile_read_fast_record(struct ntfs_logfile *, uint64_t lsn, void *,
+    size_t capacity, struct ntfs_logfile_record_view *);
+/* Assemble exact observed record bytes using an explicitly prepared page index,
+ * rechecking the selected protected page/header/target at every segment under
+ * one operation budget. This avoids repeated copy-slot scans. Unqualified copy
+ * flags/layouts refuse record acquisition globally; their target is unknown. Missing or
+ * unresolved indexed targets refuse; errors leave bytes unchanged/view zero.
+ * Complete physical selection still does not prove active history, continuation
+ * provenance, native recovery or write admission. */
+enum ntfs_result ntfs_logfile_read_indexed_record(struct ntfs_logfile *, uint64_t lsn, void *,
     size_t capacity, struct ntfs_logfile_record_view *);
 
 /* Independent immutable-byte primitives; no allocation, device I/O or writes.

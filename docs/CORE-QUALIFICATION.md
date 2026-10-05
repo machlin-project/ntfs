@@ -1,6 +1,34 @@
 # Core qualification and continuation
 
-Current portable acceptance passes 131 fatal-sanitizer suites, five focused suites,
+Current portable acceptance passes 138 fatal-sanitizer suites, thirteen focused
+suites plus the seven-suite conflict/fuzz addendum, style, both 2-KiB freestanding
+targets, 54 component groups/eleven runtime SKIPs and clean unsigned universal
+Release. An explicit optional journal index retains bounded per-target metadata,
+compares complete competing prefixes under shared credits and publishes only
+after successful preparation. Indexed record acquisition rechecks selected pages
+without repeated slot scans. Seventy-one original graphs/14,922 target rows and
+109 original packet results pass, with 13,398 constructor/1,582 selected-read faults,
+27 changed headers/targets and allocation/read/memory/lifetime boundaries.
+
+The frozen Windows journal agrees at all 1,138 targets and four whole packets;
+preparation retains 160,552 bytes and performs 1,188 reads. Current-history,
+endpoint/window/continuation authority, native analysis, recovery and writable
+admission remain unqualified. Review LOGFILE.md, artifacts/logfile-index/ and
+the Recovery observation's native-core-index/ evidence. No new app is installed.
+Next establish the actual completed endpoint and unfinished tail independently
+of restart-time CurrentLsn, then qualify ordered active records and continuations.
+
+Fresh fuzz replays 2,795 seeds with all preceding 2,557 bytes unchanged. The initial
+coverage run fails at the 1-GiB limit during libFuzzer corpus reload; its saved
+input passes alone at 42 MiB. Disabling external reload for the lone corpus owner
+preserves startup loading/replay and all existing discoveries. The corrected run
+passes 41,579 units/61 seconds at 703 MiB; input/RSS/time/sanitizer bounds are unchanged.
+Failed/corrected evidence and source/corpus bindings remain under
+artifacts/logfile-index/{oom-diagnostic,reload-bound}/ and artifacts/fuzz-logfile-index/.
+Consolidated independent acceptance is artifacts/logfile-index/main-review.json;
+native-core-index/main-review.json binds all source wire fields, targets and packets.
+
+Preceding portable acceptance passes 131 fatal-sanitizer suites, five focused suites,
 style, both 2-KiB freestanding targets, 54 component groups/eleven runtime SKIPs and
 clean unsigned universal Release. Complete physical journal inventory reserves
 whole-scan credits before I/O and adds no allocation. Sixty original graphs supply
@@ -21,9 +49,9 @@ capture; it does not qualify that missing recovery scenario. Complete physical
 coverage does not establish current history, continuation ownership, native
 analysis or writable admission. No new app is installed. Evidence:
 artifacts/logfile-inventory/ and the Recovery observation's history-inventory/
-and native-core-inventory/ main reviews. Next implement bounded copy ownership,
-the completed endpoint/unfinished tail and ordered continuity under LOGFILE.md
-and WRITES.md before native analysis/replay.
+and native-core-inventory/ main reviews. The retained index now supplies bounded
+physical copy ownership; next qualify the endpoint/unfinished tail and ordered
+continuity under LOGFILE.md and WRITES.md before native analysis/replay.
 
 Preceding mount-refusal acceptance passes 126 fatal-sanitizer suites, style, both 2-KiB
 freestanding targets, 54 component groups/eleven runtime SKIPs and clean unsigned

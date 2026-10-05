@@ -67,7 +67,54 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest portable acceptance is complete physical journal page inventory: 131
+Latest portable acceptance is retained journal target selection: 138 fatal-sanitizer
+suites, thirteen initial focused suites plus seven conflict/fuzz addendum suites,
+style, both 2-KiB freestanding targets, 54 component groups/eleven runtime SKIPs and
+clean unsigned universal Release. Main checks actual four products and original
+native comparison evidence. Minimum macOS remains 26.5/SDK 27.0; this build is not installed.
+
+Read LOGFILE.md and the optional page-index APIs in ntfs/logfile.h. Preparation
+explicitly bounds one metadata/scratch allocation and reserves complete physical
+scan plus worst-case copy comparisons before work. Failed preparation publishes
+nothing; equal newest prefixes are compared completely, with later backend errors
+still visible after a conflict. Cached queries have no I/O; close/clear release it.
+Indexed reads recheck every selected protected header/target and avoid repeated
+slot scans. Legacy continuation zero-start observation remains separate from
+continuation provenance. Unrouted/unknown/conflicting evidence never becomes
+current-history authority. No restart-time CurrentLsn ceiling is applied.
+
+Seventy-one original graphs/14,922 target rows, 109 packet results, 13,398
+constructor and 1,582 selected-read fault cases plus 27 header/target changes pass.
+The original Windows journal independently agrees at all 1,138 targets; all four
+whole window packets need one selected read apiece. Preparation uses 1,188 reads
+and retains 160,552 bytes; one unrouted copy remains visible. These are acquisition
+counts/memory, not installed throughput or a current endpoint proof. Review
+artifacts/logfile-index/{final,conflict-bound}/, artifacts/fskit-logfile-index/ and
+the Recovery observation's native-core-index/ and native-core-index-execution/.
+Next qualify the actual completed endpoint/unfinished tail, ordered active window
+and continuation ownership, then native analysis/replay/durability under WRITES.md.
+The read environment and FSKit mutations remain read-only.
+
+Fresh fuzz replays all 2,795 seeds, preserving the preceding 2,557 bytes; 238 new
+envelopes exercise indexed preparation/acquisition. The initial coverage campaign
+fails the 1-GiB RSS bound while libFuzzer reloads a second corpus batch. Its saved
+unit passes alone at 42 MiB. The single-process harness now disables external
+reload, preserving startup/replay and every prior corpus file. A fresh campaign
+passes 41,579 units/61 seconds at 703 MiB under unchanged input/RSS/time/sanitizer
+bounds. Do not discard the failed run or infer a product memory leak from corpus
+retention. Review artifacts/logfile-index/{oom-diagnostic,reload-bound}/ and
+artifacts/fuzz-logfile-index/. Current code has no writable capability.
+
+Main's consolidated acceptance is artifacts/logfile-index/main-review.json.
+Independent host, fixture and seed/fuzz reviews bind the current ten source
+inputs, raw results, actual products and all retained corpus bytes. The native
+main-review.json independently compares protected wire fields, nine restored
+peer groups, every target and four complete packets directly with source bytes.
+Later wording/control-only addenda pass focused checks without changing compiled
+production or fuzzer C. The final source binding is in stamp-bound/main-review.json.
+Read these reviews before extending the history owner.
+
+Preceding portable acceptance is complete physical journal page inventory: 131
 fatal-sanitizer suites, five focused suites, style, both 2-KiB freestanding targets,
 54 component groups/eleven runtime SKIPs/zero failures and clean unsigned universal
 Release. Main verifies all nine unchanged source inputs, raw results and four
@@ -112,9 +159,9 @@ format evidence, not a native later-than-checkpoint/crash history. Review
 recovery-partition-observation/{history-inventory,native-core-inventory}/ and
 their main-review.json files; no VM operation was required for these queries.
 
-Next implement the journal owner's bounded retained target index and complete
-prefix conflict resolution, then completed endpoint/unfinished-tail selection
-independent of RSTR CurrentLsn. Qualify ordered active records, sequence/wrap and
+The retained target index above closes bounded physical copy selection and
+complete prefix conflict resolution. Next qualify completed endpoint/unfinished-tail
+selection independent of RSTR CurrentLsn, ordered active records, sequence/wrap and
 continuation provenance before post-checkpoint transaction analysis. Preserve
 unknown/conflicting evidence and never use transfer positions as record identity.
 Plan optimization separately: reuse qualified acquisition, then compare cold/hot

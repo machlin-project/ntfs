@@ -16,7 +16,31 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
-Current journal inventory qualification runs `logfile-inventory`,
+Current journal index qualification runs `logfile-index`, `logfile-index-cli` and
+five `fuzz-logfile-index` variants alongside the preceding inventory/legacy/fast
+checks, then all 138 fatal-sanitizer suites. Its original author is
+tests/logfile_index_fixtures.py: 71 target-selection graphs/14,922 rows and 109
+exact packet results. Complete scan plus comparison credits and retained bytes
+have independent admission, failure/retry and lifetime checks. The regular-file
+CLI commands are `ntfs-logfile index LOGICAL_JOURNAL_FILE` and
+`ntfs-logfile indexed-record LOGICAL_JOURNAL_FILE DECIMAL_LSN`; they use named
+1-MiB index-memory and 4,096-read/16-MiB policies. Production defaults remain unchanged.
+Current source/product evidence is under artifacts/logfile-index/ and
+artifacts/fskit-logfile-index/. The frozen Windows comparison is in the Recovery
+observation's native-core-index/ with original-source and whole-packet comparisons.
+This is per-target selection/acquisition, not current history or recovery.
+
+The current journal campaign replays 2,795 authored seeds, retaining all 2,557
+preceding bytes and 238 appended index envelopes. The lone logfile process passes
+`-reload=0`; no peer modifies its corpus during the run. Startup corpus loading and
+every authored seed's fixed replay still execute. This avoids the observed duplicate
+batch allocation during periodic corpus imports, whose saved OOM input passes
+alone. See [LLVM's reload option](https://llvm.org/docs/LibFuzzer.html#options).
+Keep the failed run and standalone diagnostic under artifacts/logfile-index/;
+the corrected campaign and source/seed/corpus review are in reload-bound/ and
+artifacts/fuzz-logfile-index/. Input/RSS/time limits and fatal sanitizers stay unchanged.
+
+The preceding journal inventory qualification runs `logfile-inventory`,
 `logfile-inventory-cli` and the three `fuzz-logfile-inventory` variants, then all
 131 fatal-sanitizer suites. Its original author is tests/logfile_inventory_fixtures.py:
 60 complete graphs/14,729 ordered rows, with exact backend/visitor failures,

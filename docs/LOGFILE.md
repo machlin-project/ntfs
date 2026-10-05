@@ -25,7 +25,9 @@ physical/current-history provenance.
 Separate completed-copy observers route legacy tails and modern fast slots with
 the contracts below. They do not select an entire current journal history.
 The same owner also inventories complete physical storage under explicit scan
-credits, retaining every common/target result without resolving competing copies.
+credits, retaining every common/target result. An optional bounded retained index
+resolves competing written prefixes per target and supports exact record reads
+without repeating copy scans; it does not qualify current history.
 
 Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
 restart-table free topology and client-versioned open-attribute/dirty-page plus
@@ -232,8 +234,9 @@ such native transition corrupt: original Windows lifecycle/resize/version-change
 observations are still needed. One good supported copy can be selected beside
 missing or structurally bad storage, with SINGLE_COPY visible in the report.
 
-The owner allocates one object and three `max_page_bytes` buffers, with no
-journal-sized allocation. Defaults are 64-KiB pages and 32 read calls/256 KiB per
+Opening allocates one object and three `max_page_bytes` buffers, with no
+journal-sized allocation. Optional retained indexing has a separate explicit
+memory bound described below. Defaults are 64-KiB pages and 32 read calls/256 KiB per
 operation; discovery has nine candidates and at most 18 exact reads. Both system
 and log-page sizes must fit the buffer policy. Read credit is reserved before a
 callback, including a failed or partial callback. On failure the owner output is
@@ -325,15 +328,84 @@ geometry refuses before reads/allocation. The frozen native Windows journal's
 1,170 rows also agree with independent protected source-byte review; its four
 complete selected-page packets do not supply a later-than-restart native history.
 
-Next the journal owner needs a bounded retained target index, complete competing
-prefix comparison and explicit unresolved-copy evidence. It must establish the
-actual completed endpoint and unfinished tail independently of RSTR CurrentLsn,
-then qualify ordered records, sequence/wrap and continuation ownership from the
-selected client's checkpoint/analysis bounds. Transfer count/position cannot
-identify record fragments. Complete checkpoint tables plus subsequent transaction
-analysis and volume references remain prerequisites for WRITES.md's recovery gate.
-Optimize repeated acquisition through that qualified index only after correctness
-checks; measure read counts, memory and matched cold/hot workloads separately.
+## Retained target index and exact acquisition
+
+`ntfs_logfile_prepare_page_index` is an explicit optional operation on the immutable
+owner. Its positive `max_bytes` bounds one private allocation containing fixed copy
+metadata, one entry per complete circular target and one log-page comparison buffer.
+This retains metadata rather than the journal's data pages. Required bytes are
+measurable on a too-small positive bound. The complete physical scan plus at most
+two comparison reads per copy slot must fit the source's read-call/byte credits
+before allocation or I/O. Defaults refuse rather than silently increasing limits.
+
+The index chooses the greatest candidate epoch separately for each target. Legacy
+tail and circular epochs both use last-end LSN; modern epochs use last-start LSN.
+This deliberately differs from the physical inventory's observation-only maximum.
+Protected legacy circular continuation pages may have a zero last-start field;
+their physical address and last-end remain observable. This establishes no
+continuation provenance. Modern fast indexing retains the qualified 4-KiB layout,
+including the nonoverlapping DWORD target; unsupported profiles refuse before work.
+RSTR CurrentLsn is not used as a ceiling for candidate epochs.
+
+Every equally newest candidate must agree on flags, last-end LSN, NextRecordOffset
+and all restored bytes between page_data_offset and NextRecordOffset. USA words,
+transfer metadata and unused capacity can differ. The lowest physical offset is
+the deterministic canonical candidate. Each compared page is reloaded and its
+cached header/target rechecked. A disagreement retains an UNSUPPORTED target and
+explicit prefix-conflict evidence. Remaining peers are still read, so a later
+backend failure remains visible instead of being hidden by that conflict.
+Unknown circular flags block their known target. A chosen copy must have a completed
+nonempty prefix; there is no fallback to an older epoch when the newest is unresolved.
+
+One complete preparation can publish missing/corrupt/unsupported target entries.
+Unroutable copy evidence stays in separate counters. Unknown copy flags/layouts
+also prevent indexed record acquisition globally because their target is unqualified.
+Backend, revalidation or allocation failures publish no index, release all temporary
+storage and permit a full retry. A second successful-owner preparation returns BUSY
+without callbacks. Cached page/report queries require no allocation or I/O;
+their function result is separate from each target's retained structural result.
+Explicit clear and owner close release the exact retained allocation while cached
+restart/client snapshots remain unchanged.
+
+`ntfs_logfile_read_indexed_record` uses this prepared selection with the existing
+exact record assembler. It rechecks each selected protected page and target under
+one fresh operation budget, with one physical read per successful segment. It
+preserves exact unpadded bytes, logical circular offsets, one-wrap bounds and final
+written-prefix/RecordEnd evidence. Every failure leaves caller bytes unchanged and
+the record view zero. It does not add a continuation-ownership or current-history claim.
+
+The regular-file CLI commands are `ntfs-logfile index LOGICAL_JOURNAL_FILE` and
+`ntfs-logfile indexed-record LOGICAL_JOURNAL_FILE DECIMAL_LSN`. Both explicitly
+use the named 1-MiB index-memory and 4,096-read/16-MiB policies. JSON keeps
+history_qualified and recovery_qualified false and reports preparation separately
+from record reads. Large sources can legitimately refuse these diagnostic policies.
+
+Seventy-one original graphs cover seventy published indices and one unsupported
+profile refusal, with 14,922 exact ordered target rows. Equal copies, all-slot groups,
+independent targets, complete prefix conflicts, newer epochs replacing old conflicts,
+future epochs, legacy ordering and unsupported/unrouted evidence pass. The original
+109 packet cases preserve 75 complete-byte successes and 34 explicit refusals.
+Four whole-operation fault graphs exercise 13,398 partial/full-valid failed reads
+under seven backend statuses, including failures after a discovered prefix conflict;
+1,582 selected-record read faults and allocation failures also preserve atomic output
+and retry. Twenty comparison-header and seven selected-reader header/target changes
+refuse STALE. Exact/short/default read bounds, measured memory boundaries, cached
+queries, clear/close/BUSY behavior and virtual 4-GiB preflight pass.
+
+The frozen Windows journal's 1,138 target decisions match independently restored
+source bytes: 34 selected pages, 1,104 missing targets, nine equal-prefix comparisons
+and one visible unrouted copy. Preparation performs 1,188 reads/4,866,048 bytes and
+retains 160,552 bytes on the host. All four original packets then
+need one selected-page read apiece. This measures acquisition counts and retained
+memory, not installed throughput, a clean guest flush or an active-window proof.
+
+Next establish the actual completed endpoint and unfinished tail independently of
+RSTR CurrentLsn, then qualify ordered active records, sequence/wrap and continuation
+ownership from the selected client's checkpoint/analysis bounds. Transfer
+count/position cannot identify record fragments. Complete checkpoint tables plus
+subsequent transaction analysis and volume references remain prerequisites for
+WRITES.md's recovery gate. Matched cold/hot timing and broader memory pressure
+measurements remain a separate optimization task after history correctness.
 
 ## Physical circular-record observation
 

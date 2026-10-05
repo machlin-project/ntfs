@@ -20,6 +20,7 @@ from logfile_record_fixtures import author as generate_logfile_records
 from logfile_legacy_fixtures import author as generate_logfile_legacy
 from logfile_fast_fixtures import author as generate_logfile_fast
 from logfile_inventory_fixtures import author as generate_logfile_inventory
+from logfile_index_fixtures import author as generate_logfile_index
 from logfile_client_fixtures import author as generate_logfile_clients
 from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
@@ -41,6 +42,7 @@ LOGFILE_TABLE_KINDS = {0: 9, 1: 10, 2: 11, 3: 12}
 LOGFILE_PROTECTED_RECORD_KIND = 13
 LOGFILE_LEGACY_RECORD_KIND = 14
 LOGFILE_INVENTORY_KIND = 23
+LOGFILE_INDEX_KIND = 24
 LOGFILE_INVENTORY_READ_CALL_BUDGET = 4096
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 LOGFILE_CHECKPOINT_TABLE_KIND = 17
@@ -55,8 +57,11 @@ LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1)
 BITS_PER_BYTE = 8
 LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
-LOGFILE_ALLOCATION_FAULT = 1 << 8
-LOGFILE_RECORD_ALLOCATION_FAULT = 1 << 9
+LOGFILE_ALLOCATION_FAULT = 1 << BITS_PER_BYTE
+LOGFILE_RECORD_ALLOCATION_FAULT = 1 << (BITS_PER_BYTE + 1)
+LOGFILE_INDEX_COMPARISON_FAULT = 1 << (BITS_PER_BYTE + 2)
+LOGFILE_INDEX_SELECTED_READ_FAULT = 1 << (BITS_PER_BYTE + 3)
+LOGFILE_INDEX_SHORT_MEMORY = 1 << (BITS_PER_BYTE + 4)
 LOGFILE_BUDGET_SHIFT = 16
 LOGFILE_ENCODE_SHORT_SHIFT = struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_PAGE_WORKSPACE_SHORT_SHIFT = LOGFILE_ENCODE_SHORT_SHIFT + 1
@@ -339,6 +344,40 @@ def generate(output):
         for name, (stop, control) in controls.items():
             envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_INVENTORY_KIND, stop, control)
             filename = 'inventory-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    indices = output / 'logfile-index'
+    index_cases, index_records = generate_logfile_index(indices)
+    for case in index_cases:
+        payload = (indices / case['path']).read_bytes()
+        if len(payload) + LOGFILE_FUZZ_HEADER.size > LOGFILE_FUZZ_INPUT_BYTES:
+            continue
+        controls = {'default': 0}
+        if case['faults']:
+            maximum_reads = case['maximum_reads']
+            byte_units = maximum_reads * case['page_bytes'] // logfile_wire.USA_STRIDE
+            controls.update({'first-read': 1,
+                'comparison-read': LOGFILE_INDEX_COMPARISON_FAULT | 1,
+                'index-allocation': LOGFILE_ALLOCATION_FAULT,
+                'short-memory': LOGFILE_INDEX_SHORT_MEMORY,
+                'exact-calls': (maximum_reads - 1 + LOGFILE_INVENTORY_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT,
+                'short-calls': (maximum_reads - 2 + LOGFILE_INVENTORY_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT,
+                'exact-bytes': byte_units << LOGFILE_BUDGET_SHIFT,
+                'short-bytes': (byte_units - 1) << LOGFILE_BUDGET_SHIFT})
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_INDEX_KIND, 0, control)
+            filename = 'index-' + case['path'].replace('/', '-').replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    for case in index_records:
+        payload = (indices / case['path']).read_bytes()
+        assert len(payload) + LOGFILE_FUZZ_HEADER.size <= LOGFILE_FUZZ_INPUT_BYTES
+        controls = {'record-default': 0}
+        if case['code'] == 0 and (case['pages'] > 1 or case.get('faults')):
+            controls.update({'record-allocation': LOGFILE_RECORD_ALLOCATION_FAULT,
+                'selected-first-read': LOGFILE_INDEX_SELECTED_READ_FAULT | 1,
+                'selected-last-read': LOGFILE_INDEX_SELECTED_READ_FAULT | case['pages']})
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_INDEX_KIND, case['lsn'], control)
+            filename = 'index-' + case['path'].replace('/', '-').replace('.', '-') + '-' + name + '.seed'
             (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):

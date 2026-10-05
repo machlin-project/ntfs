@@ -1,5 +1,22 @@
 # Code provenance
 
+Complete physical journal inventory, shared-credit preflight, error/visitor
+accounting and the declarative graph/fault author are original repository code.
+Named common/fast fields use the research already linked below. The distinction
+between restart-time CurrentLsn and later journal records follows
+[Suhanov's original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/).
+No foreign scanning, history-selection or recovery implementation was imported.
+Independent main review checks all authored source hashes, USA-restored common
+headers, ordered row goldens and existing fuzz-seed bytes. The 64-KiB legacy graph
+remains an ordinary test input outside the unchanged 2-MiB fuzz envelope.
+
+The frozen Windows journal additionally supplies complete physical metadata and
+four whole packets from one protected page window, including an earlier client
+restart. Independent original wire/USA review compares the production inventory
+against every physical ordinal. The additional restart extension stays opaque.
+These generated native inputs establish format observations, not authoritative
+current history, post-checkpoint analysis, Windows recovery or device durability.
+
 The volume-admission correction uses the existing named dirty-bit format value
 and the original
 [libfsntfs volume-information research](https://github.com/libyal/libfsntfs/blob/main/documentation/New%20Technologies%20File%20System%20%28NTFS%29.asciidoc):

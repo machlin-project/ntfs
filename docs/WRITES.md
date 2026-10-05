@@ -42,9 +42,21 @@ checkpoint binding/membership with their original owner. This confirms that nati
 snapshot profile, not the whole current history or Windows continuation ownership;
 LOGFILE.md and ACCEPTANCE.md define the narrower contract and acquisition limits.
 
+Complete physical page inventory is now implemented under explicit whole-scan
+credits, without allocation or source mutation. All copy slots and circular pages
+remain observable, including structural errors and unsupported targets; backend
+errors terminate exactly. The original Windows journal's complete metadata scan
+and four-packet selected-page window pass independent byte comparison. Neither
+the maximum observed header LSN nor RSTR CurrentLsn is an authoritative current
+endpoint. Full competing-copy resolution, ordered continuity, continuation
+ownership and native transaction analysis remain required before recovery.
+
 The next core implementation sequence is:
 
-1. Establish selected current physical $LogFile history, acquire the owning NTFS
+1. Build bounded copy/current-history ownership over the complete physical scan:
+   resolve competing prefixes, identify the completed endpoint/unfinished tail
+   independently of restart-time CurrentLsn and qualify ordered continuation
+   provenance. Acquire the owning NTFS
    client restart record, and validate complete checkpoint tables and native
    transaction analysis. Existing read-only packet observers and the reference
    durability model are groundwork; they do not close this recovery contract.

@@ -24,6 +24,8 @@ snapshot identity before common-prefix decoding. This does not establish its
 physical/current-history provenance.
 Separate completed-copy observers route legacy tails and modern fast slots with
 the contracts below. They do not select an entire current journal history.
+The same owner also inventories complete physical storage under explicit scan
+credits, retaining every common/target result without resolving competing copies.
 
 Separate [native checkpoint framing](WRITE-FOUNDATIONS.md) now checks complete
 restart-table free topology and client-versioned open-attribute/dirty-page plus
@@ -259,6 +261,79 @@ active snapshots preserve complete UTF-16 names. The pair identifies an entry
 in that selected restart snapshot; it does not establish a record's lifetime,
 written/current page history or the NTFS client's payload version. Future native
 admission must still gate cached use after resource revocation.
+
+## Complete physical page inventory
+
+`ntfs_logfile_visit_pages` visits every complete record-storage page after both
+restart pages through the selected `usable_bytes`, in ascending physical offset.
+This includes both LFS 1.1 tail slots or all 32 LFS 2.0 fast slots, then the
+circular area. Capacity beyond selected geometry and a declared partial last
+page are excluded. Cached restart/client state is unchanged.
+
+The exact total read count and bytes must fit the source's operation limits
+before any read or visitor call. There is one exact read per page and no new
+allocation; the existing raw/scratch buffers are reused. The ordinary 32-read
+default cannot cover the supported minimum storage geometry. Callers must supply
+explicit whole-scan credits; the API never enlarges them automatically. Failed
+reads consume their reserved credits and abort with the backend's exact result,
+even if that result is also a structural status or the callback filled a complete
+valid page. Failed-read bytes never reach the visitor.
+
+Each transient metadata observation reports physical offset, storage kind,
+common-page decode result and a separate target result. Missing RCRD signatures
+are NOT_FOUND; present but torn/malformed RCRD pages are CORRUPT. Structural
+failures remain visible and do not terminate coverage. Successful common headers
+stay visible when routing is invalid or unsupported. An unavailable common
+decode leaves target_result INVALID. Unknown flags or modern layouts retain an
+UNSUPPORTED target result rather than becoming current history.
+
+Known targets must be aligned complete pages inside the circular area. Legacy
+tails use the common copy field as a file offset; modern fast pages use the
+qualified DWORD field after the common header/USA capacity/padding. Circular pages
+target their own physical offset. Circular/modern last-start LSNs require selected
+LSN geometry and cannot precede last-end LSN. The LSN's addressed page is not
+required to equal this target: continuation ownership remains unqualified.
+
+`max_observed_epoch_lsn` uses last-end LSN for legacy tails and last-start LSN
+elsewhere. `max_observed_end_lsn` includes only record-end-marked pages. Both
+maxima exclude invalid/unsupported routing and describe observed headers only.
+They do not resolve competing copies, prove completed record bytes or select a
+journal tail. In particular, RSTR CurrentLsn describes the latest LSN when that
+restart area was written; it cannot bound later post-crash records. See the
+[original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/).
+
+The optional synchronous visitor borrows one const metadata object until return.
+It must not reenter/close this owner or mutate the source. Its non-OK result
+terminates with that exact status. Partial summary counters remain available:
+examined includes a visitor-rejected page, visited excludes it, and `next_offset`
+is the first page whose visit has not succeeded. Retry starts at the first storage
+page; this is not a resume cursor. NULL visitor collects only the summary.
+`complete` requires every physical page and visitor to finish successfully. It
+means coverage, including structural failures, without a history/recovery claim.
+
+The regular-file diagnostic is `ntfs-logfile pages LOGICAL_JOURNAL_FILE`. It supplies
+4,096 read calls/16 MiB explicitly, emits ordered metadata and the exact summary,
+and always reports history_qualified and recovery_qualified false. This bounded
+tool neither mounts flagged media nor writes to its source.
+
+Sixty original graphs and 14,729 ordered rows cover all fast slots with LSNs later
+than RSTR CurrentLsn, legacy 512-byte/4-KiB/64-KiB pages, missing/torn headers,
+unknown flags/layouts, USA/target boundaries, conflicting epochs and unused
+capacity. Seven backend statuses at every read position, partial and full-valid
+failed fills, visitor stops, retry and exact/short credits pass. Virtual 4-GiB
+geometry refuses before reads/allocation. The frozen native Windows journal's
+1,170 rows also agree with independent protected source-byte review; its four
+complete selected-page packets do not supply a later-than-restart native history.
+
+Next the journal owner needs a bounded retained target index, complete competing
+prefix comparison and explicit unresolved-copy evidence. It must establish the
+actual completed endpoint and unfinished tail independently of RSTR CurrentLsn,
+then qualify ordered records, sequence/wrap and continuation ownership from the
+selected client's checkpoint/analysis bounds. Transfer count/position cannot
+identify record fragments. Complete checkpoint tables plus subsequent transaction
+analysis and volume references remain prerequisites for WRITES.md's recovery gate.
+Optimize repeated acquisition through that qualified index only after correctness
+checks; measure read counts, memory and matched cold/hot workloads separately.
 
 ## Physical circular-record observation
 

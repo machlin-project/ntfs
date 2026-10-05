@@ -67,7 +67,64 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest portable acceptance is volume flag refusal classification: 126 fatal-sanitizer
+Latest portable acceptance is complete physical journal page inventory: 131
+fatal-sanitizer suites, five focused suites, style, both 2-KiB freestanding targets,
+54 component groups/eleven runtime SKIPs/zero failures and clean unsigned universal
+Release. Main verifies all nine unchanged source inputs, raw results and four
+actual universal products; logfile_source.c compiles for both architectures.
+Minimum macOS is 26.5/SDK 27.0. This build is unsigned and not installed.
+
+Read ntfs/logfile.h and LOGFILE.md. `ntfs_logfile_visit_pages` preflights exact
+whole-storage read credits and observes every complete copy/circular page in
+ascending order without allocation. Common header and target status remain
+separate; missing/torn/unknown forms are visible. Backend errors terminate exactly
+without visiting failed bytes, even for full valid fills. Visitor stops preserve
+partial counters; next_offset is not a resume cursor. Complete means physical
+coverage only. Default 32-read limits refuse the full scan; the `pages` regular-file
+CLI explicitly supplies 4,096 calls/16 MiB. Neither observed maximum nor RSTR
+CurrentLsn selects a current endpoint, competing copies or continuation ownership.
+
+Sixty original graphs/14,729 ordered rows, 4,424 partial/full backend fault
+positions, 2,212 visitor-stop positions, full retries and exact/short/default
+credits pass. Virtual 4-GiB geometry refuses before I/O/allocation. Fresh fuzz
+replays all 2,557 seeds, preserving the preceding 2,482 byte-for-byte; 75 appended
+envelopes use the new inventory selector. It completes 55,796 runs in 61 seconds
+at 841 MiB peak RSS under the unchanged 2-MiB input/1-GiB RSS limits. The 4-MiB
+legacy 64-KiB-page graph remains covered by ordinary C/CLI tests. Review
+artifacts/logfile-inventory/{final,review.json,independent-fixture-review.json,
+independent-seed-review.json}, artifacts/fuzz-logfile-inventory/ and
+artifacts/fskit-logfile-inventory/.
+
+The final test-only review connects scanf name width and buffer capacity through
+one named constant. Fresh focused C/CLI tests, all 131 suites and style pass;
+production and the preceding component/release/fuzz inputs are unchanged. Current
+post-format hashes and independent addendum review are in
+artifacts/logfile-inventory/name-bound/.
+
+The frozen original Windows journal also passes independent complete inventory:
+32 fast slots plus 1,138 circular pages, 54 protected common headers, 1,116 absent
+signatures, no torn common headers and one invalid target with metadata preserved.
+All 1,170 production rows agree exactly; input/binary bytes and timestamps stay
+unchanged. A separate protected-page window yields four whole native packets:
+the earlier restart, OAT/name dumps and selected current restart. No observed
+header is later than selected RSTR CurrentLsn in this capture. This is physical
+format evidence, not a native later-than-checkpoint/crash history. Review
+recovery-partition-observation/{history-inventory,native-core-inventory}/ and
+their main-review.json files; no VM operation was required for these queries.
+
+Next implement the journal owner's bounded retained target index and complete
+prefix conflict resolution, then completed endpoint/unfinished-tail selection
+independent of RSTR CurrentLsn. Qualify ordered active records, sequence/wrap and
+continuation provenance before post-checkpoint transaction analysis. Preserve
+unknown/conflicting evidence and never use transfer positions as record identity.
+Plan optimization separately: reuse qualified acquisition, then compare cold/hot
+read counts and bounded memory against the preceding observers; no new performance
+claim is established here. WRITES.md retains native replay/durability acceptance
+before mutations. Windows remains paused at the account-password handoff; do not
+continue setup or cold-boot it. The installed macOS build
+and its ownership limitations remain the preceding native evidence above.
+
+Preceding portable acceptance is volume flag refusal classification: 126 fatal-sanitizer
 suites, style, both 2-KiB freestanding targets and 54 component groups/eleven runtime
 SKIPs/zero failures. Clean unsigned Release contains four universal products with
 mount.c compiled for both architectures. No new product is installed. DIRTY now

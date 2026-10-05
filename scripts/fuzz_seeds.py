@@ -19,6 +19,7 @@ from logfile_volume_fixtures import author as generate_logfile_volumes
 from logfile_record_fixtures import author as generate_logfile_records
 from logfile_legacy_fixtures import author as generate_logfile_legacy
 from logfile_fast_fixtures import author as generate_logfile_fast
+from logfile_inventory_fixtures import author as generate_logfile_inventory
 from logfile_client_fixtures import author as generate_logfile_clients
 from logfile_checkpoint_fixtures import author as generate_logfile_checkpoints
 from logfile_restart_record_fixtures import author as generate_logfile_restart_records
@@ -39,6 +40,8 @@ LOGFILE_CLIENT_RESTART_RECORD_KIND = 8
 LOGFILE_TABLE_KINDS = {0: 9, 1: 10, 2: 11, 3: 12}
 LOGFILE_PROTECTED_RECORD_KIND = 13
 LOGFILE_LEGACY_RECORD_KIND = 14
+LOGFILE_INVENTORY_KIND = 23
+LOGFILE_INVENTORY_READ_CALL_BUDGET = 4096
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 LOGFILE_CHECKPOINT_TABLE_KIND = 17
 LOGFILE_CHECKPOINT_HEADER = struct.Struct('<IB')
@@ -317,6 +320,25 @@ def generate(output):
             envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_FAST_RECORD_KIND, case['lsn'], control)
             assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
             filename = 'fast-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    inventories = output / 'logfile-inventory'
+    for case in generate_logfile_inventory(inventories):
+        payload = (inventories / case['path']).read_bytes()
+        if len(payload) + LOGFILE_FUZZ_HEADER.size > LOGFILE_FUZZ_INPUT_BYTES:
+            continue
+        controls = {'default': (0, 0)}
+        if case['faults']:
+            pages = case['inventory']['total_pages']
+            byte_units = case['inventory']['read_bytes'] // logfile_wire.USA_STRIDE
+            controls.update({'first-read': (0, 1), 'last-read': (0, pages),
+                'visitor-first': (1, 0), 'visitor-last': (pages, 0),
+                'exact-calls': (0, (pages - 1 + LOGFILE_INVENTORY_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT),
+                'short-calls': (0, (pages - 2 + LOGFILE_INVENTORY_READ_CALL_BUDGET) << LOGFILE_BUDGET_SHIFT),
+                'exact-bytes': (0, byte_units << LOGFILE_BUDGET_SHIFT),
+                'short-bytes': (0, (byte_units - 1) << LOGFILE_BUDGET_SHIFT)})
+        for name, (stop, control) in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_INVENTORY_KIND, stop, control)
+            filename = 'inventory-' + case['path'].replace('.', '-') + '-' + name + '.seed'
             (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):

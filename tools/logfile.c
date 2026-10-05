@@ -14,6 +14,8 @@
 
 enum { LOGFILE_DIAGNOSTIC_VERSION = 1, LOGFILE_ARGUMENT_ERROR = 2 };
 
+enum { LOGFILE_INVENTORY_READ_CALLS = 4096, LOGFILE_INVENTORY_READ_BYTES = 16 * 1024 * 1024 };
+
 static bool
 number(const char *text, uint64_t maximum, uint64_t *out)
 {
@@ -244,6 +246,76 @@ journal(const char *path, bool volume_source)
 	}
 	ntfs_image_close(&image);
 	return result == NTFS_OK ? 0 : 1;
+}
+
+static enum ntfs_result
+inventory_page(void *context, const struct ntfs_logfile_page_observation *observation)
+{
+	const struct ntfs_logfile_page *page = &observation->page;
+	bool *first = context;
+
+	printf("%s{\"offset\":%" PRIu64 ",\"storage\":%d,\"code\":%d,\"target_code\":%d,"
+	       "\"target_offset\":%" PRIu64 ",\"page\":",
+	    *first ? "" : ",", observation->offset, (int)observation->storage,
+	    (int)observation->result, (int)observation->target_result, observation->target_offset);
+	*first = false;
+	if (observation->result != NTFS_OK) {
+		printf("null}");
+	} else {
+		printf("{\"copy_value\":%" PRIu64 ",\"last_end_lsn\":%" PRIu64 ",\"flags\":%" PRIu32
+		       ",\"page_count\":%u,\"page_position\":%u,"
+		       "\"next_record_offset\":%u}}",
+		    page->copy_value, page->last_end_lsn, page->flags, page->page_count,
+		    page->page_position, page->next_record_offset);
+	}
+	return ferror(stdout) ? NTFS_IO : NTFS_OK;
+}
+
+static int
+journal_pages(const char *path)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_limits limits;
+	struct ntfs_logfile_inventory inventory = {0};
+	struct ntfs_logfile_restart restart = {0};
+	bool first = true;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	ntfs_logfile_default_limits(&limits);
+	limits.max_read_calls = LOGFILE_INVENTORY_READ_CALLS;
+	limits.max_read_bytes = LOGFILE_INVENTORY_READ_BYTES;
+	result = ntfs_logfile_open(&image.environment, &limits, NULL, &source);
+	printf("{\"schema_version\":%u,\"scope\":\"pages\",\"history_qualified\":false,"
+	       "\"recovery_qualified\":false,\"pages\":[",
+	    LOGFILE_DIAGNOSTIC_VERSION);
+	if (result == NTFS_OK) {
+		if (ntfs_logfile_get_restart(source, &restart) != NTFS_OK) {
+			abort();
+		}
+		result = ntfs_logfile_visit_pages(source, inventory_page, &first, &inventory);
+	}
+	printf("],\"code\":%d,\"result\":\"%s\",\"restart_current_lsn\":%" PRIu64
+	       ",\"inventory\":{\"complete\":%s,\"total_pages\":%" PRIu32
+	       ",\"examined_pages\":%" PRIu32 ",\"visited_pages\":%" PRIu32
+	       ",\"decoded_pages\":%" PRIu32 ",\"missing_pages\":%" PRIu32
+	       ",\"corrupt_pages\":%" PRIu32 ",\"invalid_targets\":%" PRIu32
+	       ",\"unsupported_targets\":%" PRIu32 ",\"read_calls\":%" PRIu32
+	       ",\"read_bytes\":%" PRIu64 ",\"next_offset\":%" PRIu64
+	       ",\"max_observed_epoch_lsn\":%" PRIu64 ",\"max_observed_end_lsn\":%" PRIu64 "}}\n",
+	    (int)result, ntfs_result_string(result), restart.current_lsn,
+	    inventory.complete ? "true" : "false", inventory.total_pages, inventory.examined_pages,
+	    inventory.visited_pages, inventory.decoded_pages, inventory.missing_pages,
+	    inventory.corrupt_pages, inventory.invalid_targets, inventory.unsupported_targets,
+	    inventory.read_calls, inventory.read_bytes, inventory.next_offset,
+	    inventory.max_observed_epoch_lsn, inventory.max_observed_end_lsn);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
 }
 
 static int
@@ -589,6 +661,9 @@ main(int argc, char **argv)
 	    (strcmp(argv[1], "journal") == 0 || strcmp(argv[1], "volume-journal") == 0)) {
 		return journal(argv[2], strcmp(argv[1], "volume-journal") == 0);
 	}
+	if (argc == 3 && strcmp(argv[1], "pages") == 0) {
+		return journal_pages(argv[2]);
+	}
 	if (strcmp(argv[1], "circular-record") == 0 || strcmp(argv[1], "legacy-record") == 0 ||
 	    strcmp(argv[1], "fast-record") == 0) {
 		if (argc != 4 || !number(argv[3], UINT64_MAX, &argument)) {
@@ -723,6 +798,7 @@ usage:
 	    "       ntfs-logfile checkpoint-snapshot JOURNAL CHECKPOINT OPEN|- NAMES|- DIRTY|- "
 	    "TX|- WORKSPACE_BYTES|-\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
+	    "       ntfs-logfile pages LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
 	    "       ntfs-logfile legacy-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

@@ -34,6 +34,8 @@ enum { NTFS_LOGFILE_FAST_METADATA_BYTES = 2 * 1024 };
 
 _Static_assert(
     sizeof(struct fast_copies) <= NTFS_LOGFILE_FAST_METADATA_BYTES, "fast-copy metadata policy");
+_Static_assert(NTFS_LOGFILE_MAX_FILE_BYTES / NTFS_MST_STRIDE <= UINT32_MAX,
+    "physical inventory counter capacity");
 _Static_assert(sizeof(struct ntfs_disk_log_fast_page) ==
 	NTFS_LFS_FAST_USA_WORDS * sizeof(uint16_t) + sizeof(struct ntfs_disk_log_page) +
 	    sizeof(uint16_t) + sizeof(uint32_t),
@@ -682,6 +684,144 @@ fast_target(struct ntfs_logfile *source, uint32_t *target)
 		return NTFS_UNSUPPORTED;
 	}
 	*target = ntfs_u32(header->file_offset);
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+observe_target(struct ntfs_logfile *source, struct ntfs_logfile_page_observation *observation)
+{
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	const struct ntfs_logfile_page *page = &observation->page;
+	struct ntfs_logfile_lsn location;
+	uint64_t target;
+	uint32_t fast_offset, known_flags;
+	enum ntfs_result result;
+
+	known_flags = NTFS_LOGFILE_PAGE_RECORD_END;
+	if (restart->major == NTFS_LFS_MAJOR_FAST) {
+		known_flags |= NTFS_LOGFILE_PAGE_CLIENT_RESTART;
+	}
+	if ((page->flags & ~known_flags) != 0) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (observation->storage == NTFS_LOGFILE_LEGACY_TAIL) {
+		target = page->copy_value;
+	} else if (observation->storage == NTFS_LOGFILE_FAST_STORAGE) {
+		if (restart->system_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+		    restart->log_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+		    restart->page_data_offset < sizeof(struct ntfs_disk_log_fast_page)) {
+			return NTFS_UNSUPPORTED;
+		}
+		result = fast_target(source, &fast_offset);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		target = fast_offset;
+	} else {
+		target = observation->offset;
+	}
+	observation->target_offset = target;
+	if (target < restart->circular_offset || target % restart->log_page_bytes != 0 ||
+	    !ntfs_bounds(target, restart->log_page_bytes, restart->usable_bytes)) {
+		return NTFS_CORRUPT;
+	}
+	if (observation->storage != NTFS_LOGFILE_LEGACY_TAIL) {
+		result = ntfs_logfile_lsn_decode(restart, page->copy_value, &location);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (page->copy_value < page->last_end_lsn) {
+			return NTFS_CORRUPT;
+		}
+	}
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_visit_pages(struct ntfs_logfile *source, ntfs_logfile_page_visitor visitor,
+    void *context, struct ntfs_logfile_inventory *out)
+{
+	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_page_observation observation;
+	struct ntfs_logfile_page_view page = {0};
+	const struct ntfs_logfile_restart *restart;
+	const struct ntfs_disk_mst *header;
+	uint64_t offset, total_bytes, epoch;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	restart = &source->restart;
+	header = (const void *)source->raw;
+	offset = (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes;
+	total_bytes = restart->usable_bytes - offset;
+	out->next_offset = offset;
+	out->total_pages = (uint32_t)(total_bytes / restart->log_page_bytes);
+	if (out->total_pages > source->limits.max_read_calls ||
+	    total_bytes > source->limits.max_read_bytes) {
+		return NTFS_RANGE;
+	}
+	while (offset < restart->usable_bytes) {
+		ntfs_zero(&observation, sizeof(observation));
+		observation.offset = offset;
+		observation.storage = offset >= restart->circular_offset ? NTFS_LOGFILE_CIRCULAR
+		    : restart->major == NTFS_LFS_MAJOR_FAST		 ? NTFS_LOGFILE_FAST_STORAGE
+									 : NTFS_LOGFILE_LEGACY_TAIL;
+		observation.target_result = NTFS_INVALID;
+		result = load_page(source, offset, &work, &page);
+		out->read_calls = work.read_calls;
+		out->read_bytes = work.read_bytes;
+		if (source->backend_failed ||
+		    (result != NTFS_OK && result != NTFS_CORRUPT && result != NTFS_NOT_FOUND)) {
+			return result;
+		}
+		if (result == NTFS_CORRUPT &&
+		    !ntfs_equal(header->magic, "RCRD", sizeof(header->magic))) {
+			result = NTFS_NOT_FOUND;
+		}
+		observation.result = result;
+		out->examined_pages++;
+		if (result == NTFS_OK) {
+			observation.page = page.page;
+			out->decoded_pages++;
+			observation.target_result = observe_target(source, &observation);
+			if (observation.target_result == NTFS_UNSUPPORTED) {
+				out->unsupported_targets++;
+			} else if (observation.target_result != NTFS_OK) {
+				out->invalid_targets++;
+			} else {
+				epoch = observation.storage == NTFS_LOGFILE_LEGACY_TAIL
+				    ? observation.page.last_end_lsn
+				    : observation.page.copy_value;
+				if (epoch > out->max_observed_epoch_lsn) {
+					out->max_observed_epoch_lsn = epoch;
+				}
+				if ((observation.page.flags & NTFS_LOGFILE_PAGE_RECORD_END) != 0 &&
+				    observation.page.last_end_lsn > out->max_observed_end_lsn) {
+					out->max_observed_end_lsn = observation.page.last_end_lsn;
+				}
+			}
+		} else if (result == NTFS_NOT_FOUND) {
+			out->missing_pages++;
+		} else {
+			out->corrupt_pages++;
+		}
+		if (visitor != NULL) {
+			result = visitor(context, &observation);
+			if (result != NTFS_OK) {
+				return result;
+			}
+		}
+		out->visited_pages++;
+		offset += restart->log_page_bytes;
+		out->next_offset = offset;
+	}
+	out->complete = true;
 	return NTFS_OK;
 }
 

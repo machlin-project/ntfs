@@ -16,14 +16,31 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
-The current mount-refusal qualification runs `volume-flags` and `volume-flags-cli`
+Current journal inventory qualification runs `logfile-inventory`,
+`logfile-inventory-cli` and the three `fuzz-logfile-inventory` variants, then all
+131 fatal-sanitizer suites. Its original author is tests/logfile_inventory_fixtures.py:
+60 complete graphs/14,729 ordered rows, with exact backend/visitor failures,
+full retry and preflight credits. Run `ntfs-logfile pages LOGICAL_JOURNAL_FILE`
+for immutable regular-file metadata using explicit 4,096-read/16-MiB limits.
+Ordinary source defaults are not automatically increased for a complete scan.
+
+Artifacts/logfile-inventory/ retains focused/full raw logs, actual host products
+and main source/fixture/seed review. The fresh journal campaign replays 2,557
+inputs, including all 2,482 preceding inputs unchanged; its 4-MiB legacy graph
+is tested outside the unchanged 2-MiB fuzz envelope. Complete native Windows
+comparison is in the frozen Recovery observation's history-inventory/ and
+native-core-inventory/ with separate main reviews. These offline queries leave
+the source and VM unchanged. Physical coverage is distinct from authoritative
+history, native recovery, writable admission and installed acceptance.
+
+The preceding mount-refusal qualification runs `volume-flags` and `volume-flags-cli`
 over 44 independently authored protected images, then the complete 126-suite fatal-
 sanitizer run. DIRTY identifies the named dirty bit; all other nonzero flags stay
 unsupported and version admission keeps priority. Artifacts/volume-flags/ retains
 the pre-change diagnostic, final host evidence and unchanged original Recovery
 image refusal. No force/admission, native recovery or writable qualification follows.
 
-The current completed fast-copy qualification runs `logfile-fast`, `logfile-fast-cli`
+The preceding completed fast-copy qualification runs `logfile-fast`, `logfile-fast-cli`
 and five `fuzz-logfile-fast` variants, then the full fatal-sanitizer suite. Its
 independent author is tests/logfile_fast_fixtures.py. That checkpoint has 124 suites
 and 2,482 freshly replayed journal seeds, including all 2,378 preceding inputs
@@ -46,7 +63,7 @@ The preceding private page-encoding qualification runs `logfile-page-encode` and
 three `fuzz-logfile-page-encode` variants, then the full fatal-sanitizer suite. Its
 independent author is tests/logfile_page_encode_fixtures.py; regenerate seeds into a
 fresh directory for a campaign so superseded persistent build seeds are excluded.
-Current results are 117 suites and 2,378 freshly replayed journal seeds. Retain whole
+That checkpoint passes 117 suites and 2,378 freshly replayed journal seeds. Retain whole
 packet goldens, failed initial builds and final source/product evidence separately;
 ACCEPTANCE.md and WRITE-FOUNDATIONS.md define their exact scope.
 

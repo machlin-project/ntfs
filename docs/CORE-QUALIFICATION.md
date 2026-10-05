@@ -1,6 +1,31 @@
 # Core qualification and continuation
 
-Current portable acceptance passes 126 fatal-sanitizer suites, style, both 2-KiB
+Current portable acceptance passes 131 fatal-sanitizer suites, five focused suites,
+style, both 2-KiB freestanding targets, 54 component groups/eleven runtime SKIPs and
+clean unsigned universal Release. Complete physical journal inventory reserves
+whole-scan credits before I/O and adds no allocation. Sixty original graphs supply
+14,729 exact ordered rows, including all modern slots with epochs later than RSTR
+CurrentLsn. Partial/full failed reads, seven exact backend statuses, visitor stops,
+retries and preflight credit boundaries pass. Fresh fuzz replays all 2,557 seeds,
+including 2,482 unchanged preceding inputs; the 2-MiB input/1-GiB RSS bounds remain.
+Main verifies raw host logs, actual products/source bytes and seed/fixture goldens.
+The final test-only named scanf-capacity correction also passes focused C/CLI,
+all 131 suites and style; production qualification remains unchanged. Its current
+source binding and main review are in artifacts/logfile-inventory/name-bound/.
+
+The frozen Windows journal's 1,170 physical rows match independent USA/source-byte
+review exactly: 54 common headers, 1,116 missing signatures and one invalid target.
+A separately reviewed selected-page window contains four exact native records.
+There are no observed pages later than the selected RSTR CurrentLsn in this
+capture; it does not qualify that missing recovery scenario. Complete physical
+coverage does not establish current history, continuation ownership, native
+analysis or writable admission. No new app is installed. Evidence:
+artifacts/logfile-inventory/ and the Recovery observation's history-inventory/
+and native-core-inventory/ main reviews. Next implement bounded copy ownership,
+the completed endpoint/unfinished tail and ordered continuity under LOGFILE.md
+and WRITES.md before native analysis/replay.
+
+Preceding mount-refusal acceptance passes 126 fatal-sanitizer suites, style, both 2-KiB
 freestanding targets, 54 component groups/eleven runtime SKIPs and clean unsigned
 universal Release. Forty-four protected flag/version profiles qualify exact dirty
 versus unsupported refusal, unchanged publication/inputs, owner cleanup and clean
@@ -19,7 +44,7 @@ Recovery volume is still rejected by core admission for an unsupported nonzero
 flag; no dirty-state, complete current-history, replay or durability claim follows.
 ACCEPTANCE.md and LOGFILE.md record exact evidence. Writable APIs remain absent.
 
-The current portable continuation retains checked base metadata across temporary
+The preceding metadata continuation retains checked base metadata across temporary
 node closure. Direct-mapped full-reference keys are independent of raw/count keys;
 only complete successful standard-information/reparse-presence checks publish.
 Cold precharge, fresh header validation, ancestor work admission and separate
@@ -28,7 +53,7 @@ accounted bytes beyond the preceding filename-count memo, with no public ABI cha
 Disabled/single/default capacities, competing objects, rejected collisions,
 sequence/owner isolation, faults and exact work boundaries pass.
 
-Current acceptance is 75 fatal-sanitizer suites, 54 native component groups/eleven
+That checkpoint passes 75 fatal-sanitizer suites, 54 native component groups/eleven
 runtime SKIPs, both 2-KiB freestanding targets and universal Release. New synthetic
 controls check 290 inventories/filename bodies and 288 resident streams across
 32 fitting and 256 competing independent files. Fresh fuzz replays 443 seeds and
@@ -150,7 +175,7 @@ boundaries when updating ACCEPTANCE.md and HANDOFF-SOL.md.
 | Links and special data | Immutable lossless core reparse snapshots, original-wire copies/physical sizes; bounded FSKit symlink/junction projection with explicit current-owner roots, numeric ancestry, filename aliases and intermediate within-owner directory resolution; 76 component verdicts, active-cycle/finite-reuse and 63-snapshot/512-component/shared-entry boundaries, 205 allocation/44 partial-full read fault positions and 28 core/physical ancestor thresholds; ordinary EFS metadata and independent plaintext ADS; WOF XPRESS4K/8K/16K and LZX32K storage/table/content with 37 verdicts, 390 allocation/101 read faults, 23 legacy provider scenarios and bounded image fuzz; 87 content/11 invalid XPRESS and 140 content/31 invalid LZX vectors; 192 external LZX streams and 139 external synthetic decodes | Windows/installed link and native loop/memory semantics, context-dependent reparse hard links and cross-volume ownership; provider-specific native fault/interleaving and hard-link qualification, Windows codec/format observations; WIM/cloud/unknown policies and EFS decryption/key ownership |
 | Security | Original descriptor/SID/ACL/ACE parser and bounded immutable resolver for `$Secure` and per-file attributes; distinct absent/NULL/empty ACLs, checked index paths/hash/copies and four external image geometries; complete supported SII/SDH traversal, used allocation inventory, cross-index/SDS consistency, nonzero FILE-ID references and selected zero-ID per-file framing, with 46 store/nine complete-volume store and 65 per-file verdicts plus fault/budget sweeps; fixed-internal/inert and narrowly owned canonical repair omissions retain explicit scope and present-packet checks; three public NIST stores and all documented user per-file/indexed descriptors compare with external exports; bounded ordered DACL evaluator with generic request mappings, concrete stored masks, ordinary ownership and deny-only/restricting contexts, 196,608 independent per-right oracles and 392 stored-mask policy verdicts; four corrected local generic-ACE refusals with unchanged supported controls; explicit extraction selection, stable native presentation and zero-I/O/configuration/refusal components | Windows-authored complete-store/per-file payload qualification; native AccessCheck comparisons, restricted ownership, advanced ACE/SACL/privilege/maximum-access policy and Windows-to-native identities; qualify extraction credentials/native enforcement and integrate owning authorization |
 | FSKit lifecycle and interoperability | Separate admission/drain; 16 gated direct/window-read/overlapping-teardown cases and 120 resource geometry/fault verdicts at three alignments; conditional reclaim, weak canonical identity and five modeled eligibility/publication cases; virtual dot/parent IDs and exact dot lookup with full-reference released-parent reconstruction, two allocation/two partial-full read faults and 12 core/physical boundaries; separate cookie views/native errors; two lazy pool-backed independent continuations, 32 layout/view/cache/pressure cases, reentrant pin/epoch/retired-table ownership, 34 allocation/13 I/O names-only faults and 151 allocation/41 I/O interleaved faults; encoded-file pages and bounded native link/raw-metadata/remount/revocation checks; late-unit WOF errors and common result-construction/revoked-acquisition guards informed by ext4 history; independent pressure observer with selective cache release, three measured allocation scenarios and blocked-read/fault/namespace components; resource-bound private checks, temporary unary identities, async read-only refusals, cooperative cancellation/drain, sealed owner detachment and prompt busy admission, with full/quick fault sweeps and eight gated load/check/admission cases | Synchronous I/O interruption/deadlines and installed task cancellation/unary dispatch/client results; native reclaim counts/macOS 27 runtime and installed scheduling/buffer lifetime; actual modern result-construction failure injection; complete link/provider resolution and broader checkpoint/index reuse; installed dot/path/case semantics, pressure notification delivery/aggregate stress and distribution discovery; see LIFECYCLE.md, READ-CACHE-POLICY.md and FSKIT-EXT4-LESSONS.md |
-| Recovery and release processes | No write callback; native recovery contract in WRITES.md; immutable LFS 1.1/2.0 primitives/nonempty-LCN update framing, 109 verdicts/110 diagnostic contracts; independent logical owner, bounded compatible restart selection/conflicts, cached clients and staged physical pages, 22 source/report verdicts; counted ordinary NTFS stream binding, 24 volume/report verdicts and 54 allocation/58 physical-read faults; physical wrapped-record observation with 30 byte/report verdicts, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary; cached active-client index/sequence lookup with 858 pair queries/seven snapshots and 42 exact reports; source/record USA-preserving fuzz and mounted-volume image fuzz path; executable serialized in-memory transaction/durability reference model, 49,855 crash/fault states, 47 independent native-byte endpoints and four unsafe-order witnesses; private CI workflow and provenance | Native journal admission/drain ownership, written/current circular history and qualified record selection, legacy tail/modern fast-page routing and native client registration/checkpoints/tables; qualify LCN-less/native Windows packets and copy lifecycle/version transitions; product transaction/recovery integration, interleaved histories and broader crash/durability qualification; relocated-source/native release reproducibility, actual private CI execution and later native Windows recovery acceptance |
+| Recovery and release processes | No write callback; native recovery contract in WRITES.md; immutable LFS 1.1/2.0 framing, empty/nonempty-LCN/name/table/checkpoint composition; bounded logical owner and compatible restart selection; counted ordinary NTFS stream lifetime; exact wrapped and completed legacy/modern per-target record observation; cached selected clients; complete physical inventory with 60 graphs/14,729 rows and all 1,170 native metadata rows compared; source/record USA-preserving fuzz; serialized in-memory transaction/durability reference model with 49,855 crash/fault states, 47 independent native-byte endpoints and four unsafe-order witnesses; private CI/provenance | Native journal admission/drain ownership, full competing-copy/current endpoint selection, ordered continuity and continuation provenance, native client lifecycle/volume references/post-checkpoint analysis; recovery integration, interleaved histories and Windows crash/durability qualification; relocated/native release reproducibility, actual private CI and commercial release remain open |
 
 The current extent-read continuation passes 68 sanitized suites, both 2-KiB
 freestanding targets, style, 42 component groups/ten runtime SKIPs and the clean

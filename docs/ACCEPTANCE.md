@@ -69,7 +69,97 @@ native-read/attempt-4-access-admission/. This qualifies development signing, ena
 and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
 namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
-## Volume flag refusal classification
+## Complete physical journal metadata inventory
+
+The immutable logical owner now visits every complete record-storage page in
+physical order, including both legacy tail slots or all 32 modern fast slots
+and the complete circular area. Whole-scan read count/bytes must fit explicit
+operation credits before any read/visitor. Existing private buffers are reused
+without allocation; selected restart/client state and source bytes stay unchanged.
+Common-page decode and routing results remain separate. Missing/torn/unsupported
+forms retain explicit metadata/status evidence. Backend errors abort exactly
+without visiting failed bytes, including full valid pages accompanied by failure.
+Visitor rejection retains partial counters and a first-unsuccessful offset;
+retry restarts the scan. Complete means physical coverage, not history selection.
+
+Sixty original declarative graphs supply 14,729 exact ordered C/CLI rows. All 32
+modern slots have a case whose observed epoch exceeds restart-time CurrentLsn.
+Legacy 512-byte/4-KiB/64-KiB geometry, USA/target boundaries, extended/unsupported
+layouts, missing/torn/scalar-invalid pages, unknown flags, reversed/zero epochs,
+invalid targets, conflicting equal epochs and unused source capacity pass. The
+whole scan deliberately exposes competing copies rather than resolving them.
+Main independently restores every successful common header and verifies actual
+source hashes, ordered flat goldens and observation-only maxima.
+
+Two independent fault graphs cover 254 modern and 62 legacy physical pages.
+Seven backend statuses at every read with partial/full-valid failed fills produce
+4,424 injected cases; each preserves its exact result and succeeds on full retry.
+Seven visitor statuses at every page produce 2,212 stop positions with unchanged
+allocation state and successful retries. NULL visitor/arguments, exact and one-below
+read-call/byte limits, ordinary defaults, immutable selected state and complete
+cleanup pass. A virtual 4-GiB journal refuses before I/O/visitor/allocation without
+materializing the journal. Default credits remain unchanged.
+
+Final host qualification passes all 131 fatal-sanitizer suites and five focused
+suites, both 2-KiB freestanding architecture targets and style. FSKit components
+pass 54 groups with eleven explicit macOS 27 runtime/SDK SKIPs and zero failures.
+Main reviews actual raw JSONL results and the named stderr test diagnostics.
+Clean unsigned Release has four verified arm64/x86_64 products, minimum macOS
+26.5/SDK 27.0, and actual logfile_source.c compilation for both targets. Strict
+signature verification rejects the unsigned app as expected; no product is
+installed. Nine production/test inputs remain unchanged through qualification.
+
+Final test review also derives the scanf name width and buffer capacity from one
+named constant. This test-only correction passes a fresh two-suite focused run,
+all 131 suites and style; production/component/release/fuzz inputs remain unchanged.
+The post-format source binding and raw addendum are independently accepted under
+artifacts/logfile-inventory/name-bound/main-review.json.
+
+Fresh fuzz replays all 2,557 authored envelopes and completes 55,796 runs in 61
+seconds at 841 MiB peak RSS. Limits remain 2-MiB inputs, 1-GiB RSS and five seconds
+per input; fatal ASan/UBSan settings are verified. Main compares all 2,482 preceding
+seed files byte-for-byte and checks all 75 appended inventory envelopes against
+their authored sources. The 4-MiB legacy 64-KiB-page graph remains ordinary C/CLI
+coverage outside the unchanged fuzz input limit.
+
+An original independent query also scans the entire frozen Windows Recovery
+journal: 32 fast slots and 1,138 circular pages. It observes 54 USA-protected common
+headers, 1,116 absent RCRD signatures, no common protection failures and one invalid
+fast target. The invalid target retains its successfully decoded common fields.
+Main independently verifies every physical ordinal and restored header against
+the original immutable source. Missing signatures do not establish unwritten,
+clean or safe storage.
+
+The selected newer fast page contains four complete packets in one window: an
+earlier client restart, OAT dump, attribute-name dump and selected current client
+restart. Main compares every whole packet with source bytes; both client-1.0
+extensions remain opaque. The maximum observed last-start/completed-end LSN is
+the selected restart's CurrentLsn; this capture supplies no later-than-restart
+native history witness. It is a physical metadata/packet observation only.
+
+The newly qualified frozen `pages` CLI compares all 1,170 ordered rows exactly
+against that independent inventory. It consumes 1,170 reads/4,792,320 bytes and
+finishes at selected usable byte 4,800,512. Input and binary full hashes, modes,
+inodes and timestamps remain unchanged. The Recovery volume itself still refuses
+UNSUPPORTED for its unqualified nonzero flag; no mount or flag change occurs.
+No VM setup, boot, account or device-write operation occurs during these queries.
+
+Main host/fixture/seed reviews are in artifacts/logfile-inventory/, with raw
+focused/full results and retained products under final/. Fresh fuzz and universal
+Release are under artifacts/fuzz-logfile-inventory/ and fskit-logfile-inventory/.
+Native reports, packet bytes, bounded commands and independent reviews are under
+artifacts/windows-write-vm/recovery-partition-observation/{history-inventory,
+history-inventory-execution,native-core-inventory,native-core-inventory-execution}/.
+
+Complete physical coverage does not qualify competing-prefix selection, the
+current completed endpoint/unfinished tail, ordered continuity, continuation
+ownership, post-checkpoint analysis, replay, durability or writable admission.
+Those journal-owner contracts are next under LOGFILE.md and WRITES.md. Latest
+portable acceptance is separate from the preceding installed signed macOS build
+and its unresolved ownership limitation. Windows still awaits its manual account
+handoff before a separate disposable unencrypted NTFS/chkdsk volume can be prepared.
+
+## Preceding volume flag refusal classification
 
 Mount now uses the existing named dirty bit to distinguish DIRTY from UNSUPPORTED.
 Unsupported versions still take precedence; every nonzero flag still refuses.
@@ -1362,18 +1452,19 @@ claimed.
 | WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 390 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries and exact dot lookup/released-parent reconstruction, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 42 in-process PASS groups; ten modern lifecycle/operation/pressure/enumeration/lookup/content/link/case/maintenance checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, cross-volume/reparse-hard-link and complete provider qualification and installed lifetime remain open |
+| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries and exact dot lookup/released-parent reconstruction, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount | 54 in-process PASS groups; eleven modern lifecycle/operation/pressure/enumeration/lookup/content/link/case/maintenance checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, cross-volume/reparse-hard-link and complete provider qualification and installed lifetime remain open |
 | FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed again with operation scopes; earlier paired large/small legacy memory-reader benefit had increased bounded pool peak; current guard overhead and installed/native/device qualification remain open |
 | FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
-| FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned build and earlier signed Release passed; installed runtime and macOS 27 untested |
-| Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Not run |
-| Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Tools locally tested; Windows acquisition/qualification not run |
-| Read-only log primitives | LFS 1.1/2.0 common restart/client/page framing, LSN geometry and exact logical records; nonempty-LCN NTFS update spans; bounded immutable inputs/caller scratch and diagnostic transport | 109 independent verdicts and 110 diagnostic contracts passed; structured USA-preserving fuzz passed; complete journal ownership/copy routing/current-history/checkpoint tables, LCN-less and Windows log qualification remain open |
-| Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz passed; native journal ownership, tail/fast routing and circular currentness remain open |
+| FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Current unsigned universal build passes; preceding personally signed build 3 is installed/enabled with scoped reading on macOS 26.5.2; macOS 27 runtime and distribution remain open |
+| Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Preceding signed build 3 installed/enabled; both nine-file synthetic reading/mmap/write-refusal checks and extraction refusal/retry pass; mounts report noowners and a separate ownership route fails; broader Finder/concurrency/lifetime/ownership remain open |
+| Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Collector locally tested; full Windows corpus/chkdsk not run; frozen original Recovery journal has scoped metadata/packet comparisons, while the flagged Recovery volume is refused and the system partition is encrypted |
+| Read-only log primitives | LFS 1.1/2.0 common restart/client/page framing, LSN geometry and exact logical records; empty/nonempty-LCN NTFS update spans; lossless names and checkpoint/table framing; bounded immutable inputs/caller scratch and diagnostic transport | Original framing and later composed table/membership checks pass with USA-preserving fuzz and scoped native Windows packet comparisons; current history, volume semantics, transaction analysis and recovery remain open |
+| Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz pass; completed legacy/modern per-target observers are qualified separately; native admission and complete circular currentness remain open |
+| Complete physical log inventory | Exact whole-storage preflight credits, all tail/fast/circular pages in physical order, no allocation, separate common/target results, exact backend/visitor errors and partial counters, observation-only maxima | 60 graphs/14,729 C/CLI rows, 4,424 partial/full read-fault cases, 2,212 visitor-stop positions, retry and exact/short/default credits pass; all 1,170 native Windows rows agree independently; complete coverage does not qualify competing-copy selection, current endpoint, continuity or recovery |
 | NTFS journal stream binding | Fixed MFT slot/unnamed ordinary stream, complete fragmented/list/sequence/base ownership, node-independent counted lifetime, logical versus physical read accounting, staged partial-read isolation and refusal of unsupported system-file forms | 24 image verdicts/exact reports, 54 allocation/58 physical-read faults with retry, two simultaneous owners, BUSY unmount and unchanged images passed; ordinary dirty-media policy is unchanged; native journal admission/drain remains open |
 | Physical circular-record observation | LSN-addressed adjacent protected fragments and one wrap, no-page-revisit bound, exact unpadded bytes/extended headers, shared read credits and bounded ephemeral staging | 30 C verdicts/exact CLI reports, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary passed; eight bound-volume storage forms also check exact records and resource/staging faults; written/current history, copy routing, active clients and recovery remain unqualified |
 | Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |
-| NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds passed; complete extensions/tables, containing-record ownership, selected current history and native Windows qualification remain open |
+| NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds pass; scoped native client-1.0 prefixes also compare; complete extensions, current history, native transaction analysis and recovery remain open |
 | Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
 | Transaction/durability reference model | Exclusive serialized owner, complete private/log credits, data/WAL/commit/home/checkpoint ordering, arbitrary pending-sector eviction, partial/full I/O failures and interrupted abstract replay against independently authored NTFS endpoints | 49,855 modeled states, 22 ownership contracts, 14 history refusals, 1,205 interrupted-recovery states, 47 complete native-byte diagnostics/content checks and four unsafe-order witnesses passed; typed in-memory evidence, no native journal or product write API; see RECOVERY-MODEL.md |
 | Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Product implementation remains open; read-only primitives and abstract reference-model replay do not provide native recovery or permit writes/dirty mounts |

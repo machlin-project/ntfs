@@ -364,7 +364,18 @@ limits. Unsupported encoded/sparse/partial-VDL or reparse/directory/view forms
 refuse automatic binding explicitly.
 Three bounded private buffers retain selected metadata and stage physical page
 reads, publishing caller bytes only after complete integrity checks. Native
-journal admission/drain integration remains separate. Physical circular-record
+journal admission/drain integration remains separate. The serialized physical
+inventory now preflights exact whole-storage read credits and scans every copy
+slot/circular page using those buffers without allocation. Its transient visitor
+receives common metadata plus independent target/structural results; backend
+failure aborts before exposing failed bytes. Coverage, routing-valid observed LSN
+maxima and partial progress have explicit counters. Complete coverage does not
+select competing copies, a current endpoint or continuation provenance. RSTR
+CurrentLsn remains a restart-time observation, not a bound on later log records.
+Future retained target indexing, complete prefix conflicts and ordered history
+belong in this journal owner, with separate bounds and admission; native analysis,
+recovery and persistence still require their owning contracts.
+Physical circular-record
 assembly locates the first header by LSN and joins adjacent protected payload
 pages through at most one wrap. One shared operation budget, a no-page-revisit
 bound and at most one 1-MiB ephemeral allocation limit traversal and memory;

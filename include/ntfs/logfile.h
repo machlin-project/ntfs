@@ -138,6 +138,26 @@ struct ntfs_logfile_page_view {
 	struct ntfs_logfile_page page;
 };
 
+struct ntfs_logfile_page_observation {
+	uint64_t offset, target_offset;
+	enum ntfs_logfile_storage storage;
+	/* Decode success preserves the complete common header, even when routing
+	 * is unsupported. Missing signatures are NOT_FOUND; invalid RCRD is CORRUPT.
+	 * target_result describes addressing/known flags, not written provenance. */
+	enum ntfs_result result, target_result;
+	struct ntfs_logfile_page page;
+};
+
+struct ntfs_logfile_inventory {
+	uint64_t read_bytes, next_offset, max_observed_epoch_lsn, max_observed_end_lsn;
+	uint32_t read_calls, total_pages, examined_pages, visited_pages;
+	uint32_t decoded_pages, missing_pages, corrupt_pages, invalid_targets, unsupported_targets;
+	bool complete;
+};
+
+typedef enum ntfs_result (*ntfs_logfile_page_visitor)(
+    void *, const struct ntfs_logfile_page_observation *);
+
 struct ntfs_logfile_record_view {
 	struct ntfs_logfile_record record;
 	uint64_t first_page_offset, last_page_offset, read_bytes;
@@ -203,6 +223,25 @@ enum ntfs_result ntfs_logfile_decode_client_restart_record(
  * zero, including partial backend reads. No source page is changed or cached. */
 enum ntfs_result ntfs_logfile_read_page(struct ntfs_logfile *, uint64_t offset, void *,
     size_t capacity, struct ntfs_logfile_page_view *);
+/* Observe every complete physical record-storage page in ascending offset,
+ * including all tail/fast slots and the circular area. The complete scan's
+ * exact read count/bytes must fit the source limits before any read or visitor.
+ * No allocation occurs; callbacks borrow one metadata observation until return.
+ * Missing/torn/invalid pages are visited with explicit structural results;
+ * a backend failure aborts with its exact result and never visits partial bytes.
+ * Known-layout targets require circular bounds and valid epoch/LSN geometry;
+ * unknown layouts/flags remain visible with UNSUPPORTED target_result. Epoch is
+ * last-end for legacy tails, last-start for circular/modern pages. Maxima cover
+ * only routing-valid headers; no duplicate resolution or history selection occurs.
+ * An optional visitor can stop with any non-OK result. Calls must not reenter
+ * this owner or mutate its source. Output retains partial counters on failure;
+ * next_offset is the first page whose visit has not succeeded; retry starts at
+ * the first storage page. complete requires every visitor to succeed. NULL
+ * visitor observes only the summary. Output/context/source are
+ * disjoint. Complete means physical coverage, never current history, continuation
+ * provenance, recovery or writable admission. Ordinary defaults can refuse RANGE. */
+enum ntfs_result ntfs_logfile_visit_pages(struct ntfs_logfile *, ntfs_logfile_page_visitor,
+    void *context, struct ntfs_logfile_inventory *);
 /* Assemble an exact record from physical circular storage by its LSN. Only the
  * first segment has a record header; continuations begin at page_data_offset.
  * USA and common page/record framing are checked, including linked-LSN geometry.

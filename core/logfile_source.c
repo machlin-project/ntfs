@@ -295,6 +295,18 @@ volume_release(void *context, void *bytes, size_t size)
 	ntfs_free(stream->volume, bytes, size);
 }
 
+static void *
+recovery_volume_allocate(void *context, size_t size)
+{
+	return ntfs_alloc(context, size);
+}
+
+static void
+recovery_volume_release(void *context, void *bytes, size_t size)
+{
+	ntfs_free(context, bytes, size);
+}
+
 enum ntfs_result
 ntfs_logfile_open_volume_impl(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
     struct ntfs_logfile_report *report, struct ntfs_logfile **out)
@@ -440,6 +452,34 @@ ntfs_logfile_get_restart(const struct ntfs_logfile *source, struct ntfs_logfile_
 		return NTFS_INVALID;
 	}
 	*out = source->restart;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_environment(const struct ntfs_logfile *source, struct ntfs_environment *out,
+    struct ntfs_logfile_limits *limits, struct ntfs_volume **backing)
+{
+	if (out == NULL || backing == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	*backing = NULL;
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	*out = source->environment;
+	/* Recovery queries need only owned bytes. Do not retain a source read
+	 * callback or a stream context which source close would destroy. */
+	out->read = NULL;
+	if (source->backing != NULL) {
+		*backing = source->backing->volume;
+		out->context = *backing;
+		out->allocate = recovery_volume_allocate;
+		out->release = recovery_volume_release;
+	}
+	if (limits != NULL) {
+		*limits = source->limits;
+	}
 	return NTFS_OK;
 }
 
@@ -2289,6 +2329,7 @@ history_next_lsn(const struct ntfs_logfile_restart *restart, uint64_t current,
 static enum ntfs_result
 history_tail(struct ntfs_logfile *source, const struct ntfs_logfile_record_view *last,
     const struct record_ending *ending, struct ntfs_logfile_report *work,
+    const struct ntfs_logfile_checkpoint_capture_limits *limits,
     struct ntfs_logfile_history_report *out)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -2325,6 +2366,12 @@ history_tail(struct ntfs_logfile *source, const struct ntfs_logfile_record_view 
 	if (expected->offset == 0 || expected->page.copy_value != out->tail_lsn) {
 		return NTFS_STALE;
 	}
+	if (limits != NULL &&
+	    (work->read_calls >= limits->max_read_calls ||
+		work->read_bytes > limits->max_read_bytes ||
+		restart->log_page_bytes > limits->max_read_bytes - work->read_bytes)) {
+		return NTFS_RANGE;
+	}
 	result = index_reload(source, expected, location.page_offset, work, &page);
 	if (result != NTFS_OK) {
 		return result;
@@ -2356,11 +2403,13 @@ history_tail(struct ntfs_logfile *source, const struct ntfs_logfile_record_view 
 }
 
 enum ntfs_result
-ntfs_logfile_visit_records(struct ntfs_logfile *source, uint64_t first, uint32_t max_records,
+ntfs_logfile_visit_records_limited(struct ntfs_logfile *source, uint64_t first,
+    uint32_t max_records, const struct ntfs_logfile_checkpoint_capture_limits *limits,
     void *workspace, size_t capacity, ntfs_logfile_record_visitor visitor, void *context,
     struct ntfs_logfile_history_report *out)
 {
 	struct record_copies route = {.indexed = true, .history = true};
+	struct ntfs_logfile_checkpoint_capture_limits admitted;
 	struct ntfs_logfile_report work = {0};
 	struct ntfs_logfile_record_view record;
 	struct record_ending ending;
@@ -2379,6 +2428,13 @@ ntfs_logfile_visit_records(struct ntfs_logfile *source, uint64_t first, uint32_t
 	ntfs_zero(out, sizeof(*out));
 	if (source == NULL || workspace == NULL || max_records == 0) {
 		return NTFS_INVALID;
+	}
+	if (limits != NULL) {
+		admitted = *limits;
+		if (admitted.max_read_calls == 0 || admitted.max_read_bytes == 0) {
+			return NTFS_INVALID;
+		}
+		route.capture_limits = &admitted;
 	}
 	restart = &source->restart;
 	if (capacity < restart->record_header_bytes) {
@@ -2451,7 +2507,8 @@ ntfs_logfile_visit_records(struct ntfs_logfile *source, uint64_t first, uint32_t
 			result = history_next_lsn(
 			    restart, current, &record, &ending, false, &out->next_lsn);
 			if (result == NTFS_OK) {
-				result = history_tail(source, &record, &ending, &work, out);
+				result = history_tail(
+				    source, &record, &ending, &work, route.capture_limits, out);
 			}
 			out->complete = result == NTFS_OK;
 			break;
@@ -2492,6 +2549,15 @@ ntfs_logfile_visit_records(struct ntfs_logfile *source, uint64_t first, uint32_t
 	out->read_calls = work.read_calls;
 	out->read_bytes = work.read_bytes;
 	return result;
+}
+
+enum ntfs_result
+ntfs_logfile_visit_records(struct ntfs_logfile *source, uint64_t first, uint32_t max_records,
+    void *workspace, size_t capacity, ntfs_logfile_record_visitor visitor, void *context,
+    struct ntfs_logfile_history_report *out)
+{
+	return ntfs_logfile_visit_records_limited(
+	    source, first, max_records, NULL, workspace, capacity, visitor, context, out);
 }
 
 enum ntfs_result

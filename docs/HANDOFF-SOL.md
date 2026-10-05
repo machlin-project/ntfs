@@ -7,6 +7,62 @@ changes are included. Publishing source and choosing a public license remain
 separate decisions. Native writes are requested continuation work; WRITES.md
 defines the recovery and durability requirements before writable admission.
 
+## Owned recovery inputs and original Windows volume
+
+The new `ntfs_recovery_open` composition internally captures the selected client's
+checkpoint and complete retained oldest-to-endpoint packet interval. It binds every
+checkpoint/dump byte, exact analysis packet, previous/undo lifetime and physical
+transaction seed. Complete owners survive source close; governed volume children
+keep unmount BUSY until close. Unknown control targets/undo markers refuse, while
+the observed Forget/Compensation form does not require a preceding Commit. Read
+RECOVERY-INPUTS.md before adding target resolution or execution. No writable API
+or recovery authority is added by this preparation.
+
+Forty original input profiles and focused lifetime/capture/history/volume checks
+pass. All 163 fatal-sanitizer suites, style and both freestanding 2-KiB core targets
+pass. Main checks the raw unique results and all 3,291 prior authored fuzz
+names/bytes; 45 new owned-history envelopes append under selector 29. All 3,336
+fresh authored inputs fixed-replay before 43,952 units/61 seconds at 671 MiB with
+unchanged caps and no findings. The FSKit components pass 54 groups/eleven runtime
+SKIPs/no failures, and the clean unsigned universal Release passes. Main verifies
+the actual four product hashes, paired UUIDs, both minimum-OS slices and embedded
+extension identity; the prior signed guest build remains installed.
+Main independently compares
+all four unchanged original Recovery packets with their separate byte witnesses;
+this native snapshot contains zero transaction lifetimes. The bound checkpoint
+dump flag does not establish its meaning on ordinary updates. Current validation
+and whole-source fuzz evidence are tracked under
+`artifacts/recovery-history/`; preserve failed fixture/runner attempts.
+
+Windows Guest Tools installation is now complete after explicit user acceptance
+of its displayed licence. Actual file transfer and SYSTEM administrative command
+execution are verified without changing execution policy. The actual OS is Windows
+11 Pro 26H2/ARM64. Read-only inventory separates the 64-GiB OS disk from the blank
+8-GiB NVMe test disk. Main reviewed that binding before the prepared original script
+initialized only Disk 1 to GPT/NTFS T:. No OS/System/Recovery partition is a mutation
+target. Source `tests/windows_write_capture.ps1` retains the guards and original
+workload/acquisition contract.
+
+The first workload failed at .NET Framework alternate-stream path validation;
+its report remains retained. Native PowerShell stream-provider access corrects
+that harness error and a fresh named workload preserves prior partial data.
+The completed guest report confirms read-only chkdsk success, volume lock held
+through complete raw capture, volume/physical flush success and dismount while
+locked. Exact transfer/decode and GPT verification pass, but the physical boot OEM
+is BitLocker ciphertext because Windows automatically encrypted T:. Preserve that
+image as an explicit refusal witness. Guarded Disk 1/T:-only decryption then
+completes; selected C: encryption fields and the reviewed target mapping remain
+unchanged. The updated capture requires full decryption and checks the physical
+NTFS OEM while holding the same volume lock. Fresh plaintext acquisition, native
+core comparison and interrupted recovery remain distinct subsequent evidence. Review
+`artifacts/windows-write-vm/{write-access-20261006,native-write-baseline-20261006,native-write-baseline-20261006-fixed}/`.
+The guarded preparation evidence is in `test-volume-decryption-20261006/`.
+
+Only one worker owns a VM. Sol hands prepared CLI execution to Luna and waits
+for an explicit return; all VM commands use the absolute lab directory. Continue
+the already authorized write scope through target/recovery/WAL/durability work;
+a preparation checkpoint is not completion of that scope.
+
 ## Meaning of the requested 60%
 
 The request was to establish roughly 60% of a driver and hand off the remainder.
@@ -64,7 +120,7 @@ capture JSON and actual original source identity independently; no synthetic
 owner projection supplies a positive native transaction. Review
 checkpoint-transactions/native-execution-20261005/.
 
-Windows command transport remains blocked. The initial native probe observes
+At that checkpoint Windows command transport was blocked. The initial native probe observes
 started UTM status but OSStatus -2700 reports QGA absent/not running, even with
 exit zero. Under updated unrestricted permissions, supported Raise and Escape
 wake the actual Windows desktop without an account/setup prompt; File Explorer
@@ -73,8 +129,10 @@ without output. No Guest Tools installer, EULA, inventory, reboot, account/disk
 mutation or host installation occurred. Read windows-write-vm/
 {continuation-readiness-20261005,continuation-ready-unrestricted-20261005}/.
 
-The user has been asked to install the prepared official Guest Tools manually
-inside machlin-ntfs-windows. After that, Sol must verify actual command output,
+The user was asked to install the prepared official Guest Tools manually
+inside machlin-ntfs-windows. The installation and transport verification have
+since completed as recorded above. The required acquisition sequence was to
+verify actual command output,
 Windows build/ARM64 and the exact blank 8-GiB disk mapping using the prepared
 read-only inventory. Only then may main review the mapping and hand CLI execution
 to Luna. Every VM command uses absolute /Users/darekhta/Development/machlin/lab;
@@ -87,7 +145,8 @@ combine owned checkpoint state with qualified post-checkpoint ordered records
 and reconstruct native transaction/OAT/dirty state. Current continuation ownership,
 redo/undo, interrupted Windows/chkdsk roundtrips and device durability still precede
 the requested writable implementation. Do not request new implementation permission
-for this already authorized scope; the pending action is a concrete transport blocker.
+for this already authorized scope; transport is now available for the remaining
+native qualification.
 
 ## Preceding selected transaction-chain continuation
 

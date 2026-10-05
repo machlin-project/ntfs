@@ -13,4 +13,17 @@ enum ntfs_result ntfs_logfile_checkpoint_anchor(const struct ntfs_logfile_restar
     const struct ntfs_logfile_client_restart *, uint64_t checkpoint_lsn,
     enum ntfs_logfile_checkpoint_kind, struct ntfs_logfile_table_reference *);
 
+/* Allocation-only context for an independent recovery-input owner. A volume
+ * source returns governed volume callbacks and its lifetime owner, not the
+ * source's temporary backing stream. The caller must retain that volume before
+ * source close. This does not grant read or write access to the byte source. */
+enum ntfs_result ntfs_logfile_environment(const struct ntfs_logfile *, struct ntfs_environment *,
+    struct ntfs_logfile_limits *, struct ntfs_volume **);
+
+/* Tightened whole-walk credits, including the unfinished successor probe. */
+enum ntfs_result ntfs_logfile_visit_records_limited(struct ntfs_logfile *, uint64_t first_lsn,
+    uint32_t max_records, const struct ntfs_logfile_checkpoint_capture_limits *, void *workspace,
+    size_t capacity, ntfs_logfile_record_visitor, void *context,
+    struct ntfs_logfile_history_report *);
+
 #endif

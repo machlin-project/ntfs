@@ -9,6 +9,46 @@ ownership enforcement, Windows interoperability and commercial release remain op
 The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
+## Recovery-input ownership continuation
+
+`ntfs_recovery_open` prepares the exact internally captured checkpoint and retained
+client interval before publication, with previous/undo lifetime checks and bound
+physical checkpoint roots. Source close preserves owned bytes; a separate governed
+volume child keeps unmount BUSY. The focused capture/history/volume and lifetime
+checks pass, including aggregate memory rejection before reads. All forty original
+input profiles pass, with twenty-two published snapshots and eighteen explicit
+refusals. The full 163-suite fatal ASan/UBSan run, style and both freestanding
+2-KiB-frame compilation targets pass. Main checks every raw unique suite result
+and preserves all 3,291 prior authored fuzz names/bytes alongside 45 new inputs.
+The fresh campaign fixed-replays all 3,336 authored inputs and completes 43,952
+units in 61 seconds, peaking at 671 MiB under unchanged input/RSS/time caps with
+no sanitizer, crash, timeout or OOM finding. FSKit components pass 54 groups with
+eleven explicit runtime SKIPs and no failures. The clean unsigned universal Release
+passes; main independently verifies the four products, matching dSYM UUIDs, both
+minimum-OS slices and the embedded extension. This product is not installed.
+Main independently
+matches the frozen original Recovery journal's four packets to their separate byte
+witnesses. This native profile has no transaction lifetime and does not qualify
+replay or writable admission. RECOVERY-INPUTS.md records the full contract and
+remaining native execution work; current validation reports are retained under
+`artifacts/recovery-history/`.
+
+The Windows transport blocker is resolved: Guest Tools completed after the user's
+explicit licence acceptance, and actual command/file transfer and administrative
+identity are verified. Main reviewed the isolated blank 8-GiB NVMe disk before the
+guarded original workload initialized only Disk 1/T:. The guest acquisition report
+confirms read-only chkdsk success and successful volume lock, volume/physical flush
+and dismount held through complete capture. Exact transfer, sparse decode and GPT
+checks pass, but raw boot inspection identifies BitLocker ciphertext: Windows had
+automatically encrypted the new test volume. That image remains a refusal witness,
+not a positive NTFS input. Guarded decryption of only Disk 1/T: succeeds, with the
+reviewed partition mapping and selected system C: encryption fields unchanged.
+The capture harness now requires full decryption and a physical NTFS boot OEM under
+the held lock. A fresh plaintext acquisition, core comparison and interrupted Windows
+recovery remain separate stages. Evidence and the retained
+initial .NET stream-path failure are under `artifacts/windows-write-vm/`; no host
+driver installation or OS/System/Recovery disk mutation occurred.
+
 ## Compatible guest development installation
 
 The isolated macOS 26.5.2/arm64 guest has actual version, stock-kernel and RPC

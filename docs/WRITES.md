@@ -4,6 +4,13 @@ No writable API is implemented. The current read environment cannot write, and
 the FSKit adapter must reject all mutations with EROFS. Do not enable writes by
 adding a pwrite callback to individual operations.
 
+The [recovery-input owner](RECOVERY-INPUTS.md) now internally binds the owning
+checkpoint and complete retained oldest-to-endpoint packet interval, distinguishing
+transaction lifetimes and verifying checkpoint roots. It survives source close and
+retains volume memory/lifetime accounting. This prepares checked native inputs;
+OAT/dirty evolution, compensation, replay, native persistence and Windows recovery
+qualification still precede writable admission.
+
 Read-only mount admission also retains refusal for every nonzero volume-information
 flag. DIRTY now identifies the actual dirty bit; other unsupported flags return
 UNSUPPORTED and do not establish a Windows repair requirement. Unsupported versions

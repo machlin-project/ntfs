@@ -32,6 +32,7 @@ from checkpoint_snapshot_fixtures import author as generate_checkpoint_snapshots
 from checkpoint_capture_fixtures import author as generate_checkpoint_captures
 from logfile_transaction_fixtures import author as generate_transaction_chains
 from checkpoint_transaction_fixtures import author as generate_checkpoint_transactions
+from recovery_history_fixtures import author as generate_recovery_histories
 from record_protect_fixtures import author as generate_record_protection
 from logfile_encode_fixtures import author as generate_logfile_encoding, RECORD_KIND as LOGFILE_ENCODE_RECORD
 from logfile_page_encode_fixtures import author as generate_logfile_page_encoding
@@ -51,6 +52,7 @@ LOGFILE_HISTORY_KIND = 25
 LOGFILE_CAPTURE_KIND = 26
 LOGFILE_TRANSACTION_CHAIN_KIND = 27
 LOGFILE_CHECKPOINT_TRANSACTIONS_KIND = 28
+LOGFILE_RECOVERY_INPUTS_KIND = 29
 LOGFILE_TRANSACTION_HEADER = struct.Struct('<HHI')
 LOGFILE_INVENTORY_READ_CALL_BUDGET = 4096
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
@@ -488,6 +490,22 @@ def generate(output):
         for name, control in controls.items():
             envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CHECKPOINT_TRANSACTIONS_KIND, identity, control)
             filename = 'checkpoint-chain-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    recovery_histories = output / 'recovery-history'
+    for case in generate_recovery_histories(recovery_histories):
+        payload = (recovery_histories / case['path']).read_bytes()
+        assert len(payload) + LOGFILE_FUZZ_HEADER.size <= LOGFILE_FUZZ_INPUT_BYTES
+        controls = {'default': 0}
+        if case['path'] == 'checkpoint-active-then-forget-0-0-0.journal':
+            controls.update({'index-allocation': LOGFILE_ALLOCATION_FAULT,
+                'owner-allocation': LOGFILE_RECORD_ALLOCATION_FAULT,
+                'selected-first-read': LOGFILE_INDEX_SELECTED_READ_FAULT | 1,
+                'short-record-count': LOGFILE_HISTORY_SHORT_RECORDS,
+                'short-history-bytes': LOGFILE_HISTORY_SHORT_WORKSPACE})
+        identity = logfile_wire.CLIENT_SEQUENCE << LOGFILE_CAPTURE_IDENTITY_SHIFT
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_RECOVERY_INPUTS_KIND, identity, control)
+            filename = 'recovery-' + case['path'].replace('.', '-') + '-' + name + '.seed'
             (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):

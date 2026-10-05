@@ -1,5 +1,24 @@
 # Code provenance
 
+The immutable recovery-input composition, exact checkpoint/history binding,
+transaction lifetime map, root verification and counted volume allocation context
+are original repository code over the existing owned journal components. Original
+packet/lifetime/fault authors and whole-source fuzz properties use named wire fields.
+The Forget/Compensation marker form follows
+[Suhanov's original Windows rename observation](https://raw.githubusercontent.com/msuhanov/articles/master/misc/log_rename.txt);
+its marker is observed, not executed. No foreign analysis, recovery or filesystem
+implementation is imported. This work is not a source-isolated clean-room claim.
+
+The guarded original Windows workload and raw gzip capture are repository-owned
+PowerShell/C# test code. Genuine Windows creates the files, namespace changes and
+native journal. The acquisition uses Microsoft's documented
+[volume lock](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_lock_volume),
+[buffer flush](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers)
+and [locked dismount](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_dismount_volume)
+interfaces, preserving the locking handle through every captured byte. Generated
+images and reports stay outside source history. Native acquisition does not import
+a Windows driver or confer recovery/write acceptance on the product.
+
 Checkpoint transaction composition, full-seed admission, physical-key/root
 binding, aggregate budgets and its independent packet/seed/fault author are
 original repository code over the existing owned capture and chain components.

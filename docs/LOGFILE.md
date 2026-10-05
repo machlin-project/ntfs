@@ -38,6 +38,12 @@ against physical allocated OAT keys. Volume references and qualified current
 history remain separate. These decoders do not advance native
 replay or writable admission.
 
+The separate [recovery-input owner](RECOVERY-INPUTS.md) now composes the stored
+selected checkpoint and retained oldest-to-endpoint packet interval, distinguishes
+serialized transaction lifetimes and verifies checkpoint roots. It adds owned
+preparation for recovery execution without granting read-write access or replay
+authority.
+
 ## Bounded selected transaction chain
 
 `ntfs_logfile_visit_transaction` walks an explicit nonzero transaction/root LSN,

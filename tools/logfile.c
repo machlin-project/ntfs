@@ -2,6 +2,7 @@
 #include <ntfs/logfile.h>
 #include <ntfs/logfile_tables.h>
 #include <ntfs/checkpoint.h>
+#include <ntfs/recovery.h>
 #include "image.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -1005,6 +1006,100 @@ enum {
 };
 
 static int
+recovery_inputs(const char *path, uint16_t index, uint16_t sequence)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_recovery *owner = NULL;
+	struct ntfs_logfile_limits source_limits;
+	struct ntfs_recovery_limits limits;
+	struct ntfs_recovery_report report = {0};
+	struct ntfs_logfile_page_index_report preparation = {0};
+	struct ntfs_recovery_record record;
+	struct ntfs_recovery_transaction transaction;
+	const uint8_t *bytes;
+	const void *packet;
+	uint32_t ordinal, byte;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	ntfs_logfile_default_limits(&source_limits);
+	ntfs_recovery_default_limits(&limits);
+	source_limits.max_read_calls = limits.max_read_calls;
+	source_limits.max_read_bytes = limits.max_read_bytes;
+	result = ntfs_logfile_open(&image.environment, &source_limits, NULL, &source);
+	if (result == NTFS_OK) {
+		result =
+		    ntfs_logfile_prepare_page_index(source, LOGFILE_INDEX_MAX_BYTES, &preparation);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_recovery_open(source, index, sequence, &limits, &report, &owner);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"recovery-inputs\",\"code\":%d,"
+	       "\"result\":\"%s\",\"recovery_qualified\":false,\"writes_enabled\":false,"
+	       "\"index\":%u,\"sequence\":%u,\"records\":[",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), index, sequence);
+	for (ordinal = 0; owner != NULL && ordinal < report.records; ordinal++) {
+		if (ntfs_recovery_get_record(owner, ordinal, &record, &packet) != NTFS_OK) {
+			abort();
+		}
+		printf("%s{\"record\":{", ordinal == 0 ? "" : ",");
+		record_fields(&record.record, false);
+		printf("},\"epoch\":%" PRIu32 ",\"bytes_hex\":\"", record.transaction_epoch);
+		bytes = packet;
+		for (byte = 0; byte < record.packet.length; byte++) {
+			printf("%02x", bytes[byte]);
+		}
+		printf("\"}");
+	}
+	printf("],\"transactions\":[");
+	for (ordinal = 0; owner != NULL && ordinal < report.transaction_epochs; ordinal++) {
+		if (ntfs_recovery_get_transaction(owner, ordinal, &transaction) != NTFS_OK) {
+			abort();
+		}
+		printf("%s{\"key\":%" PRIu32 ",\"records\":%" PRIu32 ",\"first_lsn\":%" PRIu64
+		       ",\"last_lsn\":%" PRIu64 ",\"predecessor_lsn\":%" PRIu64
+		       ",\"undo_next_lsn\":%" PRIu64 ",\"control_lsn\":%" PRIu64
+		       ",\"control_operation\":%u,\"state\":%d,\"complete_chain\":%s}",
+		    ordinal == 0 ? "" : ",", transaction.key, transaction.records,
+		    transaction.first_lsn, transaction.last_lsn, transaction.predecessor_lsn,
+		    transaction.undo_next_lsn, transaction.control_lsn,
+		    transaction.control_operation, (int)transaction.state,
+		    transaction.complete_chain ? "true" : "false");
+	}
+	printf("],\"report\":{\"published\":%s,\"read_calls\":%" PRIu32 ",\"read_bytes\":%" PRIu64
+	       ",\"reserved_bytes\":%" PRIu64 ",\"retained_bytes\":%" PRIu64 ",\"records\":%" PRIu32
+	       ",\"history_bytes\":%" PRIu32 ",\"transaction_epochs\":%" PRIu32
+	       ",\"verified_seeds\":%" PRIu32 ",\"partial_prefixes\":%" PRIu32
+	       ",\"active_transactions\":%" PRIu32 ",\"prepared_transactions\":%" PRIu32
+	       ",\"committed_transactions\":%" PRIu32 ",\"forgotten_transactions\":%" PRIu32
+	       "},\"checkpoint\":{\"checkpoint_lsn\":%" PRIu64 ",\"read_calls\":%" PRIu32
+	       ",\"read_bytes\":%" PRIu64 ",\"complete\":%s},"
+	       "\"history\":{\"first_lsn\":%" PRIu64 ",\"completed_end_lsn\":%" PRIu64
+	       ",\"next_lsn\":%" PRIu64 ",\"tail_lsn\":%" PRIu64 ",\"read_calls\":%" PRIu32
+	       ",\"read_bytes\":%" PRIu64 ",\"complete\":%s},\"preparation\":",
+	    report.published ? "true" : "false", report.read_calls, report.read_bytes,
+	    report.reserved_bytes, report.retained_bytes, report.records, report.history_bytes,
+	    report.transaction_epochs, report.verified_seeds, report.partial_prefixes,
+	    report.active_transactions, report.prepared_transactions, report.committed_transactions,
+	    report.forgotten_transactions, report.checkpoint.checkpoint_lsn,
+	    report.checkpoint.read_calls, report.checkpoint.read_bytes,
+	    report.checkpoint.complete ? "true" : "false", report.history.first_lsn,
+	    report.history.completed_end_lsn, report.history.next_lsn, report.history.tail_lsn,
+	    report.history.read_calls, report.history.read_bytes,
+	    report.history.complete ? "true" : "false");
+	index_report_fields(&preparation);
+	printf("}\n");
+	ntfs_recovery_close(owner);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
+}
+
+static int
 checkpoint_snapshot(char **argv)
 {
 	struct ntfs_image image;
@@ -1127,6 +1222,13 @@ main(int argc, char **argv)
 			goto usage;
 		}
 		return checkpoint_transactions(argv[2], (uint16_t)argument, (uint16_t)sequence);
+	}
+	if (strcmp(argv[1], "recovery-inputs") == 0) {
+		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
+		    !number(argv[4], UINT16_MAX, &sequence)) {
+			goto usage;
+		}
+		return recovery_inputs(argv[2], (uint16_t)argument, (uint16_t)sequence);
 	}
 	if (strcmp(argv[1], "checkpoint-snapshot") == 0) {
 		if (argc != LOGFILE_SNAPSHOT_ARGUMENTS) {
@@ -1289,6 +1391,7 @@ usage:
 	    "       ntfs-logfile checkpoint-table JOURNAL CHECKPOINT_RECORD KIND TABLE_RECORD|-\n"
 	    "       ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n"
 	    "       ntfs-logfile checkpoint-transactions LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n"
+	    "       ntfs-logfile recovery-inputs LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n"
 	    "       ntfs-logfile checkpoint-snapshot JOURNAL CHECKPOINT OPEN|- NAMES|- DIRTY|- "
 	    "TX|- WORKSPACE_BYTES|-\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"

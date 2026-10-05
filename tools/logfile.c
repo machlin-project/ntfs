@@ -397,10 +397,14 @@ journal_index(const char *path)
 			page = &indexed.selected.page;
 			printf("%s{\"target_offset\":%" PRIu64 ",\"epoch_lsn\":%" PRIu64
 			       ",\"code\":%d,\"prefix_conflict\":%s,\"selected_offset\":%" PRIu64
-			       ",\"storage\":%d,\"page\":",
+			       ",\"storage\":%d,",
 			    ordinal == 0 ? "" : ",", indexed.target_offset, indexed.epoch_lsn,
 			    (int)indexed.result, indexed.prefix_conflict ? "true" : "false",
 			    indexed.selected.offset, (int)indexed.selected.storage);
+			if (indexed.retained_fast_copy) {
+				printf("\"retained_fast_copy\":true,");
+			}
+			printf("\"page\":");
 			if (indexed.selected.offset == 0) {
 				printf("null}");
 			} else {

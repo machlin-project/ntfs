@@ -18,6 +18,14 @@ Native Windows Recovery snapshot packets now confirm that observation profile
 and selected-client table membership. No generated packet or page has gained
 Windows-consumption or durable-publication evidence from those reads.
 
+The separate `ntfs_logfile_fast_page_encode` now serializes canonical 4-KiB
+LFS 2.0 pages, preserving the opaque DWORD target and complete borrowed data.
+Both private serializers admit the known RECORD_END/CLIENT_RESTART flags.
+112 independent complete-page goldens, extended-descriptor overlap checks and
+appended selector 30 pass. The original 44 legacy inputs/goldens remain unchanged.
+Placement, native transaction planning and durable publication remain outside
+these helpers; no generated page is written to a device.
+
 ## Logical journal output
 
 `ntfs/logfile_encode.h` owns allocation-free logical LFS record and NTFS update

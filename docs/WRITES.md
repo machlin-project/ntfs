@@ -32,8 +32,10 @@ borrowed content while clearing only reserved storage/padding. These helpers do 
 resolve native addresses, select live history, plan pages/flags or commit an NTFS
 transaction. Their exact-byte/native-input checks cannot enable a writable owner.
 The page serializer now supplies canonical private headers and protected sector tails
-using caller workspace. It preserves opaque LSN/copy fields and the complete borrowed
-body, rejecting modern layouts and unknown flags. It does not choose page placement,
+using caller workspace. The separate LFS 2.0 serializer requires the supported
+4-KiB prefix and preserves its opaque DWORD target. Both serializers preserve
+opaque LSN/copy fields and the complete borrowed body, rejecting other layouts
+and unknown flags. They do not choose page placement,
 live history, transfers, flush ordering or a durable native journal publication.
 
 Completed LFS 1.1 observation also admits final circular bytes only inside the
@@ -63,6 +65,18 @@ partial/refusal evidence. Synthetic window, footer, wrap and failure checks do n
 choose the owning client's analysis lower bound, establish native continuation
 freshness, reconstruct live transaction state or qualify replay/durability. These
 remaining contracts still precede a writable owner and every mutation below.
+
+Clean Windows dismounts supply original LFS 1.1 pages with the known client-restart
+flag, including a restart prefix retained in the former LFS 2.0 fast area. The
+index qualifies only protected, completed, single-page restart duplicates whose
+DWORD target and start/end LSN geometry agree. A separate exact comparison against
+the resolved home prefix precedes duplicate exclusion from endpoint selection.
+Physical inventory remains visible; missing homes, conflicting bytes, other targets
+and transfers do not receive this exception. Candidate comparison pairs reserve
+aggregate read credits after the complete inventory and before comparison I/O.
+Both unchanged Windows captures now publish their exact two-packet clean interval
+and owning checkpoint. The bootstrap Noop remains an observed active transaction
+epoch; this evidence does not authorize replay or writes.
 
 Complete physical page inventory is now implemented under explicit whole-scan
 credits, without allocation or source mutation. All copy slots and circular pages

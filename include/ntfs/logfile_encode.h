@@ -31,6 +31,13 @@ struct ntfs_logfile_page_input {
 	struct ntfs_logfile_buffer data;
 };
 
+struct ntfs_logfile_fast_page_input {
+	struct ntfs_logfile_page_input common;
+	/* Opaque little-endian DWORD value after the canonical protection array.
+	 * The journal planner, not this serializer, validates its physical target. */
+	uint32_t file_offset;
+};
+
 /* Encode one private logical LFS packet with the known common header. data.offset
  * must name that header and data.length must equal payload_bytes. Extended headers
  * and unknown types/flags are UNSUPPORTED; invalid descriptions are INVALID.
@@ -57,7 +64,8 @@ enum ntfs_result ntfs_logfile_update_encode(
     const struct ntfs_logfile_update_input *, void *output, size_t capacity);
 
 /* Construct one private common-header LFS 1.1 RCRD page and generate USA protection.
- * Modern/unknown versions and unknown page flags are UNSUPPORTED. Page size is a
+ * Modern/unknown versions and flags outside RECORD_END/CLIENT_RESTART are
+ * UNSUPPORTED. Page size is a
  * bounded power of two; data_offset must leave the complete canonical USA and room
  * for a common record header. data.bytes must exactly fill the remaining region.
  * Transfer position/count and nonzero next-record boundaries have scalar framing
@@ -72,6 +80,19 @@ enum ntfs_result ntfs_logfile_update_encode(
  * allocation, callback or device I/O occurs. This does not plan a native WAL page. */
 enum ntfs_result ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *, void *workspace,
     size_t workspace_bytes, void *output, size_t capacity);
+
+/* Construct a private LFS 2.0 page in the supported 4096-byte fast-copy layout.
+ * The common input must select version 2.0, data_offset must be at least 64,
+ * and only RECORD_END/CLIENT_RESTART flags are supported. The canonical USA
+ * begins at the common-header end; its padding and the DWORD file_offset occupy
+ * the remainder of the fixed 64-byte prefix. A zero target is preserved, as are
+ * all other target values: circular/fast placement belongs to the journal owner.
+ * Other sizes/layouts are UNSUPPORTED. All scalar framing, complete borrowed
+ * body, disjoint buffers, unchanged errors and no-I/O contracts above apply.
+ * The entire fast descriptor, including file_offset, must be disjoint from the
+ * used workspace/output. Legacy encoding retains its separate version contract. */
+enum ntfs_result ntfs_logfile_fast_page_encode(const struct ntfs_logfile_fast_page_input *,
+    void *workspace, size_t workspace_bytes, void *output, size_t capacity);
 
 /* All operations perform complete admission before publication. Used output
  * must be disjoint from the descriptor and every nonempty borrowed input; overlap

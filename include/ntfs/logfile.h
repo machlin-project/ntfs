@@ -164,6 +164,9 @@ struct ntfs_logfile_indexed_page {
 	uint64_t target_offset, epoch_lsn;
 	enum ntfs_result result;
 	bool prefix_conflict;
+	/* Exact completed restart prefix retained in a former LFS 2.0 fast slot.
+	 * Physical inventory remains visible; this duplicate is not a history end. */
+	bool retained_fast_copy;
 };
 
 struct ntfs_logfile_page_index_report {

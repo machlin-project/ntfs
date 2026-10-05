@@ -17,6 +17,13 @@ separates reused transaction lifetimes and binds checkpoint roots. Owned packets
 survive source close while keeping volume memory and lifetime accounting. This
 prepares native recovery execution; it adds no write capability.
 
+Two original, locked Windows test-disk captures now supply complete native clean
+checkpoint/history inputs. Legacy client-restart page flags and an exactly compared
+restart copy retained in a former modern fast slot are qualified without clearing
+volume flags or modifying captured bytes. The newly captured unencrypted NTFS volume
+also passes full allocation/metadata validation and exact Windows-authored file/ADS
+comparison. There is still no writable product admission or native replay acceptance.
+
 Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
@@ -33,8 +40,10 @@ with wire-width admission, checked overlap and unchanged errors. Independent gol
 cover 135 authored cases and 75 retained original packet inputs; physical journal
 placement and native transaction semantics remain separate.
 Private common-header LFS 1.1 page encoding now constructs complete RCRD pages and
-USA protection in disjoint caller buffers. Forty-four independent whole-page goldens
-cover four sizes, sequence wrap and transfer fields. LSN/copy fields remain opaque;
+USA protection in disjoint caller buffers. A separate 4-KiB LFS 2.0 serializer
+preserves its opaque DWORD target and complete data region. 112 independent
+whole-page goldens cover sizes, sequence wrap, transfer fields and restart flags.
+LSN/copy fields remain opaque;
 this is not native WAL planning or durable publication.
 Independent byte/topology vectors and journal fuzzing pass; these primitives add
 no device writes. [Their contracts](docs/WRITE-FOUNDATIONS.md) separate framing

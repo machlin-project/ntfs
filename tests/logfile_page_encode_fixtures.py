@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independently author canonical private LFS 1.1 protected record pages."""
+"""Independently author canonical legacy and modern protected record pages."""
 from pathlib import Path
 import argparse
 import hashlib
@@ -14,15 +14,23 @@ INPUT_PADDING = 0x6d
 PATTERN_MULTIPLIER = 13
 PATTERN_ADDEND = 7
 TRANSFER_PAGES = 4
+CLIENT_RESTART_PAGE = 0x00000002
+FAST_USA_WORDS = w.PAGE_BYTES // w.USA_STRIDE + 1
+FAST_HEADER = w.Layout(w.PAGE.fields + (
+    ('usa_capacity', f'{FAST_USA_WORDS * w.WORD_BYTES}s'),
+    ('usa_padding', 'H'), ('file_offset', 'I')))
+DWORD_MAX = (1 << (struct.calcsize('<I') * w.BITS_PER_BYTE)) - 1
 
 
-def canonical(fields, data_offset, body, previous_sequence):
+def canonical(fields, data_offset, body, previous_sequence, file_offset=None):
     # Append the named header, empty USA/padding and complete restored data.
     # Save tails from this constructed page, not from the input's old USA words.
     fields = dict(fields, reserved=bytes(struct.calcsize('<' + dict(w.PAGE.fields)['reserved'])))
     output = bytearray(w.PAGE.pack(fields))
     output.extend(bytes(data_offset - len(output)))
     output.extend(body)
+    if file_offset is not None:
+        FAST_HEADER.put(output, 'file_offset', file_offset)
     sequence = (previous_sequence + 1) & WORD_MAX
     if sequence in (0, WORD_MAX):
         sequence = 1
@@ -40,12 +48,15 @@ def author(output):
     cases = []
 
     def add(name, size, previous_sequence, *, count=1, position=1,
-            flags=w.RECORD_END, next_kind='data'):
+            flags=w.RECORD_END, next_kind='data', modern=False,
+            target=0, extra_header_bytes=0):
         usa_count = size // w.USA_STRIDE + 1
-        data_offset = w.aligned(w.PAGE.size + usa_count * w.WORD_BYTES)
+        prefix = FAST_HEADER.size if modern else w.PAGE.size + usa_count * w.WORD_BYTES
+        data_offset = w.aligned(prefix + extra_header_bytes)
         next_offset = {'zero': 0, 'data': data_offset, 'end': size}[next_kind]
         assert next_offset <= WORD_MAX
-        record_lsn = w.lsn_at((w.RESTART_PAGES + w.LEGACY_TAIL_PAGES) * size + data_offset,
+        copy_pages = w.FAST_PAGES if modern else w.LEGACY_TAIL_PAGES
+        record_lsn = w.lsn_at((w.RESTART_PAGES + copy_pages) * size + data_offset,
                               file_bytes=w.LARGE_FILE_BYTES)
         fields = dict(magic=b'RCRD', usa_offset=w.PAGE.size, usa_count=usa_count,
                       copy_value=record_lsn, last_end_lsn=record_lsn, flags=flags,
@@ -58,16 +69,22 @@ def author(output):
         original.extend(bytes([INPUT_PADDING]) * (data_offset - len(original)))
         struct.pack_into('<H', original, w.PAGE.size, previous_sequence)
         original.extend(body)
-        expected = canonical(fields, data_offset, body, previous_sequence)
+        if modern:
+            FAST_HEADER.put(original, 'file_offset', target)
+        expected = canonical(fields, data_offset, body, previous_sequence,
+                             target if modern else None)
         restart_offset = w.aligned(w.RESTART_HEADER.size + usa_count * w.WORD_BYTES)
         restart, _ = w.restart(system=size, log=size, file_bytes=w.LARGE_FILE_BYTES,
-                               area_offset=restart_offset, page_data_offset=data_offset)
+                               area_offset=restart_offset, page_data_offset=data_offset,
+                               major=w.FAST_MAJOR if modern else w.LEGACY_MAJOR,
+                               minor=w.FAST_MINOR if modern else w.LEGACY_MINOR)
         restart, _ = w.protect(restart, w.RESTART_HEADER)
         packets = {'input': bytes(original), 'expected': expected, 'restart': bytes(restart)}
         for suffix, packet in packets.items():
             (output / (name + '.' + suffix)).write_bytes(packet)
         cases.append(dict(name=name, bytes=size, data_offset=data_offset,
                           prior_update_sequence=previous_sequence, fields=fields | {'reserved': None},
+                          modern=modern, file_offset=target if modern else None,
                           hashes={suffix: hashlib.sha256(packet).hexdigest()
                                   for suffix, packet in packets.items()}))
 
@@ -81,6 +98,25 @@ def author(output):
                 add(f'transfer-{count}-{position}-flags-{flags}-next-{next_kind}',
                     w.PAGE_BYTES, w.USA_SEQUENCE, count=count, position=position,
                     flags=flags, next_kind=next_kind)
+    for count, position in ((0, 0), (1, 1), (TRANSFER_PAGES, 1),
+                            (TRANSFER_PAGES, TRANSFER_PAGES)):
+        for flags in (CLIENT_RESTART_PAGE, w.RECORD_END | CLIENT_RESTART_PAGE):
+            for next_kind in ('zero', 'data', 'end'):
+                add(f'legacy-restart-transfer-{count}-{position}-flags-{flags}-next-{next_kind}',
+                    w.PAGE_BYTES, w.USA_SEQUENCE, count=count, position=position,
+                    flags=flags, next_kind=next_kind)
+    circular = (w.RESTART_PAGES + w.FAST_PAGES) * w.PAGE_BYTES
+    for previous_sequence in (0, 1, WORD_MAX - 2, WORD_MAX - 1, WORD_MAX):
+        for target in (0, circular, circular + w.PAGE_BYTES, DWORD_MAX):
+            add(f'fast-sequence-{previous_sequence}-target-{target}',
+                w.PAGE_BYTES, previous_sequence, modern=True, target=target)
+    for flags in (0, w.RECORD_END, CLIENT_RESTART_PAGE, w.RECORD_END | CLIENT_RESTART_PAGE):
+        for count, position in ((0, 0), (TRANSFER_PAGES, 1), (TRANSFER_PAGES, TRANSFER_PAGES)):
+            for extra in (0, 2 * w.ALIGNMENT):
+                add(f'fast-flags-{flags}-transfer-{count}-{position}-extra-{extra}',
+                    w.PAGE_BYTES, w.USA_SEQUENCE, modern=True, target=circular,
+                    flags=flags, count=count, position=position, next_kind='end',
+                    extra_header_bytes=extra)
     # JSON metadata has no byte blobs; packet files retain all independent goldens.
     for case in cases:
         case['fields'].pop('magic')

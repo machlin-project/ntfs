@@ -77,6 +77,19 @@ unchanged(const uint8_t *bytes, size_t size)
 	}
 }
 
+static enum ntfs_result
+encode_page(const struct ntfs_logfile_page_input *input, uint32_t file_offset, void *work,
+    size_t work_bytes, void *output, size_t capacity)
+{
+	struct ntfs_logfile_fast_page_input fast;
+
+	if (input->major == NTFS_LFS_MAJOR_FAST) {
+		fast = (struct ntfs_logfile_fast_page_input){*input, file_offset};
+		return ntfs_logfile_fast_page_encode(&fast, work, work_bytes, output, capacity);
+	}
+	return ntfs_logfile_page_encode(input, work, work_bytes, output, capacity);
+}
+
 static void
 check_case(const char *directory, const char *name, uint16_t data_offset)
 {
@@ -84,8 +97,10 @@ check_case(const char *directory, const char *name, uint16_t data_offset)
 	struct ntfs_logfile_restart restart;
 	struct ntfs_logfile_page view;
 	const struct ntfs_disk_log_page *header;
+	const struct ntfs_disk_log_fast_page *fast_header;
 	uint8_t *original, *golden, *config, *source, *work, *destination, *scratch, *output;
 	size_t bytes, expected_bytes, config_bytes, allocation, shift, variant, capacity;
+	uint32_t file_offset;
 
 	original = read_bytes(directory, name, ".input", &bytes);
 	golden = read_bytes(directory, name, ".expected", &expected_bytes);
@@ -103,6 +118,9 @@ check_case(const char *directory, const char *name, uint16_t data_offset)
 		memset(source, TEST_GUARD, allocation);
 		memcpy(source + TEST_GUARD_BYTES + shift, original, bytes);
 		header = (const void *)(source + TEST_GUARD_BYTES + shift);
+		fast_header = (const void *)header;
+		file_offset =
+		    restart.major == NTFS_LFS_MAJOR_FAST ? ntfs_u32(fast_header->file_offset) : 0;
 		input.bytes = (uint32_t)bytes;
 		input.major = restart.major;
 		input.minor = restart.minor;
@@ -123,8 +141,8 @@ check_case(const char *directory, const char *name, uint16_t data_offset)
 			capacity = bytes + variant * TEST_EXTRA_BYTES;
 			memset(work, TEST_GUARD, allocation);
 			memset(destination, TEST_GUARD, allocation);
-			assert(ntfs_logfile_page_encode(
-				   &input, scratch, capacity, output, capacity) == NTFS_OK);
+			assert(encode_page(&input, file_offset, scratch, capacity, output,
+				   capacity) == NTFS_OK);
 			assert(memcmp(output, golden, bytes) == 0);
 			assert(memcmp(&input, &copy, sizeof(copy)) == 0);
 			assert(memcmp(header, original, bytes) == 0);
@@ -142,15 +160,15 @@ check_case(const char *directory, const char *name, uint16_t data_offset)
 			    view.next_record_offset == input.page.next_record_offset);
 			assert(
 			    memcmp(scratch + data_offset, input.data.data, input.data.bytes) == 0);
-			assert(ntfs_logfile_page_encode(
-				   &input, scratch, capacity, output, capacity) == NTFS_OK);
+			assert(encode_page(&input, file_offset, scratch, capacity, output,
+				   capacity) == NTFS_OK);
 			assert(memcmp(output, golden, bytes) == 0);
 		}
 		memset(work, TEST_GUARD, allocation);
 		memset(destination, TEST_GUARD, allocation);
-		assert(ntfs_logfile_page_encode(&input, scratch, bytes - 1, output, bytes) ==
+		assert(encode_page(&input, file_offset, scratch, bytes - 1, output, bytes) ==
 		    NTFS_RANGE);
-		assert(ntfs_logfile_page_encode(&input, scratch, bytes, output, bytes - 1) ==
+		assert(encode_page(&input, file_offset, scratch, bytes, output, bytes - 1) ==
 		    NTFS_RANGE);
 		unchanged(work, allocation);
 		unchanged(destination, allocation);
@@ -204,7 +222,7 @@ check_errors(void)
 			expected = NTFS_UNSUPPORTED;
 			break;
 		case PAGE_UNKNOWN_FLAGS:
-			input.page.flags = NTFS_LOGFILE_PAGE_RECORD_END << 1;
+			input.page.flags = NTFS_LOGFILE_PAGE_CLIENT_RESTART << 1;
 			expected = NTFS_UNSUPPORTED;
 			break;
 		case PAGE_ZERO_SIZE:
@@ -333,6 +351,163 @@ check_errors(void)
 	free(body);
 }
 
+static void
+check_fast_errors(void)
+{
+	struct ntfs_logfile_fast_page_input base = {0}, input, copy;
+	struct ntfs_logfile_fast_page_input *alias;
+	const struct ntfs_disk_log_fast_page *header;
+	uint8_t *body, *work, *output;
+	size_t index, allocation = 2 * TEST_PAGE_BYTES + TEST_EXTRA_BYTES;
+	enum ntfs_result expected;
+
+	body = malloc(TEST_PAGE_BYTES);
+	work = malloc(allocation);
+	output = malloc(allocation);
+	assert(body != NULL && work != NULL && output != NULL);
+	memset(body, TEST_GUARD, TEST_PAGE_BYTES);
+	base.common.bytes = TEST_PAGE_BYTES;
+	base.common.major = NTFS_LFS_MAJOR_FAST;
+	base.common.minor = NTFS_LFS_MINOR_FAST;
+	base.common.data_offset = TEST_DATA_OFFSET;
+	base.common.page.page_count = base.common.page.page_position = 1;
+	base.common.data = (struct ntfs_logfile_buffer){body, TEST_PAGE_BYTES - TEST_DATA_OFFSET};
+	base.file_offset = UINT32_MAX;
+	for (index = 0; index < PAGE_ERROR_CASES; index++) {
+		input = base;
+		expected = NTFS_INVALID;
+		switch (index) {
+		case PAGE_MODERN_VERSION:
+			input.common.major = NTFS_LFS_MAJOR_LEGACY;
+			input.common.minor = NTFS_LFS_MINOR_LEGACY;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_UNKNOWN_VERSION:
+			input.common.major = 0;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_UNKNOWN_MINOR:
+			input.common.minor++;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_UNKNOWN_FLAGS:
+			input.common.page.flags = NTFS_LOGFILE_PAGE_CLIENT_RESTART << 1;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_ZERO_SIZE:
+			input.common.bytes = 0;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_SMALL_SIZE:
+			input.common.bytes = TEST_PAGE_BYTES / 2;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_NON_POWER_SIZE:
+			input.common.bytes++;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_POLICY_SIZE:
+			input.common.bytes = NTFS_LOGFILE_MAX_PAGE_BYTES + NTFS_MST_STRIDE;
+			expected = NTFS_UNSUPPORTED;
+			break;
+		case PAGE_USA_OVERLAP:
+			input.common.data_offset =
+			    sizeof(struct ntfs_disk_log_fast_page) - NTFS_WIRE_ALIGNMENT;
+			break;
+		case PAGE_UNALIGNED_DATA:
+			input.common.data_offset++;
+			break;
+		case PAGE_NO_HEADER_ROOM:
+			input.common.data_offset = TEST_PAGE_BYTES - NTFS_WIRE_ALIGNMENT;
+			break;
+		case PAGE_SHORT_DATA:
+			input.common.data.bytes--;
+			break;
+		case PAGE_LONG_DATA:
+			input.common.data.bytes++;
+			break;
+		case PAGE_OVERFLOW_DATA:
+			input.common.data.bytes = SIZE_MAX;
+			break;
+		case PAGE_NULL_DATA:
+			input.common.data.data = NULL;
+			break;
+		case PAGE_ZERO_POSITION:
+			input.common.page.page_position = 0;
+			break;
+		case PAGE_ZERO_COUNT:
+			input.common.page.page_count = 0;
+			break;
+		case PAGE_EXCESS_POSITION:
+			input.common.page.page_position++;
+			break;
+		case PAGE_NEXT_HEADER:
+			input.common.page.next_record_offset =
+			    TEST_DATA_OFFSET - NTFS_WIRE_ALIGNMENT;
+			break;
+		case PAGE_NEXT_EXCESS:
+			input.common.page.next_record_offset =
+			    TEST_PAGE_BYTES + NTFS_WIRE_ALIGNMENT;
+			break;
+		case PAGE_NEXT_UNALIGNED:
+			input.common.page.next_record_offset = TEST_DATA_OFFSET + 1;
+			break;
+		}
+		copy = input;
+		memset(work, TEST_GUARD, allocation);
+		memset(output, TEST_GUARD, allocation);
+		assert(ntfs_logfile_fast_page_encode(
+			   &input, work, allocation, output, allocation) == expected);
+		assert(memcmp(&input, &copy, sizeof(input)) == 0);
+		unchanged(work, allocation);
+		unchanged(output, allocation);
+	}
+	assert(ntfs_logfile_fast_page_encode(NULL, work, allocation, output, allocation) ==
+	    NTFS_INVALID);
+	assert(ntfs_logfile_fast_page_encode(&base, NULL, allocation, output, allocation) ==
+	    NTFS_INVALID);
+	assert(ntfs_logfile_fast_page_encode(&base, work, allocation, NULL, allocation) ==
+	    NTFS_INVALID);
+	assert(ntfs_logfile_fast_page_encode((const void *)(UINTPTR_MAX - sizeof(base) + 1), work,
+		   allocation, output, allocation) == NTFS_INVALID);
+	input = base;
+	input.common.data.data = (const void *)(UINTPTR_MAX - input.common.data.bytes + 1);
+	assert(ntfs_logfile_fast_page_encode(&input, work, allocation, output, allocation) ==
+	    NTFS_INVALID);
+	assert(ntfs_logfile_fast_page_encode(&base, work, allocation, work + 1, allocation - 1) ==
+	    NTFS_INVALID);
+	/* The extended descriptor tail must also remain outside both used buffers. */
+	alias = (void *)output;
+	*alias = base;
+	assert(ntfs_logfile_fast_page_encode(alias, work, allocation, output + sizeof(base.common),
+		   allocation - sizeof(base.common)) == NTFS_INVALID);
+	assert(memcmp(alias, &base, sizeof(base)) == 0);
+	alias = (void *)work;
+	*alias = base;
+	assert(ntfs_logfile_fast_page_encode(alias, work + sizeof(base.common),
+		   allocation - sizeof(base.common), output, allocation) == NTFS_INVALID);
+	assert(memcmp(alias, &base, sizeof(base)) == 0);
+	input = base;
+	input.common.data.data = output;
+	assert(ntfs_logfile_fast_page_encode(&input, work, allocation, output, allocation) ==
+	    NTFS_INVALID);
+	input.common.data.data = work;
+	assert(ntfs_logfile_fast_page_encode(&input, work, allocation, output, allocation) ==
+	    NTFS_INVALID);
+	input = base;
+	input.common.page.copy_value = input.common.page.last_end_lsn = UINT64_MAX;
+	assert(
+	    ntfs_logfile_fast_page_encode(&input, work, allocation, output, allocation) == NTFS_OK);
+	header = (const void *)output;
+	assert(ntfs_u32(header->file_offset) == UINT32_MAX);
+	assert(ntfs_u64(header->common.copy_value) == UINT64_MAX &&
+	    ntfs_u64(header->common.last_end_lsn) == UINT64_MAX);
+	unchanged(body, TEST_PAGE_BYTES);
+	free(output);
+	free(work);
+	free(body);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -356,6 +531,7 @@ main(int argc, char **argv)
 	}
 	assert(feof(cases) && count != 0 && fclose(cases) == 0);
 	check_errors();
+	check_fast_errors();
 	printf("PASS: %zu exact private RCRD pages, guarded byte alignment/capacities, "
 	       "USA advancement/tails, repeatability, alias/width/version refusals and unchanged "
 	       "errors\n",

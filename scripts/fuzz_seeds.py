@@ -36,6 +36,7 @@ from recovery_history_fixtures import author as generate_recovery_histories
 from record_protect_fixtures import author as generate_record_protection
 from logfile_encode_fixtures import author as generate_logfile_encoding, RECORD_KIND as LOGFILE_ENCODE_RECORD
 from logfile_page_encode_fixtures import author as generate_logfile_page_encoding
+from logfile_retained_fixtures import author as generate_logfile_retained
 
 LOGFILE_FUZZ_HEADER = struct.Struct('<BQI')
 LOGFILE_FUZZ_KINDS = {'restart': 0, 'page': 1, 'record': 2, 'update': 3, 'client': 4}
@@ -62,6 +63,7 @@ LOGFILE_CHECKPOINT_SNAPSHOT_KIND = 18
 LOGFILE_RECORD_ENCODE_KIND = 19
 LOGFILE_UPDATE_ENCODE_KIND = 20
 LOGFILE_PAGE_ENCODE_KIND = 21
+LOGFILE_FAST_PAGE_ENCODE_KIND = 30
 LOGFILE_FAST_RECORD_KIND = 22
 LOGFILE_SNAPSHOT_KINDS = 4
 LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1))
@@ -586,13 +588,23 @@ def generate(output):
     page_packets = output / 'logfile-page-encoding'
     for case in generate_logfile_page_encoding(page_packets):
         payload = (page_packets / (case['name'] + '.input')).read_bytes()
-        argument = (case['data_offset'] | (logfile_wire.LEGACY_MAJOR << LOGFILE_PAGE_MAJOR_SHIFT)
-                    | (logfile_wire.LEGACY_MINOR << LOGFILE_PAGE_MINOR_SHIFT))
+        modern = case['modern']
+        major = logfile_wire.FAST_MAJOR if modern else logfile_wire.LEGACY_MAJOR
+        minor = logfile_wire.FAST_MINOR if modern else logfile_wire.LEGACY_MINOR
+        kind = LOGFILE_FAST_PAGE_ENCODE_KIND if modern else LOGFILE_PAGE_ENCODE_KIND
+        argument = (case['data_offset'] | (major << LOGFILE_PAGE_MAJOR_SHIFT)
+                    | (minor << LOGFILE_PAGE_MINOR_SHIFT))
         for suffix, control in (('', 0), ('-short-capacity', 1 << LOGFILE_ENCODE_SHORT_SHIFT),
                                 ('-short-workspace', 1 << LOGFILE_PAGE_WORKSPACE_SHORT_SHIFT)):
-            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_PAGE_ENCODE_KIND, argument | control, 0)
+            envelope = LOGFILE_FUZZ_HEADER.pack(kind, argument | control, 0)
             assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
             (log_seeds / ('page-encode-' + case['name'] + suffix + '.seed')).write_bytes(envelope + payload)
+    retained_packets = output / 'logfile-retained'
+    for case in generate_logfile_retained(retained_packets):
+        payload = (retained_packets / case['path']).read_bytes()
+        envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_HISTORY_KIND, case['first_lsn'], 0)
+        assert len(envelope) + len(payload) <= LOGFILE_FUZZ_INPUT_BYTES
+        (log_seeds / ('retained-' + case['path'] + '.seed')).write_bytes(envelope + payload)
     return seeds
 
 

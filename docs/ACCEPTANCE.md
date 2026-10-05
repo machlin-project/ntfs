@@ -1,5 +1,43 @@
 # Acceptance
 
+## Original Windows clean journals and retained restart copies
+
+Guest Tools were installed in the dedicated Windows VM after explicit license
+consent. The guarded Disk 1 test volume was automatically BitLocker-encrypted;
+that capture retains its original encrypted-volume refusal. Per-volume decryption
+completed while selected system-volume encryption properties remained unchanged.
+Fresh locked captures pass native read-only chkdsk and physical NTFS boot checks.
+Enabling new short-name generation on the test volume alone leaves the global
+policy unchanged and yields zero volume-information flags. The preceding flagged
+capture and its mount refusal remain retained; no flags were edited offline.
+
+The zero-flag capture passes exact comparison of four Windows-authored files and
+one ADS, and complete metadata/allocation validation: 256 MFT slots, 55 base
+records, 25 streams, 53 names/index entries, 7,620 claimed/allocated clusters,
+zero unclaimed clusters and all four mandatory mirror records. Original locked
+images remain read-only. Review artifacts/windows-write-vm/{native-write-plain-20261006,
+native-write-alias-20261006}/ and logfile-retained/native-validation-20261006/.
+
+Both original LFS 1.1 journals contain completed restart pages with the known
+CLIENT_RESTART flag and one exact restart prefix retained in a former modern
+fast slot. Independently qualified target/LSN geometry plus home-prefix comparison
+precede duplicate exclusion from endpoint selection. Physical inventory remains
+observable. All 41 original retained-copy profiles pass, including all 30 former
+slots, conflicting written bytes, missing/invalid homes, transfers, read failures,
+allocation refusal and shared comparison credits. The native sources now yield
+their exact two packets/264 bytes and complete owning checkpoint. Their bootstrap
+Noop remains an observed active epoch; replay and writable admission are unqualified.
+Review artifacts/logfile-retained/{focused-fixed-20261006,native-20261006}/.
+
+The separate modern private page encoder and known legacy restart flags pass all
+112 complete independent goldens. All 168 fatal ASan/UBSan suites, style and 31
+freestanding objects on each architecture pass. Fresh journal fuzz preserves all
+3,336 prior authored identities, replays all 3,581 inputs and completes 44,033
+units in 61 seconds at 700 MiB under unchanged caps, with no findings. Review
+artifacts/fuzz-logfile-retained-20261006/. The first new-test build argument-order
+error remains retained in logfile-retained/focused-20261006/. No product was
+installed or granted write admission by these checks.
+
 The delivered scope is a bounded read-only core and FSKit development product.
 Local core, adapter component, app builds with linker ad hoc signing and
 independent-image checks passed. The current personally signed Release is installed

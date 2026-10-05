@@ -206,19 +206,30 @@ ntfs_logfile_update_encode(
 	return NTFS_OK;
 }
 
-enum ntfs_result
-ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *workspace,
+static enum ntfs_result
+page_encode(const struct ntfs_logfile_page_input *input, const void *description,
+    size_t description_bytes, bool fast, uint32_t file_offset, void *workspace,
     size_t workspace_bytes, void *output, size_t capacity)
 {
 	struct ntfs_disk_log_page *header = workspace;
+	struct ntfs_disk_log_fast_page *fast_header = workspace;
 	uint8_t *restored = workspace;
-	size_t bytes, data_offset, usa_count, usa_bytes;
+	size_t bytes, data_offset, usa_count, usa_bytes, prefix;
+	uint32_t known_flags;
 
-	if (!valid_range(input, sizeof(*input)) || workspace == NULL || output == NULL) {
+	if (!valid_range(description, description_bytes) || workspace == NULL || output == NULL) {
 		return NTFS_INVALID;
 	}
-	if (input->major != NTFS_LFS_MAJOR_LEGACY || input->minor != NTFS_LFS_MINOR_LEGACY ||
-	    (input->page.flags & ~NTFS_LOGFILE_PAGE_RECORD_END) != 0) {
+	known_flags = NTFS_LOGFILE_PAGE_RECORD_END | NTFS_LOGFILE_PAGE_CLIENT_RESTART;
+	if (fast) {
+		if (input->major != NTFS_LFS_MAJOR_FAST || input->minor != NTFS_LFS_MINOR_FAST ||
+		    input->bytes != NTFS_LFS_FAST_PAGE_BYTES) {
+			return NTFS_UNSUPPORTED;
+		}
+	} else if (input->major != NTFS_LFS_MAJOR_LEGACY || input->minor != NTFS_LFS_MINOR_LEGACY) {
+		return NTFS_UNSUPPORTED;
+	}
+	if ((input->page.flags & ~known_flags) != 0) {
 		return NTFS_UNSUPPORTED;
 	}
 	bytes = input->bytes;
@@ -232,7 +243,8 @@ ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *work
 	}
 	usa_count = bytes / NTFS_MST_STRIDE + 1;
 	usa_bytes = usa_count * NTFS_MST_WORD_BYTES;
-	if (data_offset < sizeof(*header) + usa_bytes || data_offset % NTFS_WIRE_ALIGNMENT != 0 ||
+	prefix = fast ? sizeof(*fast_header) : sizeof(*header) + usa_bytes;
+	if (data_offset < prefix || data_offset % NTFS_WIRE_ALIGNMENT != 0 ||
 	    !ntfs_bounds(data_offset, sizeof(struct ntfs_disk_log_record), bytes) ||
 	    input->data.bytes != bytes - data_offset ||
 	    input->page.page_position > input->page.page_count ||
@@ -243,9 +255,9 @@ ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *work
 		    input->page.next_record_offset % NTFS_WIRE_ALIGNMENT != 0))) {
 		return NTFS_INVALID;
 	}
-	if (!separate(input, sizeof(*input), output, bytes) ||
+	if (!separate(description, description_bytes, output, bytes) ||
 	    !separate(input->data.data, input->data.bytes, output, bytes) ||
-	    !separate(input, sizeof(*input), workspace, bytes) ||
+	    !separate(description, description_bytes, workspace, bytes) ||
 	    !separate(input->data.data, input->data.bytes, workspace, bytes) ||
 	    !separate(workspace, bytes, output, bytes)) {
 		return NTFS_INVALID;
@@ -263,6 +275,28 @@ ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *work
 	ntfs_put_u16(header->next_record_offset, input->page.next_record_offset);
 	ntfs_put_u64(header->last_end_lsn, input->page.last_end_lsn);
 	ntfs_put_u16(restored + sizeof(*header), input->prior_update_sequence);
+	if (fast) {
+		ntfs_put_u32(fast_header->file_offset, file_offset);
+	}
 	ntfs_copy(restored + data_offset, input->data.data, input->data.bytes);
 	return ntfs_record_protect(workspace, bytes, output, capacity);
+}
+
+enum ntfs_result
+ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *workspace,
+    size_t workspace_bytes, void *output, size_t capacity)
+{
+	return page_encode(
+	    input, input, sizeof(*input), false, 0, workspace, workspace_bytes, output, capacity);
+}
+
+enum ntfs_result
+ntfs_logfile_fast_page_encode(const struct ntfs_logfile_fast_page_input *input, void *workspace,
+    size_t workspace_bytes, void *output, size_t capacity)
+{
+	if (!valid_range(input, sizeof(*input))) {
+		return NTFS_INVALID;
+	}
+	return page_encode(&input->common, input, sizeof(*input), true, input->file_offset,
+	    workspace, workspace_bytes, output, capacity);
 }

@@ -1,6 +1,31 @@
 # Core qualification and continuation
 
-Current portable acceptance passes 138 fatal-sanitizer suites, thirteen focused
+Current portable acceptance passes 142 fatal-sanitizer suites, style, both 2-KiB
+freestanding targets, 54 component groups/eleven runtime SKIPs and a clean unsigned
+universal Release. The immutable indexed journal owner visits a bounded selected
+record interval from an exact caller LSN, sharing credits across complete packets
+and optional unfinished-header verification. Ordered byte extents, written prefixes,
+completion tags and sequence/wrap bounds must agree through the candidate endpoint.
+Partial reports cannot authorize native recovery or resume failed analysis.
+
+All 123 original windows/861 emitted packet oracles pass, including the exact
+1-MiB record boundary, read/allocation retry, visitor stops and shared-budget
+exhaustion. The frozen Windows journal supplies four exact packets and suffixes;
+its 1,138 target rows remain identical, with retained metadata growing by 272 to
+160,824 bytes. It provides no post-RSTR record, large modern continuation or clean
+flush witness. Native client lower bounds, transaction analysis, continuation
+freshness, replay and durability remain requirements before writing under WRITES.md.
+
+Fresh journal fuzz replays all 2,934 authored seeds and passes 38,253 units/61 seconds
+at 700 MiB under unchanged caps. All 3,004 preceding learned files pass 94 fixed
+replay batches with the new binary and remain unchanged. Their byte-preserving merge
+retains all 3,106 fresh files and adds 209 missing units for 3,315 total. Main verifies
+raw commands, executed paths, exact bytes and eleven qualified source inputs in
+artifacts/logfile-history/main-review.json and its independent host, fixture, native
+and fuzz reviews. LOGFILE.md defines the selected framing contract; PERFORMANCE.md
+separately plans measurement and page/staging reuse. No new app is installed.
+
+Preceding portable acceptance passes 138 fatal-sanitizer suites, thirteen focused
 suites plus the seven-suite conflict/fuzz addendum, style, both 2-KiB freestanding
 targets, 54 component groups/eleven runtime SKIPs and clean unsigned universal
 Release. An explicit optional journal index retains bounded per-target metadata,
@@ -519,6 +544,40 @@ aggregate memory, installed notification delivery and throughput measurements.
 | Concurrency | Benchmark discloses external serialization and lock wait in latency | Object/callback/teardown contract, then independent reads with measured benefit and progress guarantees |
 
 ## Windows acquisition and comparison
+
+The next native journal acquisition has three separate evidence scopes. First,
+Sol verifies guest build/ARM64 and working command transport, then records the
+exact disposable 8-GiB disk identity, partition/volume mapping and encryption state.
+Only that confirmed blank test disk may be prepared as an unencrypted NTFS volume;
+the Windows system and Recovery partitions are not test targets. Luna executes
+prepared workloads after an explicit VM handoff. Reports retain commands, native
+return values and original complete images/logical journals under
+artifacts/windows-write-vm/native-journal-corpus/.
+
+For a clean baseline, close test handles, record successful volume flushing, obtain
+an exclusive volume lock and retain that lock through acquisition. A successful
+Windows lock flushes cached volume data; dismount alone permits remount and does
+not replace the lock. A native raw-capture helper must read through the locking
+handle. The existing collector below observes an already read-only volume and
+supplies no flush/lock evidence. Record each native result and keep device/VM persistence
+qualification separate. See Microsoft's [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers),
+[FSCTL_LOCK_VOLUME](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_lock_volume)
+and [FSCTL_DISMOUNT_VOLUME](https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ni-winioctl-fsctl_dismount_volume).
+
+A separate live or interrupted capture must actually contain records later than
+its selected RSTR CurrentLsn and a multi-page NTFS record with every physical
+fragment. Candidate workloads include namespace changes and large security
+descriptor updates; their intended effects are not evidence that either witness
+exists. Preserve the unmodified capture and native workload results, then inspect
+all pages, selected target decisions, exact packets and client/checkpoint links.
+Keep a paused-VM copy explicitly separate from a clean locked acquisition. Never
+clear dirty flags or synthesize restart/client metadata to make that capture pass.
+For later recovery comparison, retain the original and use independent copies for
+this implementation and Windows replay. Keep chkdsk status runs separate from
+repair: `/f`, `/r`, `/x` and `/b` change the volume, and an active-volume status run
+can report transient errors. Record full output and exit status under Microsoft's
+[chkdsk contract](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chkdsk).
+This is the next acquisition protocol, not native recovery or write acceptance.
 
 Use a disposable NTFS fixture volume prepared on Windows and attached read-only
 before acquisition. Its assigned drive root must report `FILE_READ_ONLY_VOLUME`;

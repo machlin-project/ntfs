@@ -94,9 +94,20 @@ documented Disk Arbitration route with per-attachment owners-on fails at mount a
 with kDAReturnNotReady after successful probe/staging. Its checker never runs; cleanup
 passes and no policy/capability is changed. Review native-read/{attempt-1,attempt-2-ntfs30,
 client-options,attempt-3-diskarbitration}/ under the guest artifacts. Next diagnose
-ownership-preserving admission without weakening native authorization. Windows remains
-at the account-password screen by explicit user request. Do not continue account
-setup or cold-boot the Windows VM.
+ownership-preserving admission without weakening native authorization. The user now
+reports the Windows desktop is open and clarifies that its black console was sleep.
+The earlier manual account handoff is resolved. Fresh native build/disk evidence and
+working command transport still need verification before a Windows CLI handoff.
+
+The read-only readiness probe explicitly reports that the QEMU guest agent is not
+running or installed, despite utmctl's zero process exit. Treat native error output
+as failure. Root's supported Computer Use entry and reset/rebind both fail with
+`Sky Computer Use native pipe startup failed`; neither supplies fresh guest UI state
+or changes the guest. Sol continues official guest-tools/CLI preparation for ARM64 within
+the existing VM authorization, without account or disk mutations. Evidence is under
+artifacts/windows-write-vm/{readiness-after-history,desktop-and-transport}/. Keep the
+blank 8-GiB disk untouched until actual guest mapping is reviewed; CORE-QUALIFICATION.md
+defines the next clean/live/interrupted journal acquisition protocol.
 
 Read NATIVE-INSTALLATION.md and review
 artifacts/fskit-guest-26.5.2/{signed/review,installation,modules-helper,read-preparation,native-read}/.

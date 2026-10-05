@@ -112,6 +112,16 @@ WAL/commit/home/checkpoint ordering, partial writes and interrupted replay; see
 [RECOVERY-MODEL.md](RECOVERY-MODEL.md). Its typed history is not an NTFS journal
 format. Native transaction/recovery integration and broader crash/durability
 qualification remain required.
+
+Selected-client checkpoint acquisition now captures the stored restart and all
+referenced dumps in caller-owned immutable record storage. Identity and the whole
+anchor set precede table reads; all packet reads share one operation budget and
+optional tighter call/byte ceilings. Complete binding, entry/free topology and
+cross-table membership precede publication. Failure retains acquisition evidence
+without publishing a partial snapshot; successful value-only views survive source
+close with their caller-owned bytes. This supplies recovery analysis inputs, not
+current-history liveness, transaction semantics, continuation freshness or native
+recovery/durability acceptance. The read environment still has no write method.
 The independent client restart decoder observes only the 64-byte common prefix
 for client formats 0.0/1.0. Its raw analysis/table LSNs and byte counts authorize
 no table reads, transaction state or recovery; containing-record ownership,

@@ -87,6 +87,70 @@ enum ntfs_result ntfs_logfile_checkpoint_decode(const struct ntfs_logfile *,
     const struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS],
     void *name_workspace, size_t workspace_bytes, struct ntfs_logfile_checkpoint_snapshot *);
 
+enum {
+	NTFS_LOGFILE_CHECKPOINT_MAX_PACKETS = NTFS_LOGFILE_CHECKPOINT_KINDS + 1,
+	NTFS_LOGFILE_CHECKPOINT_MAX_BYTES =
+	    NTFS_LOGFILE_CHECKPOINT_MAX_PACKETS * NTFS_LOGFILE_MAX_RECORD_BYTES
+};
+
+struct ntfs_logfile_checkpoint_capture {
+	uint16_t client_index, client_sequence;
+	struct ntfs_logfile_client client;
+	struct ntfs_logfile_client_restart restart;
+	struct ntfs_logfile_checkpoint_snapshot snapshot;
+	/* Exact unpadded packets relative to caller-owned record workspace. The
+	 * checkpoint is first; present dumps follow in checkpoint-kind order.
+	 * Snapshot body spans remain relative to their corresponding dump packet;
+	 * restart.extension remains relative to the checkpoint's client payload. */
+	struct ntfs_logfile_span checkpoint, dumps[NTFS_LOGFILE_CHECKPOINT_KINDS];
+	uint32_t bytes;
+};
+
+struct ntfs_logfile_checkpoint_capture_report {
+	uint64_t checkpoint_lsn, requested_lsn, read_bytes;
+	uint32_t read_calls, acquired_records, record_bytes, copy_pages_read;
+	bool complete;
+};
+
+struct ntfs_logfile_checkpoint_capture_limits {
+	uint32_t max_read_calls;
+	uint64_t max_read_bytes;
+};
+
+/* Acquire the selected active NTFS client's stored restart and every referenced
+ * dump into one caller-owned immutable snapshot. Identity is explicit, including
+ * client sequence; stale/free identities refuse before I/O. A zero restart LSN
+ * returns NOT_FOUND. A prepared page index is required; ordinary indexed-record
+ * selection/provenance limitations still apply. Every page read for all packets
+ * shares one source operation budget. Optional positive capture limits impose
+ * an additional whole-capture ceiling and are copied at admission; NULL inherits
+ * source limits. Neither ceiling is raised. Preparation/open reads are separate.
+ * After restart binding, all nonzero anchor pairs, geometry and distinct dump
+ * LSNs are checked before any table read. Record-extent/completion framing,
+ * including a MULTI_PAGE flag for actual spanning records, dump binding,
+ * free topology, allocated entries and cross-table membership must all succeed
+ * before capture publication. No partial capture or caller-provided owner
+ * projection is accepted. Errors zero capture; the required report retains
+ * attempted reads and successfully acquired packet counts/bytes. requested_lsn
+ * identifies the most recently requested packet, including a failed attempt.
+ * Counts do not imply table semantics or freshness; complete marks only this
+ * acquisition/binding operation. There are at most MAX_PACKETS acquisitions,
+ * at most MAX_BYTES copied storage and one MAX_RECORD_BYTES private staging
+ * allocation at a time. Insufficient remaining record capacity returns RANGE.
+ * Name scratch follows checkpoint_decode's exact needed-prefix contract.
+ * Both workspaces may change on failure; unused record capacity is untouched.
+ * Records, name scratch, output, report and source are disjoint; all calls are
+ * externally serialized against immutable media. Successful record bytes and
+ * value-only capture metadata remain usable after source close while the caller
+ * retains them. This preserves opaque client extensions and raw analysis/LSN
+ * fields. It neither selects an analysis lower bound nor validates volume
+ * references, native transaction state, current continuation freshness, recovery,
+ * durability or writable admission. No device write capability is added. */
+enum ntfs_result ntfs_logfile_capture_checkpoint(struct ntfs_logfile *, uint16_t client_index,
+    uint16_t client_sequence, const struct ntfs_logfile_checkpoint_capture_limits *,
+    void *record_workspace, size_t record_capacity, void *name_workspace, size_t name_capacity,
+    struct ntfs_logfile_checkpoint_capture *, struct ntfs_logfile_checkpoint_capture_report *);
+
 #ifdef __cplusplus
 }
 #endif

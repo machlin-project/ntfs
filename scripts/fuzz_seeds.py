@@ -29,6 +29,7 @@ from logfile_tables_fixtures import author as generate_logfile_tables
 from logfile_names_fixtures import author as generate_logfile_names
 from checkpoint_fixtures import author as generate_checkpoint_bindings
 from checkpoint_snapshot_fixtures import author as generate_checkpoint_snapshots
+from checkpoint_capture_fixtures import author as generate_checkpoint_captures
 from record_protect_fixtures import author as generate_record_protection
 from logfile_encode_fixtures import author as generate_logfile_encoding, RECORD_KIND as LOGFILE_ENCODE_RECORD
 from logfile_page_encode_fixtures import author as generate_logfile_page_encoding
@@ -45,6 +46,7 @@ LOGFILE_LEGACY_RECORD_KIND = 14
 LOGFILE_INVENTORY_KIND = 23
 LOGFILE_INDEX_KIND = 24
 LOGFILE_HISTORY_KIND = 25
+LOGFILE_CAPTURE_KIND = 26
 LOGFILE_INVENTORY_READ_CALL_BUDGET = 4096
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 LOGFILE_CHECKPOINT_TABLE_KIND = 17
@@ -57,6 +59,9 @@ LOGFILE_FAST_RECORD_KIND = 22
 LOGFILE_SNAPSHOT_KINDS = 4
 LOGFILE_SNAPSHOT_HEADER = struct.Struct('<' + 'I' * (LOGFILE_SNAPSHOT_KINDS + 1))
 BITS_PER_BYTE = 8
+LOGFILE_CAPTURE_SHORT_WORKSPACE = 1 << (BITS_PER_BYTE + 5)
+LOGFILE_CAPTURE_SHORT_NAMES = 1 << (BITS_PER_BYTE + 6)
+LOGFILE_CAPTURE_IDENTITY_SHIFT = struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_CLIENT_VERSION_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
 LOGFILE_FUZZ_INPUT_BYTES = 2 * 1024 * 1024
 LOGFILE_ALLOCATION_FAULT = 1 << BITS_PER_BYTE
@@ -400,6 +405,31 @@ def generate(output):
         for name, control in controls.items():
             envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_HISTORY_KIND, case['first_lsn'], control)
             filename = 'history-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    captures = output / 'checkpoint-capture'
+    for case in generate_checkpoint_captures(captures):
+        payload = (captures / case['path']).read_bytes()
+        if len(payload) + LOGFILE_FUZZ_HEADER.size > LOGFILE_FUZZ_INPUT_BYTES:
+            continue
+        controls = {'default': 0}
+        if case['code'] == 0 and case['path'] in (
+                'client-0-fast-0-mask-15.journal', 'checkpoint-fast-copy.journal',
+                'wrapped-checkpoint.journal'):
+            controls.update({'record-allocation': LOGFILE_RECORD_ALLOCATION_FAULT,
+                'selected-first-read': LOGFILE_INDEX_SELECTED_READ_FAULT | 1,
+                'selected-last-read': LOGFILE_INDEX_SELECTED_READ_FAULT | case['report']['read_calls'],
+                'short-record-workspace': LOGFILE_CAPTURE_SHORT_WORKSPACE,
+                'short-name-workspace': LOGFILE_CAPTURE_SHORT_NAMES})
+            byte_units = case['report']['read_bytes'] // logfile_wire.USA_STRIDE
+            remainder = case['report']['read_calls'] - 2
+            periods = max(1, (byte_units - remainder + LOGFILE_INVENTORY_READ_CALL_BUDGET - 1) //
+                LOGFILE_INVENTORY_READ_CALL_BUDGET)
+            budget = remainder + periods * LOGFILE_INVENTORY_READ_CALL_BUDGET
+            controls['short-capture-calls'] = budget << LOGFILE_BUDGET_SHIFT
+        identity = case['client_index'] | (case['client_sequence'] << LOGFILE_CAPTURE_IDENTITY_SHIFT)
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CAPTURE_KIND, identity, control)
+            filename = 'capture-' + case['path'].replace('.', '-') + '-' + name + '.seed'
             (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):

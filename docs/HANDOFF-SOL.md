@@ -3,8 +3,9 @@
 Work in `/Users/darekhta/Development/machlin/ntfs`, branch `development`.
 Read AGENTS.md, README.md, ARCHITECTURE.md, ACCEPTANCE.md, PROVENANCE.md and WRITES.md.
 This is an independent proprietary FSKit product. No kernel adapter or LXNU
-changes are included. Publishing source, choosing a public license and enabling
-writes are separate decisions.
+changes are included. Publishing source and choosing a public license remain
+separate decisions. Native writes are requested continuation work; WRITES.md
+defines the recovery and durability requirements before writable admission.
 
 ## Meaning of the requested 60%
 
@@ -17,7 +18,61 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Selected journal interval continuation
+## Selected checkpoint acquisition continuation
+
+`ntfs_logfile_capture_checkpoint` in ntfs/checkpoint.h now acquires the selected
+active NTFS client's stored restart and all four possible table dumps. Client
+index/sequence is explicit; the whole anchor set is admitted before table I/O.
+All selected page reads share source credits and optional tighter capture ceilings.
+Extent/completion framing, exact dump binding, free topology, allocated entries
+and cross-table membership precede publication. A failed operation publishes no
+capture and retains its separate acquisition report. The caller owns concatenated
+exact packets and name scratch; successful value-only views survive source close.
+Opaque extensions and raw analysis/LSN fields remain uninterpreted inputs.
+
+The 144 original profiles contain 78 complete captures/66 refusals and 310 exact
+packet oracles. They cover all presence masks for both client/LFS families, both
+legacy/all modern copy slots, extended headers/payloads, invalid owners/anchors,
+large OAT, the exact record cap, wrap and membership failures. Selected profiles
+fail every read and staged allocation, retain exact partial counters, exhaust
+aggregate credits, reject short workspaces and retry the unchanged owner.
+
+All 148 fatal-ASan/UBSan suites pass with both 2-KiB freestanding targets, style,
+54 component PASS/eleven runtime SKIPs and a clean unsigned universal Release.
+These products remain uninstalled; the personally signed guest build is a separate
+older native baseline. Review artifacts/checkpoint-capture/{focused,final}/ and
+the explicit ownership/span contract in LOGFILE.md. The diagnostic is
+`ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX SEQUENCE`.
+
+The unchanged original Windows journal returns precisely its three checkpoint
+packets: restart, OAT and attribute names, 704 bytes under three selected reads/
+12,288 bytes. All three packets match an independent original-byte oracle. Wrong
+index and sequence refuse with zero acquisition reads; index preparation is
+reported separately. This small observation contains neither dirty nor transaction
+table anchors and provides no post-checkpoint or large modern continuation witness.
+Review artifacts/checkpoint-capture/native-execution/ and main-review.json.
+
+Selector 26 appends 160 whole-source acquisition envelopes while retaining all
+2,934 prior authored seeds unchanged. Exhaustive replay passes all 3,094 seeds;
+coverage exploration passes 40,649 units/61 seconds at 707 MiB under the same
+2-MiB input, 1-GiB RSS and five-second caps with external reload disabled. The same
+frozen binary replays every one of the 3,315 prior corpus paths in 104 fixed batches.
+Keep artifacts/fuzz-checkpoint-capture/ and checkpoint-capture/prior-corpus-replay/.
+Main independently reviews raw executed paths, source/product bytes and corpus
+preservation before accepting this input-acquisition checkpoint.
+The additive preservation step keeps all 3,315 prior and 3,284 fresh corpus files,
+adding 350 missing paths for 3,665 total without overwriting or deleting anything.
+Its plan, raw execution and complete result are in checkpoint-capture/corpus-preservation/.
+
+Next use this owned checkpoint input to qualify native analysis bounds and live
+transaction/OAT/dirty state over the selected interval. Current continuation
+freshness, post-checkpoint native histories, redo/undo semantics and Windows
+replay/durability still precede a writable owner. The pending manual UTM Guest
+Tools installation remains the Windows command-transport step; the user-reported
+desktop/account completion and sleep clarification do not verify guest commands.
+Keep the test disk blank until actual guest mapping is reviewed.
+
+## Preceding selected journal interval continuation
 
 Read LOGFILE.md's bounded selected-record contract and `ntfs_logfile_visit_records`
 in ntfs/logfile.h. The caller supplies an exact lower LSN and prepared index. A
@@ -28,7 +83,8 @@ reports and borrowed visitor packets cannot authorize native recovery or resume 
 failed analysis. Modern zero-start continuations and equal incomplete peers refuse;
 legacy zero-start framing alone does not establish native freshness/ownership.
 
-All 142 fatal-sanitizer suites pass, with 123 original windows/861 emitted exact
+The preceding selected-window checkpoint passed 142 fatal-sanitizer suites, with
+123 original windows/861 emitted exact
 packet oracles, read/allocation retry, callback stops, shared whole-walk credits,
 maximum pages, exact 1-MiB record cap and sequence overflow. Freestanding core still
 passes both 2-KiB frame targets. FSKit has 54 component PASS/eleven macOS-27 runtime
@@ -52,7 +108,7 @@ initially separate; all 3,004 prior learned files subsequently pass 94 fixed rep
 batches with the current binary. The byte-preserving merge adds 209 missing units,
 retaining all 3,106 fresh files for 3,315 total. Main checks every raw executed path
 and retained byte in artifacts/logfile-history/prior-corpus-replay/. Current consolidated
-acceptance is artifacts/logfile-history/main-review.json, binding eleven source inputs,
+acceptance for that preceding window is artifacts/logfile-history/main-review.json, binding eleven source inputs,
 raw results, actual products, original Windows packets and every retained corpus file.
 Preserve both campaign records and every prior file. See DEVELOPMENT.md and PERFORMANCE.md
 for the separately planned page/staging reuse measurements. Native client lower

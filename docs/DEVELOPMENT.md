@@ -16,7 +16,37 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
-Current selected-window qualification runs `logfile-history`, `logfile-history-cli`,
+Current checkpoint-input qualification runs `checkpoint-capture`,
+`checkpoint-capture-cli` and four `fuzz-checkpoint-capture` variants, followed by
+all 148 fatal-ASan/UBSan suites. The original author is
+tests/checkpoint_capture_fixtures.py: 144 acquisition/refusal cases, 78 complete
+captures and 310 exact packet oracles. Capture uses one explicit active client,
+prepared index, caller record/name workspaces and shared whole-operation I/O
+ceilings. Run `ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX SEQUENCE`;
+the diagnostic reports exact concatenated packets and separate acquisition/index
+evidence. Review artifacts/checkpoint-capture/{focused,final}/ and the complete
+span/failure/lifetime contract in LOGFILE.md. This is an owned analysis input;
+native client history/continuation semantics, transaction recovery and Windows
+durability acceptance remain separate.
+
+Current selector 26 adds 160 acquisition envelopes without changing any of the
+preceding 2,934 authored journal seeds. The campaign exhaustively replays all 3,094
+seeds, then passes 40,649 units/61 seconds at 707 MiB under the unchanged 2-MiB input,
+1-GiB RSS and five-second per-input ceilings. External reload remains disabled.
+The exact frozen binary additionally replays all 3,315 prior corpus paths in 104
+fixed batches. Review artifacts/fuzz-checkpoint-capture/ and
+artifacts/checkpoint-capture/{fuzz-campaign-execution,prior-corpus-replay}/;
+main-review.json binds raw execution and every retained byte to qualified inputs.
+Keep prior corpora and fresh discoveries. The unchanged original Windows journal
+also supplies three exact checkpoint packets/704 bytes, with separate acquisition
+and preparation reports in checkpoint-capture/native-execution/. That source has
+no dirty/transaction anchors, post-checkpoint history or modern spanning witness.
+The additive corpus-preservation plan retains the 3,315 old and 3,284 fresh files,
+adds 350 missing paths and leaves 3,665 in artifacts/fuzz/logfile/corpus-2097152/.
+Review artifacts/checkpoint-capture/corpus-preservation/. Do not drop preceding
+mutations when adding a selector or starting a separate campaign.
+
+Preceding selected-window qualification runs `logfile-history`, `logfile-history-cli`,
 `fuzz-logfile-history` and `fuzz-logfile-history-tail-fault`, then all 142 fatal-sanitizer
 suites. The original fixture author is tests/logfile_history_fixtures.py: 123 windows,
 65 complete results/58 refusals and 861 exact emitted packet oracles. The regular-file
@@ -51,7 +81,7 @@ Keep the failed run and standalone diagnostic under artifacts/logfile-index/;
 the corrected campaign and source/seed/corpus review are in reload-bound/ and
 artifacts/fuzz-logfile-index/. Input/RSS/time limits and fatal sanitizers stay unchanged.
 
-Current selector 25 adds 139 whole-source history envelopes to the unchanged 2,795
+Preceding selector 25 adds 139 whole-source history envelopes to the unchanged 2,795
 authored journal seeds. The fresh campaign exhaustively replays all 2,934 seeds before
 coverage exploration with the same 2-MiB input, 1-GiB RSS and five-second per-input caps.
 Keep the preceding learned corpus under artifacts/fuzz-logfile-index/logfile/ unchanged;

@@ -136,6 +136,58 @@ Evidence is artifacts/checkpoint-snapshot/{initial,native,final}/ and review.jso
 These cases establish membership, without original current nonempty history or
 Windows/recovery/writing qualification.
 
+## Complete selected checkpoint acquisition
+
+`ntfs_logfile_capture_checkpoint` acquires the active NTFS client's stored restart
+and all referenced table packets through the prepared target index. The caller
+supplies the exact client index/sequence, one record workspace and independent
+name scratch. Free/stale identities and other client names refuse before reads;
+an absent stored restart returns NOT_FOUND. Caller-supplied restart/table packet
+projections are not inputs to this acquisition API.
+
+One operation counter covers every selected page for the restart and all dumps.
+Optional positive capture limits are copied at admission and impose a further
+call/byte ceiling beneath the source's unchanged limits. Index preparation and
+source discovery remain separate operations. All anchor pairs, circular geometry,
+ordering before the checkpoint and distinct dump LSNs are checked after restart
+binding and before any table read. Actual spanning records require MULTI_PAGE;
+byte extents, intermediate page boundaries and the completed ending witness must
+agree. Indexed copy/continuation admission retains its existing limitations.
+
+The operation stages one exact bounded packet at a time, copying it into the
+workspace only after successful assembly. The restart is first; present dumps
+follow in checkpoint-kind order without alignment padding. The complete binding,
+free topology, allocated entries and cross-table name/dirty membership must pass
+before the value-only capture is published. Errors zero the capture. The separate
+report retains the requested packet LSN, attempted reads and successful packet
+counts/bytes; its complete flag describes acquisition and binding alone.
+
+There are at most five packet acquisitions, at most 5 MiB of caller record storage
+used and at most one 1-MiB private staging allocation at a time. Short remaining
+record capacity returns RANGE. Name scratch retains the existing exact needed
+prefix contract. Workspaces can change on error; untouched capacity stays intact.
+All inputs/output/workspaces require disjoint, externally serialized lifetime.
+Successful record bytes and capture metadata contain no source-owned pointers
+and remain usable after source close while the caller retains them. Body spans
+are still relative to the corresponding dump packet; the client extension span
+is relative to the checkpoint payload. Opaque extensions and raw analysis/LSN
+values are preserved.
+
+The diagnostic is `ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX
+SEQUENCE`, with bounded index/I/O policies and exact concatenated packet bytes.
+Original fixtures currently cover 144 acquisition/refusal profiles, including
+both client versions, all table-presence masks, both legacy slots/all 32 fast slots,
+extended headers/payloads, invalid identities/anchors/membership, a large OAT,
+the exact 1-MiB record limit and a wrapped checkpoint. Their 78 complete profiles
+have 310 independently authored exact packet oracles. Read/allocation failure
+sweeps, aggregate call/byte limits, short workspaces, unaligned guards, immutable
+media and source-independent snapshot lifetime are separate executable checks.
+
+This supplies an owned checkpoint input snapshot. It does not choose the current
+client history or analysis lower bound, establish continuation freshness, validate
+volume references/LCNs or reconstruct transaction state. Native analysis,
+redo/undo recovery, persistence and writable admission remain separate gates.
+
 ## Empty LCN vectors and attribute-name packets
 
 The stored NTFS update prefix reserves one LCN slot even when its declared count

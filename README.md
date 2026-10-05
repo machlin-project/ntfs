@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 142 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 148 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -33,6 +33,14 @@ this is not native WAL planning or durable publication.
 Independent byte/topology vectors and journal fuzzing pass; these primitives add
 no device writes. [Their contracts](docs/WRITE-FOUNDATIONS.md) separate framing
 from current history, native transaction recovery and writable admission.
+
+Selected-client checkpoint acquisition now reads the stored restart and every
+referenced dump through one prepared owner, under aggregate I/O limits. It validates
+all anchors before table reads and publishes one complete caller-owned input snapshot
+only after packet binding and cross-table checks. Exact bytes and value-only views
+survive source close. All 144 acquisition/refusal profiles pass, with 310 independent
+packet oracles, fault sweeps and bounded workspace checks. This prepares transaction
+analysis inputs; current native history, recovery and durable writing remain open.
 
 The immutable journal owner now also routes completed LFS 1.1 tail copies while
 assembling records. It examines both slots, rejects conflicting written prefixes,

@@ -53,6 +53,7 @@ struct fast_copies {
 struct record_copies {
 	struct legacy_copies *legacy;
 	struct fast_copies *fast;
+	const struct ntfs_logfile_checkpoint_capture_limits *capture_limits;
 	bool indexed, history;
 };
 
@@ -498,11 +499,19 @@ ntfs_logfile_get_active_client(const struct ntfs_logfile *source, uint16_t index
 	return cursor == NTFS_LOGFILE_NO_CLIENT ? NTFS_STALE : NTFS_CORRUPT;
 }
 
+static bool
+is_ntfs_client(const struct ntfs_logfile_client *client)
+{
+	static const uint16_t client_name[] = {'N', 'T', 'F', 'S'};
+
+	return client->name_length == sizeof(client_name) / sizeof(client_name[0]) &&
+	    ntfs_equal(client->name, client_name, sizeof(client_name));
+}
+
 enum ntfs_result
 ntfs_logfile_decode_client_restart_record(const struct ntfs_logfile *source, const void *input,
     size_t size, struct ntfs_logfile_client_restart *out)
 {
-	static const uint16_t client_name[] = {'N', 'T', 'F', 'S'};
 	struct ntfs_logfile_record record;
 	struct ntfs_logfile_client client;
 	enum ntfs_result result;
@@ -527,8 +536,7 @@ ntfs_logfile_decode_client_restart_record(const struct ntfs_logfile *source, con
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if (client.name_length != sizeof(client_name) / sizeof(client_name[0]) ||
-	    !ntfs_equal(client.name, client_name, sizeof(client_name))) {
+	if (!is_ntfs_client(&client)) {
 		return NTFS_UNSUPPORTED;
 	}
 	if (client.restart_lsn == 0 || record.lsn != client.restart_lsn) {
@@ -1446,8 +1454,17 @@ load_record_page(struct ntfs_logfile *source, uint64_t offset, uint64_t lsn,
     struct ntfs_logfile_report *work, const struct record_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
+	const struct ntfs_logfile_checkpoint_capture_limits *limits;
+
 	if (copies == NULL) {
 		return load_page(source, offset, work, out);
+	}
+	limits = copies->capture_limits;
+	if (limits != NULL &&
+	    (work->read_calls >= limits->max_read_calls ||
+		work->read_bytes > limits->max_read_bytes ||
+		source->restart.log_page_bytes > limits->max_read_bytes - work->read_bytes)) {
+		return NTFS_RANGE;
 	}
 	if (copies->indexed) {
 		if (copies->history) {
@@ -1634,6 +1651,129 @@ ntfs_logfile_read_indexed_record(struct ntfs_logfile *source, uint64_t requested
 	struct record_copies route = {.indexed = true};
 
 	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route, NULL);
+}
+
+static enum ntfs_result
+capture_packet(struct ntfs_logfile *source, uint64_t lsn, uint8_t *workspace, size_t capacity,
+    struct ntfs_logfile_span *span, struct ntfs_logfile_report *work,
+    const struct ntfs_logfile_checkpoint_capture_limits *limits,
+    struct ntfs_logfile_checkpoint_capture_report *report)
+{
+	struct ntfs_logfile_record_view view;
+	struct record_ending ending;
+	struct record_copies route = {.capture_limits = limits, .indexed = true};
+	enum ntfs_result result;
+
+	report->requested_lsn = lsn;
+	result = assemble_record(source, lsn, workspace + report->record_bytes,
+	    capacity - report->record_bytes, &view, work, &route, &ending);
+	report->read_calls = work->read_calls;
+	report->read_bytes = work->read_bytes;
+	if (result == NTFS_OK) {
+		*span = (struct ntfs_logfile_span){report->record_bytes, view.bytes};
+		report->record_bytes += view.bytes;
+		report->acquired_records++;
+		report->copy_pages_read += view.copy_pages_read;
+	}
+	return result;
+}
+
+enum ntfs_result
+ntfs_logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
+    const struct ntfs_logfile_checkpoint_capture_limits *limits, void *workspace, size_t capacity,
+    void *names, size_t name_capacity, struct ntfs_logfile_checkpoint_capture *out,
+    struct ntfs_logfile_checkpoint_capture_report *report)
+{
+	struct ntfs_logfile_checkpoint_capture value = {0};
+	struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS] = {0};
+	struct ntfs_logfile_table_reference anchors[NTFS_LOGFILE_CHECKPOINT_KINDS];
+	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_checkpoint_capture_limits admitted;
+	const struct ntfs_logfile_checkpoint_capture_limits *budget = NULL;
+	uint8_t *bytes = workspace;
+	uint32_t kind, previous;
+	enum ntfs_result result;
+
+	_Static_assert(
+	    NTFS_LOGFILE_CHECKPOINT_MAX_BYTES <= UINT32_MAX, "checkpoint workspace span capacity");
+	if (out != NULL) {
+		ntfs_zero(out, sizeof(*out));
+	}
+	if (report != NULL) {
+		ntfs_zero(report, sizeof(*report));
+	}
+	if (out == NULL || report == NULL || source == NULL || workspace == NULL) {
+		return NTFS_INVALID;
+	}
+	if (limits != NULL) {
+		admitted = *limits;
+		if (admitted.max_read_calls == 0 || admitted.max_read_bytes == 0) {
+			return NTFS_INVALID;
+		}
+		budget = &admitted;
+	}
+	result = ntfs_logfile_get_active_client(source, index, sequence, &value.client);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (!is_ntfs_client(&value.client)) {
+		return NTFS_UNSUPPORTED;
+	}
+	report->checkpoint_lsn = value.client.restart_lsn;
+	if (value.client.restart_lsn == 0) {
+		return NTFS_NOT_FOUND;
+	}
+	result = capture_packet(source, value.client.restart_lsn, bytes, capacity,
+	    &value.checkpoint, &work, budget, report);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_logfile_decode_client_restart_record(
+	    source, bytes, value.checkpoint.length, &value.restart);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	/* Admit the complete anchor set before any table read. This also prevents
+	 * one packet being assigned two table roles by a forged restart payload. */
+	for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+		result = ntfs_logfile_checkpoint_anchor(&source->restart, &value.restart,
+		    value.client.restart_lsn, (enum ntfs_logfile_checkpoint_kind)kind,
+		    &anchors[kind]);
+		if (result == NTFS_NOT_FOUND) {
+			continue;
+		}
+		if (result != NTFS_OK) {
+			return result;
+		}
+		for (previous = 0; previous < kind; previous++) {
+			if (anchors[previous].lsn == anchors[kind].lsn) {
+				return NTFS_CORRUPT;
+			}
+		}
+	}
+	for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+		if (anchors[kind].lsn == 0) {
+			continue;
+		}
+		result = capture_packet(source, anchors[kind].lsn, bytes, capacity,
+		    &value.dumps[kind], &work, budget, report);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		dumps[kind] = (struct ntfs_logfile_checkpoint_dump){
+		    bytes + value.dumps[kind].offset, value.dumps[kind].length};
+	}
+	result = ntfs_logfile_checkpoint_decode(
+	    source, bytes, value.checkpoint.length, dumps, names, name_capacity, &value.snapshot);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	value.client_index = index;
+	value.client_sequence = sequence;
+	value.bytes = report->record_bytes;
+	*out = value;
+	report->complete = true;
+	return NTFS_OK;
 }
 
 static enum ntfs_result

@@ -27,6 +27,15 @@ walks against this source and unchanged Windows inputs before introducing reuse:
    resource reads and memory pressure separately. A lower synthetic callback count
    alone cannot establish a Windows recovery or installed throughput improvement.
 
+The new selected checkpoint capture has the same per-packet staging/read policy,
+with aggregate credits for all packets and no hidden retained payload allocation.
+Measure index construction, checkpoint capture and later ordered analysis separately.
+Include copied caller bytes/name scratch as well as core live memory; caller storage
+is outside the source allocator report. Compare repeated same-page dumps, large
+tables and spanning checkpoints against exact packet/failure oracles before sharing
+the proposed bounded page or staging reuse slot. Capture ownership and lower read
+counts alone establish no throughput or native recovery improvement.
+
 ## Checked base metadata across temporary nodes
 
 The current bounded memo retains checked standard information and reparse presence

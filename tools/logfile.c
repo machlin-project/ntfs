@@ -117,10 +117,10 @@ restart_fields(const struct ntfs_logfile_restart *r, bool comma)
 }
 
 static void
-client_restart_fields(const struct ntfs_logfile_client_restart *value)
+client_restart_fields(const struct ntfs_logfile_client_restart *value, bool comma)
 {
-	printf(",\"major\":%" PRIu32 ",\"minor\":%" PRIu32 ",\"analysis_lsn\":%" PRIu64,
-	    value->major, value->minor, value->analysis_lsn);
+	printf("%s\"major\":%" PRIu32 ",\"minor\":%" PRIu32 ",\"analysis_lsn\":%" PRIu64,
+	    comma ? "," : "", value->major, value->minor, value->analysis_lsn);
 	printf(",\"open_attributes\":{\"lsn\":%" PRIu64 ",\"bytes\":%" PRIu32 "}",
 	    value->open_attributes.lsn, value->open_attributes.bytes);
 	printf(",\"attribute_names\":{\"lsn\":%" PRIu64 ",\"bytes\":%" PRIu32 "}",
@@ -637,7 +637,7 @@ client_restart_record(const char *path, const char *packet_path)
 	printf("{\"schema_version\":%u,\"scope\":\"client-restart-record\",\"code\":%d,"
 	       "\"result\":\"%s\",\"recovery_qualified\":false",
 	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result));
-	client_restart_fields(&value);
+	client_restart_fields(&value, true);
 	printf("}\n");
 	free(bytes);
 	ntfs_logfile_close(source);
@@ -661,6 +661,96 @@ checkpoint_fields(const struct ntfs_logfile_checkpoint_table *value)
 	printf("},\"names\":{\"entry_count\":%" PRIu32, value->names.entry_count);
 	span("entries", value->names.entries);
 	printf("}");
+}
+
+static int
+checkpoint_capture(const char *path, uint16_t index, uint16_t sequence)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_limits limits;
+	struct ntfs_logfile_page_index_report preparation = {0};
+	struct ntfs_logfile_checkpoint_capture value = {0};
+	struct ntfs_logfile_checkpoint_capture_report report = {0};
+	uint8_t *records = NULL, *names = NULL;
+	size_t kind, position;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	ntfs_logfile_default_limits(&limits);
+	limits.max_read_calls = LOGFILE_INVENTORY_READ_CALLS;
+	limits.max_read_bytes = LOGFILE_INVENTORY_READ_BYTES;
+	result = ntfs_logfile_open(&image.environment, &limits, NULL, &source);
+	if (result == NTFS_OK) {
+		result =
+		    ntfs_logfile_prepare_page_index(source, LOGFILE_INDEX_MAX_BYTES, &preparation);
+	}
+	if (result == NTFS_OK) {
+		records = malloc(NTFS_LOGFILE_CHECKPOINT_MAX_BYTES);
+		names = malloc(NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES);
+		if (records == NULL || names == NULL) {
+			result = NTFS_NO_MEMORY;
+		} else {
+			result = ntfs_logfile_capture_checkpoint(source, index, sequence, NULL,
+			    records, NTFS_LOGFILE_CHECKPOINT_MAX_BYTES, names,
+			    NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES, &value, &report);
+		}
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"checkpoint-capture\",\"code\":%d,"
+	       "\"result\":\"%s\",\"history_qualified\":false,\"recovery_qualified\":false,"
+	       "\"index\":%u,\"sequence\":%u,\"capture\":",
+	    LOGFILE_DIAGNOSTIC_VERSION, (int)result, ntfs_result_string(result), index, sequence);
+	if (result == NTFS_OK) {
+		printf("{\"client_index\":%u,\"client_sequence\":%u,\"bytes\":%" PRIu32
+		       ",\"client\":",
+		    value.client_index, value.client_sequence, value.bytes);
+		client_fields(&value.client, false);
+		printf(",\"restart\":{");
+		client_restart_fields(&value.restart, false);
+		printf("},\"snapshot\":{\"present_mask\":%" PRIu32 ",\"client_major\":%" PRIu32
+		       ",\"client_minor\":%" PRIu32 ",\"checkpoint_lsn\":%" PRIu64
+		       ",\"named_attributes\":%" PRIu32 ",\"dirty_pages\":%" PRIu32 ",\"tables\":[",
+		    value.snapshot.present_mask, value.snapshot.client_major,
+		    value.snapshot.client_minor, value.snapshot.checkpoint_lsn,
+		    value.snapshot.named_attributes, value.snapshot.dirty_pages);
+		for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+			printf("%s{", kind == 0 ? "" : ",");
+			checkpoint_fields(&value.snapshot.tables[kind]);
+			printf("}");
+		}
+		printf("]}");
+		span("checkpoint", value.checkpoint);
+		printf(",\"dumps\":[");
+		for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
+			printf("%s{\"offset\":%" PRIu32 ",\"length\":%" PRIu32 "}",
+			    kind == 0 ? "" : ",", value.dumps[kind].offset,
+			    value.dumps[kind].length);
+		}
+		printf("],\"bytes_hex\":\"");
+		for (position = 0; position < value.bytes; position++) {
+			printf("%02x", (unsigned)records[position]);
+		}
+		printf("\"}");
+	} else {
+		printf("null");
+	}
+	printf(",\"acquisition\":{\"checkpoint_lsn\":%" PRIu64 ",\"requested_lsn\":%" PRIu64
+	       ",\"read_bytes\":%" PRIu64 ",\"read_calls\":%" PRIu32
+	       ",\"acquired_records\":%" PRIu32 ",\"record_bytes\":%" PRIu32
+	       ",\"copy_pages_read\":%" PRIu32 ",\"complete\":%s},\"preparation\":",
+	    report.checkpoint_lsn, report.requested_lsn, report.read_bytes, report.read_calls,
+	    report.acquired_records, report.record_bytes, report.copy_pages_read,
+	    report.complete ? "true" : "false");
+	index_report_fields(&preparation);
+	printf("}\n");
+	free(names);
+	free(records);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
 }
 
 static int
@@ -835,6 +925,13 @@ main(int argc, char **argv)
 	if (argc < 3) {
 		goto usage;
 	}
+	if (strcmp(argv[1], "checkpoint-capture") == 0) {
+		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
+		    !number(argv[4], UINT16_MAX, &sequence)) {
+			goto usage;
+		}
+		return checkpoint_capture(argv[2], (uint16_t)argument, (uint16_t)sequence);
+	}
 	if (strcmp(argv[1], "checkpoint-snapshot") == 0) {
 		if (argc != LOGFILE_SNAPSHOT_ARGUMENTS) {
 			goto usage;
@@ -960,7 +1057,7 @@ main(int argc, char **argv)
 	} else if (is_record) {
 		record_fields(&record, true);
 	} else if (is_client_restart) {
-		client_restart_fields(&client_restart);
+		client_restart_fields(&client_restart, true);
 	} else if (is_attribute_name) {
 		printf(",\"target_attribute\":%u,\"name_units\":%u,\"bytes\":%" PRIu32,
 		    attribute_name.target_attribute, attribute_name.name_units,
@@ -994,6 +1091,7 @@ usage:
 	    "       ntfs-logfile client-restart CLIENT_PACKET\n"
 	    "       ntfs-logfile client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD\n"
 	    "       ntfs-logfile checkpoint-table JOURNAL CHECKPOINT_RECORD KIND TABLE_RECORD|-\n"
+	    "       ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n"
 	    "       ntfs-logfile checkpoint-snapshot JOURNAL CHECKPOINT OPEN|- NAMES|- DIRTY|- "
 	    "TX|- WORKSPACE_BYTES|-\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"

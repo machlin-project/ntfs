@@ -1,6 +1,45 @@
 # Core qualification and continuation
 
-Current portable acceptance passes 142 fatal-sanitizer suites, style, both 2-KiB
+Current portable acceptance passes 148 fatal-ASan/UBSan suites, style, both 2-KiB
+freestanding targets, 54 component groups/eleven runtime SKIPs and a clean unsigned
+universal Release. Selected checkpoint acquisition supplies the active NTFS
+client's stored restart and every referenced table packet in one caller-owned
+immutable input snapshot. The full anchor set precedes table reads; all packet
+reads share source and optional tighter capture credits. Complete framing/binding,
+entry/free topology and cross-table membership precede value-only publication.
+Errors zero capture and retain the separate attempted/acquired counters.
+
+All 144 original profiles pass: 78 complete captures/66 refusals and 310 exact
+packet oracles, including both client formats/LFS families, every copy slot,
+all table-presence masks, extended/large/wrapped packets and owner/anchor/member
+errors. Read/allocation sweeps, aggregate exact/short credits, short/unaligned
+workspaces, unchanged media and source-independent lifetime pass. The command is
+`ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX SEQUENCE`.
+Review artifacts/checkpoint-capture/{focused,final}/. No new app is installed.
+This supplies analysis inputs while native history/continuation freshness,
+transaction analysis, recovery, Windows replay and durability remain open.
+
+The original Windows journal supplies three exact anchored packets/704 bytes:
+restart, OAT and attribute names. Independent USA-restored source-byte framing
+agrees with every returned packet. Capture uses three reads/12,288 bytes; wrong
+index and sequence return STALE before acquisition I/O. Preparation has separate
+1,188-read/160,824-byte accounting. The source remains unchanged. This observation
+has no dirty/transaction anchors, post-checkpoint history or large modern
+continuation witness. Review artifacts/checkpoint-capture/native-execution/.
+
+The new journal campaign replays all 3,094 authored seeds, preserving all 2,934
+prior names/bytes and adding 160 selector-26 envelopes. Coverage passes 40,649 units/
+61 seconds at 707 MiB with unchanged caps and no external reload. The same frozen
+binary fixed-replays all 3,315 prior corpus paths in 104 batches. Main independently
+checks every raw execution path and hashes all retained old/fresh corpus files;
+artifacts/checkpoint-capture/main-review.json binds those results to the eleven
+source inputs, actual universal products and original native packets. Keep both
+the fresh campaign and previous corpus evidence.
+The additive corpus merge preserves all 3,315 old and 3,284 fresh files and adds
+350 missing paths for 3,665 total. Its independently checked result is under
+checkpoint-capture/corpus-preservation/; no existing file is overwritten or deleted.
+
+Preceding portable acceptance passes 142 fatal-sanitizer suites, style, both 2-KiB
 freestanding targets, 54 component groups/eleven runtime SKIPs and a clean unsigned
 universal Release. The immutable indexed journal owner visits a bounded selected
 record interval from an exact caller LSN, sharing credits across complete packets
@@ -16,7 +55,7 @@ its 1,138 target rows remain identical, with retained metadata growing by 272 to
 flush witness. Native client lower bounds, transaction analysis, continuation
 freshness, replay and durability remain requirements before writing under WRITES.md.
 
-Fresh journal fuzz replays all 2,934 authored seeds and passes 38,253 units/61 seconds
+The preceding journal fuzz run replays all 2,934 authored seeds and passes 38,253 units/61 seconds
 at 700 MiB under unchanged caps. All 3,004 preceding learned files pass 94 fixed
 replay batches with the new binary and remain unchanged. Their byte-preserving merge
 retains all 3,106 fresh files and adds 209 missing units for 3,315 total. Main verifies

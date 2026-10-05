@@ -69,7 +69,56 @@ native-read/attempt-4-access-admission/. This qualifies development signing, ena
 and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
 namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
-## Bounded selected journal record interval
+## Owned selected checkpoint acquisition
+
+One prepared logical journal owner now acquires the explicit active NTFS client's
+stored restart and every anchored dump under one whole-operation read budget.
+Optional copied capture credits can tighten its ceilings. The entire anchor set
+is checked before table reads; complete packet extent/completion framing, dump
+binding, free topology, allocated entries and name/dirty membership precede one
+value-only publication. Refusals zero the capture while retaining exact attempted
+reads and successfully acquired packet counters. Caller-owned packet bytes/views
+survive source close; opaque extensions and raw analysis fields are preserved.
+
+All 144 original cases pass: 78 complete/66 refused profiles and 310 independently
+authored complete packet oracles. Selected cases sweep every read with four exact
+backend results and partial/full failed transfers, every staging allocation,
+shared exact/short call and byte ceilings, short workspaces and unchanged retry.
+Both client formats/LFS families, all presence masks and copy slots, extended
+headers/payloads, large OAT, exact 1-MiB cap, wrap, identity/anchor/membership errors,
+byte guards and source-independent lifetime have separate checks.
+
+Host qualification passes 148/148 fatal-ASan/UBSan suites, both 2-KiB freestanding
+targets, style, 54 component PASS/eleven macOS-27 runtime SKIPs/zero failures and a
+clean unsigned universal Release. Generated source/product evidence is under
+artifacts/checkpoint-capture/final/ and artifacts/fskit-checkpoint-capture/.
+These are uninstalled products; installed development acceptance remains the
+separate earlier guest build. Captured checkpoint ownership does not qualify
+native current-history liveness, continuation freshness, transaction analysis,
+recovery, Windows replay, device persistence or mutations.
+
+The unmodified Windows Recovery journal also returns its complete three-packet
+checkpoint: restart, OAT and attribute names, 704 bytes under three reads/12,288
+bytes. Every packet matches independent protected-source byte framing; wrong index
+and sequence return STALE with null captures and zero acquisition I/O. Preparation
+remains separate. No dirty/transaction anchors, later history or large modern
+continuation is present in this witness. The exact source and frozen CLI remain
+unchanged; review artifacts/checkpoint-capture/native-execution/.
+
+Fresh journal fuzz preserves all 2,934 preceding authored seed names/bytes and adds
+160 selector-26 acquisition envelopes. Exhaustive replay passes all 3,094 seeds;
+the campaign passes 40,649 units/61 seconds at 707 MiB under unchanged input/RSS/time
+caps and fatal sanitizers, with external reload disabled. The same frozen binary
+then executes every one of the 3,315 prior corpus paths in 104 fixed batches.
+Main checks raw commands/paths and hashes every old/fresh retained file independently
+in artifacts/checkpoint-capture/main-review.json. Preserve the separate fresh run
+under artifacts/fuzz-checkpoint-capture/ and every preceding corpus file.
+The additive preservation step retains all 3,315 preceding files and all 3,284
+fresh files, adding 350 missing paths for 3,665 total with zero overwrites/deletions.
+Its reviewed plan, raw command and complete result remain under
+artifacts/checkpoint-capture/corpus-preservation/.
+
+## Preceding bounded selected journal record interval
 
 The immutable prepared owner now visits a selected framing interval from an exact
 caller LSN, under one read-call/byte budget for all records and an optional unfinished
@@ -1590,6 +1639,7 @@ claimed.
 | Complete physical log inventory | Exact whole-storage preflight credits, all tail/fast/circular pages in physical order, no allocation, separate common/target results, exact backend/visitor errors and partial counters, observation-only maxima | 60 graphs/14,729 C/CLI rows, 4,424 partial/full read-fault cases, 2,212 visitor-stop positions, retry and exact/short/default credits pass; all 1,170 native Windows rows agree independently; complete coverage does not qualify competing-copy selection, current endpoint, continuity or recovery |
 | Retained log target index | Explicit bounded metadata allocation and worst-case shared read preflight, complete newest-prefix comparison, unresolved-copy evidence, atomic preparation/retry, cached queries and exact selected-page acquisition | 71 graphs/14,922 target rows, 109 packet results, 13,398 constructor and 1,582 selected-read fault cases, 27 header/target changes and lifetime/credit/memory boundaries pass; all 1,138 native Windows targets and four whole packets agree; active endpoint/window, continuation ownership, recovery and writes remain unqualified |
 | Bounded selected log interval | Exact caller anchor, candidate completed endpoint, ordered complete packet framing, optional unfinished successor header, shared whole-walk credits and partial reports | 123 original windows/861 emitted packet oracles, exact 1-MiB record boundary, read/allocation retry, callback stops, wrap/sequence, copy-target regression and shared-credit cases pass; four frozen Windows packets and suffixes agree; native client lower bounds, modern continuation provenance, current history, transaction analysis/replay and durability remain open |
+| Owned selected checkpoint inputs | Explicit active index/sequence, prepared owner, all-anchor preflight, whole-operation read credits, extent/completion framing and complete bound table validation before caller-owned publication | 144 profiles/78 complete captures/310 exact packet oracles, staged read/allocation faults, quota/workspace/retry/lifetime checks and three original Windows packets pass; all 3,094 authored seeds and 3,315 preceding corpus paths replay with the same binary; native analysis, continuation freshness, volume references, recovery and durability remain open |
 | NTFS journal stream binding | Fixed MFT slot/unnamed ordinary stream, complete fragmented/list/sequence/base ownership, node-independent counted lifetime, logical versus physical read accounting, staged partial-read isolation and refusal of unsupported system-file forms | 24 image verdicts/exact reports, 54 allocation/58 physical-read faults with retry, two simultaneous owners, BUSY unmount and unchanged images passed; ordinary dirty-media policy is unchanged; native journal admission/drain remains open |
 | Physical circular-record observation | LSN-addressed adjacent protected fragments and one wrap, no-page-revisit bound, exact unpadded bytes/extended headers, shared read credits and bounded ephemeral staging | 30 C verdicts/exact CLI reports, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary passed; eight bound-volume storage forms also check exact records and resource/staging faults; written/current history, copy routing, active clients and recovery remain unqualified |
 | Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |

@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
+#include "logfile_internal.h"
 #include "logfile_tables_disk.h"
 #include <ntfs/checkpoint.h>
 
@@ -52,6 +53,47 @@ validate_entries(const uint8_t *bytes, const struct ntfs_logfile_restart_table *
 }
 
 enum ntfs_result
+ntfs_logfile_checkpoint_anchor(const struct ntfs_logfile_restart *restart,
+    const struct ntfs_logfile_client_restart *client, uint64_t checkpoint_lsn,
+    enum ntfs_logfile_checkpoint_kind kind, struct ntfs_logfile_table_reference *out)
+{
+	struct ntfs_logfile_table_reference anchor;
+	struct ntfs_logfile_lsn location;
+
+	ntfs_zero(out, sizeof(*out));
+	switch (kind) {
+	case NTFS_LOGFILE_CHECKPOINT_OPEN_ATTRIBUTES:
+		anchor = client->open_attributes;
+		break;
+	case NTFS_LOGFILE_CHECKPOINT_ATTRIBUTE_NAMES:
+		anchor = client->attribute_names;
+		break;
+	case NTFS_LOGFILE_CHECKPOINT_DIRTY_PAGES:
+		anchor = client->dirty_pages;
+		break;
+	case NTFS_LOGFILE_CHECKPOINT_TRANSACTIONS:
+		anchor = client->transactions;
+		break;
+	default:
+		return NTFS_INVALID;
+	}
+	if (anchor.lsn == 0 && anchor.bytes == 0) {
+		return NTFS_NOT_FOUND;
+	}
+	if (anchor.lsn == 0 || anchor.bytes == 0 || anchor.lsn >= checkpoint_lsn) {
+		return NTFS_CORRUPT;
+	}
+	if (anchor.bytes > NTFS_LOGFILE_MAX_RECORD_BYTES) {
+		return NTFS_RANGE;
+	}
+	if (ntfs_logfile_lsn_decode(restart, anchor.lsn, &location) != NTFS_OK) {
+		return NTFS_CORRUPT;
+	}
+	*out = anchor;
+	return NTFS_OK;
+}
+
+enum ntfs_result
 ntfs_logfile_checkpoint_table_decode(const struct ntfs_logfile *source,
     enum ntfs_logfile_checkpoint_kind kind, const void *checkpoint_input, size_t checkpoint_bytes,
     const void *table_input, size_t table_bytes, struct ntfs_logfile_checkpoint_table *out)
@@ -84,37 +126,14 @@ ntfs_logfile_checkpoint_table_decode(const struct ntfs_logfile *source,
 		return result;
 	}
 	value.checkpoint_lsn = ntfs_u64(checkpoint->lsn);
-	switch (kind) {
-	case NTFS_LOGFILE_CHECKPOINT_OPEN_ATTRIBUTES:
-		anchor = client.open_attributes;
-		break;
-	case NTFS_LOGFILE_CHECKPOINT_ATTRIBUTE_NAMES:
-		anchor = client.attribute_names;
-		break;
-	case NTFS_LOGFILE_CHECKPOINT_DIRTY_PAGES:
-		anchor = client.dirty_pages;
-		break;
-	case NTFS_LOGFILE_CHECKPOINT_TRANSACTIONS:
-		anchor = client.transactions;
-		break;
-	default:
-		return NTFS_INVALID;
-	}
-	if (anchor.lsn == 0 && anchor.bytes == 0) {
-		return NTFS_NOT_FOUND;
-	}
-	if (anchor.lsn == 0 || anchor.bytes == 0 || anchor.lsn >= value.checkpoint_lsn) {
-		return NTFS_CORRUPT;
-	}
-	if (anchor.bytes > NTFS_LOGFILE_MAX_RECORD_BYTES) {
-		return NTFS_RANGE;
-	}
 	result = ntfs_logfile_get_restart(source, &restart);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if (ntfs_logfile_lsn_decode(&restart, anchor.lsn, &location) != NTFS_OK) {
-		return NTFS_CORRUPT;
+	result =
+	    ntfs_logfile_checkpoint_anchor(&restart, &client, value.checkpoint_lsn, kind, &anchor);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	result = ntfs_logfile_record_decode(
 	    table_input, table_bytes, restart.record_header_bytes, &record);

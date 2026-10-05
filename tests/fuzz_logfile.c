@@ -39,6 +39,7 @@ enum {
 	FUZZ_PAGE_INVENTORY,
 	FUZZ_PAGE_INDEX,
 	FUZZ_RECORD_HISTORY,
+	FUZZ_CHECKPOINT_CAPTURE,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -64,6 +65,8 @@ enum {
 	FUZZ_HISTORY_SHORT_WORKSPACE = 1u << (NTFS_BITS_PER_BYTE + 5),
 	FUZZ_HISTORY_VISITOR_STOP = 1u << (NTFS_BITS_PER_BYTE + 6),
 	FUZZ_HISTORY_SHORT_RECORDS = 1u << (NTFS_BITS_PER_BYTE + 7),
+	FUZZ_CAPTURE_SHORT_WORKSPACE = 1u << (NTFS_BITS_PER_BYTE + 5),
+	FUZZ_CAPTURE_SHORT_NAMES = 1u << (NTFS_BITS_PER_BYTE + 6),
 	FUZZ_HISTORY_MAX_RECORDS = 1024,
 	FUZZ_HISTORY_STOP_RECORD = 2,
 	FUZZ_BUDGET_SHIFT = 2 * NTFS_BITS_PER_BYTE,
@@ -469,11 +472,18 @@ fuzz_history_visit(void *context, const struct ntfs_logfile_record_view *view, c
 }
 
 static void
-fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t controls, bool history)
+fuzz_source_index(
+    const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t controls, bool history, bool capture)
 {
 	struct ntfs_logfile_page_index_report indices[2] = {0}, cached, empty = {0};
 	struct ntfs_logfile_record_view views[2] = {0}, zero_view = {0};
 	struct ntfs_logfile_history_report histories[2] = {0};
+	struct ntfs_logfile_checkpoint_capture captures[2] = {0}, zero_capture = {0};
+	struct ntfs_logfile_checkpoint_capture_report acquisitions[2] = {0};
+	struct ntfs_logfile_checkpoint_capture_limits capture_limits;
+	struct ntfs_logfile_checkpoint_snapshot snapshot;
+	struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS];
+	struct ntfs_logfile_record record;
 	struct fuzz_history_visitor visitors[2] = {0};
 	struct ntfs_logfile_report reports[2];
 	struct ntfs_logfile_restart restart;
@@ -487,14 +497,15 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 	enum ntfs_result records[2] = {NTFS_INVALID, NTFS_INVALID};
 
 	uint64_t digests[2] = {0}, max_bytes, budget_bytes;
-	size_t index, memory, retained, allocations, reads, capacity, guarded_bytes;
+	size_t index, memory, retained, allocations, reads, capacity, guarded_bytes, kind;
+	size_t name_capacity;
 	size_t used[2] = {0};
 	uint32_t pages, fault, budget = controls >> FUZZ_BUDGET_SHIFT;
 
 	ntfs_logfile_default_limits(&limits);
 	limits.max_read_calls = FUZZ_INVENTORY_READ_CALLS;
 	limits.max_read_bytes = FUZZ_INDEX_READ_BYTES;
-	if (budget != 0) {
+	if (budget != 0 && !capture) {
 		limits.max_read_calls = 1u + budget % FUZZ_INVENTORY_READ_CALLS;
 		budget_bytes = (uint64_t)budget * NTFS_MST_STRIDE;
 		limits.max_read_bytes =
@@ -508,6 +519,10 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 		environment = fuzz_environment(&device);
 		environment.read = partial_read;
 		memset(record_scratch[index], FUZZ_GUARD_VALUE, guarded_bytes);
+		if (capture) {
+			memset(
+			    name_workspace[index], FUZZ_GUARD_VALUE, sizeof(name_workspace[index]));
+		}
 		opens[index] = ntfs_logfile_open(&environment, &limits, &reports[index], &source);
 		assert(reports[index].read_calls <= limits.max_read_calls &&
 		    reports[index].read_bytes <= limits.max_read_bytes);
@@ -563,7 +578,90 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 				device.fail_allocation =
 				    (controls & FUZZ_FAULT_RECORD_ALLOCATION) != 0 ? allocations + 1
 										   : 0;
-				if (history) {
+				if (capture) {
+					if ((controls & FUZZ_CAPTURE_SHORT_WORKSPACE) != 0) {
+						capacity = restart.record_header_bytes - 1u;
+					}
+					name_capacity = (controls & FUZZ_CAPTURE_SHORT_NAMES) != 0
+					    ? 0
+					    : NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES;
+					capture_limits =
+					    (struct ntfs_logfile_checkpoint_capture_limits){
+						budget == 0
+						    ? limits.max_read_calls
+						    : 1u + budget % FUZZ_INVENTORY_READ_CALLS,
+						budget == 0 ? limits.max_read_bytes
+							    : (uint64_t)budget * NTFS_MST_STRIDE};
+					records[index] = ntfs_logfile_capture_checkpoint(source,
+					    (uint16_t)lsn,
+					    (uint16_t)(lsn >> FUZZ_ENCODE_SHORT_SHIFT),
+					    budget == 0 ? NULL : &capture_limits,
+					    record_scratch[index] + FUZZ_GUARD_BYTES, capacity,
+					    name_workspace[index] + FUZZ_GUARD_BYTES, name_capacity,
+					    &captures[index], &acquisitions[index]);
+					used[index] = capacity;
+					assert(acquisitions[index].read_calls == device.reads &&
+					    acquisitions[index].read_calls <=
+						capture_limits.max_read_calls &&
+					    acquisitions[index].read_bytes <=
+						capture_limits.max_read_bytes &&
+					    acquisitions[index].read_bytes <=
+						limits.max_read_bytes &&
+					    acquisitions[index].record_bytes <= capacity &&
+					    acquisitions[index].acquired_records <=
+						NTFS_LOGFILE_CHECKPOINT_MAX_PACKETS &&
+					    acquisitions[index].complete ==
+						(records[index] == NTFS_OK));
+					guard(name_workspace[index], name_capacity,
+					    sizeof(name_workspace[index]));
+					if (records[index] == NTFS_OK) {
+						assert(captures[index].bytes ==
+							acquisitions[index].record_bytes &&
+						    captures[index].checkpoint.offset == 0 &&
+						    captures[index].checkpoint.length <=
+							captures[index].bytes);
+						assert(ntfs_logfile_record_decode(
+							   record_scratch[index] + FUZZ_GUARD_BYTES,
+							   captures[index].checkpoint.length,
+							   restart.record_header_bytes,
+							   &record) == NTFS_OK &&
+						    record.lsn ==
+							captures[index].client.restart_lsn &&
+						    record.client_index ==
+							captures[index].client_index &&
+						    record.client_sequence ==
+							captures[index].client_sequence);
+						for (kind = 0; kind < NTFS_LOGFILE_CHECKPOINT_KINDS;
+						    kind++) {
+							assert(ntfs_bounds(
+							    captures[index].dumps[kind].offset,
+							    captures[index].dumps[kind].length,
+							    captures[index].bytes));
+							dumps[kind] =
+							    (struct ntfs_logfile_checkpoint_dump){
+								record_scratch[index] +
+								    FUZZ_GUARD_BYTES +
+								    captures[index]
+									.dumps[kind]
+									.offset,
+								captures[index].dumps[kind].length};
+						}
+						reads = device.reads;
+						allocations = device.allocations;
+						assert(ntfs_logfile_checkpoint_decode(source,
+							   record_scratch[index] + FUZZ_GUARD_BYTES,
+							   captures[index].checkpoint.length, dumps,
+							   name_workspace[index] + FUZZ_GUARD_BYTES,
+							   name_capacity, &snapshot) == NTFS_OK);
+						assert(memcmp(&snapshot, &captures[index].snapshot,
+							   sizeof(snapshot)) == 0 &&
+						    device.reads == reads &&
+						    device.allocations == allocations);
+					} else {
+						assert(memcmp(&captures[index], &zero_capture,
+							   sizeof(zero_capture)) == 0);
+					}
+				} else if (history) {
 					if ((controls & FUZZ_HISTORY_SHORT_WORKSPACE) != 0) {
 						capacity = restart.record_header_bytes - 1u;
 					}
@@ -599,7 +697,7 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 				}
 				assert(device.memory == retained &&
 				    device.reads <= limits.max_read_calls);
-				if (!history && records[index] == NTFS_OK) {
+				if (!history && !capture && records[index] == NTFS_OK) {
 					used[index] = views[index].bytes;
 					assert(used[index] <= capacity &&
 					    views[index].record.lsn == lsn &&
@@ -608,7 +706,7 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 					    views[index].read_bytes <= limits.max_read_bytes &&
 					    views[index].copy_pages_read <=
 						views[index].pages_read);
-				} else if (!history) {
+				} else if (!history && !capture) {
 					assert(memcmp(&views[index], &zero_view,
 						   sizeof(zero_view)) == 0);
 				}
@@ -638,8 +736,14 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 	    memcmp(&indices[0], &indices[1], sizeof(indices[0])) == 0 &&
 	    memcmp(&views[0], &views[1], sizeof(views[0])) == 0 &&
 	    memcmp(&histories[0], &histories[1], sizeof(histories[0])) == 0 &&
+	    memcmp(&captures[0], &captures[1], sizeof(captures[0])) == 0 &&
+	    memcmp(&acquisitions[0], &acquisitions[1], sizeof(acquisitions[0])) == 0 &&
 	    memcmp(&visitors[0], &visitors[1], sizeof(visitors[0])) == 0 &&
 	    memcmp(record_scratch[0], record_scratch[1], guarded_bytes) == 0);
+	if (capture) {
+		assert(
+		    memcmp(name_workspace[0], name_workspace[1], sizeof(name_workspace[0])) == 0);
+	}
 }
 
 static void
@@ -1228,9 +1332,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(memcmp(data, original, size) == 0);
 		return 0;
 	}
-	if (kind == FUZZ_PAGE_INDEX || kind == FUZZ_RECORD_HISTORY) {
+	if (kind == FUZZ_PAGE_INDEX || kind == FUZZ_RECORD_HISTORY ||
+	    kind == FUZZ_CHECKPOINT_CAPTURE) {
 		fuzz_source_index(packet, packet_size, argument,
-		    ntfs_u32(header->configuration_bytes), kind == FUZZ_RECORD_HISTORY);
+		    ntfs_u32(header->configuration_bytes), kind == FUZZ_RECORD_HISTORY,
+		    kind == FUZZ_CHECKPOINT_CAPTURE);
 		assert(memcmp(data, original, size) == 0);
 		return 0;
 	}
@@ -1537,7 +1643,8 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	page_bytes = size - sizeof(*envelope) - configuration_size;
 	source_kind = kind == FUZZ_SOURCE || kind == FUZZ_CIRCULAR_RECORD ||
 	    kind == FUZZ_LEGACY_RECORD || kind == FUZZ_FAST_RECORD || kind == FUZZ_PAGE_INVENTORY ||
-	    kind == FUZZ_PAGE_INDEX || kind == FUZZ_RECORD_HISTORY;
+	    kind == FUZZ_PAGE_INDEX || kind == FUZZ_RECORD_HISTORY ||
+	    kind == FUZZ_CHECKPOINT_CAPTURE;
 	if (kind == FUZZ_CLIENT_RESTART_RECORD &&
 	    (seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD == 0) {
 		page = data + sizeof(*envelope);
@@ -1594,7 +1701,7 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	}
 	minimum = 0;
 	if ((kind == FUZZ_PAGE_INVENTORY || kind == FUZZ_PAGE_INDEX ||
-		kind == FUZZ_RECORD_HISTORY) &&
+		kind == FUZZ_RECORD_HISTORY || kind == FUZZ_CHECKPOINT_CAPTURE) &&
 	    (seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD != 0) {
 		record_page = inventory_mutation_page(&page, &page_bytes, seed);
 		if (record_page) {

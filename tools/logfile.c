@@ -20,6 +20,18 @@ enum { LOGFILE_INDEX_MAX_BYTES = 1024 * 1024 };
 
 enum { LOGFILE_HISTORY_MAX_RECORDS = 4096 };
 
+enum { LOGFILE_CHECKPOINT_TRANSACTION_READ_CALLS = 8192 };
+
+enum {
+	LOGFILE_TRANSACTION_SOURCE_ARGUMENT = 2,
+	LOGFILE_TRANSACTION_INDEX_ARGUMENT = LOGFILE_TRANSACTION_SOURCE_ARGUMENT + 1,
+	LOGFILE_TRANSACTION_SEQUENCE_ARGUMENT = LOGFILE_TRANSACTION_INDEX_ARGUMENT + 1,
+	LOGFILE_TRANSACTION_ID_ARGUMENT = LOGFILE_TRANSACTION_SEQUENCE_ARGUMENT + 1,
+	LOGFILE_TRANSACTION_ROOT_ARGUMENT = LOGFILE_TRANSACTION_ID_ARGUMENT + 1,
+	LOGFILE_TRANSACTION_ARGUMENTS = LOGFILE_TRANSACTION_ROOT_ARGUMENT + 1,
+	LOGFILE_TRANSACTION_LINK_BYTES = NTFS_LOGFILE_TRANSACTION_MAX_RECORDS * 2 * sizeof(uint64_t)
+};
+
 static bool
 number(const char *text, uint64_t maximum, uint64_t *out)
 {
@@ -580,6 +592,76 @@ journal_records(const char *path, uint64_t lsn)
 }
 
 static int
+transaction_records(char **argv)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_limits limits;
+	struct ntfs_logfile_page_index_report preparation = {0};
+	struct ntfs_logfile_transaction_report report = {0};
+	uint8_t *bytes = NULL, *links = NULL;
+	uint64_t index, sequence, transaction, root;
+	bool first = true;
+	enum ntfs_result result;
+
+	if (!number(argv[LOGFILE_TRANSACTION_INDEX_ARGUMENT], UINT16_MAX, &index) ||
+	    !number(argv[LOGFILE_TRANSACTION_SEQUENCE_ARGUMENT], UINT16_MAX, &sequence) ||
+	    !number(argv[LOGFILE_TRANSACTION_ID_ARGUMENT], UINT32_MAX, &transaction) ||
+	    !number(argv[LOGFILE_TRANSACTION_ROOT_ARGUMENT], UINT64_MAX, &root)) {
+		fprintf(stderr, "Invalid transaction identity or root LSN\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	if (ntfs_image_open(argv[LOGFILE_TRANSACTION_SOURCE_ARGUMENT], &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	ntfs_logfile_default_limits(&limits);
+	limits.max_read_calls = LOGFILE_INVENTORY_READ_CALLS;
+	limits.max_read_bytes = LOGFILE_INVENTORY_READ_BYTES;
+	result = ntfs_logfile_open(&image.environment, &limits, NULL, &source);
+	if (result == NTFS_OK) {
+		result =
+		    ntfs_logfile_prepare_page_index(source, LOGFILE_INDEX_MAX_BYTES, &preparation);
+	}
+	printf(
+	    "{\"schema_version\":%u,\"scope\":\"transaction-records\",\"history_qualified\":false,"
+	    "\"recovery_qualified\":false,\"index\":%" PRIu64 ",\"sequence\":%" PRIu64
+	    ",\"transaction\":%" PRIu64 ",\"requested_lsn\":%" PRIu64 ",\"records\":[",
+	    LOGFILE_DIAGNOSTIC_VERSION, index, sequence, transaction, root);
+	if (result == NTFS_OK) {
+		bytes = malloc(NTFS_LOGFILE_MAX_RECORD_BYTES);
+		links = malloc(LOGFILE_TRANSACTION_LINK_BYTES);
+		if (bytes == NULL || links == NULL) {
+			result = NTFS_NO_MEMORY;
+		} else {
+			result = ntfs_logfile_visit_transaction(source, (uint16_t)index,
+			    (uint16_t)sequence, (uint32_t)transaction, root, NULL, bytes,
+			    NTFS_LOGFILE_MAX_RECORD_BYTES, links, LOGFILE_TRANSACTION_LINK_BYTES,
+			    history_record, &first, &report);
+		}
+	}
+	printf("],\"code\":%d,\"result\":\"%s\",\"chain\":{\"root_lsn\":%" PRIu64
+	       ",\"last_lsn\":%" PRIu64 ",\"next_lsn\":%" PRIu64 ",\"control_lsn\":%" PRIu64
+	       ",\"control_operation\":%u,\"transaction\":%" PRIu32 ",\"record_bytes\":%" PRIu64
+	       ",\"read_bytes\":%" PRIu64 ",\"read_calls\":%" PRIu32
+	       ",\"examined_records\":%" PRIu32 ",\"visited_records\":%" PRIu32
+	       ",\"copy_pages_read\":%" PRIu32 ",\"undo_references\":%" PRIu32
+	       ",\"complete\":%s},\"preparation\":",
+	    (int)result, ntfs_result_string(result), report.root_lsn, report.last_lsn,
+	    report.next_lsn, report.control_lsn, report.control_operation, report.transaction,
+	    report.record_bytes, report.read_bytes, report.read_calls, report.examined_records,
+	    report.visited_records, report.copy_pages_read, report.undo_references,
+	    report.complete ? "true" : "false");
+	index_report_fields(&preparation);
+	printf("}\n");
+	free(links);
+	free(bytes);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
+}
+
+static int
 active_client(const char *path, uint16_t index, uint16_t sequence)
 {
 	struct ntfs_image image;
@@ -812,6 +894,107 @@ checkpoint_table(
 	return result == NTFS_OK ? 0 : 1;
 }
 
+static enum ntfs_result
+checkpoint_transaction_view(
+    void *context, const struct ntfs_logfile_checkpoint_transaction_view *view)
+{
+	bool *first = context;
+	const struct ntfs_logfile_transaction *seed = &view->snapshot;
+	const struct ntfs_logfile_transaction_report *chain = &view->chain;
+
+	printf("%s{\"key\":%" PRIu32 ",\"snapshot\":{\"state\":%d,\"first_lsn\":%" PRIu64
+	       ",\"previous_lsn\":%" PRIu64 ",\"undo_next_lsn\":%" PRIu64
+	       ",\"undo_records\":%" PRIu32 ",\"undo_bytes\":%" PRIu32 "},"
+	       "\"chain\":{\"root_lsn\":%" PRIu64 ",\"last_lsn\":%" PRIu64 ",\"next_lsn\":%" PRIu64
+	       ",\"control_lsn\":%" PRIu64 ",\"record_bytes\":%" PRIu64 ",\"read_bytes\":%" PRIu64
+	       ",\"transaction\":%" PRIu32 ",\"read_calls\":%" PRIu32
+	       ",\"examined_records\":%" PRIu32 ",\"visited_records\":%" PRIu32
+	       ",\"copy_pages_read\":%" PRIu32 ",\"undo_references\":%" PRIu32
+	       ",\"control_operation\":%u,\"complete\":%s}}",
+	    *first ? "" : ",", view->key, (int)seed->state, seed->first_lsn, seed->previous_lsn,
+	    seed->undo_next_lsn, seed->undo_records, seed->undo_bytes, chain->root_lsn,
+	    chain->last_lsn, chain->next_lsn, chain->control_lsn, chain->record_bytes,
+	    chain->read_bytes, chain->transaction, chain->read_calls, chain->examined_records,
+	    chain->visited_records, chain->copy_pages_read, chain->undo_references,
+	    chain->control_operation, chain->complete ? "true" : "false");
+	*first = false;
+	return NTFS_OK;
+}
+
+static int
+checkpoint_transactions(const char *path, uint16_t index, uint16_t sequence)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_limits limits;
+	struct ntfs_logfile_page_index_report preparation = {0};
+	struct ntfs_logfile_checkpoint_transaction_report report = {0};
+	struct ntfs_logfile_checkpoint_transaction_workspace workspace = {0};
+	const struct ntfs_logfile_checkpoint_capture_report *capture = &report.checkpoint;
+	enum ntfs_result result;
+	bool first = true;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	ntfs_logfile_default_limits(&limits);
+	limits.max_read_calls = LOGFILE_CHECKPOINT_TRANSACTION_READ_CALLS;
+	limits.max_read_bytes = LOGFILE_INVENTORY_READ_BYTES;
+	result = ntfs_logfile_open(&image.environment, &limits, NULL, &source);
+	if (result == NTFS_OK) {
+		result =
+		    ntfs_logfile_prepare_page_index(source, LOGFILE_INDEX_MAX_BYTES, &preparation);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"checkpoint-transactions\","
+	       "\"history_qualified\":false,\"recovery_qualified\":false,"
+	       "\"index\":%u,\"sequence\":%u,\"transactions\":[",
+	    LOGFILE_DIAGNOSTIC_VERSION, index, sequence);
+	if (result == NTFS_OK) {
+		workspace.checkpoint_capacity = NTFS_LOGFILE_CHECKPOINT_MAX_BYTES;
+		workspace.name_capacity = NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES;
+		workspace.record_capacity = NTFS_LOGFILE_MAX_RECORD_BYTES;
+		workspace.link_capacity = LOGFILE_TRANSACTION_LINK_BYTES;
+		workspace.checkpoint_records = malloc(workspace.checkpoint_capacity);
+		workspace.names = malloc(workspace.name_capacity);
+		workspace.record = malloc(workspace.record_capacity);
+		workspace.links = malloc(workspace.link_capacity);
+		if (workspace.checkpoint_records == NULL || workspace.names == NULL ||
+		    workspace.record == NULL || workspace.links == NULL) {
+			result = NTFS_NO_MEMORY;
+		} else {
+			result = ntfs_logfile_visit_checkpoint_transactions(source, index, sequence,
+			    NULL, &workspace, checkpoint_transaction_view, &first, &report);
+		}
+	}
+	printf("],\"code\":%d,\"result\":\"%s\",\"checkpoint\":{\"checkpoint_lsn\":%" PRIu64
+	       ",\"requested_lsn\":%" PRIu64 ",\"read_calls\":%" PRIu32 ",\"read_bytes\":%" PRIu64
+	       ",\"acquired_records\":%" PRIu32 ",\"record_bytes\":%" PRIu32
+	       ",\"copy_pages_read\":%" PRIu32 ",\"complete\":%s},"
+	       "\"report\":{\"table_lsn\":%" PRIu64 ",\"allocated_transactions\":%" PRIu32
+	       ",\"verified_transactions\":%" PRIu32 ",\"visited_transactions\":%" PRIu32
+	       ",\"requested_transaction\":%" PRIu32 ",\"read_calls\":%" PRIu32
+	       ",\"read_bytes\":%" PRIu64 ",\"record_bytes\":%" PRIu64
+	       ",\"examined_records\":%" PRIu32 ",\"checked_records\":%" PRIu32
+	       ",\"copy_pages_read\":%" PRIu32 ",\"complete\":%s},\"preparation\":",
+	    (int)result, ntfs_result_string(result), capture->checkpoint_lsn,
+	    capture->requested_lsn, capture->read_calls, capture->read_bytes,
+	    capture->acquired_records, capture->record_bytes, capture->copy_pages_read,
+	    capture->complete ? "true" : "false", report.table_lsn, report.allocated_transactions,
+	    report.verified_transactions, report.visited_transactions, report.requested_transaction,
+	    report.read_calls, report.read_bytes, report.record_bytes, report.examined_records,
+	    report.checked_records, report.copy_pages_read, report.complete ? "true" : "false");
+	index_report_fields(&preparation);
+	printf("}\n");
+	free(workspace.links);
+	free(workspace.record);
+	free(workspace.names);
+	free(workspace.checkpoint_records);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
+}
+
 enum {
 	LOGFILE_SNAPSHOT_SOURCE_ARGUMENT = 2,
 	LOGFILE_SNAPSHOT_CHECKPOINT_ARGUMENT = LOGFILE_SNAPSHOT_SOURCE_ARGUMENT + 1,
@@ -925,12 +1108,25 @@ main(int argc, char **argv)
 	if (argc < 3) {
 		goto usage;
 	}
+	if (strcmp(argv[1], "transaction-records") == 0) {
+		if (argc != LOGFILE_TRANSACTION_ARGUMENTS) {
+			goto usage;
+		}
+		return transaction_records(argv);
+	}
 	if (strcmp(argv[1], "checkpoint-capture") == 0) {
 		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
 		    !number(argv[4], UINT16_MAX, &sequence)) {
 			goto usage;
 		}
 		return checkpoint_capture(argv[2], (uint16_t)argument, (uint16_t)sequence);
+	}
+	if (strcmp(argv[1], "checkpoint-transactions") == 0) {
+		if (argc != 5 || !number(argv[3], UINT16_MAX, &argument) ||
+		    !number(argv[4], UINT16_MAX, &sequence)) {
+			goto usage;
+		}
+		return checkpoint_transactions(argv[2], (uint16_t)argument, (uint16_t)sequence);
 	}
 	if (strcmp(argv[1], "checkpoint-snapshot") == 0) {
 		if (argc != LOGFILE_SNAPSHOT_ARGUMENTS) {
@@ -1092,12 +1288,15 @@ usage:
 	    "       ntfs-logfile client-restart-record LOGICAL_JOURNAL_FILE ASSEMBLED_RECORD\n"
 	    "       ntfs-logfile checkpoint-table JOURNAL CHECKPOINT_RECORD KIND TABLE_RECORD|-\n"
 	    "       ntfs-logfile checkpoint-capture LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n"
+	    "       ntfs-logfile checkpoint-transactions LOGICAL_JOURNAL_FILE INDEX SEQUENCE\n"
 	    "       ntfs-logfile checkpoint-snapshot JOURNAL CHECKPOINT OPEN|- NAMES|- DIRTY|- "
 	    "TX|- WORKSPACE_BYTES|-\n"
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile pages LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile index LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile records LOGICAL_JOURNAL_FILE DECIMAL_FIRST_LSN\n"
+	    "       ntfs-logfile transaction-records LOGICAL_JOURNAL_FILE INDEX SEQUENCE TX "
+	    "ROOT_LSN\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
 	    "       ntfs-logfile legacy-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

@@ -1,5 +1,26 @@
 # Code provenance
 
+Checkpoint transaction composition, full-seed admission, physical-key/root
+binding, aggregate budgets and its independent packet/seed/fault author are
+original repository code over the existing owned capture and chain components.
+Transaction entry fields follow the original Linux-NTFS research below. The use
+of TransactionId as a physical restart-table byte offset is also described in
+the [original format-related security report](https://lists.openwall.net/linux-kernel/2026/09/21/2791).
+Only that wire-format fact is used; no foreign filesystem code or recovery
+algorithm is imported. Synthetic roots/chains and raw states do not qualify live
+native analysis, redo/undo or writable admission.
+
+The bounded selected transaction-chain visitor, private link scratch, decreasing
+chain lookup, shared budgets, callback/error accounting and original graph/fault
+author are repository-owned implementation. Previous/undo-next header fields and
+Prepare/Commit/Forget opcode values follow the
+[original Linux-NTFS field research](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html).
+[Suhanov's original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/)
+and its [decoded rename observation](https://raw.githubusercontent.com/msuhanov/articles/master/misc/log_rename.txt)
+provide format context only. No foreign transaction-analysis, ARIES, parser or
+recovery implementation is imported. Most-recent raw markers and synthetic chain
+membership do not qualify native transaction state or writable recovery.
+
 Retained journal target indexing, complete prefix comparison, shared-credit/memory
 admission and atomic cached lifetime are original repository code. The exact
 indexed reader reuses the original assembler; no foreign selection or recovery

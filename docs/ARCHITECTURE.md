@@ -433,6 +433,16 @@ zero the whole snapshot, and source/record bytes remain immutable without callba
 Volume reference/type/LCN semantics and complete current page/copy history remain
 owning-layer work before native analysis, redo/undo or writable admission.
 
+The checkpoint transaction composition acquires those owned inputs internally,
+admits every allocated seed, then binds each complete chain to its physical
+transaction-table key and stored first/undo roots. Capture and all chains share
+source-bounded I/O and aggregate record credits. Disjoint caller buffers hold the
+private checkpoint, one reusable record and bounded link pairs; no additional
+retained owner allocation is introduced. Callbacks see fully bound individual
+chains but must retain the whole analysis privately until outer success. Raw
+states and markers cannot choose recovery actions. Post-checkpoint native state,
+current continuation ownership and durability remain separate under WRITES.md.
+
 Private logical journal encoders accept immutable typed descriptions and borrowed
 byte spans without callbacks or allocation. Wire widths and checked disjoint used
 output ranges gate every store; all errors and unused capacity stay unchanged.

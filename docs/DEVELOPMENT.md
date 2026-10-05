@@ -16,7 +16,35 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
-Current checkpoint-input qualification runs `checkpoint-capture`,
+Current checkpoint-transaction qualification runs `checkpoint-transactions`,
+`checkpoint-transactions-cli` and the four `fuzz-checkpoint-transaction` variants,
+then the full 160 fatal-ASan/UBSan suites. The original author is
+tests/checkpoint_transaction_fixtures.py: 69 profiles, 50 complete/19 refused
+results and 1,774 exact seed/chain views. The regular-file diagnostic is
+`ntfs-logfile checkpoint-transactions LOGICAL_JOURNAL_FILE INDEX SEQUENCE`;
+it acquires the owning checkpoint, checks physical transaction keys and stored
+roots, and reports aggregate capture/chain credits separately from preparation.
+The CLI uses defaults and compares 65 profiles/137 exact views; explicit policy
+boundaries and the largest wire table remain in the C suite. See LOGFILE.md for
+the full ownership, callback, budget and refusal contract. Review
+artifacts/checkpoint-transactions/{focused-json-corrected-20261005,final-20261005}/
+and artifacts/fskit-checkpoint-transactions/.
+
+Selector 28 adds 87 checkpoint-chain envelopes while preserving all preceding
+3,204 authored names/bytes. Fuzz traversal has explicit 512-entry/aggregate-record
+and 1-MiB checkpoint workspace policies; the C suite independently qualifies
+production 4096-record limits and the maximum redo-length-fitting table. All
+3,291 fresh seeds replay before the 60-second exploration, under unchanged
+2-MiB input/1-GiB RSS/five-second caps. Use a fresh --output directory and retain
+prior corpora. Fixed replay requires absolute paths when its cwd differs from
+the corpus root. Native continuation ownership, post-checkpoint analysis and
+Windows recovery still precede writes.
+The qualified campaign and all 7,351 prior input paths pass independent raw-log/
+byte review. Append-only corpus retention adds 278 missing files to the unchanged
+3,961 baseline inputs for 4,239 total; keep the complete reviewed plan/result in
+checkpoint-transactions/corpus-preservation-20261005/ and failed invocations.
+
+Preceding checkpoint-input qualification runs `checkpoint-capture`,
 `checkpoint-capture-cli` and four `fuzz-checkpoint-capture` variants, followed by
 all 148 fatal-ASan/UBSan suites. The original author is
 tests/checkpoint_capture_fixtures.py: 144 acquisition/refusal cases, 78 complete
@@ -29,7 +57,7 @@ span/failure/lifetime contract in LOGFILE.md. This is an owned analysis input;
 native client history/continuation semantics, transaction recovery and Windows
 durability acceptance remain separate.
 
-Current selector 26 adds 160 acquisition envelopes without changing any of the
+Preceding selector 26 adds 160 acquisition envelopes without changing any of the
 preceding 2,934 authored journal seeds. The campaign exhaustively replays all 3,094
 seeds, then passes 40,649 units/61 seconds at 707 MiB under the unchanged 2-MiB input,
 1-GiB RSS and five-second per-input ceilings. External reload remains disabled.

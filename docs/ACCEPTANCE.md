@@ -69,7 +69,111 @@ native-read/attempt-4-access-admission/. This qualifies development signing, ena
 and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
 namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
-## Owned selected checkpoint acquisition
+## Checkpoint transaction roots and chains
+
+The owning checkpoint is acquired internally before allocated transaction entries
+are bound to their physical keys, complete retained previous chains, stored first
+LSNs and same-chain undo roots. All seeds are admitted before chain reads or
+callbacks. Empty entries and absent anchors remain distinct; raw states/credits
+and control markers do not choose recovery actions. Capture and all chains share
+source-bounded I/O and aggregate record credits; disjoint caller storage and exact
+partial reports preserve private analysis until outer success.
+
+All 69 original profiles pass: 50 complete/19 refused results and 1,774 independent
+seed/chain views. Both client/LFS/header families, both legacy/all modern slots,
+free/empty/absent tables, raw states, root/key/client mismatches, invalid chronology
+and geometry, outside undo roots, complete-seed preflight, aggregate 4096/4097
+records and the maximum wire table are covered. Selected profiles sweep read
+errors with partial/full failed fills, every staging allocation, callback stops, short/exact limits,
+source ceilings, copied configurations and unchanged retry pass. The default
+CLI compares 65 profiles/137 exact views; explicit policy controls are qualified
+in the C suite.
+
+All 160 unique fatal-ASan/UBSan suites, both 2-KiB freestanding targets and style
+pass. FSKit components report 54 PASS/eleven explicit macOS 27 runtime SKIPs/zero
+failures. The clean unsigned universal Release build passes; it is not installed.
+Review artifacts/checkpoint-transactions/{focused-json-corrected-20261005,
+final-20261005}/ and artifacts/fskit-checkpoint-transactions/. Earlier fixture,
+capacity-placement and diagnostic JSON failures remain in their original logs.
+
+Fresh selector 28 retains all 3,204 preceding authored names/bytes and adds 87
+envelopes. Every one of 3,291 fresh authored inputs executes before 41,267 units/
+61 seconds at 704 MiB under unchanged caps and disabled external reload. The
+same frozen binary fixed-replays all 7,351 prior paths in 230 batches: 3,961 from
+the baseline corpus and 3,390 from the preceding chain corpus. An initial
+relative-path replay invocation failed before input execution; the absolute-path
+retry preserves that log and passes every file. Review
+artifacts/fuzz-checkpoint-transactions-20261005/ and checkpoint-transactions/
+{fuzz-execution-20261005,prior-corpus-replay-absolute-20261005}/.
+Main independently reviews every input identity and raw execution row. The
+reviewed append-only retention plan preserves 3,961 baseline and both prior/fresh
+source corpora, adds 278 missing files and leaves 4,239 inputs without overwrite
+or deletion. Review checkpoint-transactions/{main-review-20261005,
+corpus-preservation-20261005}/.
+
+The unchanged original Recovery journal returns NOT_FOUND for the absent
+transaction anchor after acquiring the same three checkpoint packets/704 bytes.
+Stale sequence refuses without capture. Existing exact capture remains unchanged;
+source and binary identity are preserved. Review checkpoint-transactions/
+native-execution-20261005/. This is an honest native refusal, not a positive
+transaction, post-checkpoint analysis, Windows recovery or write witness.
+
+The Windows VM's initial native probe observes started status but reports QGA
+absent/not running. Supported Raise/Escape later wakes the actual desktop without
+account setup; File Explorer coordinate input fails noWindowsAvailable and command
+probes abort without output. No installer or inventory runs. Manual Guest Tools
+installation is requested before read-only build/ARM64 and exact blank-disk mapping.
+Review windows-write-vm/{continuation-readiness-20261005,
+continuation-ready-unrestricted-20261005}/. No native write/recovery acceptance
+follows from observing the desktop.
+
+## Preceding bounded selected transaction chains
+
+The prepared immutable owner now verifies a caller's explicit NTFS transaction
+root, exact client/transaction binding, decreasing retained previous links and
+undo-next membership within that same completed chain. Raw control markers remain
+observations. Whole-operation limits, byte-aligned private record/link scratch and
+exact partial reports bound traversal without retained allocation or device writes.
+
+All 79 original profiles pass: 56 complete/23 refused results and 8,455 independently
+authored emitted packet oracles. Both LFS families/header layouts, legacy/all modern
+copy slots, wrap/spanning/exact record caps, 4096-record admission/one-beyond refusal,
+foreign identities, client flags, invalid geometry/spans, transaction-key reuse and
+outside undo branches are covered. Selected profiles sweep every read with four
+backend errors/partial and full failed fills, every staging allocation and callback
+stop, exact/short budgets/workspaces, copied-limit mutation and unchanged retry.
+Dense chains prove caller limits cannot raise either source I/O ceiling. NULL/zero
+arguments, missing index, aligned/unaligned guards and immutable bytes pass separately.
+
+That host checkpoint passes all 154 unique fatal-ASan/UBSan suites, both 2-KiB
+freestanding targets, style, 54 FSKit component PASS/eleven runtime SKIPs/zero failures
+and a clean unsigned universal Release. Main verifies actual product bytes and both
+CPU/minimum-OS/SDK slices. Review artifacts/logfile-transaction/{final-counters-corrected,
+final-names}/ and artifacts/fskit-logfile-transaction/. These products are uninstalled;
+the earlier personally signed guest build remains a separate installed baseline.
+Initial fixture/result-code and fuzz-counter oracle failures remain in artifacts;
+the isolated Release retry adds actual USER/LOGNAME identity for XcodeGen without
+source changes. Existing successful checks are not repeated for that environment fix.
+
+Fresh selector 27 appends 110 envelopes, retaining all 3,094 preceding authored seed
+names/bytes. Every one of 3,204 clean authored inputs executes before the timed
+campaign: 38,283 units/61 seconds at 695 MiB with unchanged 2-MiB input/1-GiB RSS/
+five-second caps and external reload disabled. The same frozen binary then passes
+all 3,665 preceding corpus paths in 115 fixed batches. Main checks raw paths and
+retained bytes independently; review artifacts/fuzz-logfile-transaction/ and
+logfile-transaction/prior-corpus-replay/. Additive preservation keeps old/fresh files
+without overwrite or deletion, with its complete plan/result under corpus-preservation/.
+
+No positive original Windows transaction chain is qualified. The frozen Recovery
+checkpoint's observed transaction IDs are zero and its transaction anchor is absent;
+the new nonzero-transaction tests are synthetic. Windows VM status is started, but a
+new bounded probe returns no Windows output and explicitly reports unavailable QEMU
+Guest Agent. This is transport failure, not native test success. Review
+artifacts/windows-write-vm/transport-revalidation-after-transaction/. Checkpoint
+analysis, live transaction/OAT/dirty state, continuation freshness, redo/undo,
+Windows/chkdsk recovery and persistence still precede writable ownership.
+
+## Preceding owned selected checkpoint acquisition
 
 One prepared logical journal owner now acquires the explicit active NTFS client's
 stored restart and every anchored dump under one whole-operation read budget.

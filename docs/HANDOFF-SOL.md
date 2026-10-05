@@ -18,7 +18,125 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
-## Selected checkpoint acquisition continuation
+## Checkpoint transaction continuation
+
+`ntfs_logfile_visit_checkpoint_transactions` now acquires the complete owning
+checkpoint and binds every allocated physical transaction-table key to its
+stored first/undo roots and complete retained previous chain. All seeds are
+admitted before chain reads or callbacks. Raw states/credits/control markers
+remain observations; no redo/undo decision or device writes are added. Capture
+and all chains share aggregate source-bounded I/O and record ceilings. Read the
+full caller-storage, callback/private-analysis and refusal contract in LOGFILE.md.
+The diagnostic is
+`ntfs-logfile checkpoint-transactions LOGICAL_JOURNAL_FILE INDEX SEQUENCE`.
+
+The 69 original profiles pass: 50 complete/19 refused results and 1,774 exact
+seed/chain views. The default CLI passes 65 profiles/137 views. Selected profiles
+sweep every read/staging failure and callback stop. Shared/source ceilings, copied
+configurations, short/exact workspaces, aggregate 4096/4097 records and the maximum
+wire table are covered. All
+160 unique fatal-sanitizer suites, both 2-KiB core targets, style, 54 FSKit component
+PASS/eleven explicit runtime SKIPs and a clean unsigned universal Release pass.
+Main independently verifies raw suite labels, source oracles, all four actual
+products and both CPU/minimum-OS slices. This product is not installed; the prior
+personally signed guest build remains the installed baseline. Review
+artifacts/checkpoint-transactions/{final-20261005,main-review-20261005}/ and
+artifacts/fskit-checkpoint-transactions/. Preserve preceding failed attempts.
+
+Selector 28 adds 87 envelopes without changing any of the preceding 3,204
+authored names/bytes. All 3,291 fresh inputs execute before 41,267 units/61 seconds
+at 704 MiB under unchanged caps. The frozen binary fixed-replays all 7,351 prior
+paths in 230 batches; every actual Running row and retained input byte passes
+main review. Review artifacts/fuzz-checkpoint-transactions-20261005/ and
+checkpoint-transactions/prior-corpus-replay-absolute-20261005/. The earlier
+relative-path invocation failed before input execution and remains preserved.
+The fuzz composition deliberately caps transactions/aggregate records at 512
+and checkpoint workspace at 1 MiB; direct C tests qualify the production policy.
+Reviewed append-only preservation retains all 3,961 baseline identities and both
+prior/fresh source corpora, adds 278 missing files and leaves 4,239 total. Main
+checks the final bytes against the complete plan/result in checkpoint-transactions/
+corpus-preservation-20261005/. Nothing is overwritten or deleted.
+
+The unchanged original Recovery journal acquires the same three exact checkpoint
+packets/704 bytes, then returns NOT_FOUND for its absent transaction anchor.
+Stale sequence refuses without capture. Main compares the complete old/new
+capture JSON and actual original source identity independently; no synthetic
+owner projection supplies a positive native transaction. Review
+checkpoint-transactions/native-execution-20261005/.
+
+Windows command transport remains blocked. The initial native probe observes
+started UTM status but OSStatus -2700 reports QGA absent/not running, even with
+exit zero. Under updated unrestricted permissions, supported Raise and Escape
+wake the actual Windows desktop without an account/setup prompt; File Explorer
+coordinate input then fails -10005 noWindowsAvailable. Command probes abort
+without output. No Guest Tools installer, EULA, inventory, reboot, account/disk
+mutation or host installation occurred. Read windows-write-vm/
+{continuation-readiness-20261005,continuation-ready-unrestricted-20261005}/.
+
+The user has been asked to install the prepared official Guest Tools manually
+inside machlin-ntfs-windows. After that, Sol must verify actual command output,
+Windows build/ARM64 and the exact blank 8-GiB disk mapping using the prepared
+read-only inventory. Only then may main review the mapping and hand CLI execution
+to Luna. Every VM command uses absolute /Users/darekhta/Development/machlin/lab;
+only one agent owns the VM at a time. System/Recovery partitions are not mutation
+targets. Successful native flush and an exclusive Windows volume lock retained
+through acquisition remain required; dismount alone is not clean capture proof.
+
+Next qualify checkpoint roots against positive original Windows histories, then
+combine owned checkpoint state with qualified post-checkpoint ordered records
+and reconstruct native transaction/OAT/dirty state. Current continuation ownership,
+redo/undo, interrupted Windows/chkdsk roundtrips and device durability still precede
+the requested writable implementation. Do not request new implementation permission
+for this already authorized scope; the pending action is a concrete transport blocker.
+
+## Preceding selected transaction-chain continuation
+
+Real device writes and writable FSKit remain unimplemented. The new
+`ntfs_logfile_visit_transaction` verifies an explicit active NTFS client's nonzero
+transaction/root, retained decreasing previous links, exact UPDATE packets/spans
+and undo-next membership on that same chain. It rejects foreign/reused transaction
+branches without deciding recovery state from raw Prepare/Commit/Forget markers.
+Limits are copied and share one operation budget beneath source ceilings; at most
+4096 records use private two-uint64 link scratch, at most 64 KiB. Visitors receive
+borrowed packets before final membership succeeds and must keep analysis private.
+Read-call/byte counters in each view are cumulative; page/copy counts are per packet.
+
+Read LOGFILE.md's complete contract. The diagnostic is
+`ntfs-logfile transaction-records LOGICAL_JOURNAL_FILE INDEX SEQUENCE TRANSACTION ROOT_LSN`.
+The 79 original profiles contain 56 complete/23 refused results and 8,455 exact
+emitted packet oracles. Read/staging/callback faults, both source ceilings, copied
+limit mutation, short/NULL/unaligned workspaces, all copy slots, spanning/wrapped
+records, the exact record/4096-record boundaries and transaction-key reuse pass.
+That qualification is 154 unique fatal-sanitizer suites, both 2-KiB core targets,
+54 component PASS/eleven runtime SKIPs, style and clean unsigned universal Release.
+The unique test-label addendum leaves all actual driver/test binaries unchanged.
+Review artifacts/logfile-transaction/{final-counters-corrected,final-names}/ and
+artifacts/fskit-logfile-transaction/. No new product is installed.
+
+Selector 27 adds 110 chain envelopes to the unchanged 3,094 authored inputs. All
+3,204 replay before 38,283 units/61 seconds at 695 MiB under unchanged caps. The
+same frozen binary fixed-replays every one of 3,665 preceding corpus paths in 115
+batches. Main checks all raw paths and old/fresh bytes; preserve both campaigns,
+failed attempts and the reviewed additive corpus plan/result. The 4-MiB exact-record
+source stays in direct tests outside the unchanged 2-MiB fuzz envelope; the fuzz
+chain workspace deliberately caps traversal at 512 records, while direct tests
+qualify the production 4096-record policy.
+
+No positive original Windows transaction chain or redo/undo acceptance follows.
+The observed Recovery records have transaction zero and no transaction-table anchor.
+The latest VM probe verifies UTM started status but gets no Windows output because
+QEMU Guest Agent is unavailable. Manual Guest Tools installation remains pending;
+do not count the earlier desktop/sleep reports as guest command execution. Review
+windows-write-vm/transport-revalidation-after-transaction/.
+
+Next combine owned checkpoint inputs with qualified post-checkpoint ordered records
+to reconstruct native transaction/OAT/dirty state, then implement and qualify redo/
+undo. Native current-history/continuation ownership, interrupted Windows witnesses,
+Windows/chkdsk recovery and device persistence still precede writable admission.
+Write implementation remains the user's requested scope; these are engineering
+requirements, not a request for new implementation permission.
+
+## Preceding selected checkpoint acquisition continuation
 
 `ntfs_logfile_capture_checkpoint` in ntfs/checkpoint.h now acquires the selected
 active NTFS client's stored restart and all four possible table dumps. Client

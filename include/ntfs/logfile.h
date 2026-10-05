@@ -22,6 +22,7 @@ enum {
 	NTFS_LOGFILE_PAGE_RECORD_END = 0x00000001,
 	NTFS_LOGFILE_PAGE_CLIENT_RESTART = 0x00000002,
 	NTFS_LOGFILE_FAST_COPY_PAGES = 32,
+	NTFS_LOGFILE_TRANSACTION_MAX_RECORDS = 4096,
 	/* Offset zero plus each possible second-copy page size, 512..65536. */
 	NTFS_LOGFILE_RESTART_PROBES = 9,
 	NTFS_LOGFILE_NO_PROBE = UINT16_MAX,
@@ -188,8 +189,58 @@ struct ntfs_logfile_history_report {
 	bool endpoint_verified, tail_verified, complete, wrapped;
 };
 
+struct ntfs_logfile_transaction_limits {
+	uint32_t max_records, max_read_calls;
+	uint64_t max_read_bytes;
+};
+
+struct ntfs_logfile_transaction_report {
+	uint64_t root_lsn, last_lsn, next_lsn, control_lsn, record_bytes, read_bytes;
+	uint32_t transaction, read_calls, examined_records, visited_records, copy_pages_read;
+	uint32_t undo_references;
+	uint16_t control_operation;
+	bool complete;
+};
+
 typedef enum ntfs_result (*ntfs_logfile_record_visitor)(
     void *, const struct ntfs_logfile_record_view *, const void *record_bytes);
+
+/* Walk one NTFS transaction's complete previous-LSN chain, newest first, from
+ * an explicit root. Require a prepared immutable source index, active client
+ * index/sequence, exact NTFS name and nonzero transaction/root/retained oldest
+ * LSN. Every complete packet must be UPDATE, bind that same client/transaction,
+ * remain inside the retained lower bound and have strictly older previous/undo
+ * links with valid geometry. ADDING/DELETING client-lifecycle flags refuse.
+ * After the previous chain ends at zero, verify every undo-next link names a
+ * member of this same chain, including transaction-key reuse boundaries. No
+ * previous-chain cycle or outside undo branch is accepted. NTFS update spans
+ * are decoded; operation/target semantics remain separate. control_lsn/operation
+ * observe only the most recent Prepare/Commit/Forget marker, not a recovery
+ * decision. A marker alone never authorizes redo or undo.
+ * NULL limits inherits source I/O ceilings and MAX_RECORDS. Explicit positive
+ * limits may tighten or further cap I/O, never raise source ceilings; max_records
+ * is at most MAX_RECORDS. Link scratch reserves max_records * two uint64_t values
+ * before I/O, accepts byte alignment and is private temporary storage. Record
+ * workspace follows indexed-record staging/capacity rules. No retained allocation
+ * occurs; one bounded record staging allocation exists at a time. All reads share
+ * one operation budget. Source preparation/discovery reads are separate.
+ * A required report retains attempted reads and examined/delivered packet counts;
+ * complete is set only after the whole chain and all undo edges pass. Visitors
+ * receive borrowed exact bytes. Each view's page/copy counts cover that packet;
+ * its read-call/byte counters are cumulative across the operation. Calls are
+ * externally serialized; retain analysis in private
+ * state until complete success. Visitors must not reenter the source or alter
+ * private workspaces. Limits are copied before callbacks. A callback error
+ * propagates exactly. Workspaces
+ * may change on failure, unused link scratch remains untouched, and input, output,
+ * workspaces and source are disjoint. This verifies selected packet/chain binding;
+ * checkpoint analysis bounds, current continuation freshness, dirty/OAT state,
+ * native transaction semantics, replay and writable admission remain separate. */
+enum ntfs_result ntfs_logfile_visit_transaction(struct ntfs_logfile *, uint16_t client_index,
+    uint16_t client_sequence, uint32_t transaction, uint64_t root_lsn,
+    const struct ntfs_logfile_transaction_limits *, void *record_workspace, size_t record_capacity,
+    void *link_workspace, size_t link_capacity, ntfs_logfile_record_visitor, void *context,
+    struct ntfs_logfile_transaction_report *);
 
 /* Independent ownership of a logical, immutable $LogFile byte source, not a
  * volume environment. Its context must outlive the owner; calls are serialized.

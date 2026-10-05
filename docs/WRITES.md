@@ -66,6 +66,25 @@ the maximum observed header LSN nor RSTR CurrentLsn is an authoritative current
 endpoint. Full competing-copy resolution, ordered continuity, continuation
 ownership and native transaction analysis remain required before recovery.
 
+An explicit transaction-chain visitor now checks the selected client's retained
+previous-LSN chain, packet identity, update spans and undo-next membership before
+marking the chain complete. Copied whole-operation limits and caller-owned link
+scratch bound reads and verification work. It observes raw control markers without
+choosing redo/undo state; callbacks must retain partial analysis privately. This
+closes a chain-binding primitive, not checkpoint analysis, native recovery or the
+write gate. Original Windows transaction and interrupted-recovery witnesses remain
+required. See LOGFILE.md for the exact contract.
+
+Checkpoint transaction traversal now acquires the owning checkpoint internally
+and binds allocated physical table keys to complete previous chains, stored first
+LSNs and undo-root membership. All seeds are admitted before chain callbacks;
+checkpoint and chains share aggregate I/O/record ceilings. Empty and absent tables
+remain distinct. This adds checked inputs for later analysis, without advancing
+native state through post-checkpoint records or deciding redo/undo actions. The
+unchanged original Recovery journal has no transaction anchor. Positive native
+transaction histories, continuation ownership and interrupted Windows recovery
+remain required before enabling writes.
+
 The next core implementation sequence is:
 
 1. Build bounded copy/current-history ownership over the complete physical scan:

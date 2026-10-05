@@ -30,6 +30,8 @@ from logfile_names_fixtures import author as generate_logfile_names
 from checkpoint_fixtures import author as generate_checkpoint_bindings
 from checkpoint_snapshot_fixtures import author as generate_checkpoint_snapshots
 from checkpoint_capture_fixtures import author as generate_checkpoint_captures
+from logfile_transaction_fixtures import author as generate_transaction_chains
+from checkpoint_transaction_fixtures import author as generate_checkpoint_transactions
 from record_protect_fixtures import author as generate_record_protection
 from logfile_encode_fixtures import author as generate_logfile_encoding, RECORD_KIND as LOGFILE_ENCODE_RECORD
 from logfile_page_encode_fixtures import author as generate_logfile_page_encoding
@@ -47,6 +49,9 @@ LOGFILE_INVENTORY_KIND = 23
 LOGFILE_INDEX_KIND = 24
 LOGFILE_HISTORY_KIND = 25
 LOGFILE_CAPTURE_KIND = 26
+LOGFILE_TRANSACTION_CHAIN_KIND = 27
+LOGFILE_CHECKPOINT_TRANSACTIONS_KIND = 28
+LOGFILE_TRANSACTION_HEADER = struct.Struct('<HHI')
 LOGFILE_INVENTORY_READ_CALL_BUDGET = 4096
 LOGFILE_NAME_KINDS = {0: 16, 1: 15}
 LOGFILE_CHECKPOINT_TABLE_KIND = 17
@@ -73,6 +78,8 @@ LOGFILE_HISTORY_SHORT_WORKSPACE = 1 << (BITS_PER_BYTE + 5)
 LOGFILE_HISTORY_VISITOR_STOP = 1 << (BITS_PER_BYTE + 6)
 LOGFILE_HISTORY_SHORT_RECORDS = 1 << (BITS_PER_BYTE + 7)
 LOGFILE_BUDGET_SHIFT = 16
+LOGFILE_TRANSACTION_SHORT_LINKS = 1 << LOGFILE_BUDGET_SHIFT
+LOGFILE_TRANSACTION_BUDGET_SHIFT = LOGFILE_BUDGET_SHIFT + 1
 LOGFILE_ENCODE_SHORT_SHIFT = struct.calcsize('<H') * BITS_PER_BYTE
 LOGFILE_PAGE_WORKSPACE_SHORT_SHIFT = LOGFILE_ENCODE_SHORT_SHIFT + 1
 LOGFILE_PAGE_MAJOR_SHIFT = struct.calcsize('<I') * BITS_PER_BYTE
@@ -430,6 +437,57 @@ def generate(output):
         for name, control in controls.items():
             envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CAPTURE_KIND, identity, control)
             filename = 'capture-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + payload)
+    chains = output / 'logfile-transaction'
+    for case in generate_transaction_chains(chains):
+        payload = (chains / case['path']).read_bytes()
+        if len(payload) + LOGFILE_FUZZ_HEADER.size + LOGFILE_TRANSACTION_HEADER.size > LOGFILE_FUZZ_INPUT_BYTES:
+            continue
+        controls = {'default': 0}
+        if case['code'] == 0 and case['path'] in (
+                'legacy-markers-extended-0.journal', 'fast-copy-31.journal',
+                'legacy-spanning-root.journal', 'legacy-wrapped-root.journal'):
+            controls.update({'record-allocation': LOGFILE_RECORD_ALLOCATION_FAULT,
+                'selected-first-read': LOGFILE_INDEX_SELECTED_READ_FAULT | 1,
+                'selected-last-read': LOGFILE_INDEX_SELECTED_READ_FAULT | case['report']['read_calls'],
+                'short-record-workspace': LOGFILE_HISTORY_SHORT_WORKSPACE,
+                'short-link-workspace': LOGFILE_TRANSACTION_SHORT_LINKS,
+                'visitor-stop': LOGFILE_HISTORY_VISITOR_STOP,
+                'short-record-count': LOGFILE_HISTORY_SHORT_RECORDS})
+            byte_units = case['report']['read_bytes'] // logfile_wire.USA_STRIDE
+            remainder = case['report']['read_calls'] - 2
+            periods = max(1, (byte_units - remainder + LOGFILE_INVENTORY_READ_CALL_BUDGET - 1) //
+                LOGFILE_INVENTORY_READ_CALL_BUDGET)
+            budget = remainder + periods * LOGFILE_INVENTORY_READ_CALL_BUDGET
+            controls['short-chain-calls'] = budget << LOGFILE_TRANSACTION_BUDGET_SHIFT
+        identity = LOGFILE_TRANSACTION_HEADER.pack(case['index'], case['sequence'], case['transaction'])
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_TRANSACTION_CHAIN_KIND, case['root'], control)
+            filename = 'chain-' + case['path'].replace('.', '-') + '-' + name + '.seed'
+            (log_seeds / filename).write_bytes(envelope + identity + payload)
+    checkpoint_transactions = output / 'checkpoint-transactions'
+    for case in generate_checkpoint_transactions(checkpoint_transactions)['cases']:
+        payload = (checkpoint_transactions / case['path']).read_bytes()
+        assert len(payload) + LOGFILE_FUZZ_HEADER.size <= LOGFILE_FUZZ_INPUT_BYTES
+        controls = {'default': 0}
+        if case['path'] in ('client-1-fast-0-extended-0.journal', 'copy-fast-1-31.journal'):
+            controls.update({'index-allocation': LOGFILE_ALLOCATION_FAULT,
+                'record-allocation': LOGFILE_RECORD_ALLOCATION_FAULT,
+                'selected-first-read': LOGFILE_INDEX_SELECTED_READ_FAULT | 1,
+                'selected-last-read': LOGFILE_INDEX_SELECTED_READ_FAULT | case['report']['read_calls'],
+                'short-record-workspace': LOGFILE_HISTORY_SHORT_WORKSPACE,
+                'short-link-workspace': LOGFILE_TRANSACTION_SHORT_LINKS,
+                'visitor-stop': LOGFILE_HISTORY_VISITOR_STOP,
+                'short-record-count': LOGFILE_HISTORY_SHORT_RECORDS})
+            byte_units = case['report']['read_bytes'] // logfile_wire.USA_STRIDE
+            remainder = case['report']['read_calls'] - 2
+            periods = max(1, (byte_units - remainder + LOGFILE_INVENTORY_READ_CALL_BUDGET - 1) //
+                LOGFILE_INVENTORY_READ_CALL_BUDGET)
+            controls['short-total-calls'] = (remainder + periods * LOGFILE_INVENTORY_READ_CALL_BUDGET) << LOGFILE_TRANSACTION_BUDGET_SHIFT
+        identity = case['index'] | (case['sequence'] << LOGFILE_CAPTURE_IDENTITY_SHIFT)
+        for name, control in controls.items():
+            envelope = LOGFILE_FUZZ_HEADER.pack(LOGFILE_CHECKPOINT_TRANSACTIONS_KIND, identity, control)
+            filename = 'checkpoint-chain-' + case['path'].replace('.', '-') + '-' + name + '.seed'
             (log_seeds / filename).write_bytes(envelope + payload)
     log_clients = output / 'logfile-clients'
     for case in generate_logfile_clients(log_clients):

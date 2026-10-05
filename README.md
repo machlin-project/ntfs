@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 148 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 160 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -41,6 +41,22 @@ only after packet binding and cross-table checks. Exact bytes and value-only vie
 survive source close. All 144 acquisition/refusal profiles pass, with 310 independent
 packet oracles, fault sweeps and bounded workspace checks. This prepares transaction
 analysis inputs; current native history, recovery and durable writing remain open.
+
+Selected transaction traversal now verifies exact packet identity, retained
+previous-LSN chains and every undo-next reference under one operation budget.
+Private bounded link scratch detects unrelated branches and reused transaction IDs;
+raw Prepare/Commit/Forget markers do not decide recovery state. All 79 original
+profiles and 8,455 exact packet oracles pass, with fault and resource checks.
+This supplies another native analysis primitive; no device write API or writable
+FSKit behavior is implemented.
+
+Checkpoint transaction verification now acquires the selected checkpoint and
+binds every allocated physical transaction key to its stored first/undo roots
+and complete previous-LSN chain. The entire capture and all chains share I/O and
+aggregate record ceilings. All 69 original profiles pass, including complete
+preflight, 4096-record shared limits and failure/retry checks; the diagnostic
+passes 65 default-policy profiles. This prepares checked checkpoint state for
+later analysis. Native post-checkpoint state and Windows recovery remain open.
 
 The immutable journal owner now also routes completed LFS 1.1 tail copies while
 assembling records. It examines both slots, rejects conflicting written prefixes,

@@ -38,6 +38,85 @@ against physical allocated OAT keys. Volume references and qualified current
 history remain separate. These decoders do not advance native
 replay or writable admission.
 
+## Bounded selected transaction chain
+
+`ntfs_logfile_visit_transaction` walks an explicit nonzero transaction/root LSN,
+newest first, through its stored previous-LSN links. Admission requires a prepared
+immutable index, active exact client index/sequence, NTFS client name and retained
+nonzero oldest LSN. Every complete packet must be UPDATE, bind the same client and
+transaction, decode its update spans and have strictly older, geometrically valid
+previous/undo-next links within the retained lower bound. Client lifecycle flags
+refuse. After reaching a zero previous link, every nonzero undo-next link must name
+a record in that same chain. Reused transaction IDs and unrelated earlier branches
+cannot satisfy this membership check.
+
+The caller supplies record and link scratch. At most 4096 records are admitted;
+two uint64_t values per admitted record are reserved before I/O, at most 64 KiB.
+Scratch accepts byte alignment. The decreasing chain permits binary membership
+search without extra reads, giving O(records log records) bounded work. One staging
+allocation exists per packet, with no retained allocation. All packet reads use
+one operation budget; copied positive limits may tighten, never raise source I/O
+ceilings. Discovery/index preparation remains separate. NULL limits inherit those
+ceilings and the record policy cap.
+
+Visitors receive borrowed exact packets before final undo membership is known;
+retain analysis privately until complete success. They must not reenter the source
+or alter private workspaces. Each view's pages/copy counts cover its packet, while
+read calls/bytes are cumulative across the operation. Callback errors propagate
+exactly. Reports distinguish attempted reads, examined packets, accepted callbacks,
+the next unwalked LSN and verified undo references. Source bytes remain immutable;
+failure may alter private scratch and never marks the chain complete. A raw most
+recent Prepare/Commit/Forget marker is observed, without deciding recovery state.
+
+The diagnostic is
+`ntfs-logfile transaction-records LOGICAL_JOURNAL_FILE INDEX SEQUENCE TRANSACTION ROOT_LSN`.
+It reports preparation separately, exact packets and complete/partial chain evidence.
+This is selected transaction binding, not checkpoint analysis, live OAT/dirty state,
+current continuation freshness, redo/undo execution or writable admission. No
+positive Windows transaction chain is qualified by the small Recovery checkpoint,
+whose observed packets have transaction zero.
+
+## Checkpoint transaction roots and chains
+
+`ntfs_logfile_visit_checkpoint_transactions` acquires the complete selected
+checkpoint itself, then uses each allocated transaction entry's physical
+table-relative byte offset as the packet transaction key. It does not accept
+caller-projected table views. Every seed is admitted before chain I/O or a
+callback: first/previous LSNs must be nonzero, retained, geometrically valid and
+ordered before the transaction dump; a nonzero undo root lies in that interval.
+An empty UNINITIALIZED entry requires zero links and credits. Other incomplete
+link combinations refuse. Free entries remain opaque.
+
+Each nonempty seed walks the complete previous-LSN chain through zero, preserving
+exact selected-client/key binding and every packet's undo-next membership. The
+oldest packet must equal the stored first LSN, and the stored undo root must be a
+member of this same chain. Raw state, undo credits and control markers remain
+observations. They do not establish winners, losers or native recovery actions.
+
+Positive copied limits cap allocated transactions and the aggregate examined
+chain records at 4096 each by default. One read-call/byte budget covers the entire
+checkpoint acquisition and every chain; neither explicit nor inherited limits
+raise the source ceiling. Record credits are never reset per transaction. The
+caller supplies disjoint private checkpoint/name/record/link workspaces; links
+reserve two uint64_t values per admitted chain record before any I/O, at most
+64 KiB, and are reused between chains. Byte alignment is accepted. The API header
+defines capacities, lifetimes and exact partial counters.
+
+A callback receives a borrowed seed and its fully bound chain report. A later
+transaction can still fail, so keep all analysis private until the outer report
+is complete. Callback failures propagate exactly. A present empty transaction
+table completes without chain reads; an absent anchor returns NOT_FOUND after
+checkpoint acquisition. The regular-file diagnostic is
+`ntfs-logfile checkpoint-transactions LOGICAL_JOURNAL_FILE INDEX SEQUENCE`.
+Preparation is reported separately; tool ceilings are 8192 reads/16 MiB, with
+4096 transactions/aggregate records and a 1-MiB retained index.
+
+This qualifies bounded checkpoint-root binding. It does not process records after
+the checkpoint, choose current continuation ownership, reconstruct live native
+OAT/dirty/transaction state, execute redo/undo or admit writes. The original
+Recovery observation has no transaction-table anchor; synthetic positive cases
+cannot supply that missing native witness.
+
 ## Selected-checkpoint dump binding
 
 `ntfs/checkpoint.h` exposes `ntfs_logfile_checkpoint_table_decode`. It accepts an

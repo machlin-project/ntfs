@@ -151,6 +151,74 @@ enum ntfs_result ntfs_logfile_capture_checkpoint(struct ntfs_logfile *, uint16_t
     void *record_workspace, size_t record_capacity, void *name_workspace, size_t name_capacity,
     struct ntfs_logfile_checkpoint_capture *, struct ntfs_logfile_checkpoint_capture_report *);
 
+struct ntfs_logfile_checkpoint_transaction_limits {
+	uint32_t max_transactions, max_records, max_read_calls;
+	uint64_t max_read_bytes;
+};
+
+struct ntfs_logfile_checkpoint_transaction_workspace {
+	void *checkpoint_records, *names, *record, *links;
+	size_t checkpoint_capacity, name_capacity, record_capacity, link_capacity;
+};
+
+struct ntfs_logfile_checkpoint_transaction_view {
+	uint32_t key;
+	struct ntfs_logfile_transaction snapshot;
+	struct ntfs_logfile_transaction_report chain;
+};
+
+struct ntfs_logfile_checkpoint_transaction_report {
+	struct ntfs_logfile_checkpoint_capture_report checkpoint;
+	uint64_t table_lsn, read_bytes, record_bytes;
+	uint32_t allocated_transactions, verified_transactions, visited_transactions;
+	uint32_t requested_transaction, read_calls, examined_records, checked_records,
+	    copy_pages_read;
+	bool complete;
+};
+
+typedef enum ntfs_result (*ntfs_logfile_checkpoint_transaction_visitor)(
+    void *, const struct ntfs_logfile_checkpoint_transaction_view *);
+
+/* Acquire the complete selected checkpoint, then bind every allocated transaction
+ * table entry to its exact retained previous-LSN chain. Transaction keys are
+ * physical table-relative entry offsets. Admit all seed LSNs before chain reads:
+ * nonempty first/previous links, first <= previous < table LSN, undo zero or in
+ * [first, previous], valid geometry and retained first. Require the chain to end
+ * exactly at first with previous zero, and the stored undo root to name a member
+ * of that chain. Empty UNINITIALIZED entries with zero links/credits are observed
+ * without chain I/O; other zero-link combinations are UNSUPPORTED. Free payloads
+ * remain opaque. State and undo credits are original snapshot values; raw control
+ * markers never change them or authorize recovery.
+ * NULL limits inherits source I/O ceilings and TRANSACTION_MAX_RECORDS for both
+ * transaction/aggregate chain-record caps. Positive explicit caps may not exceed
+ * that record policy. Checkpoint acquisition and every chain share the minimum
+ * of caller/source I/O ceilings, including failed attempts. Source preparation
+ * remains separate. Whole-table admission precedes chain I/O/callbacks; at most
+ * max_records chain packets are examined across all entries, not per transaction.
+ * All four workspaces are disjoint/private; checkpoint storage and name scratch
+ * follow capture_checkpoint, record/link scratch follows visit_transaction.
+ * Link scratch reserves max_records * two uint64_t values before any I/O and is
+ * reused per chain. Configurations are copied before callbacks. No retained
+ * allocation occurs, and one bounded private staging allocation exists at a time.
+ * Visitors borrow one fully checked entry view; chain read counters describe that
+ * chain, outer counters cover the whole operation. Callback errors propagate
+ * exactly. Later failure can follow earlier callbacks; keep all analysis private
+ * until outer complete success. Report preserves capture, attempted I/O, checked
+ * packets and verified versus delivered entry counts. Absent transaction anchors
+ * return NOT_FOUND after checkpoint acquisition; a present empty table succeeds.
+ * Caller bytes may change on failure; unused capacity is untouched. Source,
+ * workspaces, configurations, report and callback state are disjoint and externally
+ * serialized. Calls must not reenter or mutate borrowed/private storage. This
+ * qualifies checkpoint seed/chain binding, not the analysis lower bound, post-
+ * checkpoint state, current continuation freshness, redo/undo, persistence or
+ * writable admission. No device-write capability is added. */
+enum ntfs_result ntfs_logfile_visit_checkpoint_transactions(struct ntfs_logfile *,
+    uint16_t client_index, uint16_t client_sequence,
+    const struct ntfs_logfile_checkpoint_transaction_limits *,
+    const struct ntfs_logfile_checkpoint_transaction_workspace *,
+    ntfs_logfile_checkpoint_transaction_visitor, void *context,
+    struct ntfs_logfile_checkpoint_transaction_report *);
+
 #ifdef __cplusplus
 }
 #endif

@@ -36,6 +36,24 @@ tables and spanning checkpoints against exact packet/failure oracles before shar
 the proposed bounded page or staging reuse slot. Capture ownership and lower read
 counts alone establish no throughput or native recovery improvement.
 
+The selected transaction-chain verifier keeps index preparation separate and uses
+one packet staging allocation at a time. Caller scratch retains two uint64_t values
+per admitted record, at most 64 KiB for 4096 records. Strictly decreasing links
+permit O(records log records) undo membership checks with no additional reads.
+The original dense 4096-record graph still reads one selected page per packet even
+when several packets share a page. Measure forward analysis, backward transaction
+traversal and final link verification separately before considering the bounded
+page/staging reuse above. Include caller scratch, partial failures and exact byte
+oracles in paired measurements. No timing or speedup is claimed for this verifier.
+
+Checkpoint composition retains that chain policy and reuses the link reservation
+between entries. Complete seed admission is linear in transaction-table bytes;
+membership work is bounded by the aggregate record cap rather than a cap renewed
+for each transaction. Checkpoint acquisition and all chains share read credits,
+including failed attempts. Caller checkpoint/name/record/link storage is explicit
+and separate from source-retained metadata. No benchmark or throughput improvement
+is claimed for this composition.
+
 ## Checked base metadata across temporary nodes
 
 The current bounded memo retains checked standard information and reparse presence

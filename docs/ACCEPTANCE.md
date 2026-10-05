@@ -69,6 +69,64 @@ native-read/attempt-4-access-admission/. This qualifies development signing, ena
 and scoped synthetic reading on the legacy runtime. Modern runtime, ownership, broader
 namespace/lifecycle/authorization, performance, Windows recovery and release remain open.
 
+## Bounded selected journal record interval
+
+The immutable prepared owner now visits a selected framing interval from an exact
+caller LSN, under one read-call/byte budget for all records and an optional unfinished
+header. Candidate maximum completed tags require exact ordered packet framing and
+completion/NextRecordOffset agreement before endpoint acceptance. Matching last-start
+witnesses distinguish an unfinished same-page record from a closed prefix followed
+by another payload page. Copy routing uses its declared target, preserving completion
+regressions even when a continuation's header LSN names another page. Conflicts,
+unsupported/ambiguous partial copies, recent/undated unroutable evidence and sequence
+overflow refuse. Legacy zero-start framing is observation, without native freshness.
+
+All 123 original window cases pass: 65 complete results, 58 refusals and 861 exact
+emitted packet oracles, including partial prefixes of rejected intervals. Maximum
+64-KiB pages, exact/excess 1-MiB record length, extended headers, padding, every copy
+slot, distinct transfer metadata, wrap, footer/header errors and incomplete tails
+are covered. The direct core suite also fails every read and private record allocation
+in three distinct successful windows, retries unchanged owners, stops visitors and
+checks cached-index clear/lifetime. The 600-record case independently exhausts shared
+call and byte budgets; a new per-record budget cannot make it pass. Initial compile
+and fixture failures are retained under artifacts/logfile-history/, with corrected
+framing versus closed-prefix diagnosis and the circular last-start/last-end invariant.
+
+Final qualification passes 142/142 fatal-ASan/UBSan suites, both freestanding 2-KiB
+frame targets, 54 FSKit component groups/eleven macOS-27 runtime SKIPs, formatting and
+a clean unsigned universal Release app/extensions/core archive. All inspected slices
+report minimum macOS 26.5 and SDK 27.0. These products are uninstalled and distinct from
+the existing personally signed guest development baseline. Source and product hashes
+and complete raw reports remain generated evidence in artifacts/logfile-history/final/
+and artifacts/fskit-logfile-history/.
+
+One-owner ordered acquisition of the unchanged frozen Windows journal passes all
+four original packets and their exact suffixes. The full interval needs four selected
+copy reads/16,384 bytes and preserves 864 exact packet bytes through the completed
+boundary; no unfinished successor is observed. Later/zero anchors refuse NOT_FOUND
+before reads. All 1,138 target rows and preceding index counters remain identical;
+the private allocation grows by 272 to 160,824 bytes. The initial comparison excluded
+only retained_bytes and failed on required_bytes; independent review found exactly
+these two expected size changes, and the preserved addendum validates their fresh
+equal measured allocation. All four indexed reads also match the original packets.
+This remains one small preexisting snapshot: no post-RSTR native record, large modern
+continuation, clean guest flush, client transaction analysis or replay is qualified.
+
+The fresh bounded journal fuzz campaign passes exhaustive replay of 2,934 authored
+seeds and 38,253 executed units/61 seconds at 700 MiB, with all preceding 2,795 authored
+bytes preserved and 139 new history envelopes. The original input/RSS/per-unit/fatal
+sanitizer limits and single-owner -reload=0 remain unchanged. That campaign starts
+from a fresh corpus path; prior learned mutations have a separately recorded replay
+and merge under artifacts/logfile-history/prior-corpus-replay/. All 3,004 preceding
+files pass 94 fixed replay batches with the current binary; 209 missing units merge
+without changing any preceding or fresh file, retaining 3,315 total. Main checks all
+raw executed paths, exit codes, terminal counts and every retained byte. Consolidated
+acceptance is artifacts/logfile-history/main-review.json; independent host, fixture,
+native and fuzz reviews bind eleven source inputs and actual generated evidence.
+Keep the preceding corpus and both reports. Complete selected framing does not qualify the client's
+retained analysis lower bound, continuation provenance, native current history,
+transaction/recovery or durable writes. WRITES.md's gate remains open.
+
 ## Retained journal target selection and exact acquisition
 
 The immutable journal owner now optionally retains one bounded circular-target
@@ -1531,6 +1589,7 @@ claimed.
 | Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz pass; completed legacy/modern per-target observers are qualified separately; native admission and complete circular currentness remain open |
 | Complete physical log inventory | Exact whole-storage preflight credits, all tail/fast/circular pages in physical order, no allocation, separate common/target results, exact backend/visitor errors and partial counters, observation-only maxima | 60 graphs/14,729 C/CLI rows, 4,424 partial/full read-fault cases, 2,212 visitor-stop positions, retry and exact/short/default credits pass; all 1,170 native Windows rows agree independently; complete coverage does not qualify competing-copy selection, current endpoint, continuity or recovery |
 | Retained log target index | Explicit bounded metadata allocation and worst-case shared read preflight, complete newest-prefix comparison, unresolved-copy evidence, atomic preparation/retry, cached queries and exact selected-page acquisition | 71 graphs/14,922 target rows, 109 packet results, 13,398 constructor and 1,582 selected-read fault cases, 27 header/target changes and lifetime/credit/memory boundaries pass; all 1,138 native Windows targets and four whole packets agree; active endpoint/window, continuation ownership, recovery and writes remain unqualified |
+| Bounded selected log interval | Exact caller anchor, candidate completed endpoint, ordered complete packet framing, optional unfinished successor header, shared whole-walk credits and partial reports | 123 original windows/861 emitted packet oracles, exact 1-MiB record boundary, read/allocation retry, callback stops, wrap/sequence, copy-target regression and shared-credit cases pass; four frozen Windows packets and suffixes agree; native client lower bounds, modern continuation provenance, current history, transaction analysis/replay and durability remain open |
 | NTFS journal stream binding | Fixed MFT slot/unnamed ordinary stream, complete fragmented/list/sequence/base ownership, node-independent counted lifetime, logical versus physical read accounting, staged partial-read isolation and refusal of unsupported system-file forms | 24 image verdicts/exact reports, 54 allocation/58 physical-read faults with retry, two simultaneous owners, BUSY unmount and unchanged images passed; ordinary dirty-media policy is unchanged; native journal admission/drain remains open |
 | Physical circular-record observation | LSN-addressed adjacent protected fragments and one wrap, no-page-revisit bound, exact unpadded bytes/extended headers, shared read credits and bounded ephemeral staging | 30 C verdicts/exact CLI reports, 14 allocation/40 partial-read faults and exact 1-MiB custom-credit boundary passed; eight bound-volume storage forms also check exact records and resource/staging faults; written/current history, copy routing, active clients and recovery remain unqualified |
 | Selected active LFS client | Cached index/sequence match plus selected in-use membership, zero stale output and bounded no-I/O/no-allocation lookup, distinct raw/free metadata | 858 pair queries across seven snapshots and 42 exact CLI reports passed, including sequence/name/client-count boundaries; all-source fuzz and counted volume checks passed; record liveness, client registration lifecycle and native checkpoint interpretation remain unqualified |

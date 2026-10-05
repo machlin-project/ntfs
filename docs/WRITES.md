@@ -49,6 +49,14 @@ current endpoint, active window or continuation owner. Those boundaries and subs
 native analysis remain required before recovery can advance this write gate. The
 original read environment has no write capability.
 
+A bounded ordered selected-record visitor now verifies complete framing from a caller's
+exact LSN through a selected completed endpoint and verifies an observed unfinished
+successor header separately. It preserves one whole-operation I/O budget and explicit
+partial/refusal evidence. Synthetic window, footer, wrap and failure checks do not
+choose the owning client's analysis lower bound, establish native continuation
+freshness, reconstruct live transaction state or qualify replay/durability. These
+remaining contracts still precede a writable owner and every mutation below.
+
 Complete physical page inventory is now implemented under explicit whole-scan
 credits, without allocation or source mutation. All copy slots and circular pages
 remain observable, including structural errors and unsupported targets; backend

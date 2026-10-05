@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
-#include <ntfs/logfile.h>
+#include "logfile_internal.h"
 
 struct indexed_page_entry {
 	struct ntfs_logfile_indexed_page page;
@@ -12,7 +12,10 @@ struct indexed_page_entry {
 struct page_index {
 	struct ntfs_logfile_page_index_report report;
 	struct ntfs_logfile_page_view copies[NTFS_LOGFILE_FAST_COPY_PAGES];
+	uint64_t copy_targets[NTFS_LOGFILE_FAST_COPY_PAGES];
+	uint64_t unrouted_lsn;
 	size_t allocation_bytes;
+	bool unrouted_undated;
 	struct indexed_page_entry entries[];
 };
 
@@ -50,7 +53,13 @@ struct fast_copies {
 struct record_copies {
 	struct legacy_copies *legacy;
 	struct fast_copies *fast;
-	bool indexed;
+	bool indexed, history;
+};
+
+struct record_ending {
+	struct ntfs_logfile_page_view page;
+	uint64_t offset;
+	size_t end_offset;
 };
 
 enum {
@@ -884,6 +893,7 @@ index_collect(void *context, const struct ntfs_logfile_page_observation *observa
 	const struct ntfs_logfile_restart *restart = builder->restart;
 	struct indexed_page_entry *entry;
 	struct ntfs_logfile_page_view view = {0};
+	struct ntfs_logfile_lsn location;
 	uint64_t target, epoch, bit;
 	uint32_t slot;
 	enum ntfs_result result;
@@ -901,6 +911,25 @@ index_collect(void *context, const struct ntfs_logfile_page_observation *observa
 		if (result != NTFS_OK) {
 			index->report.unrouted_copies += observation->result != NTFS_NOT_FOUND;
 			index->report.unsupported_copies += result == NTFS_UNSUPPORTED;
+			if (observation->result == NTFS_OK) {
+				epoch = observation->page.last_end_lsn;
+				if (observation->storage == NTFS_LOGFILE_FAST_STORAGE &&
+				    ntfs_logfile_lsn_decode(restart, observation->page.copy_value,
+					&location) == NTFS_OK &&
+				    observation->page.copy_value > epoch) {
+					epoch = observation->page.copy_value;
+				}
+				if (epoch > index->unrouted_lsn) {
+					index->unrouted_lsn = epoch;
+				}
+				if (epoch == 0 &&
+				    ((observation->page.flags & NTFS_LOGFILE_PAGE_RECORD_END) !=
+					    0 ||
+					observation->page.next_record_offset >
+					    restart->page_data_offset)) {
+					index->unrouted_undated = true;
+				}
+			}
 			return NTFS_OK;
 		}
 		slot = (uint32_t)((observation->offset - builder->first_offset) /
@@ -911,6 +940,11 @@ index_collect(void *context, const struct ntfs_logfile_page_observation *observa
 		target = observation->offset;
 	}
 	entry = &index->entries[(target - restart->circular_offset) / restart->log_page_bytes];
+	if (observation->storage == NTFS_LOGFILE_CIRCULAR && observation->result == NTFS_OK) {
+		entry->circular.offset = observation->offset;
+		entry->circular.storage = observation->storage;
+		entry->circular.page = observation->page;
+	}
 	if (result != NTFS_OK) {
 		if (result == NTFS_UNSUPPORTED) {
 			entry->blocked = true;
@@ -925,6 +959,7 @@ index_collect(void *context, const struct ntfs_logfile_page_observation *observa
 	view.page = observation->page;
 	if (observation->storage != NTFS_LOGFILE_CIRCULAR) {
 		index->copies[slot] = view;
+		index->copy_targets[slot] = target;
 	} else {
 		entry->circular = view;
 	}
@@ -1373,13 +1408,51 @@ load_fast_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile
 }
 
 static enum ntfs_result
-load_record_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfile_report *work,
-    const struct record_copies *copies, struct ntfs_logfile_page_view *out)
+load_history_page(struct ntfs_logfile *source, uint64_t offset, uint64_t lsn,
+    struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out)
+{
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	const struct indexed_page_entry *entry;
+	const struct ntfs_logfile_page_view *selected;
+
+	entry = &source->page_index
+		     ->entries[(offset - restart->circular_offset) / restart->log_page_bytes];
+	if (entry->blocked || entry->page.prefix_conflict ||
+	    (entry->page.result == NTFS_UNSUPPORTED &&
+		(entry->equal_candidates & (entry->equal_candidates - 1u)) != 0)) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (entry->page.result != NTFS_OK &&
+	    !(entry->page.result == NTFS_UNSUPPORTED &&
+		entry->page.selected.storage != NTFS_LOGFILE_CIRCULAR &&
+		entry->page.selected.offset != 0)) {
+		return entry->page.result;
+	}
+	selected = &entry->page.selected;
+	/* A legacy tail preserves the completed prefix. A matching protected
+	 * circular page can additionally contain the new spanning record beyond
+	 * that prefix. Equal-end prefix agreement was checked by preparation. */
+	if (selected->storage == NTFS_LOGFILE_LEGACY_TAIL && selected->page.last_end_lsn < lsn &&
+	    entry->circular.offset != 0 &&
+	    entry->circular.page.last_end_lsn == selected->page.last_end_lsn &&
+	    (entry->circular.page.copy_value == lsn || entry->circular.page.copy_value == 0)) {
+		selected = &entry->circular;
+	}
+	return index_reload(source, selected, offset, work, out);
+}
+
+static enum ntfs_result
+load_record_page(struct ntfs_logfile *source, uint64_t offset, uint64_t lsn,
+    struct ntfs_logfile_report *work, const struct record_copies *copies,
+    struct ntfs_logfile_page_view *out)
 {
 	if (copies == NULL) {
 		return load_page(source, offset, work, out);
 	}
 	if (copies->indexed) {
+		if (copies->history) {
+			return load_history_page(source, offset, lsn, work, out);
+		}
 		return load_indexed_page(source, offset, work, out);
 	}
 	if (copies->legacy != NULL) {
@@ -1391,7 +1464,7 @@ load_record_page(struct ntfs_logfile *source, uint64_t offset, struct ntfs_logfi
 static enum ntfs_result
 assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes, size_t capacity,
     struct ntfs_logfile_record_view *out, struct ntfs_logfile_report *work,
-    const struct record_copies *copies)
+    const struct record_copies *copies, struct record_ending *ending)
 {
 	struct ntfs_logfile_record_view view = {0};
 	struct ntfs_logfile_page_view page;
@@ -1407,6 +1480,9 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
+	if (ending != NULL) {
+		ntfs_zero(ending, sizeof(*ending));
+	}
 	if (source == NULL || bytes == NULL) {
 		return NTFS_INVALID;
 	}
@@ -1418,9 +1494,13 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 	if (capacity < restart->record_header_bytes) {
 		return NTFS_RANGE;
 	}
-	result = load_record_page(source, location.page_offset, work, copies, &page);
+	result = load_record_page(source, location.page_offset, requested_lsn, work, copies, &page);
 	if (result != NTFS_OK) {
 		return result;
+	}
+	if (ending != NULL && page.storage != NTFS_LOGFILE_LEGACY_TAIL &&
+	    page.page.copy_value == 0) {
+		return NTFS_STALE;
 	}
 	header = (const void *)(source->scratch + location.record_offset);
 	if (ntfs_u64(header->lsn) != requested_lsn) {
@@ -1446,11 +1526,33 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 		if (amount > total - copied) {
 			amount = (size_t)total - copied;
 		}
+		if (ending != NULL) {
+			/* Continuation framing follows the record's byte extent, never an
+			 * I/O transfer's count/position. A full continuation contains no
+			 * other starts or ends; the first partial record leaves its free
+			 * boundary at its own header. */
+			if (page.storage != NTFS_LOGFILE_LEGACY_TAIL && page.page.copy_value != 0 &&
+			    (page.page.copy_value < requested_lsn ||
+				(copied + amount < total &&
+				    page.page.copy_value != requested_lsn))) {
+				result = NTFS_STALE;
+				goto done;
+			}
+			if (copied + amount < total &&
+			    (page.page.next_record_offset != record_offset ||
+				(copied != 0 &&
+				    ((page.page.flags & NTFS_LOGFILE_PAGE_RECORD_END) != 0 ||
+					page.page.last_end_lsn != 0)))) {
+				result = NTFS_CORRUPT;
+				goto done;
+			}
+		}
 		/* A spanning record starts beyond the last completed prefix. Only its
 		 * ending circular segment, and every selected completed tail segment,
 		 * must fit the page's declared written prefix. */
 		if (copies != NULL &&
-		    (page.storage != NTFS_LOGFILE_CIRCULAR || copied + amount == total) &&
+		    ((ending == NULL && page.storage != NTFS_LOGFILE_CIRCULAR) ||
+			copied + amount == total) &&
 		    !ntfs_bounds(record_offset, amount, page.page.next_record_offset)) {
 			result = NTFS_CORRUPT;
 			goto done;
@@ -1472,7 +1574,7 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 			result = NTFS_RANGE;
 			goto done;
 		}
-		result = load_record_page(source, offset, work, copies, &page);
+		result = load_record_page(source, offset, requested_lsn, work, copies, &page);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -1486,6 +1588,10 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 	}
 	result = ntfs_logfile_record_decode(
 	    staged, (size_t)total, restart->record_header_bytes, &view.record);
+	if (result == NTFS_OK && ending != NULL && view.pages_read > 1 &&
+	    (view.record.flags & NTFS_LOGFILE_RECORD_MULTI_PAGE) == 0) {
+		result = NTFS_CORRUPT;
+	}
 	if (result == NTFS_OK &&
 	    ((view.record.previous_lsn != 0 &&
 		 ntfs_logfile_lsn_decode(restart, view.record.previous_lsn, &linked) != NTFS_OK) ||
@@ -1500,6 +1606,11 @@ assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes
 		view.read_bytes = work->read_bytes;
 		ntfs_copy(bytes, staged, (size_t)total);
 		*out = view;
+		if (ending != NULL) {
+			ending->page = page;
+			ending->offset = offset;
+			ending->end_offset = record_offset + amount;
+		}
 	}
 done:
 	source->environment.release(source->environment.context, staged, (size_t)total);
@@ -1512,7 +1623,7 @@ ntfs_logfile_read_circular_record(struct ntfs_logfile *source, uint64_t requeste
 {
 	struct ntfs_logfile_report work = {0};
 
-	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, NULL);
+	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, NULL, NULL);
 }
 
 enum ntfs_result
@@ -1522,7 +1633,360 @@ ntfs_logfile_read_indexed_record(struct ntfs_logfile *source, uint64_t requested
 	struct ntfs_logfile_report work = {0};
 	struct record_copies route = {.indexed = true};
 
-	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route);
+	return assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route, NULL);
+}
+
+static enum ntfs_result
+history_bounds(struct ntfs_logfile *source, uint64_t first, struct ntfs_logfile_history_report *out,
+    uint64_t *end_target)
+{
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	const struct page_index *index = source->page_index;
+	const struct indexed_page_entry *entry;
+	const struct ntfs_logfile_page_view *view;
+	struct ntfs_logfile_lsn beginning, end, started;
+	uint32_t ordinal, slot;
+	uint64_t completed, candidate;
+	bool duplicate = false;
+	enum ntfs_result result;
+
+	result = ntfs_logfile_lsn_decode(restart, first, &beginning);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (index == NULL) {
+		return NTFS_NOT_FOUND;
+	}
+	if (index->report.unsupported_copies != 0 || index->unrouted_undated ||
+	    index->unrouted_lsn >= first) {
+		return NTFS_UNSUPPORTED;
+	}
+	for (ordinal = 0; ordinal < index->report.indexed_targets; ordinal++) {
+		entry = &index->entries[ordinal];
+		if (entry->blocked || entry->page.prefix_conflict ||
+		    (entry->page.result == NTFS_UNSUPPORTED &&
+			(entry->equal_candidates & (entry->equal_candidates - 1u)) != 0)) {
+			return NTFS_UNSUPPORTED;
+		}
+		if (entry->page.result == NTFS_CORRUPT) {
+			return NTFS_CORRUPT;
+		}
+		if (entry->page.result != NTFS_OK &&
+		    !(entry->page.result == NTFS_UNSUPPORTED && entry->page.selected.offset != 0 &&
+			entry->page.selected.storage != NTFS_LOGFILE_CIRCULAR)) {
+			continue;
+		}
+		view = &entry->page.selected;
+		completed = (view->page.flags & NTFS_LOGFILE_PAGE_RECORD_END) != 0
+		    ? view->page.last_end_lsn
+		    : 0;
+		/* A newer partial page may replace obsolete records, but cannot
+		 * erase a completed record in the requested retained interval. */
+		if (entry->circular.offset != 0 &&
+		    (entry->circular.page.flags & NTFS_LOGFILE_PAGE_RECORD_END) != 0 &&
+		    entry->circular.page.last_end_lsn >= first &&
+		    entry->circular.page.last_end_lsn > completed) {
+			return NTFS_STALE;
+		}
+		if (completed > out->candidate_end_lsn) {
+			out->candidate_end_lsn = completed;
+			*end_target = entry->page.target_offset;
+			duplicate = false;
+		} else if (completed >= first && completed == out->candidate_end_lsn) {
+			duplicate = true;
+		}
+		view = restart->major == NTFS_LFS_MAJOR_LEGACY ? &entry->circular
+							       : &entry->page.selected;
+		if (view->offset != 0 && view->page.copy_value > out->observed_start_lsn &&
+		    ntfs_logfile_lsn_decode(restart, view->page.copy_value, &started) == NTFS_OK) {
+			out->observed_start_lsn = view->page.copy_value;
+		}
+	}
+	/* Copy targets come from their declared routing fields. A continuation's
+	 * last-start LSN can name a different page. Keep this pass linear in the
+	 * fixed copy count, rather than rechecking every slot for every target. */
+	for (slot = 0; slot < NTFS_LOGFILE_FAST_COPY_PAGES; slot++) {
+		view = &index->copies[slot];
+		candidate = view->page.last_end_lsn;
+		if (view->offset == 0 || (view->page.flags & NTFS_LOGFILE_PAGE_RECORD_END) == 0 ||
+		    candidate < first) {
+			continue;
+		}
+		entry = &index->entries[(index->copy_targets[slot] - restart->circular_offset) /
+		    restart->log_page_bytes];
+		completed = (entry->page.selected.page.flags & NTFS_LOGFILE_PAGE_RECORD_END) != 0
+		    ? entry->page.selected.page.last_end_lsn
+		    : 0;
+		if (candidate > completed) {
+			return NTFS_STALE;
+		}
+	}
+	if (out->candidate_end_lsn == 0 || out->candidate_end_lsn < first) {
+		return NTFS_NOT_FOUND;
+	}
+	if (duplicate) {
+		return NTFS_CORRUPT;
+	}
+	result = ntfs_logfile_lsn_decode(restart, out->candidate_end_lsn, &end);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (end.sequence < beginning.sequence || end.sequence - beginning.sequence > 1 ||
+	    (end.sequence == beginning.sequence && end.file_offset < beginning.file_offset) ||
+	    (end.sequence != beginning.sequence && end.page_offset >= beginning.page_offset)) {
+		return NTFS_STALE;
+	}
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+history_next_lsn(const struct ntfs_logfile_restart *restart, uint64_t current,
+    const struct ntfs_logfile_record_view *record, const struct record_ending *ending,
+    bool next_page, uint64_t *out)
+{
+	struct ntfs_logfile_lsn location;
+	uint64_t sequence, offset, record_offset, maximum_sequence;
+	uint32_t offset_bits;
+	enum ntfs_result result;
+
+	result = ntfs_logfile_lsn_decode(restart, current, &location);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	offset_bits = NTFS_LFS_LSN_BITS - restart->sequence_bits;
+	maximum_sequence = UINT64_MAX >> offset_bits;
+	sequence = location.sequence;
+	if (record->wrapped) {
+		if (sequence == maximum_sequence) {
+			return NTFS_RANGE;
+		}
+		sequence++;
+	}
+	offset = ending->offset;
+	record_offset =
+	    (ending->end_offset + NTFS_WIRE_ALIGNMENT - 1) & ~(uint64_t)(NTFS_WIRE_ALIGNMENT - 1);
+	if (next_page ||
+	    !ntfs_bounds(record_offset, restart->record_header_bytes, restart->log_page_bytes)) {
+		offset += restart->log_page_bytes;
+		if (offset == restart->usable_bytes) {
+			offset = restart->circular_offset;
+			if (sequence == maximum_sequence) {
+				return NTFS_RANGE;
+			}
+			sequence++;
+		}
+		record_offset = restart->page_data_offset;
+	}
+	*out = (sequence << offset_bits) | ((offset + record_offset) >> NTFS_LFS_LSN_OFFSET_SHIFT);
+	return *out > current ? NTFS_OK : NTFS_CORRUPT;
+}
+
+static enum ntfs_result
+history_tail(struct ntfs_logfile *source, const struct ntfs_logfile_record_view *last,
+    const struct record_ending *ending, struct ntfs_logfile_report *work,
+    struct ntfs_logfile_history_report *out)
+{
+	const struct ntfs_logfile_restart *restart = &source->restart;
+	const struct indexed_page_entry *entry;
+	const struct ntfs_logfile_page_view *expected;
+	struct ntfs_logfile_page_view page;
+	struct ntfs_logfile_record record;
+	struct ntfs_logfile_lsn location, linked;
+	uint64_t adjacent;
+	uint32_t bytes;
+	enum ntfs_result result;
+
+	if (out->observed_start_lsn <= out->candidate_end_lsn) {
+		return NTFS_OK;
+	}
+	out->tail_lsn = out->observed_start_lsn;
+	result = ntfs_logfile_lsn_decode(restart, out->tail_lsn, &location);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (out->tail_lsn != out->next_lsn) {
+		result = history_next_lsn(restart, last->record.lsn, last, ending, true, &adjacent);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (out->tail_lsn != adjacent) {
+			return NTFS_STALE;
+		}
+	}
+	entry = &source->page_index->entries[(location.page_offset - restart->circular_offset) /
+	    restart->log_page_bytes];
+	expected =
+	    restart->major == NTFS_LFS_MAJOR_LEGACY ? &entry->circular : &entry->page.selected;
+	if (expected->offset == 0 || expected->page.copy_value != out->tail_lsn) {
+		return NTFS_STALE;
+	}
+	result = index_reload(source, expected, location.page_offset, work, &page);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (page.page.next_record_offset != location.record_offset ||
+	    page.page.last_end_lsn > out->candidate_end_lsn) {
+		return NTFS_CORRUPT;
+	}
+	result = ntfs_logfile_record_prefix(source->scratch + location.record_offset,
+	    restart->log_page_bytes - location.record_offset, restart->record_header_bytes, &record,
+	    &bytes);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (record.lsn != out->tail_lsn) {
+		return NTFS_STALE;
+	}
+	if ((record.flags & NTFS_LOGFILE_RECORD_MULTI_PAGE) == 0 ||
+	    bytes <= restart->log_page_bytes - location.record_offset ||
+	    (record.previous_lsn != 0 &&
+		ntfs_logfile_lsn_decode(restart, record.previous_lsn, &linked) != NTFS_OK) ||
+	    (record.undo_next_lsn != 0 &&
+		ntfs_logfile_lsn_decode(restart, record.undo_next_lsn, &linked) != NTFS_OK)) {
+		return NTFS_CORRUPT;
+	}
+	out->tail_verified = true;
+	out->next_lsn = out->tail_lsn;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_visit_records(struct ntfs_logfile *source, uint64_t first, uint32_t max_records,
+    void *workspace, size_t capacity, ntfs_logfile_record_visitor visitor, void *context,
+    struct ntfs_logfile_history_report *out)
+{
+	struct record_copies route = {.indexed = true, .history = true};
+	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_record_view record;
+	struct record_ending ending;
+	struct ntfs_logfile_lsn location, beginning;
+	struct ntfs_logfile_lsn started;
+	const struct ntfs_logfile_restart *restart;
+	const struct indexed_page_entry *entry;
+	uint64_t current, end_target, before_bytes, aligned, ending_sequence, last_start;
+	uint32_t before_calls;
+	bool pending_start;
+	enum ntfs_result result;
+
+	if (out == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL || workspace == NULL || max_records == 0) {
+		return NTFS_INVALID;
+	}
+	restart = &source->restart;
+	if (capacity < restart->record_header_bytes) {
+		return NTFS_RANGE;
+	}
+	out->first_lsn = first;
+	out->next_lsn = first;
+	result = history_bounds(source, first, out, &end_target);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_logfile_lsn_decode(restart, first, &beginning);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	current = first;
+	for (;;) {
+		if (out->examined_records == max_records) {
+			result = NTFS_RANGE;
+			break;
+		}
+		before_calls = work.read_calls;
+		before_bytes = work.read_bytes;
+		result = assemble_record(
+		    source, current, workspace, capacity, &record, &work, &route, &ending);
+		if (result != NTFS_OK) {
+			break;
+		}
+		record.read_calls -= before_calls;
+		record.read_bytes -= before_bytes;
+		aligned = (ending.end_offset + NTFS_WIRE_ALIGNMENT - 1) &
+		    ~(uint64_t)(NTFS_WIRE_ALIGNMENT - 1);
+		if (ending.page.page.last_end_lsn > out->candidate_end_lsn ||
+		    aligned > ending.page.page.next_record_offset) {
+			result = NTFS_CORRUPT;
+			break;
+		}
+		result = ntfs_logfile_lsn_decode(restart, current, &location);
+		if (result != NTFS_OK) {
+			break;
+		}
+		ending_sequence = location.sequence + (record.wrapped ? 1u : 0u);
+		if (ending_sequence - beginning.sequence > 1 ||
+		    (ending_sequence != beginning.sequence &&
+			ending.offset >= beginning.page_offset)) {
+			result = NTFS_STALE;
+			break;
+		}
+		if (current == out->candidate_end_lsn &&
+		    (ending.offset != end_target || ending.page.page.last_end_lsn != current ||
+			aligned != ending.page.page.next_record_offset)) {
+			result = NTFS_CORRUPT;
+			break;
+		}
+		out->examined_records++;
+		out->last_lsn = current;
+		out->record_bytes += record.bytes;
+		out->copy_pages_read += record.copy_pages_read;
+		out->wrapped |= record.wrapped;
+		if (visitor != NULL) {
+			result = visitor(context, &record, workspace);
+			if (result != NTFS_OK) {
+				break;
+			}
+		}
+		out->visited_records++;
+		if (current == out->candidate_end_lsn) {
+			out->endpoint_verified = true;
+			out->completed_end_lsn = current;
+			result = history_next_lsn(
+			    restart, current, &record, &ending, false, &out->next_lsn);
+			if (result == NTFS_OK) {
+				result = history_tail(source, &record, &ending, &work, out);
+			}
+			out->complete = result == NTFS_OK;
+			break;
+		}
+		/* A completed prefix can end at the next spanning record's header.
+		 * Only a matching last-start witness keeps that boundary on this page;
+		 * otherwise the closed prefix advances to the next physical payload. */
+		last_start = ending.page.page.copy_value;
+		if (restart->major == NTFS_LFS_MAJOR_LEGACY) {
+			entry = &source->page_index
+				     ->entries[(ending.offset - restart->circular_offset) /
+					 restart->log_page_bytes];
+			last_start = entry->circular.page.copy_value;
+		}
+		pending_start = last_start > current &&
+		    ntfs_logfile_lsn_decode(restart, last_start, &started) == NTFS_OK &&
+		    started.file_offset == ending.offset + aligned;
+		result = history_next_lsn(restart, current, &record, &ending,
+		    aligned == ending.page.page.next_record_offset && !pending_start,
+		    &out->next_lsn);
+		if (result != NTFS_OK) {
+			break;
+		}
+		current = out->next_lsn;
+		result = ntfs_logfile_lsn_decode(restart, current, &location);
+		if (result != NTFS_OK) {
+			break;
+		}
+		if (current > out->candidate_end_lsn ||
+		    location.sequence - beginning.sequence > 1 ||
+		    (location.sequence != beginning.sequence &&
+			location.page_offset >= beginning.page_offset)) {
+			result = NTFS_STALE;
+			break;
+		}
+		out->wrapped |= location.sequence != beginning.sequence;
+	}
+	out->read_calls = work.read_calls;
+	out->read_bytes = work.read_bytes;
+	return result;
 }
 
 enum ntfs_result
@@ -1559,8 +2023,8 @@ ntfs_logfile_read_legacy_record(struct ntfs_logfile *source, uint64_t requested_
 	}
 	result = scan_legacy_copies(source, &work, &copies);
 	if (result == NTFS_OK) {
-		result =
-		    assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route);
+		result = assemble_record(
+		    source, requested_lsn, bytes, capacity, out, &work, &route, NULL);
 	}
 	source->environment.release(
 	    source->environment.context, copies.comparison, source->restart.log_page_bytes);
@@ -1613,8 +2077,8 @@ ntfs_logfile_read_fast_record(struct ntfs_logfile *source, uint64_t requested_ls
 	route = (struct record_copies){.fast = copies};
 	result = scan_fast_copies(source, &work, copies);
 	if (result == NTFS_OK) {
-		result =
-		    assemble_record(source, requested_lsn, bytes, capacity, out, &work, &route);
+		result = assemble_record(
+		    source, requested_lsn, bytes, capacity, out, &work, &route, NULL);
 	}
 	source->environment.release(source->environment.context, copies, workspace_bytes);
 	return result;

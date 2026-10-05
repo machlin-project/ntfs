@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
-#include <ntfs/logfile.h>
+#include "logfile_internal.h"
 
 enum {
 	LOG_MAX_CLIENTS = NTFS_LOGFILE_MAX_PAGE_BYTES / sizeof(struct ntfs_disk_log_client),
@@ -400,11 +400,60 @@ ntfs_logfile_page_decode(const void *input, size_t size, const struct ntfs_logfi
 }
 
 enum ntfs_result
+ntfs_logfile_record_prefix(const void *input, size_t available, uint16_t header_bytes,
+    struct ntfs_logfile_record *out, uint32_t *total)
+{
+	const struct ntfs_disk_log_record *header = input;
+	struct ntfs_logfile_record info = {0};
+	uint64_t measured;
+
+	if (out == NULL || total == NULL) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	*total = 0;
+	if (input == NULL || header_bytes < sizeof(*header) ||
+	    header_bytes % NTFS_WIRE_ALIGNMENT != 0) {
+		return NTFS_INVALID;
+	}
+	if (available < header_bytes) {
+		return NTFS_CORRUPT;
+	}
+	measured = (uint64_t)header_bytes + ntfs_u32(header->data_bytes);
+	if (measured > NTFS_LOGFILE_MAX_RECORD_BYTES) {
+		return NTFS_RANGE;
+	}
+	info.lsn = ntfs_u64(header->lsn);
+	info.previous_lsn = ntfs_u64(header->previous_lsn);
+	info.undo_next_lsn = ntfs_u64(header->undo_next_lsn);
+	info.type = ntfs_u32(header->type);
+	info.transaction = ntfs_u32(header->transaction);
+	info.client_sequence = ntfs_u16(header->client_sequence);
+	info.client_index = ntfs_u16(header->client_index);
+	info.flags = ntfs_u16(header->flags);
+	info.data.offset = header_bytes;
+	info.data.length = ntfs_u32(header->data_bytes);
+	if (info.lsn == 0 || info.previous_lsn >= info.lsn || info.undo_next_lsn >= info.lsn ||
+	    info.client_index == NTFS_LOGFILE_NO_CLIENT) {
+		return NTFS_CORRUPT;
+	}
+	if ((info.flags &
+		~(NTFS_LOGFILE_RECORD_MULTI_PAGE | NTFS_LOGFILE_RECORD_DELETING |
+		    NTFS_LOGFILE_RECORD_ADDING)) != 0 ||
+	    (info.type != NTFS_LOGFILE_RECORD_UPDATE && info.type != NTFS_LOGFILE_RECORD_RESTART)) {
+		return NTFS_UNSUPPORTED;
+	}
+	*out = info;
+	*total = (uint32_t)measured;
+	return NTFS_OK;
+}
+
+enum ntfs_result
 ntfs_logfile_record_decode(
     const void *input, size_t size, uint16_t header_bytes, struct ntfs_logfile_record *out)
 {
 	const struct ntfs_disk_log_record *header = input;
-	struct ntfs_logfile_record info = {0};
+	uint32_t total;
 
 	if (out == NULL) {
 		return NTFS_INVALID;
@@ -420,28 +469,7 @@ ntfs_logfile_record_decode(
 	if (size < header_bytes || ntfs_u32(header->data_bytes) != size - header_bytes) {
 		return NTFS_CORRUPT;
 	}
-	info.lsn = ntfs_u64(header->lsn);
-	info.previous_lsn = ntfs_u64(header->previous_lsn);
-	info.undo_next_lsn = ntfs_u64(header->undo_next_lsn);
-	info.type = ntfs_u32(header->type);
-	info.transaction = ntfs_u32(header->transaction);
-	info.client_sequence = ntfs_u16(header->client_sequence);
-	info.client_index = ntfs_u16(header->client_index);
-	info.flags = ntfs_u16(header->flags);
-	info.data.offset = header_bytes;
-	info.data.length = (uint32_t)(size - header_bytes);
-	if (info.lsn == 0 || info.previous_lsn >= info.lsn || info.undo_next_lsn >= info.lsn ||
-	    info.client_index == NTFS_LOGFILE_NO_CLIENT) {
-		return NTFS_CORRUPT;
-	}
-	if ((info.flags &
-		~(NTFS_LOGFILE_RECORD_MULTI_PAGE | NTFS_LOGFILE_RECORD_DELETING |
-		    NTFS_LOGFILE_RECORD_ADDING)) != 0 ||
-	    (info.type != NTFS_LOGFILE_RECORD_UPDATE && info.type != NTFS_LOGFILE_RECORD_RESTART)) {
-		return NTFS_UNSUPPORTED;
-	}
-	*out = info;
-	return NTFS_OK;
+	return ntfs_logfile_record_prefix(input, header_bytes, header_bytes, out, &total);
 }
 
 static bool

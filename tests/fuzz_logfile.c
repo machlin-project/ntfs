@@ -38,6 +38,7 @@ enum {
 	FUZZ_FAST_RECORD,
 	FUZZ_PAGE_INVENTORY,
 	FUZZ_PAGE_INDEX,
+	FUZZ_RECORD_HISTORY,
 	FUZZ_KINDS,
 	/* Full 1-MiB source fixtures plus their framing fit this test envelope. */
 	FUZZ_INPUT_BYTES = 2 * 1024 * 1024,
@@ -60,6 +61,11 @@ enum {
 	FUZZ_FAULT_COMPARISON = 1u << (NTFS_BITS_PER_BYTE + 2),
 	FUZZ_FAULT_SELECTED_READ = 1u << (NTFS_BITS_PER_BYTE + 3),
 	FUZZ_INDEX_SHORT_MEMORY = 1u << (NTFS_BITS_PER_BYTE + 4),
+	FUZZ_HISTORY_SHORT_WORKSPACE = 1u << (NTFS_BITS_PER_BYTE + 5),
+	FUZZ_HISTORY_VISITOR_STOP = 1u << (NTFS_BITS_PER_BYTE + 6),
+	FUZZ_HISTORY_SHORT_RECORDS = 1u << (NTFS_BITS_PER_BYTE + 7),
+	FUZZ_HISTORY_MAX_RECORDS = 1024,
+	FUZZ_HISTORY_STOP_RECORD = 2,
 	FUZZ_BUDGET_SHIFT = 2 * NTFS_BITS_PER_BYTE,
 	FUZZ_PARTIAL_READ_BYTE = 0x71,
 	FUZZ_PARTIAL_READ_DENOMINATOR = 2
@@ -430,11 +436,45 @@ indexed_digest(struct ntfs_logfile *source, const struct ntfs_logfile_restart *r
 	return digest;
 }
 
+struct fuzz_history_visitor {
+	uint64_t last_lsn, digest, bytes;
+	uint32_t calls, stop;
+	uint16_t header_bytes;
+};
+
+static enum ntfs_result
+fuzz_history_visit(void *context, const struct ntfs_logfile_record_view *view, const void *input)
+{
+	struct fuzz_history_visitor *visitor = context;
+	struct ntfs_logfile_record decoded;
+	const uint8_t *bytes = input;
+	size_t i;
+
+	assert(
+	    view->record.lsn > visitor->last_lsn && view->bytes <= NTFS_LOGFILE_MAX_RECORD_BYTES);
+	assert(ntfs_logfile_record_decode(bytes, view->bytes, visitor->header_bytes, &decoded) ==
+	    NTFS_OK);
+	assert(memcmp(&decoded, &view->record, sizeof(decoded)) == 0);
+	assert(view->pages_read == view->read_calls && view->copy_pages_read <= view->pages_read);
+	visitor->last_lsn = view->record.lsn;
+	visitor->digest ^= view->first_page_offset ^ view->last_page_offset ^ view->read_bytes ^
+	    view->copy_pages_read ^ view->wrapped;
+	for (i = 0; i < view->bytes; i++) {
+		visitor->digest = (visitor->digest << NTFS_BITS_PER_BYTE) ^
+		    (visitor->digest >> NTFS_BITS_PER_BYTE) ^ bytes[i];
+	}
+	visitor->bytes += view->bytes;
+	visitor->calls++;
+	return visitor->calls == visitor->stop ? NTFS_END : NTFS_OK;
+}
+
 static void
-fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t controls)
+fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t controls, bool history)
 {
 	struct ntfs_logfile_page_index_report indices[2] = {0}, cached, empty = {0};
 	struct ntfs_logfile_record_view views[2] = {0}, zero_view = {0};
+	struct ntfs_logfile_history_report histories[2] = {0};
+	struct fuzz_history_visitor visitors[2] = {0};
 	struct ntfs_logfile_report reports[2];
 	struct ntfs_logfile_restart restart;
 	struct ntfs_logfile_limits limits;
@@ -523,12 +563,43 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 				device.fail_allocation =
 				    (controls & FUZZ_FAULT_RECORD_ALLOCATION) != 0 ? allocations + 1
 										   : 0;
-				records[index] = ntfs_logfile_read_indexed_record(source, lsn,
-				    record_scratch[index] + FUZZ_GUARD_BYTES, capacity,
-				    &views[index]);
+				if (history) {
+					if ((controls & FUZZ_HISTORY_SHORT_WORKSPACE) != 0) {
+						capacity = restart.record_header_bytes - 1u;
+					}
+					visitors[index].header_bytes = restart.record_header_bytes;
+					visitors[index].stop =
+					    (controls & FUZZ_HISTORY_VISITOR_STOP) != 0
+					    ? FUZZ_HISTORY_STOP_RECORD
+					    : 0;
+					records[index] = ntfs_logfile_visit_records(source, lsn,
+					    (controls & FUZZ_HISTORY_SHORT_RECORDS) != 0
+						? 1
+						: FUZZ_HISTORY_MAX_RECORDS,
+					    record_scratch[index] + FUZZ_GUARD_BYTES, capacity,
+					    fuzz_history_visit, &visitors[index],
+					    &histories[index]);
+					/* Workspace is temporary even when the walk later refuses.
+					 */
+					used[index] = capacity;
+					assert(histories[index].read_calls == device.reads &&
+					    histories[index].read_bytes <= limits.max_read_bytes);
+					assert(histories[index].examined_records ==
+						visitors[index].calls &&
+					    histories[index].record_bytes ==
+						visitors[index].bytes &&
+					    histories[index].visited_records <=
+						visitors[index].calls &&
+					    histories[index].complete ==
+						(records[index] == NTFS_OK));
+				} else {
+					records[index] = ntfs_logfile_read_indexed_record(source,
+					    lsn, record_scratch[index] + FUZZ_GUARD_BYTES, capacity,
+					    &views[index]);
+				}
 				assert(device.memory == retained &&
 				    device.reads <= limits.max_read_calls);
-				if (records[index] == NTFS_OK) {
+				if (!history && records[index] == NTFS_OK) {
 					used[index] = views[index].bytes;
 					assert(used[index] <= capacity &&
 					    views[index].record.lsn == lsn &&
@@ -537,7 +608,7 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 					    views[index].read_bytes <= limits.max_read_bytes &&
 					    views[index].copy_pages_read <=
 						views[index].pages_read);
-				} else {
+				} else if (!history) {
 					assert(memcmp(&views[index], &zero_view,
 						   sizeof(zero_view)) == 0);
 				}
@@ -566,6 +637,8 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 	assert(memcmp(&reports[0], &reports[1], sizeof(reports[0])) == 0 &&
 	    memcmp(&indices[0], &indices[1], sizeof(indices[0])) == 0 &&
 	    memcmp(&views[0], &views[1], sizeof(views[0])) == 0 &&
+	    memcmp(&histories[0], &histories[1], sizeof(histories[0])) == 0 &&
+	    memcmp(&visitors[0], &visitors[1], sizeof(visitors[0])) == 0 &&
 	    memcmp(record_scratch[0], record_scratch[1], guarded_bytes) == 0);
 }
 
@@ -1155,9 +1228,9 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(memcmp(data, original, size) == 0);
 		return 0;
 	}
-	if (kind == FUZZ_PAGE_INDEX) {
-		fuzz_source_index(
-		    packet, packet_size, argument, ntfs_u32(header->configuration_bytes));
+	if (kind == FUZZ_PAGE_INDEX || kind == FUZZ_RECORD_HISTORY) {
+		fuzz_source_index(packet, packet_size, argument,
+		    ntfs_u32(header->configuration_bytes), kind == FUZZ_RECORD_HISTORY);
 		assert(memcmp(data, original, size) == 0);
 		return 0;
 	}
@@ -1464,7 +1537,7 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 	page_bytes = size - sizeof(*envelope) - configuration_size;
 	source_kind = kind == FUZZ_SOURCE || kind == FUZZ_CIRCULAR_RECORD ||
 	    kind == FUZZ_LEGACY_RECORD || kind == FUZZ_FAST_RECORD || kind == FUZZ_PAGE_INVENTORY ||
-	    kind == FUZZ_PAGE_INDEX;
+	    kind == FUZZ_PAGE_INDEX || kind == FUZZ_RECORD_HISTORY;
 	if (kind == FUZZ_CLIENT_RESTART_RECORD &&
 	    (seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD == 0) {
 		page = data + sizeof(*envelope);
@@ -1520,7 +1593,8 @@ structured_mutate(uint8_t *data, size_t size, unsigned seed)
 		}
 	}
 	minimum = 0;
-	if ((kind == FUZZ_PAGE_INVENTORY || kind == FUZZ_PAGE_INDEX) &&
+	if ((kind == FUZZ_PAGE_INVENTORY || kind == FUZZ_PAGE_INDEX ||
+		kind == FUZZ_RECORD_HISTORY) &&
 	    (seed / FUZZ_GENERIC_PERIOD) % FUZZ_GENERIC_PERIOD != 0) {
 		record_page = inventory_mutation_page(&page, &page_bytes, seed);
 		if (record_page) {

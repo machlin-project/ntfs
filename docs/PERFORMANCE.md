@@ -1,5 +1,32 @@
 # Performance contracts
 
+## Selected journal interval costs and optimization plan
+
+The bounded selected-record walker keeps index preparation and record traversal as
+separate accounted operations. Endpoint gathering is O(circular targets + fixed copy
+slots); stored routing targets avoid deriving a continuation's target from its header
+LSN or scanning every copy for every target. The index retains metadata and one page
+comparison buffer, with no disk-sized payload cache. Each complete packet still has
+one bounded staging allocation and one selected-page read per physical segment.
+
+The 600-record functional source puts eighty small records on each full 4-KiB page.
+Its ordinary walk performs 600 reads although only eight target pages contain its
+records. This is explicit I/O accounting, without a timing or throughput claim.
+After native history/continuation correctness is qualified, measure matched cold/hot
+walks against this source and unchanged Windows inputs before introducing reuse:
+
+1. Measure constructor/traversal wall and CPU time, physical calls/bytes, staging
+   allocations and peak retained bytes independently; include small and spanning
+   records, unused page capacity, copies, wrap, short budgets and injected errors.
+2. Evaluate one bounded restored selected-page reuse slot tied to the immutable
+   owner and exact target/header selection. Preserve separate prepared metadata,
+   fault/revalidation behavior, packet atomicity and whole-operation credits.
+3. Evaluate private staging reuse only after measuring allocator costs. Retain exact
+   packet caps, caller-workspace isolation, allocation refusal and owner lifetime.
+4. Repeat packet/refusal/fault checks and matched benchmarks; qualify installed
+   resource reads and memory pressure separately. A lower synthetic callback count
+   alone cannot establish a Windows recovery or installed throughput improvement.
+
 ## Checked base metadata across temporary nodes
 
 The current bounded memo retains checked standard information and reparse presence

@@ -395,17 +395,77 @@ queries, clear/close/BUSY behavior and virtual 4-GiB preflight pass.
 The frozen Windows journal's 1,138 target decisions match independently restored
 source bytes: 34 selected pages, 1,104 missing targets, nine equal-prefix comparisons
 and one visible unrouted copy. Preparation performs 1,188 reads/4,866,048 bytes and
-retains 160,552 bytes on the host. All four original packets then
+retains 160,552 bytes on the preceding index-only build. All four original packets then
 need one selected-page read apiece. This measures acquisition counts and retained
 memory, not installed throughput, a clean guest flush or an active-window proof.
 
-Next establish the actual completed endpoint and unfinished tail independently of
-RSTR CurrentLsn, then qualify ordered active records, sequence/wrap and continuation
-ownership from the selected client's checkpoint/analysis bounds. Transfer
-count/position cannot identify record fragments. Complete checkpoint tables plus
-subsequent transaction analysis and volume references remain prerequisites for
-WRITES.md's recovery gate. Matched cold/hot timing and broader memory pressure
-measurements remain a separate optimization task after history correctness.
+Use the selected-record visitor below for bounded framing from an explicit anchor.
+Native active-window and continuation ownership still require the selected client's
+checkpoint/analysis bounds. Complete checkpoint tables, subsequent transaction analysis
+and volume references remain prerequisites for WRITES.md's recovery gate. Matched
+cold/hot timing and broader memory pressure measurements remain a separate task.
+
+## Bounded selected-record interval
+
+`ntfs_logfile_visit_records` requires a prepared index, a positive record limit,
+disjoint caller workspace and a report. The caller supplies an exact first LSN;
+the owning NTFS client must eventually choose its retained analysis lower bound.
+The maximum selected RecordEnd/last-end LSN is only an endpoint candidate. The
+visitor verifies actual complete headers and declared bodies in order through that
+candidate, with checked alignment, adjacent physical payloads, monotonic LSN geometry,
+at most one ring wrap and no logical-page revisit. The final record must end on the
+candidate's declared target and exactly at its NextRecordOffset. RSTR CurrentLsn
+does not restrict the interval. Competing maximum ends, prefix conflicts, unsupported
+pages, undated/recent unroutable copies and discarded retained completion tags refuse.
+An unroutable copy dated only by an older valid completion tag remains diagnostic
+evidence outside the requested framing interval; this is not native liveness proof.
+
+NextRecordOffset can identify the beginning of a spanning record, rather than its
+end. A matching last-start witness keeps the next boundary on the same page; a
+closed prefix advances to the next physical payload. Full continuation fragments
+have no intervening record starts or ends. The declared record byte extent controls
+assembly, while transfer count/position never delimit it. A matching legacy circular
+page can supply spanning bytes beyond a completed tail prefix whose equality was
+already checked. A single incomplete modern copy can supply such framing; unresolved
+equal incomplete peers refuse. Modern zero-start continuation ownership remains
+unqualified and is not admitted by this path. Legacy zero-start segments provide
+framing evidence, without establishing their native freshness or ownership.
+
+A greatest observed last-start LSN beyond the completed candidate must identify its
+immediate successor on the same or next physical payload. Its exact complete header,
+declared spanning length, links and free boundary are checked separately. The body
+remains incomplete; the visitor never receives that tail as a complete packet.
+Legacy tail-only pages may have no observed start LSN because their common field
+is a physical target. An exhausted sequence cannot invent a representable successor.
+
+Each record uses one bounded private staging allocation and publishes exact unpadded
+bytes into the transient caller workspace after assembly. All record and optional
+tail reads share one operation budget; it never resets per record. Visitor read
+counters describe that packet's successful physical segments. Report read counters
+also retain failed attempts and optional tail-header reads; copy_pages_read counts
+completed assembled packets. A callback failure counts the examined packet but
+does not advance visited_records. A record/quota/read/allocation/footer failure
+preserves partial evidence; no report is a resume cursor. Workspace is temporary
+and can contain a prior packet even on failure. Only complete means that the entire
+requested selected framing interval and its optional observed tail finished. Consumer
+analysis must retain its own private state until this result is accepted. This API
+does not qualify client ownership, current native history, transaction semantics,
+replay, clean guest flushes or device durability, and cannot enable writes.
+
+The regular-file CLI is `ntfs-logfile records LOGICAL_JOURNAL_FILE DECIMAL_FIRST_LSN`.
+It explicitly caps index memory at 1 MiB, the walk at 4,096 records and I/O at
+4,096 calls/16 MiB, with one 1-MiB record workspace. JSON preserves complete emitted
+packets and partial reports while history_qualified/recovery_qualified remain false.
+
+The original 123 windows contain 65 complete results and 58 refusals, with 861 exact
+emitted packet oracles. They cover all copy slots, multiple records per page,
+extended headers, padding and closed-prefix gaps, independent transfers, spanning
+records, wrap, partial headers, routing/completion regressions, duplicate ends,
+unknown flags, exact/excess record cap, maximum pages and sequence ceiling. Direct
+core checks also fail every read/allocation in three distinct successful windows,
+retry the same owner, stop visitors and exercise clear/index lifetime. A 600-record
+source prepares within the physical-page budget, then refuses when the shared call
+or byte credits run out; per-record budget resets are not accepted.
 
 ## Physical circular-record observation
 

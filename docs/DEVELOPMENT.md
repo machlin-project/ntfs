@@ -16,7 +16,18 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
-Current journal index qualification runs `logfile-index`, `logfile-index-cli` and
+Current selected-window qualification runs `logfile-history`, `logfile-history-cli`,
+`fuzz-logfile-history` and `fuzz-logfile-history-tail-fault`, then all 142 fatal-sanitizer
+suites. The original fixture author is tests/logfile_history_fixtures.py: 123 windows,
+65 complete results/58 refusals and 861 exact emitted packet oracles. The regular-file
+CLI is `ntfs-logfile records LOGICAL_JOURNAL_FILE DECIMAL_FIRST_LSN`; it shares one
+4,096-read/16-MiB budget across the entire walk and caps records at 4,096, index memory
+and individual record workspace at 1 MiB. These are explicit tool policies; production
+defaults are unchanged. Review artifacts/logfile-history/{final,native-execution}/ and
+artifacts/fskit-logfile-history/. The frozen native comparison preserves the original
+Windows Recovery journal and complete packets, without claiming native replay or writes.
+
+The preceding journal index qualification runs `logfile-index`, `logfile-index-cli` and
 five `fuzz-logfile-index` variants alongside the preceding inventory/legacy/fast
 checks, then all 138 fatal-sanitizer suites. Its original author is
 tests/logfile_index_fixtures.py: 71 target-selection graphs/14,922 rows and 109
@@ -30,7 +41,7 @@ artifacts/fskit-logfile-index/. The frozen Windows comparison is in the Recovery
 observation's native-core-index/ with original-source and whole-packet comparisons.
 This is per-target selection/acquisition, not current history or recovery.
 
-The current journal campaign replays 2,795 authored seeds, retaining all 2,557
+The preceding journal campaign replays 2,795 authored seeds, retaining all 2,557
 preceding bytes and 238 appended index envelopes. The lone logfile process passes
 `-reload=0`; no peer modifies its corpus during the run. Startup corpus loading and
 every authored seed's fixed replay still execute. This avoids the observed duplicate
@@ -39,6 +50,17 @@ alone. See [LLVM's reload option](https://llvm.org/docs/LibFuzzer.html#options).
 Keep the failed run and standalone diagnostic under artifacts/logfile-index/;
 the corrected campaign and source/seed/corpus review are in reload-bound/ and
 artifacts/fuzz-logfile-index/. Input/RSS/time limits and fatal sanitizers stay unchanged.
+
+Current selector 25 adds 139 whole-source history envelopes to the unchanged 2,795
+authored journal seeds. The fresh campaign exhaustively replays all 2,934 seeds before
+coverage exploration with the same 2-MiB input, 1-GiB RSS and five-second per-input caps.
+Keep the preceding learned corpus under artifacts/fuzz-logfile-index/logfile/ unchanged;
+all 3,004 retained files pass 94 fixed-file replay batches with the current binary.
+Their byte-preserving merge adds 209 missing units to artifacts/fuzz/logfile/, retaining
+all 3,106 fresh campaign files for 3,315 total. Separate raw commands, logs and before/
+after manifests are under artifacts/logfile-history/prior-corpus-replay/. Main verifies
+every executed path, terminal count, source identity and retained file byte. A successful
+fresh corpus run alone does not establish coverage of preceding learned mutations.
 
 The preceding journal inventory qualification runs `logfile-inventory`,
 `logfile-inventory-cli` and the three `fuzz-logfile-inventory` variants, then all

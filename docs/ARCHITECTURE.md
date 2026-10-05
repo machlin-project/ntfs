@@ -382,6 +382,17 @@ reuse exact assembly. Legacy circular zero-start continuations retain observatio
 without provenance. RSTR CurrentLsn does not limit candidate epochs. Ordered
 active-window/endpoint/continuation qualification remains separate; native analysis,
 recovery and persistence still require their owning contracts. See LOGFILE.md.
+The same prepared owner supplies a bounded selected-record visitor from an exact
+caller anchor. Per-target routing metadata remains private; a continuation's header
+LSN page is never substituted for its declared copy target. An O(targets + copy slots)
+pass gathers a candidate completed end and preserves regressions/unresolved evidence.
+Ordered exact assembly, written boundaries and physical sequence/wrap checks must
+agree through that end. A tagged unfinished successor has separate header-only
+verification. One operation shares all read credits and one private record staging
+allocation at a time; successful callbacks borrow unpadded bytes. Reports retain
+partial evidence and cannot authorize native recovery or resume a failed analysis.
+Native client analysis owns its lower bound, transaction state and durability gate;
+selected framing alone does not qualify continuation freshness or native history.
 Physical circular-record
 assembly locates the first header by LSN and joins adjacent protected payload
 pages through at most one wrap. One shared operation budget, a no-page-revisit

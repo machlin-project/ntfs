@@ -181,6 +181,16 @@ struct ntfs_logfile_record_view {
 	bool wrapped;
 };
 
+struct ntfs_logfile_history_report {
+	uint64_t first_lsn, candidate_end_lsn, completed_end_lsn, last_lsn, next_lsn;
+	uint64_t observed_start_lsn, tail_lsn, record_bytes, read_bytes;
+	uint32_t read_calls, examined_records, visited_records, copy_pages_read;
+	bool endpoint_verified, tail_verified, complete, wrapped;
+};
+
+typedef enum ntfs_result (*ntfs_logfile_record_visitor)(
+    void *, const struct ntfs_logfile_record_view *, const void *record_bytes);
+
 /* Independent ownership of a logical, immutable $LogFile byte source, not a
  * volume environment. Its context must outlive the owner; calls are serialized.
  * Defaults cap pages at 64 KiB, discovery at 32 reads/256 KiB. No disk-sized
@@ -353,6 +363,29 @@ enum ntfs_result ntfs_logfile_read_fast_record(struct ntfs_logfile *, uint64_t l
  * provenance, native recovery or write admission. */
 enum ntfs_result ntfs_logfile_read_indexed_record(struct ntfs_logfile *, uint64_t lsn, void *,
     size_t capacity, struct ntfs_logfile_record_view *);
+
+/* Walk the selected written record interval from an explicit exact first LSN.
+ * Requires a prepared index. A greatest completed-page LSN is a candidate only:
+ * exact record framing, adjacent payload geometry, one-wrap/no-page-revisit
+ * bounds, completion tags and written boundaries must agree through that end.
+ * The caller-owned workspace holds one exact record, including its header;
+ * records remain capped at MAX_RECORD_BYTES. Each record uses one bounded
+ * private staging allocation. Every read across the entire walk and optional
+ * unfinished-header verification shares the source's operation credits.
+ * max_records is positive; exhaustion refuses RANGE rather than truncating.
+ * The transient visitor receives complete unpadded bytes and per-record read
+ * counters, never transfer-position-derived fragments. Successful visitor calls
+ * advance visited_records; stops/errors preserve partial report evidence.
+ * A tagged unfinished successor is verified separately and never visited as a
+ * complete record. Complete means the requested selected framing interval only;
+ * it does not choose a client's lower bound, validate native transactions or
+ * qualify recovery, durability or writes. RSTR CurrentLsn is not a ceiling.
+ * Visitor/context are optional. Calls remain serialized; a visitor must not
+ * reenter the owner. Workspace/report/source/context are disjoint. Workspace
+ * is temporary storage; report is required and initially zero on every call. */
+enum ntfs_result ntfs_logfile_visit_records(struct ntfs_logfile *, uint64_t first_lsn,
+    uint32_t max_records, void *workspace, size_t capacity, ntfs_logfile_record_visitor,
+    void *context, struct ntfs_logfile_history_report *);
 
 /* Independent immutable-byte primitives; no allocation, device I/O or writes.
  * Output structures are zero on error. Inputs, outputs and scratch must not

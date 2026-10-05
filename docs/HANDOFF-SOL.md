@@ -17,6 +17,48 @@ driver; it is not evidence that 60% of the total effort or commercial readiness
 has been achieved. Writes, native recovery and qualification may dominate the
 remaining effort. Use the acceptance matrix rather than a line-count percentage.
 
+## Selected journal interval continuation
+
+Read LOGFILE.md's bounded selected-record contract and `ntfs_logfile_visit_records`
+in ntfs/logfile.h. The caller supplies an exact lower LSN and prepared index. A
+candidate selected completed end becomes a verified framing endpoint only after
+ordered complete packet bytes, prefixes, adjacent payloads and sequence/wrap bounds
+agree. A tagged unfinished successor has a separate header-only check. Partial
+reports and borrowed visitor packets cannot authorize native recovery or resume a
+failed analysis. Modern zero-start continuations and equal incomplete peers refuse;
+legacy zero-start framing alone does not establish native freshness/ownership.
+
+All 142 fatal-sanitizer suites pass, with 123 original windows/861 emitted exact
+packet oracles, read/allocation retry, callback stops, shared whole-walk credits,
+maximum pages, exact 1-MiB record cap and sequence overflow. Freestanding core still
+passes both 2-KiB frame targets. FSKit has 54 component PASS/eleven macOS-27 runtime
+SKIPs; the clean unsigned universal Release is compilation evidence. The installed
+personally signed development build remains the separate native baseline above.
+
+The unchanged Windows journal also passes one-owner ordered framing of all four
+original packets, plus exact suffixes and absent-anchor refusals. The complete
+window needs four reads/16,384 bytes and preserves all 864 packet bytes. Preparation
+retains 160,824 bytes, 272 more than the preceding index-only build for private
+routing/unresolved-copy metadata. Every target row and other index counter remains
+identical. This capture supplies no later-than-RSTR or native large continuation
+witness, clean flush proof, transaction analysis or Windows replay acceptance.
+Review artifacts/logfile-history/{final,native-execution}/. Initial build/fixture
+failures and the corrected two-field allocation comparison remain in the artifacts.
+
+Fuzz selector 25 appends 139 history envelopes while preserving all 2,795 prior
+authored seeds. The fresh run replays 2,934 seeds and passes 38,253 units/61 seconds
+at 700 MiB under unchanged caps with external reload disabled. Its corpus was
+initially separate; all 3,004 prior learned files subsequently pass 94 fixed replay
+batches with the current binary. The byte-preserving merge adds 209 missing units,
+retaining all 3,106 fresh files for 3,315 total. Main checks every raw executed path
+and retained byte in artifacts/logfile-history/prior-corpus-replay/. Current consolidated
+acceptance is artifacts/logfile-history/main-review.json, binding eleven source inputs,
+raw results, actual products, original Windows packets and every retained corpus file.
+Preserve both campaign records and every prior file. See DEVELOPMENT.md and PERFORMANCE.md
+for the separately planned page/staging reuse measurements. Native client lower
+bounds, checkpoint/transaction analysis, continuation ownership and recovery/durability
+remain the next requirements before a writable owner under WRITES.md.
+
 ## Current native development installation
 
 Fresh personally signed build 3 is installed in the isolated stock macOS 26.5.2
@@ -67,7 +109,7 @@ The user expanded scope to complete native writes and authorized isolated VM wor
 Keep WRITES.md's native recovery/durability gate; this is authorization to implement
 and qualify writing, not evidence that mutations can already be enabled.
 
-Latest portable acceptance is retained journal target selection: 138 fatal-sanitizer
+Preceding portable acceptance is retained journal target selection: 138 fatal-sanitizer
 suites, thirteen initial focused suites plus seven conflict/fuzz addendum suites,
 style, both 2-KiB freestanding targets, 54 component groups/eleven runtime SKIPs and
 clean unsigned universal Release. Main checks actual four products and original
@@ -105,8 +147,8 @@ bounds. Do not discard the failed run or infer a product memory leak from corpus
 retention. Review artifacts/logfile-index/{oom-diagnostic,reload-bound}/ and
 artifacts/fuzz-logfile-index/. Current code has no writable capability.
 
-Main's consolidated acceptance is artifacts/logfile-index/main-review.json.
-Independent host, fixture and seed/fuzz reviews bind the current ten source
+The preceding consolidated acceptance is artifacts/logfile-index/main-review.json.
+Independent host, fixture and seed/fuzz reviews bind its ten source
 inputs, raw results, actual products and all retained corpus bytes. The native
 main-review.json independently compares protected wire fields, nine restored
 peer groups, every target and four complete packets directly with source bytes.

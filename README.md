@@ -15,7 +15,7 @@ Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
 streams. The validator checks physical DOS-alias counts and the observed internal
 repair descriptor omission through bounded namespace ownership. Current evidence
-is 138 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
+is 142 sanitized suites, 54 FSKit component groups/eleven runtime SKIPs and a clean
 universal Release app. This corpus has unestablished authoring OS; Windows/native
 acceptance remains separate. See [development](docs/DEVELOPMENT.md) for the corpus command
 and [the current handoff](docs/HANDOFF-SOL.md) for exact evidence and limitations.
@@ -69,6 +69,15 @@ pages without repeating copy-slot scans. Seventy-one original graphs supply
 all 1,138 target decisions and four complete packets agree independently; one
 unrouted copy remains visible. Current endpoint, active-window continuity and
 native analysis/recovery still need qualification before writing can be enabled.
+
+The prepared index also supports a bounded ordered record visitor from an explicit
+exact caller LSN. Complete packet framing must agree through the selected completed
+endpoint; an unfinished successor header is verified separately. Shared operation
+credits, exact packet bytes, prefix boundaries, ring sequence/wrap and refusals have
+123 original window cases, including the exact 1-MiB record limit. The CLI is
+`ntfs-logfile records LOGICAL_JOURNAL_FILE DECIMAL_FIRST_LSN`. Its completed framing
+interval does not select native client analysis bounds or qualify recovery/durability.
+Windows continuation provenance and transaction replay remain required under WRITES.md.
 
 Volume admission now reports DIRTY only for the actual dirty bit. Other nonzero
 flags remain unsupported; all 44 bit/version profiles and the unchanged Windows

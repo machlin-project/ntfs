@@ -18,6 +18,8 @@ enum { LOGFILE_INVENTORY_READ_CALLS = 4096, LOGFILE_INVENTORY_READ_BYTES = 16 * 
 
 enum { LOGFILE_INDEX_MAX_BYTES = 1024 * 1024 };
 
+enum { LOGFILE_HISTORY_MAX_RECORDS = 4096 };
+
 static bool
 number(const char *text, uint64_t maximum, uint64_t *out)
 {
@@ -494,6 +496,89 @@ circular_record(const char *path, uint64_t lsn, bool legacy_copies, bool fast_co
 	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
 }
 
+static enum ntfs_result
+history_record(void *context, const struct ntfs_logfile_record_view *view, const void *input)
+{
+	bool *first = context;
+	const uint8_t *bytes = input;
+	size_t i;
+
+	printf("%s{\"record\":{", *first ? "" : ",");
+	*first = false;
+	record_fields(&view->record, false);
+	printf("},\"assembly\":{\"first_page_offset\":%" PRIu64 ",\"last_page_offset\":%" PRIu64
+	       ",\"bytes\":%" PRIu32 ",\"pages_read\":%" PRIu32 ",\"copy_pages_read\":%" PRIu32
+	       ",\"read_calls\":%" PRIu32 ",\"read_bytes\":%" PRIu64
+	       ",\"wrapped\":%s},\"bytes_hex\":\"",
+	    view->first_page_offset, view->last_page_offset, view->bytes, view->pages_read,
+	    view->copy_pages_read, view->read_calls, view->read_bytes,
+	    view->wrapped ? "true" : "false");
+	for (i = 0; i < view->bytes; i++) {
+		printf("%02x", (unsigned)bytes[i]);
+	}
+	printf("\"}");
+	return ferror(stdout) ? NTFS_IO : NTFS_OK;
+}
+
+static int
+journal_records(const char *path, uint64_t lsn)
+{
+	struct ntfs_image image;
+	struct ntfs_logfile *source = NULL;
+	struct ntfs_logfile_limits limits;
+	struct ntfs_logfile_page_index_report preparation = {0};
+	struct ntfs_logfile_history_report report = {0};
+	uint8_t *bytes = NULL;
+	bool first = true;
+	enum ntfs_result result;
+
+	if (ntfs_image_open(path, &image) != 0) {
+		fprintf(stderr, "Cannot open read-only regular-file source\n");
+		return LOGFILE_ARGUMENT_ERROR;
+	}
+	ntfs_logfile_default_limits(&limits);
+	limits.max_read_calls = LOGFILE_INVENTORY_READ_CALLS;
+	limits.max_read_bytes = LOGFILE_INVENTORY_READ_BYTES;
+	result = ntfs_logfile_open(&image.environment, &limits, NULL, &source);
+	if (result == NTFS_OK) {
+		result =
+		    ntfs_logfile_prepare_page_index(source, LOGFILE_INDEX_MAX_BYTES, &preparation);
+	}
+	printf("{\"schema_version\":%u,\"scope\":\"records\",\"history_qualified\":false,"
+	       "\"recovery_qualified\":false,\"requested_lsn\":%" PRIu64 ",\"records\":[",
+	    LOGFILE_DIAGNOSTIC_VERSION, lsn);
+	if (result == NTFS_OK) {
+		bytes = malloc(NTFS_LOGFILE_MAX_RECORD_BYTES);
+		if (bytes == NULL) {
+			result = NTFS_NO_MEMORY;
+		} else {
+			result = ntfs_logfile_visit_records(source, lsn,
+			    LOGFILE_HISTORY_MAX_RECORDS, bytes, NTFS_LOGFILE_MAX_RECORD_BYTES,
+			    history_record, &first, &report);
+		}
+	}
+	printf("],\"code\":%d,\"result\":\"%s\",\"history\":{\"first_lsn\":%" PRIu64
+	       ",\"candidate_end_lsn\":%" PRIu64 ",\"completed_end_lsn\":%" PRIu64
+	       ",\"last_lsn\":%" PRIu64 ",\"next_lsn\":%" PRIu64 ",\"observed_start_lsn\":%" PRIu64
+	       ",\"tail_lsn\":%" PRIu64 ",\"record_bytes\":%" PRIu64 ",\"read_calls\":%" PRIu32
+	       ",\"read_bytes\":%" PRIu64 ",\"examined_records\":%" PRIu32
+	       ",\"visited_records\":%" PRIu32 ",\"copy_pages_read\":%" PRIu32
+	       ",\"endpoint_verified\":%s,\"tail_verified\":%s,\"complete\":%s,\"wrapped\":%s},"
+	       "\"preparation\":",
+	    (int)result, ntfs_result_string(result), report.first_lsn, report.candidate_end_lsn,
+	    report.completed_end_lsn, report.last_lsn, report.next_lsn, report.observed_start_lsn,
+	    report.tail_lsn, report.record_bytes, report.read_calls, report.read_bytes,
+	    report.examined_records, report.visited_records, report.copy_pages_read,
+	    report.endpoint_verified ? "true" : "false", report.tail_verified ? "true" : "false",
+	    report.complete ? "true" : "false", report.wrapped ? "true" : "false");
+	index_report_fields(&preparation);
+	printf("}\n");
+	free(bytes);
+	ntfs_logfile_close(source);
+	ntfs_image_close(&image);
+	return result == NTFS_OK && !ferror(stdout) ? 0 : 1;
+}
+
 static int
 active_client(const char *path, uint16_t index, uint16_t sequence)
 {
@@ -772,6 +857,12 @@ main(int argc, char **argv)
 	if (argc == 3 && strcmp(argv[1], "index") == 0) {
 		return journal_index(argv[2]);
 	}
+	if (strcmp(argv[1], "records") == 0) {
+		if (argc != 4 || !number(argv[3], UINT64_MAX, &argument)) {
+			goto usage;
+		}
+		return journal_records(argv[2], argument);
+	}
 	if (strcmp(argv[1], "circular-record") == 0 || strcmp(argv[1], "legacy-record") == 0 ||
 	    strcmp(argv[1], "fast-record") == 0 || strcmp(argv[1], "indexed-record") == 0) {
 		if (argc != 4 || !number(argv[3], UINT64_MAX, &argument)) {
@@ -908,6 +999,7 @@ usage:
 	    "       ntfs-logfile journal LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile pages LOGICAL_JOURNAL_FILE\n"
 	    "       ntfs-logfile index LOGICAL_JOURNAL_FILE\n"
+	    "       ntfs-logfile records LOGICAL_JOURNAL_FILE DECIMAL_FIRST_LSN\n"
 	    "       ntfs-logfile volume-journal NTFS_IMAGE_FILE\n"
 	    "       ntfs-logfile circular-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"
 	    "       ntfs-logfile legacy-record LOGICAL_JOURNAL_FILE DECIMAL_LSN\n"

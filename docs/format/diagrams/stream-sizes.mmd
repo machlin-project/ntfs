@@ -1,0 +1,9 @@
+flowchart LR
+    A["0 → 4500\ninitialized content"] --> Z["4500 → 6000\nreadable zero tail"] --> E["EOF = 6000\nreads stop"]
+    E -. "physical reservation continues" .-> S["6000 → 8192\nallocation slack"]
+    classDef data fill:#e8f6ef,stroke:#398666,color:#174532
+    classDef zero fill:#f2eaff,stroke:#8767ad,color:#44315f
+    classDef slack fill:#f5f6f8,stroke:#8e99aa,color:#546174
+    class A data
+    class Z zero
+    class S slack

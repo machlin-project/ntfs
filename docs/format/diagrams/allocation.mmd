@@ -1,0 +1,12 @@
+flowchart TB
+    subgraph Cluster["Volume cluster domain"]
+        V["$Bitmap::$DATA\nbit = one LCN"] --> C["Cluster extents\nFILE data or metadata streams"]
+    end
+    subgraph Record["MFT record domain"]
+        M["$MFT::$BITMAP\nbit = one FILE slot"] --> F["$MFT::$DATA\nFILE containers"]
+    end
+    subgraph Index["Index block domain"]
+        B["BITMAP:$I30\nbit = one block slot"] --> I["INDEX_ALLOCATION:$I30\nprotected INDX blocks"]
+    end
+    C -. "backs the stream" .-> F
+    C -. "backs the stream" .-> I

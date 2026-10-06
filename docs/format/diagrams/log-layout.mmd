@@ -1,0 +1,10 @@
+flowchart LR
+    subgraph Legacy["LFS 1.1 · logical $LogFile stream"]
+        direction LR
+        R0["RSTR 0"] --- R1["RSTR 1"] --- T0["Tail copy 0"] --- T1["Tail copy 1"] --- P0["Circular first page"] --- P1["... record pages ..."] --- PN["Circular last page"]
+        PN -. "wrap with next epoch" .-> P0
+        T0 -. "target + completed prefix" .-> P1
+        T1 -.-> PN
+    end
+    N["LFS 2.0 supported profile\n32 fast-copy slots instead of two legacy tails"]
+    N -. "separate geometry" .-> T0

@@ -1,0 +1,8 @@
+flowchart LR
+    P["Containing partition\nchecked byte bounds"] --> B["Boot fields\nsector · cluster · record"]
+    B --> A["mft_lcn × cluster_bytes\nbootstrap FILE 0"]
+    A --> F["Verify USA\nresolve $MFT::$DATA"]
+    F --> R["MFT record n\nstream offset n × record_bytes"]
+    R --> X["Mapping pairs\nchecked volume offset"]
+    B --> MM["mirror_lcn\ncritical MFT prefix"]
+    MM -. "independent consistency check" .-> F

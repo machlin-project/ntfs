@@ -1,0 +1,10 @@
+flowchart TB
+    P["Prepare complete private state\nvalidate · reserve · close immutable owners"] --> D["Dirty RSTR copies\npersist each"]
+    D --> L["Prepare tail copy → prepare home\npersist each"]
+    L --> U["Initialized user DATA, if present\ntrue persistence"]
+    U --> C["Commit tail copy → commit home\npersist each"]
+    C --> H["Protected FILE home\ntrue persistence"]
+    H --> R["Retained clean RSTR copies\npersist each · preserve client roots"]
+    R --> O["Publish successful operation\nnext reader uses a fresh epoch"]
+    classDef durable fill:#e8f6ef,stroke:#398666,color:#174532
+    class C,H,R durable

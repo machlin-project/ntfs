@@ -1,5 +1,13 @@
 # Code provenance
 
+The [NTFS format reference](format/README.md) is original repository documentation
+with original worked numbers, diagrams and a source/evidence register. Its field
+facts use the Microsoft definitions and original NTFS/LFS research cited beside
+the relevant material, cross-checked against this repository's named wire fields
+and independent tests. Consulted NTFS-3G layout comments remain attributed below;
+the reference does not claim source-isolated clean-room work. Mermaid is used
+only as a diagram-rendering tool, not as a filesystem implementation dependency.
+
 The bounded initialized-data writer, native timestamp/archive transaction,
 tail-copy publication, redo/compensation executor and FSKit image integration are
 original repository implementations. Format facts use the original field research

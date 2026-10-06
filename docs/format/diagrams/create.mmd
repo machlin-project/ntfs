@@ -1,0 +1,9 @@
+flowchart LR
+    O["Create one namespace edge"] --> F["New FILE slot\nsequence · SI · FILE_NAME · DATA"]
+    O --> P["Parent $I30\nkey + full child reference"]
+    O --> S["Inherited security\nqualified descriptor profile"]
+    F --> M["MFT bitmap\nslot becomes allocated"]
+    P --> I["Index allocation + bitmap\nif external nodes are needed"]
+    M --> G["MFT storage growth\nif no admitted slot exists"]
+    I --> V["Volume bitmap\nnew metadata clusters"]
+    G --> V

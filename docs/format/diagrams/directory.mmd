@@ -1,0 +1,11 @@
+flowchart TB
+    F["Directory FILE\nINDEX_ROOT:$I30"] --> R["Internal root key: M\nM is also a directory entry"]
+    subgraph Blocks["INDX blocks"]
+        L["INDX leaf\nA · C · H · terminal"]
+        Q["INDX leaf\nP · S · Z · terminal"]
+    end
+    R -->|"key's child VCN"| L
+    R -->|"terminal's child VCN"| Q
+    B["BITMAP:$I30\ncheck every live block slot"] -.-> Blocks
+    L --> X["Entry full reference\nrecord number + sequence"]
+    X --> N["Child FILE_NAME\nchecked parent + stored name"]

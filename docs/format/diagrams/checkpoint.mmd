@@ -1,0 +1,8 @@
+flowchart LR
+    F["Old retained floor\ncheckpoint + live redo/undo"] --> H["All required home images\nproved durable"]
+    H --> C["New complete owning checkpoint\nproved and durably published"]
+    C --> R["Restart-root publication\nrecoverable at every boundary"]
+    R --> N["New retained floor\nold pages may become reusable"]
+    B["Active undo or dirty-home obligation"] -. "keeps old history required" .-> F
+    classDef future fill:#fff4df,stroke:#b58a35,color:#6a501a
+    class C,R,N future

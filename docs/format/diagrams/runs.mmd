@@ -1,0 +1,11 @@
+flowchart TB
+    subgraph Logical["Logical stream: VCN order"]
+        direction LR
+        A["VCN 0–2\nlength 3"] --> B["VCN 3–4\nlength 2"] --> H["VCN 5–8\nlength 4"] --> C["VCN 9\nlength 1"]
+    end
+    A --> P["LCN 100–102\nfirst delta +100"]
+    B --> Q["LCN 80–81\ndelta −20"]
+    H --> Z["No disk storage\nread as zero"]
+    C --> R["LCN 95\ndelta +15 from 80"]
+    classDef hole fill:#f2eaff,stroke:#8767ad,color:#44315f
+    class H,Z hole

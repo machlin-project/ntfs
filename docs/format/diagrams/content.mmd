@@ -1,0 +1,11 @@
+flowchart TB
+    S["Checked file + selected stream"] --> P{"Content profile?"}
+    P -->|"plain"| O["Resident bytes or mapped DATA\nEOF · VDL · holes"]
+    P -->|"NTFS compressed"| N["16-cluster unit geometry\nLZNT1 decoding"]
+    P -->|"WOF file provider"| W["WofCompressedData\nchunk table → codec or raw chunk"]
+    P -->|"encrypted / unknown provider"| X["Preserve metadata classification\nrefuse unsupported plaintext read"]
+    O --> R["Publish admitted logical bytes"]
+    N --> R
+    W --> R
+    classDef refusal fill:#fff0eb,stroke:#b66b55,color:#633529
+    class X refusal

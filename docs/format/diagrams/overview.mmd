@@ -1,0 +1,12 @@
+flowchart LR
+    B["Boot record\nvolume geometry"] --> M["$MFT::$DATA\nprotected FILE records"]
+    M --> A["Attributes\ntype · name · instance"]
+    A --> D["$DATA + mapping pairs\ncontent and extents"]
+    A --> I["$I30 directory index\nname → file reference"]
+    A --> S["Security ID\n$Secure → descriptor"]
+    A --> V["Allocation metadata\nrecord and cluster ownership"]
+    L["$LogFile\nLSNs · redo · undo"] -. "recover metadata changes" .-> M
+    classDef storage fill:#e8f6ef,stroke:#398666,color:#174532
+    classDef journal fill:#f2eaff,stroke:#8767ad,color:#44315f
+    class D,V storage
+    class L journal

@@ -13,6 +13,11 @@ Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
+The [NTFS format reference](docs/format/README.md) explains disk structures and
+their relationships in chapters with diagrams, field tables and original worked
+examples. It is updated alongside implementation and native research. See the
+[documentation map](docs/README.md) for component and acceptance contracts.
+
 The installed macOS 27 FSKit image route now passes initialized ordinary-file
 `pwrite`/`fsync`, shared-mapping mutation after the writer descriptor closes,
 coherence through another descriptor and a prefaulted mapping, and two fresh mounts

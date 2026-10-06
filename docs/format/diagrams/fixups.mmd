@@ -1,0 +1,10 @@
+flowchart LR
+    O["Restored record\ntail words 1122 · 3344"] --> U["Save tails in USA\nmarker AA55"]
+    U --> P["Protected disk record\nboth tails become AA55"]
+    P --> C{"Every tail\nmatches marker?"}
+    C -->|yes| R["Restore all saved tails\nthen publish record"]
+    C -->|no| E["Reject the whole record\nno partial restoration"]
+    classDef good fill:#e8f6ef,stroke:#398666,color:#174532
+    classDef bad fill:#fff0eb,stroke:#b66b55,color:#633529
+    class R good
+    class E bad

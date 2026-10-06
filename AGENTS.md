@@ -33,3 +33,13 @@ reports, signing credentials and generated projects out of Git.
 Core tests, adapter component tests, app builds, installed mounts and commercial
 release readiness are distinct evidence. Unsupported rejection is not feature
 support. Update acceptance and handoff with actual results and limitations.
+
+Maintain docs/format/ as the living NTFS disk-format reference. When a work batch
+changes format interpretation, metadata relationships or recovery semantics, or
+establishes a new native observation, update the relevant chapter with named
+fields, units, sources and code/test links. Keep published facts, native
+observations, locally verified behavior and unresolved interpretations distinct.
+Add concrete open questions to its research register; keep feature acceptance in
+the existing acceptance documents. Update diagram sources and inspect their
+rendered SVGs when the relationships change. Keep artifact hashes and UUIDs in
+generated reports, not the reference.

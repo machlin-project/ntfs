@@ -1,0 +1,9 @@
+flowchart LR
+    F["FILE standard information\nsecurity ID"] --> C{"ID zero?"}
+    C -->|yes| P["Per-file\nSECURITY_DESCRIPTOR"]
+    C -->|no| I["$Secure:$SII\nID → locator"]
+    I --> D["$Secure:$SDS\nprimary descriptor bytes"]
+    D --> B["Duplicate SDS block\ncompare complete bytes"]
+    H["$Secure:$SDH\nhash + ID → locator"] -. "cross-check" .-> D
+    P --> V["Self-relative descriptor\nowner · group · SACL · DACL"]
+    B --> V

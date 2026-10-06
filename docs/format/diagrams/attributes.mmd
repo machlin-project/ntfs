@@ -1,0 +1,8 @@
+flowchart LR
+    F["Base FILE record\nsequence-bearing identity"] --> SI["Resident SI / FILE_NAME\nvalues inside FILE"]
+    F --> D["Nonresident DATA\nmapping pairs inside FILE"]
+    D --> C["External clusters\nvalue bytes"]
+    F --> AL["ATTRIBUTE_LIST\ntype · name · VCN · instance"]
+    AL --> E["Extension FILE\nsequence + base reference"]
+    E --> X["Additional extent\ncontinued logical stream"]
+    X --> C

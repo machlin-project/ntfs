@@ -231,7 +231,7 @@ open_owner(struct test_case *test)
 }
 
 static struct test_case *
-prepare(const char *directory)
+prepare_image(const char *directory, const char *image)
 {
 	struct test_case *test;
 	struct ntfs_volume *volume;
@@ -240,7 +240,7 @@ prepare(const char *directory)
 
 	test = calloc(1, sizeof(*test));
 	assert(test != NULL);
-	test->device.visible = load(directory, "source.img", &test->device.bytes);
+	test->device.visible = load(directory, image, &test->device.bytes);
 	test->device.durable = malloc(test->device.bytes);
 	assert(test->device.durable != NULL);
 	memcpy(test->device.durable, test->device.visible, test->device.bytes);
@@ -266,6 +266,12 @@ prepare(const char *directory)
 	validate(test);
 	open_owner(test);
 	return test;
+}
+
+static struct test_case *
+prepare(const char *directory)
+{
+	return prepare_image(directory, "source.img");
 }
 
 static void
@@ -308,7 +314,114 @@ mutation_reference(const struct ntfs_write_mutation_report *report)
 #if defined(NTFS_TEST_MUTATION_PLAN)
 static struct {
 	size_t programs, updates, inverse_prefixes, allocation_faults;
+	size_t original_file_slots, original_index_buffers, unowned_file_signatures,
+	    unowned_index_signatures, unused_mapped_index_buffers;
 } program_checks;
+
+static void
+verify_predecessors(struct test_case *test, const struct ntfs_write_mutation_plan *plan)
+{
+	struct ntfs_volume *volume;
+	struct ntfs_node *mft = NULL, *node = NULL;
+	struct ntfs_stream *mft_bitmap = NULL, *allocation = NULL, *bitmap = NULL;
+	struct ntfs_write_mutation_region region;
+	const struct ntfs_run *run;
+	uint8_t bit, expected;
+	uint64_t number, vcn, logical, physical;
+	size_t index, slot, offset;
+	enum ntfs_result result;
+	bool owned;
+
+	/* Use the unchanged input's immutable reader, independent of the mutation
+	 * owner's projected maps, bitmaps and predecessor implementation. */
+	volume = view(test);
+	assert(ntfs_node_by_number(volume, NTFS_MFT_RECORD, &mft) == NTFS_OK);
+	assert(ntfs_attribute_open(mft, NTFS_ATTR_BITMAP, NULL, 0, &mft_bitmap) == NTFS_OK);
+	for (index = 0; index < ntfs_write_mutation_plan_count(plan); index++) {
+		assert(ntfs_write_mutation_plan_region(plan, index, &region) == NTFS_OK);
+		expected = 0;
+		owned = false;
+		if (region.kind == NTFS_WRITE_MUTATION_FILE) {
+			for (slot = 0; slot < region.bytes / NTFS_WRITE_RECORD_BYTES; slot++) {
+				offset = slot * NTFS_WRITE_RECORD_BYTES;
+				logical = region.target.logical_offset + offset;
+				if (memcmp(region.before + offset, "FILE",
+					sizeof(((struct ntfs_disk_mst *)0)->magic)) != 0) {
+					continue;
+				}
+				if (!ntfs_bounds(logical, NTFS_WRITE_RECORD_BYTES,
+					volume->mft->initialized)) {
+					program_checks.unowned_file_signatures++;
+					continue;
+				}
+				if (region.target.mirror) {
+					physical =
+					    volume->mirror_lcn * NTFS_WRITE_CLUSTER_BYTES + logical;
+				} else {
+					vcn = logical / NTFS_WRITE_CLUSTER_BYTES;
+					run = ntfs_run_find(volume->mft, vcn);
+					assert(run != NULL && run->lcn != NTFS_HOLE);
+					physical =
+					    (run->lcn + vcn - run->vcn) * NTFS_WRITE_CLUSTER_BYTES +
+					    logical % NTFS_WRITE_CLUSTER_BYTES;
+				}
+				assert(physical == region.physical + offset);
+				expected |= (uint8_t)(1u << slot);
+				program_checks.original_file_slots++;
+			}
+		} else if (region.kind == NTFS_WRITE_MUTATION_INDEX) {
+			number = region.target.reference & NTFS_REFERENCE_RECORD_MASK;
+			bit = 0;
+			if (number / NTFS_BITS_PER_BYTE < mft_bitmap->size) {
+				assert(ntfs_stream_exact(mft_bitmap, number / NTFS_BITS_PER_BYTE,
+					   &bit, sizeof(bit)) == NTFS_OK);
+			}
+			if ((bit & (1u << (number % NTFS_BITS_PER_BYTE))) != 0) {
+				assert(ntfs_node_open(volume, region.target.reference, &node) ==
+				    NTFS_OK);
+				result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION,
+				    region.target.name, region.target.name_count, &allocation);
+				assert(result == NTFS_OK || result == NTFS_NOT_FOUND);
+				if (allocation != NULL &&
+				    ntfs_bounds(region.target.logical_offset, region.bytes,
+					allocation->initialized)) {
+					vcn =
+					    region.target.logical_offset / NTFS_WRITE_CLUSTER_BYTES;
+					assert(ntfs_attribute_open(node, NTFS_ATTR_BITMAP,
+						   region.target.name, region.target.name_count,
+						   &bitmap) == NTFS_OK);
+					assert(ntfs_stream_exact(bitmap, vcn / NTFS_BITS_PER_BYTE,
+						   &bit, sizeof(bit)) == NTFS_OK);
+					owned = (bit & (1u << (vcn % NTFS_BITS_PER_BYTE))) != 0;
+					run = ntfs_run_find(allocation, vcn);
+					assert(run != NULL && run->lcn != NTFS_HOLE);
+					physical =
+					    (run->lcn + vcn - run->vcn) * NTFS_WRITE_CLUSTER_BYTES;
+					assert(physical == region.physical);
+					if (!owned) {
+						program_checks.unused_mapped_index_buffers++;
+					}
+				}
+				ntfs_stream_close(bitmap);
+				ntfs_stream_close(allocation);
+				ntfs_node_close(node);
+				bitmap = allocation = NULL;
+				node = NULL;
+			}
+			if (owned) {
+				program_checks.original_index_buffers++;
+			} else if (memcmp(region.before, "INDX",
+				       sizeof(((struct ntfs_disk_mst *)0)->magic)) == 0) {
+				program_checks.unowned_index_signatures++;
+			}
+		}
+		assert(region.predecessor.file_slots == expected);
+		assert(region.predecessor.index_allocated == owned);
+	}
+	ntfs_stream_close(mft_bitmap);
+	ntfs_node_close(mft);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+}
 
 static void
 program_logical(const struct ntfs_write_mutation_region *region, const void *source, void *out)
@@ -319,14 +432,17 @@ program_logical(const struct ntfs_write_mutation_region *region, const void *sou
 	memcpy(out, source, region->bytes);
 	if (region->kind == NTFS_WRITE_MUTATION_FILE) {
 		for (offset = 0; offset < region->bytes; offset += NTFS_WRITE_RECORD_BYTES) {
-			if (memcmp(bytes + offset, "FILE",
+			if ((source != region->before ||
+				(region->predecessor.file_slots &
+				    (1u << (offset / NTFS_WRITE_RECORD_BYTES))) != 0) &&
+			    memcmp(bytes + offset, "FILE",
 				sizeof(((struct ntfs_disk_mst *)0)->magic)) == 0) {
 				assert(ntfs_record_decode(bytes + offset, NTFS_WRITE_RECORD_BYTES,
 					   false) == NTFS_OK);
 			}
 		}
 	} else if (region->kind == NTFS_WRITE_MUTATION_INDEX &&
-	    memcmp(bytes, "INDX", sizeof(((struct ntfs_disk_mst *)0)->magic)) == 0) {
+	    (source != region->before || region->predecessor.index_allocated)) {
 		assert(ntfs_fixup(bytes, region->bytes, "INDX") == NTFS_OK);
 	}
 }
@@ -349,8 +465,11 @@ program_equal(const struct ntfs_write_mutation_region *region, const void *actua
 	if (region->kind == NTFS_WRITE_MUTATION_FILE || region->kind == NTFS_WRITE_MUTATION_INDEX) {
 		for (offset = 0; offset < region->bytes; offset += span) {
 			mst = (const void *)(expected + offset);
-			if (memcmp(mst->magic, "FILE", sizeof(mst->magic)) != 0 &&
-			    memcmp(mst->magic, "INDX", sizeof(mst->magic)) != 0) {
+			if (undo &&
+			    (region->kind == NTFS_WRITE_MUTATION_FILE
+				    ? (region->predecessor.file_slots &
+					  (1u << (offset / NTFS_WRITE_RECORD_BYTES))) == 0
+				    : !region->predecessor.index_allocated)) {
 				/* A newly initialized unowned slot consumes a generation
 				 * on rollback; no old FILE object or index was published. */
 				if (undo && region->kind == NTFS_WRITE_MUTATION_INDEX) {
@@ -673,6 +792,7 @@ verify_program(struct test_case *test, const struct ntfs_write_mutation_plan *pl
 	static bool faults_checked;
 	bool check_page_faults = !faults_checked;
 
+	verify_predecessors(test, plan);
 	live = test->device.live_bytes;
 	reads = test->device.read_calls;
 	test->device.allocations = 0;
@@ -989,7 +1109,9 @@ verify_retirements(struct test_case *test, const struct ntfs_write_mutation_regi
 	for (offset = 0; offset < region->bytes; offset += NTFS_WRITE_RECORD_BYTES) {
 		before = (const void *)(region->before + offset);
 		after = (const void *)(region->after + offset);
-		if (memcmp(before->mst.magic, "FILE", sizeof(before->mst.magic)) == 0 &&
+		if ((region->predecessor.file_slots & (1u << (offset / NTFS_WRITE_RECORD_BYTES))) !=
+			0 &&
+		    memcmp(before->mst.magic, "FILE", sizeof(before->mst.magic)) == 0 &&
 		    (ntfs_u16(before->flags) & NTFS_RECORD_IN_USE) != 0 &&
 		    ntfs_u16(after->flags) == 0) {
 			memcpy(isolated + offset, after, NTFS_WRITE_RECORD_BYTES);
@@ -1059,7 +1181,9 @@ same_plan(
 		assert(ntfs_write_mutation_plan_region(expected, index, &left) == NTFS_OK);
 		assert(ntfs_write_mutation_plan_region(actual, index, &right) == NTFS_OK);
 		assert(left.physical == right.physical && left.kind == right.kind &&
-		    left.bytes == right.bytes);
+		    left.bytes == right.bytes &&
+		    left.predecessor.file_slots == right.predecessor.file_slots &&
+		    left.predecessor.index_allocated == right.predecessor.index_allocated);
 		same_target(&left.target, &right.target);
 		assert(memcmp(left.before, right.before, left.bytes) == 0);
 		assert(memcmp(left.after, right.after, left.bytes) == 0);
@@ -1543,7 +1667,7 @@ mixed_operations(const char *source, const char *cases)
 }
 
 static void
-index_and_MFT_growth(const char *source, const char *cases)
+index_and_MFT_growth_image(const char *source, const char *cases, const char *image, bool root)
 {
 	struct test_case *test;
 	uint64_t *references;
@@ -1554,8 +1678,9 @@ index_and_MFT_growth(const char *source, const char *cases)
 	size_t index, count;
 	int length;
 
-	test = prepare(source);
-	directory = create(test, test->root_reference, "mutation-index", true);
+	test = prepare_image(source, image);
+	directory = root ? test->root_reference
+			 : create(test, test->root_reference, "mutation-index", true);
 	references = calloc(TEST_CHILDREN, sizeof(*references));
 	assert(references != NULL);
 	path = malloc(TEST_PATH_BYTES);
@@ -1589,12 +1714,91 @@ index_and_MFT_growth(const char *source, const char *cases)
 		check_stale(test, references[index]);
 	}
 	assert(fclose(rows) == 0);
-	remove_entry(test, test->root_reference, "mutation-index", true, NTFS_OK);
+	if (!root) {
+		remove_entry(test, test->root_reference, "mutation-index", true, NTFS_OK);
+	}
 	validate(test);
 	free(references);
 	finish(test);
 	puts("PASS: directory index splits, MFT growth, complete lookup and deletion");
 }
+
+static void
+index_and_MFT_growth(const char *source, const char *cases)
+{
+	index_and_MFT_growth_image(source, cases, "source.img", false);
+}
+
+#if defined(NTFS_TEST_MUTATION_PLAN)
+static void
+unused_storage(const char *cases)
+{
+	static const char *const images[] = {"unused-index-torn.img", "unused-file-torn.img",
+	    "unused-file-stale.img", "unused-index-stale.img", "unused-index-unused-slot.img",
+	    "unused-mft-tail-stale.img", "unused-mft-tail-torn.img"};
+	size_t index;
+
+	for (index = 0; index < sizeof(images) / sizeof(images[0]); index++) {
+		index_and_MFT_growth_image(cases, cases, images[index], true);
+	}
+	assert(program_checks.unowned_file_signatures != 0 &&
+	    program_checks.unowned_index_signatures != 0 &&
+	    program_checks.unused_mapped_index_buffers != 0);
+	puts("PASS: stale or malformed free FILE/INDX bytes and allocated unused index buffers");
+}
+
+static void
+owned_index_damage(const char *source)
+{
+	struct test_case *test;
+	struct ntfs_volume *volume;
+	struct ntfs_node *root = NULL;
+	struct ntfs_stream *allocation = NULL;
+	struct ntfs_write_mutation_plan *failed;
+	struct ntfs_write_mutation_request request = {0};
+	const struct ntfs_run *run;
+	uint8_t *snapshot;
+	uint16_t units[TEST_NAME_UNITS], original;
+	uint64_t physical;
+	size_t index, offset;
+	static const size_t offsets[] = {
+	    offsetof(struct ntfs_disk_mst, usa_count), NTFS_MST_STRIDE - NTFS_MST_WORD_BYTES};
+
+	test = prepare(source);
+	volume = view(test);
+	assert(ntfs_root(volume, &root) == NTFS_OK);
+	assert(
+	    ntfs_attribute_open(root, NTFS_ATTR_INDEX_ALLOCATION, (uint16_t[]){'$', 'I', '3', '0'},
+		NTFS_WRITE_MUTATION_TARGET_NAME_UNITS, &allocation) == NTFS_OK);
+	run = ntfs_run_find(allocation, 0);
+	assert(run != NULL && run->lcn != NTFS_HOLE);
+	physical = run->lcn * NTFS_WRITE_CLUSTER_BYTES;
+	ntfs_stream_close(allocation);
+	ntfs_node_close(root);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+	request.kind = NTFS_WRITE_CREATE_FILE;
+	request.filetime = TEST_FILETIME;
+	request.source = name(test->root_reference, "owned-index-must-refuse.txt", units);
+	snapshot = malloc(test->device.bytes);
+	assert(snapshot != NULL);
+	for (index = 0; index < sizeof(offsets) / sizeof(offsets[0]); index++) {
+		offset = (size_t)physical + offsets[index];
+		original = ntfs_u16(test->device.visible + offset);
+		ntfs_put_u16(test->device.visible + offset, index == 0 ? 0 : (original ^ 1u));
+		memcpy(snapshot, test->device.visible, test->device.bytes);
+		failed = (void *)(uintptr_t)1;
+		assert(ntfs_write_mutation_prepare(&test->backend.reader, &request, &failed) ==
+		    NTFS_CORRUPT);
+		assert(failed == NULL && test->device.live_bytes == 0 && test->device.writes == 0 &&
+		    test->device.barriers == 0);
+		assert(memcmp(snapshot, test->device.visible, test->device.bytes) == 0);
+		ntfs_put_u16(test->device.visible + offset, original);
+	}
+	free(snapshot);
+	finish(test);
+	puts("PASS: malformed owned INDX geometry and torn sector refuse unchanged");
+}
+#endif
 
 static void
 sustained_reuse(const char *source, const char *cases)
@@ -1966,6 +2170,10 @@ int
 main(int argc, char **argv)
 {
 	assert(argc == 3);
+#if defined(NTFS_TEST_MUTATION_PLAN)
+	unused_storage(argv[2]);
+	owned_index_damage(argv[1]);
+#endif
 	mixed_operations(argv[1], argv[2]);
 	index_and_MFT_growth(argv[1], argv[2]);
 	fragmented_growth(argv[1], argv[2]);
@@ -1980,6 +2188,11 @@ main(int argc, char **argv)
 	       "%zu program/page/compensation allocation failures with exact retry\n",
 	    program_checks.programs, program_checks.updates, program_checks.inverse_prefixes,
 	    program_checks.allocation_faults);
+	printf("PASS: %zu original FILE slots, %zu original INDX buffers, %zu unowned FILE "
+	       "signatures, %zu unowned INDX signatures, %zu allocated unused INDX buffers\n",
+	    program_checks.original_file_slots, program_checks.original_index_buffers,
+	    program_checks.unowned_file_signatures, program_checks.unowned_index_signatures,
+	    program_checks.unused_mapped_index_buffers);
 	puts("Private planning and journal preparation only: no device execution, persistence "
 	     "or native recovery qualification");
 #endif

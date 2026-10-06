@@ -13,7 +13,9 @@ struct ntfs_write_program_update {
 };
 
 /* Compile the complete sealed mutation, preserving every logical stream target,
- * primary/mirror relationship and private predecessor/successor. DATA is ordered
+ * primary/mirror relationship, original storage ownership and private images.
+ * Unowned FILE/INDX signature bytes do not supply an old metadata inverse.
+ * DATA is ordered
  * initialization, not logged metadata. Mirrors share their primary MFT target.
  * This experimental composition uses complete FILE Initialize images and INDX
  * nonresident images with native bitmap/deallocation operations. The full-image

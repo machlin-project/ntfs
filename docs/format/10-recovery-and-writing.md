@@ -169,6 +169,13 @@ binds the original program's packets before producing compensation for a complet
 metadata prefix. Copied pages survive program closure; exact packet reconstruction
 checks every protected sector before changing caller output.
 
+Original ownership accompanies every copied region. The planner binds FILE
+predecessors to the unchanged MFT initialization/map and INDX predecessors to the
+unchanged parent/map/index bitmap. The complete program cannot infer an inverse
+from stale or malformed signatures in unused storage. An independent immutable
+source view checks those claims across growth, removal and inverse prefixes,
+including a mapped index buffer whose bitmap bit is clear.
+
 The [experimental opcode composition](09-logfile.md#experimental-complete-image-composition)
 uses whole FILE/INDX images with bitmap and retirement primitives. Local tests
 compare the resulting complete metadata, its reverse inverse and representative
@@ -185,8 +192,8 @@ DATA remains separate initialization work. Mirrors retain their actual independe
 physical predecessor protection while sharing the primary MFT journal target.
 No device transfer, owning current-history proof, clean-checkpoint advancement or
 FSKit mutation callback is added by this compiler. Full native image substitution
-and newly exposed/free storage still require explicit ownership and Windows
-replay/rollback qualification before executable admission.
+and newly exposed/free storage still require Windows replay/rollback
+qualification of the retained ownership rules before executable admission.
 
 General execution must bind all regions to qualified native operations, close
 immutable owners, preserve open-unlink lifetime, and recover every transfer/barrier

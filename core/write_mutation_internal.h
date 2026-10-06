@@ -28,6 +28,7 @@ struct ntfs_mutation_patch {
 	uint64_t physical;
 	enum ntfs_write_mutation_region_kind kind;
 	struct ntfs_write_mutation_target target;
+	struct ntfs_write_mutation_predecessor predecessor;
 	bool bound;
 	uint8_t before[NTFS_WRITE_CLUSTER_BYTES], after[NTFS_WRITE_CLUSTER_BYTES];
 };

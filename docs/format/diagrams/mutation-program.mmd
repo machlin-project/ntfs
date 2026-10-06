@@ -1,5 +1,6 @@
 flowchart TB
-    S["Sealed ordinary mutation\nComplete regions + logical owners"] --> C["Private operation compiler\nCopied before / after images"]
+    O["Original storage ownership\nMFT initialization / map · index map / bitmap"] --> S["Sealed ordinary mutation\nComplete regions + logical owners + provenance"]
+    S --> C["Private operation compiler\nCopied before / after images + ownership"]
     C --> F["FILE images\nSnapshot · replacement · retirement"]
     C --> I["INDX images\nWhole-buffer hypothesis"]
     C --> B["Bitmap ranges\nSet / clear inverses"]
@@ -15,5 +16,5 @@ flowchart TB
     G -. "Still required" .-> A["Writable owner and FSKit admission"]
     classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
     classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
-    class S,C,F,I,B,P,J,U,D private
+    class O,S,C,F,I,B,P,J,U,D private
     class G,A gate

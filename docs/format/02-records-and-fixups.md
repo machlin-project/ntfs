@@ -143,6 +143,32 @@ about every historical NTFS implementation. USA detects the guarded torn-sector
 model; it is not a checksum, cryptographic integrity or arbitrary corruption
 detector.
 
+### Original ownership and free bytes
+
+A FILE or INDX signature is framing evidence only after the owning stream has
+been established. Free storage can retain a valid old record, a torn record or
+unrelated signature bytes. The private mutation planner now retains original
+ownership separately from its projected allocation and copied physical images.
+
+For FILE, a predecessor slot must lie wholly inside the **original initialized
+MFT extent** and match its original physical mapping. A framed free record inside
+that extent can retain its generation; newly exposed storage has no old FILE
+inverse, even if its bytes begin with `FILE`. MFTMirr uses the original required
+prefix and its separate physical location.
+
+For INDX, the original sequence-bearing parent must own the mapped initialized
+buffer and its `$I30` bitmap bit must be set. Allocation in the volume bitmap, or
+membership in an index-allocation run, does not establish that the individual
+buffer was in use. An unused mapped buffer remains opaque. Claimed predecessors
+still undergo normal signature/USA validation; malformed owned metadata refuses.
+
+These are locally tested preparation rules in
+[the mutation owner](../../core/write_mutation.h) and
+[the connected original-volume oracle](../../tests/write_mutation.c), not new
+Windows replay acceptance. USA protection still excludes the **actual physical
+before bytes** for every output, including unused storage: object ownership and
+torn-sector detection serve different purposes.
+
 ## Implementation and evidence
 
 - Restoration and FILE validation: [record.c](../../core/record.c).

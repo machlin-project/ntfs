@@ -324,7 +324,7 @@ file_record(
 		return NTFS_UNSUPPORTED;
 	}
 	ntfs_copy(old, region->before + slot * NTFS_WRITE_RECORD_BYTES, NTFS_WRITE_RECORD_BYTES);
-	predecessor = ntfs_equal(old, "FILE", sizeof(after->mst.magic));
+	predecessor = (region->view.predecessor.file_slots & (1u << slot)) != 0;
 	if (predecessor) {
 		result = ntfs_record_decode(old, NTFS_WRITE_RECORD_BYTES, false);
 		if (result == NTFS_OK) {
@@ -434,7 +434,7 @@ compile_region(struct ntfs_write_program *program, struct program_workspace *wor
 		return result;
 	}
 	ntfs_copy(work->before, region->before, NTFS_WRITE_CLUSTER_BYTES);
-	if (ntfs_equal(work->before, "INDX", sizeof(((struct ntfs_disk_mst *)0)->magic))) {
+	if (region->view.predecessor.index_allocated) {
 		result = ntfs_fixup(work->before, NTFS_WRITE_CLUSTER_BYTES, "INDX");
 		if (result != NTFS_OK) {
 			return result;

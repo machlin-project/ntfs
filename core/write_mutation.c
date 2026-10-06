@@ -189,6 +189,46 @@ same_target(
 	    ntfs_equal(left->name, right->name, sizeof(left->name));
 }
 
+static enum ntfs_result
+file_predecessors(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_patch *patch,
+    const struct ntfs_write_mutation_target *target)
+{
+	const struct ntfs_stream *original = plan->volume->mft;
+	const struct ntfs_run *run;
+	uint64_t logical, vcn, physical;
+	size_t slot, offset;
+
+	for (slot = 0; slot < NTFS_WRITE_CLUSTER_BYTES / NTFS_WRITE_RECORD_BYTES; slot++) {
+		offset = slot * NTFS_WRITE_RECORD_BYTES;
+		logical = target->logical_offset + offset;
+		if (!ntfs_bounds(logical, NTFS_WRITE_RECORD_BYTES, original->initialized)) {
+			continue;
+		}
+		if (target->mirror) {
+			if (logical >= NTFS_MFT_MIRROR_REQUIRED_RECORDS * NTFS_WRITE_RECORD_BYTES) {
+				return NTFS_CORRUPT;
+			}
+			physical = plan->volume->mirror_lcn * NTFS_WRITE_CLUSTER_BYTES + logical;
+		} else {
+			vcn = logical / NTFS_WRITE_CLUSTER_BYTES;
+			run = ntfs_run_find(original, vcn);
+			if (run == NULL || run->lcn == NTFS_HOLE) {
+				return NTFS_CORRUPT;
+			}
+			physical = (run->lcn + vcn - run->vcn) * NTFS_WRITE_CLUSTER_BYTES +
+			    logical % NTFS_WRITE_CLUSTER_BYTES;
+		}
+		if (physical != patch->physical + offset) {
+			return NTFS_CORRUPT;
+		}
+		if (ntfs_equal(patch->before + offset, "FILE",
+			sizeof(((struct ntfs_disk_mst *)0)->magic))) {
+			patch->predecessor.file_slots |= (uint8_t)(1u << slot);
+		}
+	}
+	return NTFS_OK;
+}
+
 enum ntfs_result
 ntfs_mutation_write(struct ntfs_write_mutation_plan *plan, uint64_t physical, const void *memory,
     size_t bytes, enum ntfs_write_mutation_region_kind kind,
@@ -220,6 +260,12 @@ ntfs_mutation_write(struct ntfs_write_mutation_plan *plan, uint64_t physical, co
 		current.logical_offset -= offset;
 		if (patch->bound && !same_target(&patch->target, &current)) {
 			return NTFS_CORRUPT;
+		}
+		if (!patch->bound && kind == NTFS_WRITE_MUTATION_FILE) {
+			result = file_predecessors(plan, patch, &current);
+			if (result != NTFS_OK) {
+				return result;
+			}
 		}
 		patch->target = current;
 		patch->bound = true;
@@ -572,7 +618,8 @@ ntfs_write_mutation_plan_region(const struct ntfs_write_mutation_plan *plan, siz
 	    .after = patch->after,
 	    .bytes = NTFS_WRITE_CLUSTER_BYTES,
 	    .kind = patch->kind,
-	    .target = patch->target};
+	    .target = patch->target,
+	    .predecessor = patch->predecessor};
 	return NTFS_OK;
 }
 

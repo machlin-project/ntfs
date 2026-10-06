@@ -264,12 +264,19 @@ sealed ordinary mutation to OAT opens, metadata updates and compensation pages.
 It owns copied images and exact payloads after the mutation plan closes. Its
 current composition is a local hypothesis, with no device or FSKit admission:
 
+The sealed input now carries [original storage ownership](02-records-and-fixups.md#original-ownership-and-free-bytes).
+FILE predecessor bits require original MFT initialization and mapping; INDX
+predecessors require the original parent, mapping and index bitmap. The compiler
+copies that provenance with its images. Signature-bearing free bytes remain
+opaque and cannot supply full old-image inverses. Claimed old metadata still
+requires complete framing checks.
+
 | Region or transition | Private redo / undo composition | Evidence boundary |
 | --- | --- | --- |
-| Changed framed FILE | Full 1024-byte before image as Initialize / Initialize, then the full after image as Initialize / Noop. | Full FILE snapshots are used by the accepted overwrite family; this full before-inverse pair and replacement composition need separate native recovery acceptance. |
+| Changed owned FILE | Full 1024-byte before image as Initialize / Initialize, then the full after image as Initialize / Noop. | Full FILE snapshots are used by the accepted overwrite family; this full before-inverse pair and replacement composition need separate native recovery acceptance. |
 | Retired FILE | Full before inverse above, then empty Deallocate redo with the observed 24-byte Initialize inverse. | The header transition has original witnesses; the complete connected transaction remains unqualified. |
 | Previously uninitialized FILE | Retain Noop / Deallocate with an eight-byte zero MST inverse **before** the full Initialize / Noop redo. | Eight-byte inverse forms have original witnesses. This selected composition, storage-ownership interpretation and consumed-generation rollback need native qualification. |
-| Changed framed INDX | Full 4096-byte restored images as Update nonresident value / Update nonresident value (`0x08 / 0x08`). | Original `0x08` packets exist, but do not establish arbitrary whole-buffer substitution. |
+| Changed owned INDX | Full 4096-byte restored images as Update nonresident value / Update nonresident value (`0x08 / 0x08`). | Original `0x08` packets exist, but do not establish arbitrary whole-buffer substitution. |
 | New INDX | Full restored image as `0x08 / Noop`; the old owning FILE/bitmap must make the buffer unowned on rollback. | Complete parent, allocation and buffer recovery must be qualified together. |
 | Bitmap | The independently tested set/clear programs below. | Whole OAT/mapping and durability qualification remains separate. |
 

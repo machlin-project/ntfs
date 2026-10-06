@@ -38,6 +38,11 @@ ACE = struct.Struct('<BBHI')
 SID = struct.Struct('<BB6s')
 DWORD = struct.Struct('<I')
 SECURITY_DESCRIPTOR_TYPE = 0x50
+MST_HEADER = struct.Struct('<4sHH')
+INDEX_BLOCK_PREFIX = struct.Struct('<4sHHQQ')
+INDEX_BLOCK_FIELDS = ('magic', 'usa_offset', 'usa_count', 'lsn', 'vcn')
+UNUSED_STORAGE_PROFILES = ('file-stale', 'file-torn', 'index-stale', 'index-torn',
+                           'index-unused-slot', 'mft-tail-stale', 'mft-tail-torn')
 
 
 def sid(authority, *subauthorities):
@@ -91,6 +96,136 @@ def security_cases():
             'file-security.bin': descriptor(direct_file, True),
             'child-file-security.bin': descriptor(child_file, True)}
 
+def unused_storage_images(directory, original):
+    """Keep free bytes opaque even when they imitate another owner's metadata."""
+    import fixtures as f
+    import filename_storage as storage
+    from secure_store_fixtures import resident_value
+
+    def parts(image, number):
+        first = f.MFT_LCN * f.CLUSTER + number * f.RECORD
+        return storage.record_parts(image[first:first + f.RECORD])
+
+    def shift_children(buffer, header_offset):
+        entries_offset, used, _, _ = f.INDEX_HEADER.unpack_from(buffer, header_offset)
+        position, end = header_offset + entries_offset, header_offset + used
+        while position < end:
+            _, length, _, flags = f.INDEX_ENTRY.unpack_from(buffer, position)
+            assert length >= f.INDEX_ENTRY.size and position + length <= end
+            if flags & f.CHILD:
+                trailer = position + length - f.U64_BYTES
+                child, = struct.unpack_from('<Q', buffer, trailer)
+                struct.pack_into('<Q', buffer, trailer, child + 1)
+            position += length
+        assert position == end
+
+    def allocate_cluster(image, allocation, lcn):
+        assert not allocation[lcn // f.BYTE_BITS] & (1 << (lcn % f.BYTE_BITS))
+        header, attributes = parts(image, f.BITMAP_RECORD)
+        index = next(index for index, attribute in enumerate(attributes)
+                     if storage.attr_header(attribute)['type'] == f.DATA)
+        allocated = bytearray(allocation)
+        allocated[lcn // f.BYTE_BITS] |= 1 << (lcn % f.BYTE_BITS)
+        attributes[index] = f.resident(f.DATA, allocated,
+            storage.attr_header(attributes[index])['instance'])
+        f.put_record(image, f.BITMAP_RECORD,
+                     storage.encoded_record(f.BITMAP_RECORD, attributes, header))
+
+    _, bitmap_attributes = parts(original, f.BITMAP_RECORD)
+    allocation = resident_value(next(attribute for attribute in bitmap_attributes
+                                    if storage.attr_header(attribute)['type'] == f.DATA))
+    stale_file = f.file_record(f.ATTRIBUTE_EXTENSION_RECORD,
+                              [f.standard(), f.resident(f.DATA, b'foreign-file')])
+    stale_index = f.index_block(f.ATTRIBUTE_EXTENSION_RECORD, [])
+    for profile in UNUSED_STORAGE_PROFILES:
+        image = bytearray(original)
+        if profile.startswith(('file-', 'mft-tail-')):
+            block = bytearray(stale_file * (f.CLUSTER // f.RECORD))
+            if profile.endswith('-torn'):
+                for offset in range(0, f.CLUSTER, f.RECORD):
+                    MST_HEADER.pack_into(block, offset, b'FILE', 0, 0)
+        else:
+            block = bytearray(stale_index)
+            if profile != 'index-stale':
+                MST_HEADER.pack_into(block, 0, b'INDX', 0, 0)
+        if profile.startswith('mft-tail-'):
+            # MFT allocation and size are distinct from initialization. Keep
+            # one allocated mapped tail outside the original initialized range.
+            header, attributes = parts(image, f.MFT_RECORD)
+            index = next(index for index, attribute in enumerate(attributes)
+                         if storage.attr_header(attribute)['type'] == f.DATA)
+            attribute = attributes[index]
+            stream, runs = storage.mapping(attribute)
+            assert stream['initialized'] == stream['size']
+            tail_lcn = next(cluster for cluster in range(len(image) // f.CLUSTER)
+                            if not allocation[cluster // f.BYTE_BITS] &
+                            (1 << (cluster % f.BYTE_BITS)))
+            allocate_cluster(image, allocation, tail_lcn)
+            runs.append((1, tail_lcn))
+            attributes[index] = f.nonresident(f.DATA, runs, stream['size'],
+                storage.attr_header(attribute)['instance'],
+                allocated=sum(count for count, _ in runs) * f.CLUSTER,
+                initialized=stream['initialized'])
+            encoded = storage.encoded_record(f.MFT_RECORD, attributes, header)
+            f.put_record(image, f.MFT_RECORD, encoded)
+            f.put_data(image, f.MIRROR_LCN, encoded)
+            f.put_data(image, tail_lcn, block)
+        elif profile == 'index-unused-slot':
+            # Shift every original live VCN up by one. VCN zero stays allocated
+            # in the stream but has a clear bitmap bit and malformed bytes. The
+            # very first rebuilding mutation will use this unused buffer.
+            header, attributes = parts(image, f.ROOT_RECORD)
+            index = next(index for index, attribute in enumerate(attributes)
+                         if storage.attr_header(attribute)['type'] == f.INDEX_ALLOC)
+            attribute = attributes[index]
+            stream, runs = storage.mapping(attribute)
+            assert len(runs) == 1 and runs[0][1] == f.INDEX_LCN
+            clusters = runs[0][0]
+            assert stream['initialized'] == clusters * f.CLUSTER
+            spare_lcn = f.INDEX_LCN + clusters
+            allocate_cluster(image, allocation, spare_lcn)
+            attributes[index] = f.nonresident(f.INDEX_ALLOC,
+                [(clusters + 1, f.INDEX_LCN)], (clusters + 1) * f.CLUSTER,
+                storage.attr_header(attribute)['instance'], '$I30')
+            root_index = next(index for index, attribute in enumerate(attributes)
+                              if storage.attr_header(attribute)['type'] == f.INDEX_ROOT)
+            root = bytearray(resident_value(attributes[root_index]))
+            shift_children(root, f.INDEX_ROOT_HEADER.size)
+            attributes[root_index] = f.resident(f.INDEX_ROOT, root,
+                storage.attr_header(attributes[root_index])['instance'], '$I30')
+            bits_index = next(index for index, attribute in enumerate(attributes)
+                              if storage.attr_header(attribute)['type'] == f.BITMAP)
+            bits = int.from_bytes(resident_value(attributes[bits_index]), 'little')
+            assert bits == (1 << clusters) - 1
+            attributes[bits_index] = f.resident(f.BITMAP,
+                (bits << 1).to_bytes((clusters + 1 + f.BYTE_BITS - 1) // f.BYTE_BITS,
+                                    'little'),
+                storage.attr_header(attributes[bits_index])['instance'], '$I30')
+            for vcn in range(clusters):
+                before = bytearray(original[(f.INDEX_LCN + vcn) * f.CLUSTER:
+                                             (f.INDEX_LCN + vcn + 1) * f.CLUSTER])
+                fields = dict(zip(INDEX_BLOCK_FIELDS, INDEX_BLOCK_PREFIX.unpack_from(before)))
+                assert fields['vcn'] == vcn
+                for sector in range(1, fields['usa_count']):
+                    tail = sector * f.SECTOR - f.U16_BYTES
+                    saved = fields['usa_offset'] + sector * f.U16_BYTES
+                    before[tail:tail + f.U16_BYTES] = before[saved:saved + f.U16_BYTES]
+                fields['vcn'] += 1
+                INDEX_BLOCK_PREFIX.pack_into(before, 0,
+                    *(fields[name] for name in INDEX_BLOCK_FIELDS))
+                shift_children(before, INDEX_BLOCK_PREFIX.size)
+                f.protect(before, fields['usa_offset'])
+                f.put_data(image, f.INDEX_LCN + vcn + 1, before)
+            f.put_record(image, f.ROOT_RECORD,
+                         storage.encoded_record(f.ROOT_RECORD, attributes, header))
+            f.put_data(image, f.INDEX_LCN, block)
+        else:
+            for cluster in range(len(image) // f.CLUSTER):
+                if not allocation[cluster // f.BYTE_BITS] & (1 << (cluster % f.BYTE_BITS)):
+                    f.put_data(image, cluster, block)
+        (directory / f'unused-{profile}.img').write_bytes(image)
+
+
 def author(directory, source=None):
     directory.mkdir(parents=True, exist_ok=True)
     payload = bytes((position * PATTERN_MULTIPLIER + PATTERN_BIAS) & 0xff
@@ -125,10 +260,12 @@ def author(directory, source=None):
         f.put_record(image, f.ROOT_RECORD,
                      storage.encoded_record(f.ROOT_RECORD, attributes, header))
         (directory / 'source.img').write_bytes(image)
+        unused_storage_images(directory, image)
     manifest = dict(writeOffset=WRITE_OFFSET, payloadBytes=PAYLOAD_BYTES,
                     growBytes=GROW_BYTES, shrinkBytes=SHRINK_BYTES,
                     regrowBytes=REGROW_BYTES, children=CHILDREN,
                     childNameUnits=NAME_UNITS, reuseOperations=REUSE_OPERATIONS,
+                    unusedStorageProfiles=list(UNUSED_STORAGE_PROFILES),
                     bytes={name: dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
                            for name, data in bodies.items()},
                     requiredScenarios=['resident-growth-and-storage-conversion',

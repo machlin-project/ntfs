@@ -117,16 +117,38 @@ prefix containing only that inverse leaves its exact unpublished predecessor
 unchanged. Complete reverse metadata and selected interrupted prefixes now agree
 locally. This does not qualify Windows execution of that new family.
 
-One complete local checkpoint now passes all 180 fatal ASan/UBSan Meson suites,
+One complete local checkpoint passes all 180 fatal ASan/UBSan Meson suites,
 selected-Xcode formatting and freestanding arm64/x86_64 compilation with the
 2-KiB stack ceiling. FSKit host components pass 63 groups with thirteen explicit
 runtime/SDK SKIPs and zero failures. Main review checks every raw Meson result
 and the fatal sanitizer environment. No VM run, app installation or additional
 native acceptance occurred at this boundary.
 
+The subsequent ownership fix carries original initialized MFT slot/map and
+original parent/index-map/bitmap provenance into the copied program. Independent
+immutable-source checks cover 42,249 original FILE-slot observations, 26,529
+original INDX-buffer observations, 112 unowned FILE signatures, 57 unowned INDX
+signatures and one
+allocated bitmap-clear index buffer. Seven authored unused-storage profiles cover
+stale/malformed free bytes, a mapped unused index buffer and allocated but
+uninitialized MFT tails. Malformed/torn actively owned INDX refuses unchanged;
+the preceding malformed/torn initialized free-FILE refusals remain covered.
+The expanded connected suite passes 3,921 private programs, 49,607 metadata
+updates, 22,649 inverse prefixes and 23 program/page/compensation allocation
+failures with exact retry. Original-source bytes are unchanged; no device or VM
+execution is added. Failed fixture setup, prior signature-based compiler refusal
+and oracle/coverage corrections remain in fresh `unused-metadata-*` report
+directories under `artifacts/overwrite/`.
+The fix also passes all 180 fatal-sanitizer suites, selected-Xcode formatting and
+both freestanding architectures with the same frame ceiling. Host FSKit remains
+63 PASS / 13 runtime-SDK SKIP / 0 FAIL. The complete run and rendered diagram
+preview are retained in `unused-metadata-complete-local-20261007/`; main checks
+the original result rows, sanitizer settings and rendered layout independently.
+
 The complete FILE Initialize/Initialize inverse and whole-INDX nonresident image
-forms remain experimental substitutions. New/free storage provenance, original
-owning history, device execution, MFT bootstrap/mirror recovery, checkpoint reuse
+forms remain experimental substitutions. Physical execution of the retained
+new/free-storage ownership, original owning history, MFT bootstrap/mirror recovery,
+checkpoint reuse
 and whole native loser/winner replay remain required before these preparations
 can be admitted by the write owner or FSKit. The existing qualified overwrite
 family is unchanged. Component checkpoints do not complete the ordinary write batch.

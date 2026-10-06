@@ -552,6 +552,71 @@ attribute_length(struct ntfs_mutation_record *record, uint32_t type)
 	    : 0;
 }
 
+static enum ntfs_result
+original_index_streams(struct ntfs_write_mutation_plan *plan,
+    const struct ntfs_mutation_record *record, struct ntfs_stream **allocation,
+    struct ntfs_stream **bitmap)
+{
+	struct ntfs_node *node = NULL;
+	enum ntfs_result result;
+
+	*allocation = NULL;
+	*bitmap = NULL;
+	if (!ntfs_mutation_bit(
+		plan->mft_bitmap.before, plan->mft_bitmap.original_bytes, record->number)) {
+		return NTFS_OK;
+	}
+	/* This node and both streams read the immutable original volume, even when
+	 * this directory was already rebuilt earlier in the same mutation. */
+	result = ntfs_node_open_impl(plan->volume, record->reference, &node);
+	if (result == NTFS_OK) {
+		result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION,
+		    ntfs_mutation_index_name, NTFS_WRITE_MUTATION_TARGET_NAME_UNITS, allocation);
+		if (result == NTFS_NOT_FOUND) {
+			result = NTFS_OK;
+		} else if (result == NTFS_OK) {
+			result =
+			    ntfs_attribute_open(node, NTFS_ATTR_BITMAP, ntfs_mutation_index_name,
+				NTFS_WRITE_MUTATION_TARGET_NAME_UNITS, bitmap);
+		}
+	}
+	ntfs_node_close(node);
+	return result;
+}
+
+static enum ntfs_result
+index_predecessor(struct ntfs_mutation_patch *patch, uint64_t vcn, struct ntfs_stream *allocation,
+    struct ntfs_stream *bitmap)
+{
+	const struct ntfs_run *run;
+	uint8_t bit;
+	uint64_t physical;
+	enum ntfs_result result;
+
+	if (patch->bound || allocation == NULL ||
+	    !ntfs_bounds(vcn * NTFS_WRITE_CLUSTER_BYTES, NTFS_WRITE_CLUSTER_BYTES,
+		allocation->initialized)) {
+		return NTFS_OK;
+	}
+	if (allocation->resident || bitmap == NULL || vcn / NTFS_BITS_PER_BYTE >= bitmap->size) {
+		return NTFS_CORRUPT;
+	}
+	result = ntfs_stream_exact(bitmap, vcn / NTFS_BITS_PER_BYTE, &bit, sizeof(bit));
+	if (result != NTFS_OK || (bit & (1u << (vcn % NTFS_BITS_PER_BYTE))) == 0) {
+		return result;
+	}
+	run = ntfs_run_find(allocation, vcn);
+	if (run == NULL || run->lcn == NTFS_HOLE) {
+		return NTFS_CORRUPT;
+	}
+	physical = (run->lcn + vcn - run->vcn) * NTFS_WRITE_CLUSTER_BYTES;
+	if (physical != patch->physical) {
+		return NTFS_CORRUPT;
+	}
+	patch->predecessor.index_allocated = true;
+	return NTFS_OK;
+}
+
 enum ntfs_result
 ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
     struct ntfs_mutation_directory *directory, bool namespace_change)
@@ -560,7 +625,7 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 	struct ntfs_mutation_record *record = directory->record;
 	const struct ntfs_disk_record *header = (const void *)record->bytes;
 	struct ntfs_stream *old = NULL, *old_bitmap = NULL, *allocation = NULL,
-			   *bitmap_stream = NULL;
+			   *bitmap_stream = NULL, *original = NULL, *original_bitmap = NULL;
 	struct ntfs_stream empty = {0};
 	struct ntfs_run *runs = NULL, *bitmap_runs = NULL;
 	const struct ntfs_run *run;
@@ -584,6 +649,10 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 			result = NTFS_OK;
 		}
 	}
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	result = original_index_streams(plan, record, &original, &original_bitmap);
 	if (result != NTFS_OK) {
 		goto done;
 	}
@@ -666,6 +735,9 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 			result =
 			    ntfs_mutation_patch(plan, physical, NTFS_WRITE_MUTATION_INDEX, &patch);
 			if (result == NTFS_OK) {
+				result = index_predecessor(patch, index, original, original_bitmap);
+			}
+			if (result == NTFS_OK) {
 				result = ntfs_record_protect(tree.blocks[index],
 				    NTFS_WRITE_CLUSTER_BYTES, plan->protected_record,
 				    NTFS_WRITE_CLUSTER_BYTES);
@@ -747,5 +819,7 @@ done:
 	ntfs_stream_close(bitmap_stream);
 	ntfs_stream_close(old);
 	ntfs_stream_close(old_bitmap);
+	ntfs_stream_close(original);
+	ntfs_stream_close(original_bitmap);
 	return result;
 }

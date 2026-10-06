@@ -53,12 +53,21 @@ struct ntfs_write_mutation_target {
 	bool mirror;
 };
 
+/* Original stream ownership, independent of projected allocation and signatures
+ * in free storage. FILE bits name framed predecessors in consecutive 1-KiB
+ * slots; an INDX predecessor requires its original mapping and index bitmap. */
+struct ntfs_write_mutation_predecessor {
+	uint8_t file_slots;
+	bool index_allocated;
+};
+
 struct ntfs_write_mutation_region {
 	uint64_t physical;
 	const uint8_t *before, *after;
 	size_t bytes;
 	enum ntfs_write_mutation_region_kind kind;
 	struct ntfs_write_mutation_target target;
+	struct ntfs_write_mutation_predecessor predecessor;
 };
 
 struct ntfs_write_mutation_plan;

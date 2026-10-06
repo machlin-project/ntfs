@@ -95,8 +95,8 @@ the exact reading and failed-route evidence. Windows DACL enforcement remains ab
 Component tests cover guarded parser output and exact argument bounds; missing,
 malformed, duplicate and unsupported selections; zero-I/O/load-owner refusal;
 once-only legacy activation replies; root-allocation failure and fresh retry;
-stable root/file presentation, remount, revocation and terminal cleanup. Modern
-activation is compiled and remains an explicit runtime skip without macOS 27.
+stable root/file presentation, remount, revocation and terminal cleanup. Modern activation is compiled and passes in native component execution on
+macOS 27. Installed caller delivery remains a separate qualification.
 The full supported suite and universal app are tracked in ACCEPTANCE.md.
 
 Installed acceptance must observe the actual extension credentials and native
@@ -111,3 +111,55 @@ complete supported token/descriptor policy and authorization at the owning
 native operation boundary. Requests for an unsupported mode must continue to
 fail explicitly. Windows acquisition, installed isolation, distribution and
 commercial acceptance remain open; extraction does not close those contracts.
+
+## Offline-image editing policy
+
+A separate image owner selects `ntfs-access=image-edit`. It retains the
+backing image's original native UID/GID and presents ordinary writable files as
+owner-only 0600. Namespace acquisition and fresh file access require both real
+and effective caller UID to match that owner; root, group membership and a matching
+component credential do not grant extra access.
+This native policy does not translate Windows SIDs or apply Windows DACLs.
+
+Selection survives activation and remount. Switching between image editing and
+extraction, duplicate selections, link bindings, forced-checker options and unknown
+image options refuse before acquiring or recovering an image. Ordinary read-only
+block resources cannot select image editing. On macOS 27, public path loading
+selects this complete operation and requests a writable mount. Earlier runtimes
+refuse before acquiring scope or opening the image. The complete bounded native
+recovery gate and installed initialized-range writing pass; broader mutation
+contracts remain unsupported as recorded in ACCEPTANCE.md.
+
+The modern image handlers check authenticated FSContext on fresh opens, access
+checks, namespace traversal and stream-bearing operations. Ordinary vnode
+attributes describe already published items and grant no access capability.
+They retain the backing image's native presentation IDs and remain available to
+the kernel's mount construction and attribute cache. Metadata confidentiality
+across that native cache is not claimed. A native macOS 27 mount supplies real and
+effective UID 0 for the root-attribute request; applying file-access authorization
+there prevents mounting even after successful loading and activation. The
+attribute operation has no privileged-user exception: every caller receives the
+same checked presentation, while acquisition of namespace and data rights retains
+the complete owner policy. Admitted item rights persist until native close
+removes them, including mapping retention. Contextless reads and writes require
+those existing rights. Cached metadata still checks scope, revocation and original
+backing identity. Every write prepares its complete native reply before mutation;
+allocation refusal therefore cannot hide a committed change. Installed authenticated owner I/O, root/nobody open refusal and observer/shared-
+mapping coherence now pass for initialized ordinary-file ranges. Broader native
+cache/lifetime stress remains open.
+
+The controller also requires explicit image selection at load; it never
+acquires scope for missing, conflicting or unsupported options. It retains the
+original resource through recovery and volume ownership. A fresh teardown proxy
+may identify that same exact URL, but cannot change native identity or claim a
+different file. Controller recovery, balanced scope and drained native completion
+pass in the preceding macOS 27 component suite. All 75 preceding public-source
+groups pass without runtime SKIPs. The current 76-group conformance suite passes
+on actual macOS 27 with all 871 inputs unchanged. Its new check requires system-context
+attributes without granting foreign opens or traversal, and still refuses cached
+attributes after backing revocation. The component uses an explicit numeric caller
+model. Separate installed tests identify authenticated owner/root/nobody contexts
+and verify the actual open decisions; numeric component outcomes alone are not
+that evidence. The app saves real scoped bookmarks and repeats two mounts without
+GUI input, using the exact installed signed bundle. Automation imports only
+generated images from its own private Inbox; external files require picker access.

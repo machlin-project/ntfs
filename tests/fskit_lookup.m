@@ -548,7 +548,7 @@ ntfs_test_fskit_lookup(NSData *standard, NSString *fixtures, BOOL modern)
 {
 	NSData *nested;
 
-	if (modern && !ntfs_test_native_reclaim_available()) {
+	if (modern && !ntfs_test_modern_runtime_available()) {
 		puts("SKIP: modern dot lookup requires the macOS 27 SDK/runtime");
 		return;
 	}

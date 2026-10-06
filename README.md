@@ -6,37 +6,50 @@ lifecycle and I/O. There is no kernel adapter or LXNU integration in this scope.
 The owner intends a later open-source release; no open-source license is granted
 today. See LICENSE and docs/PROVENANCE.md.
 
-The initial delivery is a bounded read-only implementation and an engineering
-handoff, not a production NTFS driver. Build, component tests and installed native
+The implementation provides bounded read-only extraction and experimental editing
+of existing initialized ordinary-file ranges in offline images. It is not a
+production NTFS driver. Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
-The [native ordinary-file journal continuation](docs/NATIVE-WRITE-JOURNAL.md)
-now includes a private C writer for initialized data, modified/changed times and
-the archive bit, plus executed native redo and compensation recovery. Actual
-`pwrite`/`F_FULLFSYNC` on frozen Windows-source clones passes independent whole-image
-comparison and idempotent recovery. All 174 fatal-sanitizer suites, style and both
-freestanding architecture checks pass. The earlier C-authored snapshot/commit
-frames also pass three Windows recovery states. The new tail-copy/retained-root
-publication sequence still needs Windows qualification before FSKit writing can
-be admitted; an earlier empty-checkpoint interruption failed native boot health.
+The installed macOS 27 FSKit image route now passes initialized ordinary-file
+`pwrite`/`fsync`, shared-mapping mutation after the writer descriptor closes,
+coherence through another descriptor and a prefaulted mapping, and two fresh mounts
+through saved permissions. Ordinary unmount releases the backing image. The exact
+postimage then passes independent Windows file/ADS/time/File ID/ACL checks,
+read-only chkdsk, clean state and a matching healthy NTFS event. This qualifies
+bounded overwriting, not general NTFS writing or production use.
 
-An experimental separate [data-overwrite owner](docs/DATA-OVERWRITE.md) now writes
-bounded initialized ordinary file ranges on private images. Complete byte comparison,
-169 fatal-sanitizer suites and a Windows cold-boot/file/ADS/chkdsk roundtrip pass.
-This public data-only contract preserves metadata bytes. The timestamped writer
-and recovery owner are separate private implementations; writable FSKit behavior
-and acceptance remain open.
+The [native ordinary-file journal](docs/NATIVE-WRITE-JOURNAL.md) preserves the
+original client roots and supports native redo/compensation for this family.
+All 110 actual writer interruption states and 264 interrupted-recovery states
+pass offline whole-image comparisons and native Windows VHD recovery. Independent
+review binds the 264 healthy events and 154 exactly predicted torn-page warnings;
+no unrelated warning or repair is admitted. Hardware power cuts remain untested.
 
-The private FSKit image owner now retains an authorized path URL and security
-scope, performs real file persistence and closes every immutable reader before
-mutation. Stable FSItems lazily bind a fresh core view after writing; old metadata
-and stream caches never survive that transition. All 56 component groups pass with
-eleven explicit runtime SKIPs, including durable completion despite subsequent
-allocation refusal, view/node retries, mutation drain and permanent I/O poison.
-Path-resource load/mutation admission and installed sandbox/cache qualification
-remain open. The new app build and project-settings query timed out before
-compilation; prior universal app builds do not qualify these adapter changes.
+The separate image owner retains the original security-scoped URL and native
+backing owner, requires exclusive offline ownership and `F_FULLFSYNC`, closes all
+immutable reader leases before mutation and lazily rebuilds item/core caches.
+Authenticated owner writes pass; root and nobody are refused for all three tested
+open modes. Ordinary vnode attributes permit kernel mount construction without
+granting namespace or data authority. Metadata confidentiality across native
+attribute caches is not claimed. Block-resource mounts retain read-only extraction.
+
+The app saves genuine app-scope bookmarks and exposes `status`, `import`, `mount`
+and ordinary `unmount` commands. [The CLI harness](scripts/fskit_image.py) runs the
+installed signed app in a dedicated VM without console, picker or credential
+input. Automation imports generated images only from the app's own Inbox;
+external files require an ordinary picker grant. Initial OS extension enablement
+is separate from repeated mount/test automation. See [DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
+The current core checkpoint passes 175 fatal ASan/UBSan suites, selected-Xcode
+style and both freestanding architectures. FSKit components pass 59 host groups
+with thirteen explicit runtime SKIPs and all 76 native groups with zero SKIPs and
+871 unchanged inputs. The personally signed universal app and matching extension
+are installed and enabled only in the disposable test VM. Allocation/free,
+resize, create/delete/rename, resident/sparse/compressed/ADS writes, Windows ACL
+mutation and block-device writes remain unsupported. Distribution signing,
+notarization and commercial release acceptance remain open.
 
 A new [recovery-input owner](docs/RECOVERY-INPUTS.md) internally acquires the owning
 checkpoint and exact retained client history through the completed endpoint,
@@ -49,7 +62,8 @@ checkpoint/history inputs. Legacy client-restart page flags and an exactly compa
 restart copy retained in a former modern fast slot are qualified without clearing
 volume flags or modifying captured bytes. The newly captured unencrypted NTFS volume
 also passes full allocation/metadata validation and exact Windows-authored file/ADS
-comparison. There is still no writable product admission or native replay acceptance.
+comparison. These preceding immutable observations alone did not establish recovery;
+the later bounded native recovery results are described above.
 
 Three public NIST partitions now pass complete diagnostics and an independent
 offline NTFS-3G comparison of 1,133 documented user objects and their readable
@@ -171,7 +185,9 @@ A fresh personally signed development build is now installed and discovered in t
 isolated stock macOS 26.5.2 guest. Ordinary File System Extensions enablement succeeds;
 public FSClient reports the exact installed NTFS module enabled. Both complete-filename
 standard and NTFS 3.0 fixtures pass installed reading, directory, mmap and write-refusal
-checks through the public client. Both mounts ignore ownership despite requesting
+checks through the public client. The preserved VM's disposable clone now boots
+stock macOS 27.0.1, and the same installed build passes both complete native
+read/mmap/refusal regressions there with unchanged images. Both mounts ignore ownership despite requesting
 `owners`; native isolation remains unqualified. [Native installation](docs/NATIVE-INSTALLATION.md)
 keeps development signing, discovery, enabled admission and mounted behavior distinct.
 

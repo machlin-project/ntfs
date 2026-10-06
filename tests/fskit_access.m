@@ -88,11 +88,17 @@ test_options(void)
 	NSUInteger i;
 
 	assert([NTFSExtractionAccessOption isEqualToString:@"ntfs-access=extract"]);
+	assert([NTFSImageEditingAccessOption isEqualToString:@"ntfs-access=image-edit"]);
 	check_options(nil, NTFS_OK, NTFSNativeAccessUnselected);
 	check_options(@[], NTFS_OK, NTFSNativeAccessUnselected);
 	check_options(@[ @"-o", @"ro" ], NTFS_OK, NTFSNativeAccessUnselected);
 	check_options(@[ @"ntfs-accessible=extract", @"" ], NTFS_OK, NTFSNativeAccessUnselected);
 	check_options(@[ @"ntfs-access=extract" ], NTFS_OK, NTFSNativeAccessExtraction);
+	check_options(@[ @"ntfs-access=image-edit" ], NTFS_OK, NTFSNativeAccessImageEditing);
+	check_options(
+	    @[ @"-o", @"rw,ntfs-access=image-edit" ], NTFS_OK, NTFSNativeAccessImageEditing);
+	check_options(@[ @"ntfs-access=image-edit,ntfs-access=extract" ], NTFS_INVALID,
+	    NTFSNativeAccessUnselected);
 	check_options(@[ @"-o", @"ro,windows-root=C:,ntfs-access=extract" ], NTFS_OK,
 	    NTFSNativeAccessExtraction);
 	check_options(@[ @"ntfs-access" ], NTFS_INVALID, NTFSNativeAccessUnselected);
@@ -119,6 +125,19 @@ test_options(void)
 	check_options(@[ limit ], NTFS_OK, NTFSNativeAccessExtraction);
 	check_options(
 	    @[ [limit stringByAppendingString:@"x"] ], NTFS_INVALID, NTFSNativeAccessUnselected);
+	assert(ntfs_native_image_options(nil) == NTFS_OK);
+	assert(
+	    ntfs_native_image_options(@[ @"-o", @"rw,owners,ntfs-access=image-edit" ]) == NTFS_OK);
+	assert(
+	    ntfs_native_image_options(@[ @"-f", @"ntfs-access=image-edit" ]) == NTFS_UNSUPPORTED);
+	assert(ntfs_native_image_options(@[ @"ntfs-access=image-edit,windows-root=C:" ]) ==
+	    NTFS_UNSUPPORTED);
+	assert(
+	    ntfs_native_image_options(@[ @"ntfs-access=image-edit,unknown" ]) == NTFS_UNSUPPORTED);
+	assert(ntfs_native_image_options(@[ @"ntfs-access=extract" ]) == NTFS_INVALID);
+	assert(ntfs_native_image_options(@[ @"-o" ]) == NTFS_INVALID);
+	assert(ntfs_native_image_options(@[ @"-o", @"-o", @"ntfs-access=image-edit" ]) ==
+	    NTFS_INVALID);
 	puts(
 	    "PASS: bounded native extraction option parsing, ambiguity refusal and guarded output");
 }
@@ -222,6 +241,7 @@ test_volume(NSData *image, Class selected, BOOL modern)
 	assert(activate(volume, @[], modern, EACCES) == nil);
 	assert(activate(volume, @[ @"-o", @"ro" ], modern, EACCES) == nil);
 	assert(activate(volume, @[ @"ntfs-access=windows" ], modern, ENOTSUP) == nil);
+	assert(activate(volume, @[ @"ntfs-access=image-edit" ], modern, ENOTSUP) == nil);
 	assert(activate(volume, @[ @"ntfs-access=" ], modern, EINVAL) == nil);
 	assert(activate(volume, @[ @"ntfs-access=extract,ntfs-access=extract" ], modern, EINVAL) ==
 	    nil);
@@ -253,6 +273,7 @@ test_volume(NSData *image, Class selected, BOOL modern)
 	live = resource.liveAllocations;
 	assert(activate(volume, @[ @"ntfs-access=windows" ], modern, ENOTSUP) == nil);
 	mount(volume, @[ @"ntfs-access=windows" ], ENOTSUP);
+	mount(volume, @[ @"ntfs-access=image-edit" ], ENOTSUP);
 	mount(volume, @[ @"ntfs-access=extract,ntfs-access=extract" ], EINVAL);
 	assert(reader.reads == reads && resource.allocations == allocations &&
 	    resource.liveAllocations == live && volume.lifecycle == NTFSVolumeActive &&
@@ -327,6 +348,7 @@ test_load(NSData *image)
 
 	[reader setAlignedImage:image];
 	filesystem.preparedResource = [[FaultResource alloc] initWithReader:reader];
+	assert(load(filesystem, reader, @[ @"ntfs-access=image-edit" ], ENOTSUP) == nil);
 	assert(load(filesystem, reader, @[ @"-f", @"ntfs-access=windows" ], ENOTSUP) == nil);
 	assert(load(filesystem, reader, @[ @"ntfs-access=extract,ntfs-access=extract" ], EINVAL) ==
 	    nil);

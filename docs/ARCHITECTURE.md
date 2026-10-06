@@ -29,15 +29,18 @@ or block-device admission.
 Each published immutable image reader retains a counted lease and claim generation.
 Writes refuse before I/O while any lease survives, so native callers must close all
 core children and drop read resources before mutation. Unclaim, revocation, changed
-file identity/size and uncertain transfer/persistence prevent successful stale
-reads. A subsequent immutable reader sees a fresh core epoch. Image readers and the
+file identity/size/ownership and uncertain transfer/persistence prevent successful
+stale reads. Availability checks validate the backing identity before cached
+metadata and authorization as well as before data transfers. A subsequent immutable reader sees a fresh core epoch. Image readers and the
 writer share one 64-MiB core allocation cap; private reservation may precede claim,
 while all media I/O requires it. The existing read environment remains unchanged.
 Native transfers reuse the POSIX image backend, with mandatory `F_FULLFSYNC` and
 no cache-only fallback. A complete exclusive operation also excludes reader
 publication between transfers. Reentrant unclaim poisons the transport and defers
-lock release until the native transfer returns. The component is not yet selected
-by FSKit resource loading; installed scope and exclusivity remain unqualified.
+lock release until the native transfer returns. Public macOS 27 image resource
+loading selects this transport only after complete explicit editing policy;
+installed scope passes for the tested authorized image; arbitrary uncooperative
+access is still outside the ownership contract.
 
 The private image-volume factory acquires and recovers its C owner before publishing
 an immutable view. Its initialized-range operation closes all item caches, nodes
@@ -50,8 +53,25 @@ serves stale bytes or converts a durable write into an unreported failure.
 Unmount closes admission before draining mutation; a reentrant request defers its
 reply to a different execution context. Invalidation similarly defers C-owner
 release until the active write returns. Uncertain I/O remains permanently poisoned.
-These component contracts do not establish installed kernel page-cache/mmap
-coherence or native mutation admission. Native write handlers remain read-only.
+Separate installed tests establish observer/prefaulted-mapping coherence and
+shared-mapping writes after descriptor close for this bounded file profile;
+component tests alone do not establish those native outcomes. Public block-resource owners retain read-only extraction. A separate
+image-editing factory prepares native write replies before
+mutation and retains open rights belonging to the backing file's native owner.
+Its selected image policy cannot switch to extraction; unknown, conflicting or
+forced-checker options refuse before image I/O. Authenticated owner/root/nobody FSContext delivery and actual open enforcement
+pass in the installed test profile; broader security coverage remains open.
+
+Path-resource probing retains the original URL, requires positive security scope
+before opening the backing file, and acquires only a temporary immutable reader.
+It publishes no write owner and performs no recovery or writes. Scope and claim
+are released on every outcome. After the complete bounded native interrupted
+recovery gate, public macOS 27 path loading now admits the complete image owner;
+it never turns a read-only block owner into a writer. Separate installed authorization, cache/mmap, persistence, two fresh saved-URL
+mounts and independent Windows postimage acceptance now pass for initialized
+ordinary-file ranges; ACCEPTANCE.md records the exact limits.
+Controller unload closes admission and replies only after mutation drains and
+the image owner is released.
 
 Format values live in `core/disk.h`; implementation budgets live in
 `core/internal.h` and the public default limits. Field positions come from

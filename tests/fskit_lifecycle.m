@@ -29,7 +29,7 @@ enum lifecycle_scenario {
 };
 
 BOOL
-ntfs_test_native_reclaim_available(void)
+ntfs_test_modern_runtime_available(void)
 {
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 	if (@available(macOS 27.0, *)) {
@@ -38,6 +38,48 @@ ntfs_test_native_reclaim_available(void)
 #endif
 	return NO;
 }
+
+@implementation NTFSTestLegacyVolume
+
+- (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup
+{
+	__block NSUInteger cleanups = 0;
+	BOOL accepted;
+
+	accepted = [super reclaimIfEligible:item
+				    cleanup:^{
+				      cleanups++;
+				      cleanup();
+				    }];
+	assert(cleanups == (accepted ? 1u : 0u));
+	self.reclaimAttempts++;
+	self.reclaimAccepted = accepted;
+	return accepted;
+}
+
+@end
+
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+@implementation NTFSTestModernVolume
+
+- (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup
+{
+	__block NSUInteger cleanups = 0;
+	BOOL accepted;
+
+	accepted = [super reclaimIfEligible:item
+				    cleanup:^{
+				      cleanups++;
+				      cleanup();
+				    }];
+	assert(cleanups == (accepted ? 1u : 0u));
+	self.reclaimAttempts++;
+	self.reclaimAccepted = accepted;
+	return accepted;
+}
+
+@end
+#endif
 
 static dispatch_time_t
 test_deadline(void)
@@ -572,13 +614,13 @@ test_new_volume(struct ntfs_volume *core, NTFSResource *resource, BOOL modern)
 	if (modern) {
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 		if (@available(macOS 27.0, *)) {
-			return [[NTFSModernVolume alloc] initWithCore:core resource:resource];
+			return [[NTFSTestModernVolume alloc] initWithCore:core resource:resource];
 		}
 #endif
 		assert(!"modern runtime was not admitted");
 		return nil;
 	}
-	return [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	return [[NTFSTestLegacyVolume alloc] initWithCore:core resource:resource];
 }
 
 static void
@@ -617,6 +659,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario, 
 	LifecycleReply *additionalControlReply = [[LifecycleReply alloc] init];
 	LifecycleReply *queuedReply = [[LifecycleReply alloc] init];
 	NTFSVolume *volume;
+	id<NTFSTestReclaimObservation> observation;
 	struct ntfs_environment env;
 	struct ntfs_volume *core = NULL;
 	FSItem *root, *file, *resident, *compressed;
@@ -644,6 +687,7 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario, 
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
 	volume = test_new_volume(core, resource, modern);
+	observation = (id<NTFSTestReclaimObservation>)volume;
 	assert(volume != nil && volume.lifecycle == NTFSVolumeLoaded);
 	[volume mountWithOptions:nil
 		    replyHandler:^(NSError *e) {
@@ -798,14 +842,15 @@ test_blocked_read(NSData *image, BOOL modern, enum lifecycle_scenario scenario, 
 		    completed == 0);
 	} else if (scenario == TEST_RECLAIM_BLOCKED_READ) {
 		assert(controlReply.count == 1 && controlReply.errorCode == 0);
+		assert(observation.reclaimAttempts == 1);
 		test_pattern([buffer snapshot]);
 		assert([volume readItem:file
 				 offset:0
 				  bytes:buffer.mutableBytes
 				 length:buffer.length
 			      completed:&completed] ==
-		    (ntfs_test_native_reclaim_available() ? NTFS_STALE : NTFS_OK));
-		assert(completed == (ntfs_test_native_reclaim_available() ? 0 : buffer.length));
+		    (observation.reclaimAccepted ? NTFS_STALE : NTFS_OK));
+		assert(completed == (observation.reclaimAccepted ? 0 : buffer.length));
 	} else {
 		if (directBuffer && scenario != TEST_FAILED_BLOCKED_READ) {
 			/* Late direct device fills remain invalid: the reply above reports

@@ -714,7 +714,7 @@ ntfs_test_fskit_pressure(NSString *fixtures, BOOL modern)
 {
 	NSData *lzx, *xpress, *wireLZX, *wireXPRESS, *lznt1;
 
-	if (modern && !ntfs_test_native_reclaim_available()) {
+	if (modern && !ntfs_test_modern_runtime_available()) {
 		puts("SKIP: modern FSKit pressure runtime requires macOS 27");
 		return;
 	}

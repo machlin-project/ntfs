@@ -17,8 +17,9 @@
 - (void)deactivateWithOptions:(FSDeactivateOptions)options replyHandler:(void (^)(NSError *))reply
 {
 	(void)options;
-	[self invalidate];
-	reply(nil);
+	[self invalidateWithReplyHandler:^{
+	  reply(nil);
+	}];
 }
 
 - (void)lookupItemNamed:(FSFileName *)name

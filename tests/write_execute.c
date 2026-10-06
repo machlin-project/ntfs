@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "write_internal.h"
 #include "fuzz_device.h"
+#include "image_fault.h"
 #include "../adapters/posix/overwrite_image.h"
 #include <ntfs/validate.h>
 #include <assert.h>
@@ -848,10 +849,38 @@ number(const char *value, int base)
 	return parsed;
 }
 
+struct image_fault_configuration {
+	size_t write, prefix, barrier;
+	const char *trace_directory;
+};
+
+static struct ntfs_image_fault *
+image_fault_prepare(const char *path, const struct image_fault_configuration *configuration)
+{
+	struct ntfs_image_fault *fault = calloc(1, sizeof(*fault));
+	int opened;
+
+	assert(fault != NULL);
+	opened = ntfs_image_fault_open(
+	    path, configuration->write, configuration->prefix, configuration->barrier, fault);
+	assert(opened == 0);
+	return fault;
+}
+
+static void
+image_fault_finish(struct ntfs_image_fault *fault, const char *directory)
+{
+	assert(ntfs_image_fault_dump(fault, directory) == 0);
+	ntfs_image_fault_close(fault);
+	free(fault);
+}
+
 static int
-image_recover(const char *path)
+image_recover(const char *path, const struct image_fault_configuration *configuration)
 {
 	struct ntfs_overwrite_image image;
+	struct ntfs_image_fault *fault = NULL;
+	const struct ntfs_overwrite_environment *environment;
 	struct ntfs_overwrite *owner = NULL;
 	struct ntfs_overwrite_admission *admission = calloc(1, sizeof(*admission));
 	struct ntfs_write_recovery_report report;
@@ -859,13 +888,21 @@ image_recover(const char *path)
 	enum ntfs_result result;
 
 	assert(admission != NULL);
-	opened = ntfs_overwrite_image_open(path, &image);
+	if (configuration != NULL) {
+		fault = image_fault_prepare(path, configuration);
+		fault->enabled = true;
+		environment = &fault->environment;
+		opened = 0;
+	} else {
+		opened = ntfs_overwrite_image_open(path, &image);
+		environment = &image.environment;
+	}
 	if (opened != 0) {
 		fprintf(stderr, "Private recovery image open failed: %d\n", opened);
 		free(admission);
 		return 2;
 	}
-	result = ntfs_write_owner_open(&image.environment, admission, &report, &owner);
+	result = ntfs_write_owner_open(environment, admission, &report, &owner);
 	printf("{\"result\":%u,\"claimed\":%s,\"quiescent\":%s,\"initial_persistence\":%s,"
 	       "\"writes\":%u,\"barriers\":%u,\"physical_bytes\":%llu,\"durable_stage\":%u,"
 	       "\"reconstructed_files\":%u,\"compensation_persisted\":%s,\"homes_persisted\":%s,"
@@ -877,16 +914,22 @@ image_recover(const char *path)
 	    report.homes_persisted ? "true" : "false", report.completed ? "true" : "false",
 	    report.poisoned ? "true" : "false");
 	ntfs_overwrite_close(owner);
-	ntfs_overwrite_image_close(&image);
+	if (fault != NULL) {
+		image_fault_finish(fault, configuration->trace_directory);
+	} else {
+		ntfs_overwrite_image_close(&image);
+	}
 	free(admission);
 	return result == NTFS_OK ? 0 : 1;
 }
 
 static int
 image_range(const char *path, uint64_t reference, uint64_t offset, const char *payload_path,
-    uint64_t filetime, bool retained_owner)
+    uint64_t filetime, bool retained_owner, const struct image_fault_configuration *configuration)
 {
 	struct ntfs_overwrite_image image;
+	struct ntfs_image_fault *fault = NULL;
+	const struct ntfs_overwrite_environment *environment;
 	struct ntfs_overwrite *owner = NULL;
 	struct ntfs_overwrite_admission *admission = calloc(1, sizeof(*admission));
 	struct ntfs_write_range_report report = {0};
@@ -905,12 +948,21 @@ image_range(const char *path, uint64_t reference, uint64_t offset, const char *p
 	payload = malloc((size_t)length);
 	assert(payload != NULL && fread(payload, 1, (size_t)length, file) == (size_t)length);
 	assert(fgetc(file) == EOF && !ferror(file) && fclose(file) == 0);
-	opened = ntfs_overwrite_image_open(path, &image);
+	if (configuration != NULL) {
+		fault = image_fault_prepare(path, configuration);
+		environment = &fault->environment;
+		opened = 0;
+	} else {
+		opened = ntfs_overwrite_image_open(path, &image);
+		environment = &image.environment;
+	}
 	assert(opened == 0);
-	result = retained_owner
-	    ? ntfs_write_owner_open(&image.environment, admission, &recovered, &owner)
-	    : ntfs_overwrite_open(&image.environment, admission, &owner);
+	result = retained_owner ? ntfs_write_owner_open(environment, admission, &recovered, &owner)
+				: ntfs_overwrite_open(environment, admission, &owner);
 	if (result == NTFS_OK) {
+		if (fault != NULL) {
+			fault->enabled = true;
+		}
 		result = ntfs_write_existing_range(
 		    owner, reference, offset, payload, (size_t)length, filetime, &report);
 	}
@@ -928,7 +980,11 @@ image_range(const char *path, uint64_t reference, uint64_t offset, const char *p
 	    report.execution.completed ? "true" : "false",
 	    report.execution.poisoned ? "true" : "false");
 	ntfs_overwrite_close(owner);
-	ntfs_overwrite_image_close(&image);
+	if (fault != NULL) {
+		image_fault_finish(fault, configuration->trace_directory);
+	} else {
+		ntfs_overwrite_image_close(&image);
+	}
 	free(payload);
 	free(admission);
 	return result == NTFS_OK ? 0 : 1;
@@ -938,16 +994,34 @@ int
 main(int argc, char **argv)
 {
 	struct test_case *test = calloc(1, sizeof(*test));
+	struct image_fault_configuration configuration;
 
 	assert(test != NULL);
 	if (argc == 3 && strcmp(argv[1], "--recover") == 0) {
 		free(test);
-		return image_recover(argv[2]);
+		return image_recover(argv[2], NULL);
 	}
 	if (argc == 7 && (strcmp(argv[1], "--image") == 0 || strcmp(argv[1], "--append") == 0)) {
 		free(test);
 		return image_range(argv[2], number(argv[3], 16), number(argv[4], 10), argv[5],
-		    number(argv[6], 10), strcmp(argv[1], "--append") == 0);
+		    number(argv[6], 10), strcmp(argv[1], "--append") == 0, NULL);
+	}
+	if (argc == 11 && strcmp(argv[1], "--interrupt-image") == 0) {
+		configuration.write = (size_t)number(argv[7], 10);
+		configuration.prefix = (size_t)number(argv[8], 10);
+		configuration.barrier = (size_t)number(argv[9], 10);
+		configuration.trace_directory = argv[10];
+		free(test);
+		return image_range(argv[2], number(argv[3], 16), number(argv[4], 10), argv[5],
+		    number(argv[6], 10), false, &configuration);
+	}
+	if (argc == 7 && strcmp(argv[1], "--interrupt-recover") == 0) {
+		configuration.write = (size_t)number(argv[3], 10);
+		configuration.prefix = (size_t)number(argv[4], 10);
+		configuration.barrier = (size_t)number(argv[5], 10);
+		configuration.trace_directory = argv[6];
+		free(test);
+		return image_recover(argv[2], &configuration);
 	}
 	assert(argc == 2);
 	initialize(test, argv[1]);

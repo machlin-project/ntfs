@@ -10,6 +10,11 @@
  * All core/context users retain this object until their cleanup is complete. */
 @interface NTFSImageTransport : NSObject
 - (instancetype)initWithResource:(FSPathURLResource *)resource error:(NSError **)error;
+/* Public path loading must require an actual sandbox scope before opening the
+ * backing object. The unscoped initializer above is for local component owners. */
+- (instancetype)initWithResource:(FSPathURLResource *)resource
+	    requireSecurityScope:(BOOL)required
+			   error:(NSError **)error;
 - (struct ntfs_overwrite_environment)overwriteEnvironment;
 /* Serialize a complete private owner operation, including the intervals between
  * transfers. Reader publication is excluded for its duration. The operation may
@@ -23,4 +28,8 @@
 - (void)invalidate;
 @property(readonly, getter=isAvailable) BOOL available;
 @property(readonly, getter=isClaimed) BOOL claimed;
+/* Snapshot the opened image's native owner. These identities belong to the
+ * authorized backing object, independently of NTFS Windows principals. */
+@property(readonly) uid_t fileOwnerUserID;
+@property(readonly) gid_t fileOwnerGroupID;
 @end

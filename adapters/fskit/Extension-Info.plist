@@ -7,9 +7,9 @@
     <key>FSShortName</key><string>machlinntfs</string>
     <key>FSSupportsBlockResources</key><true/>
     <key>FSSupportsGenericURLResources</key><false/>
-    <key>FSSupportsPathURLs</key><false/>
+    <key>FSSupportsPathURLs</key><true/>
     <key>FSSupportsServerURLs</key><false/>
-    <key>FSRequiresSecurityScopedPathURLResources</key><false/>
+    <key>FSRequiresSecurityScopedPathURLResources</key><true/>
     <key>FSActivateOptionSyntax</key><dict><key>shortOptions</key><string>o:</string></dict>
     <key>FSCheckOptionSyntax</key><dict><key>shortOptions</key><string>fnpqy</string></dict>
     <key>FSPersonalities</key><dict><key>ntfs</key><dict>

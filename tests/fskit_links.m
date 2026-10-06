@@ -811,7 +811,7 @@ ntfs_test_fskit_links(NSString *fixtures, BOOL modern)
 	BOOL metadata;
 	NSUInteger allocations, reads, fault;
 
-	if (modern && !ntfs_test_native_reclaim_available()) {
+	if (modern && !ntfs_test_modern_runtime_available()) {
 		puts("SKIP: modern link projection requires the macOS 27 SDK/runtime");
 		return;
 	}

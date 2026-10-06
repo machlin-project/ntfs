@@ -1,41 +1,47 @@
 # Writable ownership and recovery contract
 
-The [native ordinary-file journal continuation](NATIVE-WRITE-JOURNAL.md) now
-qualifies the MFT binding, full FILE snapshot and timestamp update family with
-Windows redo/undo and torn-home experiments, including three C-authored native
-states. A private owning C writer now executes initialized-data and timestamp
-transactions, and a private recovery owner executes redo or native compensation.
-Actual `pwrite`/`F_FULLFSYNC` on source clones passes whole-image comparison and
-idempotent reopen. The bounded model passes 110 writer-interruption profiles and
-120 interruptions during recovery. These are implementation and private-image
-results, not writable product admission. The new tail-copy/retained-root sequence
-still needs Windows qualification at each publication boundary. The earlier
-intermediate empty-checkpoint state requested native repair; its later healthy
-state and chkdsk do not close that failure.
+The [native ordinary-file journal](NATIVE-WRITE-JOURNAL.md) qualifies the bounded
+MFT binding, full FILE snapshot, timestamp/archive update, native redo and
+compensation family. Actual source-clone `pwrite`/`F_FULLFSYNC`, whole-image
+comparison and idempotent reopen pass. All 110 actual writer interruption states
+and 264 interrupted-recovery fault/complete states pass native Windows VHD
+recovery. Independent original-event review binds 264 healthy events and 154
+exactly predicted USA warnings; no unrelated warning or repair is admitted.
+An earlier empty-checkpoint publication requested repair and remains disqualified;
+the accepted writer preserves original client roots.
 
-The experimental separate [initialized-data overwrite owner](DATA-OVERWRITE.md)
-now physically writes already initialized ordinary file ranges on exclusively
-owned private images while preserving every metadata byte. Its actual Windows
-cold-boot/file/ADS/chkdsk roundtrip passes. Its public contract remains data-only;
-the timestamped transaction and recovery entry points stay private. The immutable read
-environment cannot write, and the FSKit adapter still rejects mutations with
-EROFS. Do not enable individual FSKit writes by adding a pwrite callback.
+The installed FSKit image owner now passes authenticated owner `pwrite`/`fsync`,
+shared-mapping mutation after descriptor close, observer/prefaulted-mapping
+coherence, ordinary unmount and two fresh same-saved-URL CLI mounts. Authenticated
+root and nobody are each denied three open modes. The actual exported postimage
+passes independent Windows exact file/ADS/time/File ID/ACL, read-only chkdsk,
+clean-state and matching healthy-event checks. ACCEPTANCE.md owns the reports.
+These tests qualify existing initialized ordinary-file overwriting on authorized
+offline images, not allocation, resize, resident/encoded/named-stream or namespace
+mutation, general native history, ring wrap/growth or block-device writing.
+Hardware power cuts and broad product stress remain untested.
 
-The private FSKit image transport now supplies a real persistence route for an
-explicitly authorized ordinary image URL. It retains the source security scope,
-reuses the exact POSIX backend and requires `F_FULLFSYNC`. Counted immutable reader
-leases exclude writes before I/O; revoked generations cannot regain availability.
-Backing-file replacement/resize, uncertain short transfers and failed persistence
-fail closed. Its advisory lock requires caller exclusion of uncooperative access,
-and does not authorize arbitrary images or devices. Component tests perform a
-complete timestamped C write and fresh read/recovery reopen through this transport.
-A private image-volume owner now preserves FSItem identity while closing and
-replacing all immutable core state. Lazy view/node reconstruction retries allocation
-refusal without serving old metadata; durable completion keeps its actual byte
-count. Unmount/invalidation drain an admitted mutation before releasing its owner,
-including reentrant requests. FSKit path-resource loading, installed kernel cache
-coherence/sandbox authorization and the new Windows publication protocol remain
-admission gates. All native mutation handlers remain read-only.
+The image transport retains the original security-scoped URL and backing native
+owner, supplies mandatory `F_FULLFSYNC` and requires caller exclusion of
+uncooperative access/mappings. Counted immutable reader leases exclude mutation;
+replacement, resize, scope revocation, short/uncertain I/O or failed persistence
+fail closed. The volume closes every immutable child/cache before writing and
+lazily rebinds stable sequence-bearing FSItems to fresh views. Retryable allocation
+refusal never reports stale data or hides durable completion. Unmount/invalidation
+drain mutation before releasing the owner. Complete native replies are prepared
+before mutation, and contextless I/O requires retained admitted open rights.
+Ordinary vnode presentation grants no data or namespace access. Metadata
+confidentiality across native attribute caches is not claimed.
+
+Current FSKit components pass 59 host groups with thirteen runtime SKIPs and all
+76 native groups with zero SKIPs and 871 unchanged inputs. Explicit image policy
+refuses unknown/conflicting options before acquiring scope, and probing performs
+only immutable reads. Recovery precedes publication; exact-URL unload drains
+mutation. The immutable read environment has no write method and public block
+resources retain read-only extraction. The separate public data-only overwrite
+owner preserves all metadata; the timestamped journal owner supplies the complete
+installed image operation. Existing source-build/component results remain
+separate from the mounted and native Windows acceptance above.
 
 The [recovery-input owner](RECOVERY-INPUTS.md) now internally binds the owning
 checkpoint and complete retained oldest-to-endpoint packet interval, distinguishing

@@ -44,11 +44,42 @@ enum {
 @end
 
 @interface NTFSImageTransport (NativeTransfers)
+- (BOOL)beginSecurityScopeForURL:(NSURL *)url;
+- (void)endSecurityScopeForURL:(NSURL *)url;
 - (enum ntfs_result)transferWriteAt:(uint64_t)offset
 			      bytes:(const void *)bytes
 			     length:(size_t)length
 			  completed:(size_t *)completed;
 - (enum ntfs_result)transferPersist;
+@end
+
+/* Component scope outcomes test balance and pre-open refusal only. Actual
+ * authorization still requires the installed sandboxed extension. */
+static BOOL scopeBeginSucceeds, scopeRevokesResource;
+static NSUInteger scopeBeginCount, scopeEndCount;
+static TestImagePathResource *scopeResource;
+
+@interface ScopeImageTransport : NTFSImageTransport
+@end
+
+@implementation ScopeImageTransport
+
+- (BOOL)beginSecurityScopeForURL:(NSURL *)url
+{
+	assert(url == scopeResource.url);
+	scopeBeginCount++;
+	if (scopeRevokesResource) {
+		scopeResource.revokedForTest = YES;
+	}
+	return scopeBeginSucceeds;
+}
+
+- (void)endSecurityScopeForURL:(NSURL *)url
+{
+	assert(url == scopeResource.url);
+	scopeEndCount++;
+}
+
 @end
 
 @interface FaultImageTransport : NTFSImageTransport
@@ -298,6 +329,7 @@ path_admission(NSString *directory, NSData *source)
 	NSString *alias = [directory stringByAppendingPathComponent:@"alias.img"];
 	TestImagePathResource *peer;
 	__attribute__((objc_precise_lifetime)) NTFSImageTransport *transport;
+	NTFSResource *resource;
 	struct ntfs_overwrite_environment environment;
 	uint8_t read[TEST_WRITE_BYTES];
 	NSError *error;
@@ -327,11 +359,15 @@ path_admission(NSString *directory, NSData *source)
 	assert(transport != nil);
 	environment = [transport overwriteEnvironment];
 	assert(environment.claim(environment.reader.context) == NTFS_OK);
+	resource = [transport newReadResource];
+	assert(resource != nil && resource.isAvailable);
 	assert(truncate(path.fileSystemRepresentation, TEST_WRITE_BYTES) == 0);
+	assert(!resource.isAvailable);
 	assert(
 	    environment.reader.read(environment.reader.context, 0, read, sizeof(read)) == NTFS_IO);
 	assert(!transport.isAvailable);
 	environment.unclaim(environment.reader.context);
+	resource = nil;
 	transport = nil;
 	assert([NSFileManager.defaultManager removeItemAtPath:path error:&error]);
 	create_image(path, source);
@@ -339,12 +375,16 @@ path_admission(NSString *directory, NSData *source)
 	assert(transport != nil);
 	environment = [transport overwriteEnvironment];
 	assert(environment.claim(environment.reader.context) == NTFS_OK);
+	resource = [transport newReadResource];
+	assert(resource != nil && resource.isAvailable);
 	assert([NSFileManager.defaultManager moveItemAtPath:path toPath:alias error:&error]);
 	create_image(path, source);
+	assert(!resource.isAvailable);
 	assert(
 	    environment.reader.read(environment.reader.context, 0, read, sizeof(read)) == NTFS_IO);
 	assert(!transport.isAvailable);
 	environment.unclaim(environment.reader.context);
+	resource = nil;
 }
 
 static void
@@ -413,6 +453,44 @@ timestamped_core_write(NSString *directory, NSString *fixtures)
 	free(admission);
 }
 
+static void
+security_scope_admission(NSString *directory, NSData *source)
+{
+	NSString *path = [directory stringByAppendingPathComponent:@"scoped.img"];
+	NSString *missing = [directory stringByAppendingPathComponent:@"absent.img"];
+	__attribute__((objc_precise_lifetime)) NTFSImageTransport *transport;
+	NSError *error;
+	NSUInteger mode;
+
+	create_image(path, source);
+	/* Scope outcomes are explicit: this unsandboxed component process cannot
+	 * establish native denial for a plain URL. A denied scope must precede an
+	 * absent backing object, and a granted scope balances failed opens too. */
+	for (mode = 0; mode < 4; mode++) {
+		scopeBeginCount = scopeEndCount = 0;
+		scopeBeginSucceeds = mode != 0;
+		scopeRevokesResource = mode == 3;
+		scopeResource = path_resource(mode == 0 || mode == 2 ? missing : path);
+		transport = [[ScopeImageTransport alloc] initWithResource:scopeResource
+						     requireSecurityScope:YES
+								    error:&error];
+		if (mode == 1) {
+			assert(transport != nil && error == nil && transport.isAvailable);
+		} else {
+			assert(transport == nil &&
+			    error.code ==
+				(mode == 0	    ? EACCES
+					: mode == 2 ? ENOENT
+						    : EIO));
+		}
+		transport = nil;
+		assert(scopeBeginCount == 1 && scopeEndCount == (scopeBeginSucceeds ? 1 : 0));
+		assert([[NSData dataWithContentsOfFile:path] isEqualToData:source]);
+	}
+	scopeResource = nil;
+	assert([NSFileManager.defaultManager removeItemAtPath:path error:&error]);
+}
+
 void
 ntfs_test_fskit_image_transport(NSString *fixtures)
 {
@@ -439,8 +517,10 @@ ntfs_test_fskit_image_transport(NSString *fixtures)
 	assert([NSFileManager.defaultManager removeItemAtPath:path error:&error]);
 	native_failures(path, source);
 	path_admission(directory, source);
+	security_scope_admission(directory, source);
 	timestamped_core_write(directory, fixtures);
 	assert([NSFileManager.defaultManager removeItemAtPath:directory error:&error]);
-	puts("PASS: authorized image transport, reader exclusion, shared allocation cap, "
+	puts("PASS: authorized image transport, required scope admission/balance, reader "
+	     "exclusion, shared allocation cap, "
 	     "real persistence, poison, timestamped private C write and idempotent reopen");
 }

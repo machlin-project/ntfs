@@ -2,9 +2,103 @@
 
 ## Native ordinary-file writing and recovery
 
+Installed macOS 27 initialized-range image writing now passes actual owner
+`pwrite`/`fsync`, coherence through another descriptor and a prefaulted read mapping,
+and shared-mapping mutation after the writer descriptor closes. An independent
+whole-file oracle confirms exact data and advanced modified/changed times;
+identity, size and native ownership/mode remain unchanged. Authenticated root and
+nobody are each denied read-only, write-only and read/write opens. Native callback
+logs and loaded-binary identity bind those outcomes to the installed extension.
+Ordinary public unmount releases the original backing descriptor.
+
+The personally signed app's headless image commands restore genuine app-scope
+bookmarks in a new process. Two fresh CLI mounts of one saved URL preserve the
+same backing inode and entire postimage, return exact final data/metadata and
+ordinary-unmount with no remaining backing descriptors. The image was moved
+into the app's private Inbox only after the preceding owner had released it;
+that relocation does not establish continuity of the earlier source URL. The
+fresh cycles use the same new saved URL. No GUI or credential input is used for
+them. One initial ordinary Settings enablement after app registration is separate.
+The failed first harness log-string guard is retained; its successful first mount
+was inspected and normally unmounted, never automatically repeated.
+
+The exact exported FSKit postimage is independently bound to a unique GPT VHD.
+Full image/virtual-disk comparison permits changes only in the target data, FILE
+record and journal; recovery reopens without changing the image. Windows verifies
+four exact files, the unchanged ADS, modified FILETIME, File ID and ACL, clean
+state and read-only chkdsk. Independent raw XML review finds one matching healthy
+NTFS event and no warning or repair. The nonboot/nonsystem candidate detaches
+normally; the original test volume is exact before/after. This run uses no boot
+change or host read of an active UTM image. Evidence and main review are in
+`mac-public-image-build9-mounted-write-20261006/`,
+`mac-image-commands-fresh-remount-complete-20261006/`,
+`mounted-postimage-windows-preparation-20261006/` and
+`windows-mounted-postimage-20261006/`, under `artifacts/overwrite/`.
+
+All 110 actual C writer interruption states and all 264 interrupted-recovery
+fault/complete images pass offline whole-image checks, idempotent recovery and
+native Windows VHD recovery. File/ADS/time/identity/ACL, clean state, read-only
+chkdsk and ordinary detach pass. Independent original-event review binds 264
+healthy observations and 154 exactly predicted USA warnings, with no unrelated
+warning or repair. Interrupted original invocations and failed immediate queries
+remain retained; fresh final execution and read-only delayed event queries of the
+original interval close the bounded gate without remounting for events. See
+`windows-recovery-prefix-complete-delayed-main-review-20261006/`.
+
+Current core qualification is 175 fatal ASan/UBSan suites, style and both
+freestanding architectures. FSKit components pass 59 host groups with thirteen
+explicit runtime SKIPs and 76 native groups with zero SKIPs and 871 unchanged
+inputs. The current universal personally signed app is installed and enabled;
+it embeds the exact signed extension that performed the write. Actual FSClient
+reports the enabled installed path. Staged app discovery, disabled registration,
+wrong direct-build extension entry point and the preceding root-attribute
+authorization failure remain separate retained failures. Vnode presentation now
+grants no open or traversal capability and still validates backing availability.
+The revised Windows collector's positive bounded event polling is actually
+executed in the postimage run, with every raw observation retained.
+
+This is acceptance of initialized ordinary-file overwriting on exclusively owned
+authorized images. General journal histories, ring wrap/growth, allocation/free,
+resize, resident/sparse/compressed/ADS writes, namespace and Windows ACL mutation,
+block-device writing, hardware power cuts, broad native stress and distribution
+remain open. The user allows Windows alongside Debian; never terminate UTM or
+operate unrelated VMs.
+
+The preceding private owner/reply components pass all 72 groups, zero runtime
+SKIPs and 871 unchanged inputs on actual macOS 27.0.1 in
+`mac-component-stock27-complete-fixtures-20261006/`. The standalone test previously
+assumed API availability implied reclaim eligibility; it now observes FSKit
+acceptance and cleanup consistently, while a separate model checks both outcomes.
+A later incomplete fixture archive omitted a directory symlink; the complete
+pack includes its ten original expected files. Both failures remain retained.
+These native component results do not qualify installed security scope,
+authenticated FSContext or mounted writes. The newer explicit image-mode policy,
+cached backing identity checks and controller unload drain pass on the host in
+`fskit-private-image-selection-cached-identity-20261006/`; the initial recursive
+availability check failed ASan and is retained. The corrected primitive backing
+check avoids recursion and rejects cached leases before data I/O after replacement
+or resize. Authorized path probing now requires scope before open, releases its
+immutable read claim and executes neither recovery nor writes. Its current host
+suite passes 58 groups with eleven explicit runtime SKIPs in
+`fskit-authorized-image-probe-20261006/`. That preceding source still disabled
+public image admission; those component results are not installed-write acceptance.
+
+The private image controller now validates complete mode/options before acquiring
+scope or opening an image, performs owning recovery before volume publication,
+accepts teardown through a fresh proxy with the exact original URL, and drains an
+in-flight mutation before retiring the resource and replying. Reentrant loads and
+unloads refuse promptly; durable bytes and fresh reopen pass. The host suite has
+59 PASS groups and twelve runtime SKIPs; all 75 native groups pass without SKIPs
+on macOS 27.0.1 with 871 unchanged inputs. Main compares the original raw results
+and input manifests. Evidence is in `fskit-private-image-controller-options-20261006/`
+and `mac-component-stock27-image-controller-20261006/`. The initial nonnull-options
+compile failure and incorrect fixture-root preparation remain retained. These
+private tests preceded the public admission above and do not qualify installed
+FSContext, security scope or kernel caches.
+
 The [native journal continuation](NATIVE-WRITE-JOURNAL.md) now executes private
 initialized-data/timestamp transactions and native redo/compensation recovery.
-All 174 fatal-ASan/UBSan suites, selected-Xcode style and both freestanding targets
+All 175 fatal-ASan/UBSan suites and selected-Xcode style pass. Both preceding freestanding targets
 under the 2-KiB frame ceiling pass. Independent FILE/page goldens, complete fresh
 overlay validation, reservation/read faults, poison and sector-mix checks pass.
 Actual C recovery resolves 110 writer-interruption profiles; a further 120
@@ -27,8 +121,9 @@ qcow2 checks pass. The actual C-written data/timestamp image now passes a fresh
 Windows boot with all expected file/ADS hashes, exact modified time, preserved
 file ID/ACL, read-only chkdsk exit 0 and healthy this-boot NTFS evidence. First-clean
 and both-clean retained-original-root images also pass those checks. The executed
-loser/winner recovery cases are still running; the full per-sector/intermediate
-publication protocol remains a native gate. FSKit mutation admission,
+loser/winner C recovery results now also pass fresh Windows boots and the same
+native checks. The full per-sector/intermediate publication protocol remains a
+native gate. FSKit mutation admission,
 allocation/resize and namespace changes remain open.
 
 | Native experiment | Actual evidence | Disposition |
@@ -43,7 +138,7 @@ allocation/resize and namespace changes remain open.
 | Original Windows compensation packet | Exact redo bytes and same-lifetime previous/undo-next/Forget bindings; native inactive undo count decoded safely | PASS for observed wire form; not new recovery acceptance |
 | Retained-original-root first-clean and both-clean publication | Native files/ADS/time/identity/ACL, chkdsk and this-boot healthy evidence pass | PASS for those two final publication states |
 | Actual C-written initialized data and timestamps | Expected 8193-byte change and time, preserved unrelated files/ADS/identity/ACL, chkdsk exit 0 and healthy this-boot events | PASS for the complete C-executed image; interrupted publication remains OPEN |
-| New C tail-copy/retained-root recovery | Actual private-image persistence, full byte comparison and repeated C recovery pass | Windows loser/winner verification in progress |
+| New C tail-copy/retained-root recovery | Actual persistence and full byte/idempotence checks, followed by exact native Windows files/ADS/time/identity/ACL, chkdsk and healthy boot events | PASS for the executed loser/winner results; interrupted native recovery remains OPEN |
 
 Native reports and retained candidates/post-boot images are in
 `artifacts/overwrite/windows-wal-binding-probe-20261006/`,
@@ -61,14 +156,106 @@ readiness and single verifier launches. A failed Get-WinEvent query remains
 retained; its replacement uses native wevtutil XML, exact boot-time filtering,
 actual exit codes and bounded provider counts. Native evidence is in
 `artifacts/overwrite/windows-private-products-final-continuation-20261006/` with
-the first candidate's earlier verifier/events retained separately. Restoration is
-still pending completion of that batch. The active disk stays untouched while
-open. New private-I/O evidence is in
+the first candidate's earlier verifier/events retained separately. The original
+disk is restored from the exact inactive backup, and its actual loaded boot,
+files/ADS/original time/identity/ACL, chkdsk and healthy boot events now pass in
+`windows-baseline-long-transfer-20261006/`. Earlier readiness timeouts did not launch
+a baseline verifier. A busy guest destination was observed after the short transfer
+timeout; fresh names and bounded complete transfers resolve that observation.
+There was no additional boot or active-image host read. Main independent review
+of all five products, retained post-images and restored baseline is in
+`windows-private-products-reviewed-20261006/`. The active disk stays untouched
+while open. New private-I/O evidence is in
 `artifacts/overwrite/write-existing-native-io-20261006/` and
 `write-recovery-native-io-20261006/`; the current full C run is in
 `write-recovery-full-20261006/`.
 
-## Private FSKit authorized-image transport
+The test-only image transport now records real write/persistence callbacks with
+all event storage reserved before owner admission. It injects exact aligned write
+prefixes or reports uncertainty after a real persistence operation, then captures
+the attempt after owner close. Zero-prefix failures explicitly report that no
+native write was attempted. The new `write-image-interruptions` suite passes 105
+actual ordinary-file profiles with independent complete transfer/image goldens,
+metadata/data validation and unchanged zero-write recovery reopen. Both focused
+sanitized suites and style pass in `write-image-interruptions-path-20261006/`;
+the earlier unresolved executable-path invocation is retained separately. This is
+real host-file I/O with injected errors, not a hardware power cut or Windows result.
+
+Seven native-source pilot VHDs now pass actual C transfer/image comparisons,
+recovery, full allocation validation, exact data/time and repeated recovery.
+Each fixture has independently checked unique outer GPT identities; NTFS bytes
+are unchanged except for the captured C transaction prefix. Only allocated VHD
+extents are patched, followed by complete virtual-disk comparison against the
+expected raw disk. `native-interruption-vhd-pilot-20261006/` retains the sources,
+manifests and traces. All seven pilot states now pass native Windows mount recovery.
+The first multi-event XML invocation failed parsing and is retained. An injected
+USA warning is separately resolved against the exact original torn-page bytes,
+native positive checks and three exported post-Windows images with complete
+allocation validation and exact standard-information/security comparison in
+`native-post-metadata-review-20261006/`. The corrected collector preserves complete
+native XML, uses the documented Events root and matches full candidate identities.
+
+All 110 native-source writer states now pass real Windows VHD mount recovery in
+five bounded batches. They cover complete execution, every aligned sector prefix
+of all ten writes and uncertainty after every real persistence barrier. Four files,
+ADS, modified time, file ID/ACL, clean state and read-only chkdsk pass in each case;
+the original T: passes before and after every batch. All candidates are ordinarily
+detached and retained without replacing the VM's active disk or changing its boot.
+Main independently reconstructs all original event XML and matches the 56 injected
+USA warnings to exact input pages. Every candidate has matching healthy NTFS
+evidence; no unclassified warning, corruption request or repair-provider event is
+accepted. Reports are in `windows-image-recovery-writer-batches-20261006/` and
+`windows-writer-prefix-main-review-20261006/`. These are exact constructed image
+states, not observed hardware power cuts or mounted FSKit writes.
+
+Four complete native recovery schedules also pass exact transfer and whole-image
+comparison: seven/five writes for loser/winner FILE recovery and eight/six when a
+tail-copy-backed log home must first be completed. `native-recovery-transfer-oracles-20261006/`
+retains those checks. Their interrupted native Windows recovery remains open.
+
+## Preceding private FSKit authorized-image transport
+
+The private native-access bridge snapshots the opened backing file's UID/GID,
+refuses a changed owner at transport admission, and checks both real and effective
+caller UID against that owner. It supplies no root exception or Windows principal
+mapping. Only data-write access is granted; append, namespace, security and metadata
+mutations stay unsupported. Open rights survive immutable-view replacement; close
+can only remove them and requires no fresh allocation. The macOS-27 handler binds
+these checks to FSContext and checks native data callbacks against retained opens.
+That actual authenticated framework delivery and installed enforcement are still
+unqualified. Public resource loading remains unchanged and read-only.
+
+All 57 component groups pass with eleven runtime SKIPs, style and whitespace checks
+in `fskit-image-native-reply-signedness-20261006/`. Tests prove numerical credential
+denial, no privileged exception, open-right retention/removal, no mutation when the
+reply builder refuses allocation, no reentrant write during reply preparation and
+successful preallocated byte/attribute reply despite allocation refusal after the
+last durable barrier. The earlier signed/unsigned nanosecond compiler failure is
+retained. These component credentials do not impersonate a native authenticated
+FSContext. Native legacy/modern deactivation also replies only after an active
+mutation and owner release, with the reentrant case passing separately in
+`fskit-image-native-deactivation-20261006/`.
+
+The required-scope initializer refuses a denied start before opening the image;
+successful starts balance both normal cleanup and failed open/revocation. Explicit
+component outcomes and complete unchanged-image comparisons pass in
+`fskit-image-required-scope-explicit-20261006/`, alongside 57 groups/eleven runtime
+SKIPs, style and all 175 fatal-ASan/UBSan core suites. The first test assumed a plain
+URL necessarily failed scope admission in this unsandboxed process; its retained
+failure and read-only Swift diagnostic show that this assumption was false.
+The corrected test supplies explicit scope outcomes and keeps installed sandbox
+authorization unqualified.
+
+The disposable clone now boots actual stock macOS 27.0.1, with desktop RPC and
+loaded-kernel identification, while the original macOS 26.5.2 VM remains stopped.
+The real provisioning UDID is unchanged and included in the existing personal
+profile; hardware UUID is not the provisioning identifier. Installed build 3
+remains enabled and strictly signed. The two standard/NTFS 3.0 native read/mmap/
+refusal regressions pass on macOS 27, with whole source hashes unchanged and
+ordinary unmount/detach. These are the preceding read-only product, distinct from
+the personally signed but uninstalled owner/reply build and from writing.
+Reports are `mac-fskit-27-upgrade-20261006/` and
+`mac-readonly-stock27-build3-20261006/`.
 
 `NTFSImageTransport` retains the original path resource/security scope and an
 existing ordinary backing file. It coordinates cooperating claims, bounds shared
@@ -110,9 +297,9 @@ as well.
 These are local component peers and ordinary temporary files. Installed security
 scope transport, sandbox/FSKit-native exclusivity, kernel page-cache/mmap coherence
 and path-resource load/mutation admission remain unqualified. No host installation
-or path-support plist change ran; all native mutation handlers remain read-only.
+or path-support plist change ran; publicly loaded owners remain read-only.
 
-## Current FSKit application build limitation
+## Preceding FSKit application build evidence
 
 The new adapter sources compile and pass the component suite, but the complete
 unsigned universal app build times out at Xcode Build Preparation before compiling
@@ -122,7 +309,16 @@ cause. Read-only startup probes for xcodebuild, the selected SDK and Swift compi
 all exit successfully. Host Xcode reports running, but both GUI inspection attempts
 return timeout without a usable window; no GUI build starts. These failures do not
 establish a source compilation error, and earlier successful app builds cannot
-qualify the new adapter. Retain `fskit-image-app-20261006/`,
+qualify the new adapter. A separately prepared direct build now consumes the actual
+XcodeGen project source/settings list and successfully compiles and links all
+configured C, Objective-C and Swift sources for arm64 and x86_64. All 126 commands
+pass; the complete app and embedded extension contain both architectures and
+matching binary/dSYM UUIDs. Original bundle metadata keeps path support disabled.
+The products are unsigned and uninstalled. `dsymutil` warns about deleted temporary
+Swift objects/modules; successful UUID matching does not prove full Swift debug
+coverage. This closes source/universal product compilation through that route,
+not Xcode build, signing, installed mounting or writing. Evidence is in
+`fskit-direct-build-preparation-20261006/`. Retain `fskit-image-app-20261006/`,
 `fskit-xcode-preparation-diagnosis-20261006/`,
 `fskit-toolchain-startup-diagnosis-20261006/` and
 `fskit-host-gui-build-diagnosis-20261006/` under `artifacts/overwrite/`.
@@ -189,12 +385,10 @@ artifacts/fuzz-logfile-retained-20261006/. The first new-test build argument-ord
 error remains retained in logfile-retained/focused-20261006/. No product was
 installed or granted write admission by these checks.
 
-The delivered scope is a bounded read-only core and FSKit development product.
-Local core, adapter component, app builds with linker ad hoc signing and
-independent-image checks passed. The current personally signed Release is installed
-and enabled in the compatible macOS VM; public FSClient confirms the installed path.
-Initial installed reading passes on two synthetic fixtures. Broader native behavior,
-ownership enforcement, Windows interoperability and commercial release remain open.
+The preceding read-only checkpoint delivered bounded extraction and synthetic
+installed reading. The current initialized-file writer's installed ownership,
+cache/mmap and Windows postimage acceptance is recorded at the start of this
+document. Broader native behavior and commercial release remain open.
 The requested 60% is not a measured completion claim;
 see [the handoff](HANDOFF-SOL.md) for the delivered scope and remaining work.
 
@@ -1961,11 +2155,11 @@ claimed.
 | WOF file-provider reading | Sparse unnamed/exact backing storage, complete extents and paged table, raw/XPRESS4K/8K/16K/LZX32K content, counted independent lifetime, lazy private unit, truthful encrypted metadata and native ADS/projection | 37 core verdicts, 390 allocation/101 read faults and 23 legacy provider scenarios passed; bounded image fuzz passed; provider-specific native fault/interleaving/hard-link expansion, Windows and installed qualification remain open |
 | Coverage-guided fuzzing | Separate bounded image and parser libFuzzer/ASan/UBSan campaigns; fixup-preserving image mutations; descriptor campaign and counts below | Completed without reported crash or sanitizer finding; sustained Windows-seeded fuzzing remains required |
 | Portable boundary | Freestanding arm64/x86_64 compilation with 2-KiB frame budget; selected Xcode formatting | Passed; kernel integration untested |
-| FSKit component | Aligned reads, permanent revocation, initial revoked-resource rejection, common result/error boundary, item identity/names, pagination/replay, EROFS, concurrent reads; separate admission/drain and publication/reclaim ownership; virtual dot/parent entries and exact dot lookup/released-parent reconstruction, cookie views/native errors and faults/budgets; compound operation/physical credits and safe terminal scope end; encoded-stream attributes/ADS and explicit rejection pages; bounded native link projection/raw metadata/remount; private image persistence, fresh-view/item replacement and mutation drain | 56 in-process PASS groups; eleven modern lifecycle/operation/pressure/enumeration/lookup/content/link/case/maintenance checks explicitly skipped without macOS 27; actual modern result-constructor failure injection, native reclaim counts, synchronous I/O interruption, cross-volume/reparse-hard-link and complete provider qualification and installed lifetime/cache coherence remain open |
+| FSKit component | Serialized native read/extraction and separate authorized-image mutation owners, stable items, bounded operations, reply-before-write and drained teardown | 59 host PASS groups/thirteen explicit runtime SKIPs; 76 native groups/zero SKIPs/871 unchanged inputs. Installed initialized-range owner writing, authenticated root/nobody open refusal, observer/shared-mapping coherence and fresh mounts pass; broad native stress and unsupported mutation families remain open |
 | FSKit directory continuations | At most two lazy pool-backed independent cursors with exact/nearest-earlier same-view reuse, individual scan credits, completed-scan replacement, pinned packing, bounded recursion and epoch/retired-table teardown; pressure trims older inactive positions | 32 layout/view/cache/pressure cases, reentry/remount/invalidation/EOF checks, 34 allocation/13 read names-only faults and 151 allocation/41 read interleaved faults passed again with operation scopes; earlier paired large/small legacy memory-reader benefit had increased bounded pool peak; current guard overhead and installed/native/device qualification remain open |
 | FSKit pressure retention | Independent Dispatch observer, coalesced level precedence, weak/canceled-source ownership and selective access/completion release; preserved cursor/pending entry/identity and returned bytes | Three measured core-byte scenarios, blocked-read notification, 11 allocation/two read reopen faults, catalog failure/retry, ADS/links/interleaving/remount and permanent revocation passed; installed native delivery and aggregate allocation/RSS stress remain open |
-| FSKit application | Host app and embedded extension, legacy/modern protocol sources, personal development signing and strict deep signature verification | Prior unsigned universal build passes; new private-image adapter app build/settings query time out before compilation, GUI inspection unavailable; preceding personally signed build 3 is installed/enabled with scoped reading on macOS 26.5.2; macOS 27 runtime and distribution remain open |
-| Native installation | Signed VM mount, Finder, mmap, concurrency, removal | Preceding signed build 3 installed/enabled; both nine-file synthetic reading/mmap/write-refusal checks and extraction refusal/retry pass; mounts report noowners and a separate ownership route fails; broader Finder/concurrency/lifetime/ownership remain open |
+| FSKit application | Universal personally development-signed host and embedded extension, public image mount and saved real app-scope bookmarks | Exact signed extension performs installed writing; current signed host CLI restores saved permissions and completes two fresh mount/check/ordinary-unmount cycles without GUI input. Initial OS enablement is separate; distribution/notarization remain open |
+| Native installation | Dedicated stock macOS VM; actual enabled FSClient installed path, loaded extension identity, writable image mount, mmap and removal | Initialized ordinary-file pwrite/fsync/shared-mmap, authenticated owner/root/nobody decisions, exact fresh reads and ordinary descriptor-releasing teardown pass; general device/Finder/concurrency/lifetime acceptance remains open |
 | Windows corpus | Read-only Windows collector, offline manifest verifier and synthetic contract tests; native metadata/sparse/compression/repair evidence | Collector locally tested; full Windows corpus/chkdsk not run; frozen original Recovery journal has scoped metadata/packet comparisons, while the flagged Recovery volume is refused and the system partition is encrypted |
 | Read-only log primitives | LFS 1.1/2.0 common restart/client/page framing, LSN geometry and exact logical records; empty/nonempty-LCN NTFS update spans; lossless names and checkpoint/table framing; bounded immutable inputs/caller scratch and diagnostic transport | Original framing and later composed table/membership checks pass with USA-preserving fuzz and scoped native Windows packet comparisons; current history, volume semantics, transaction analysis and recovery remain open |
 | Logical log source and restart copies | Immutable exact logical reads, all bounded restart positions, compatible newer/equal selection and explicit conflicts/partial reports; cached lossless clients and staged physical pages with per-operation credits | 22 independent source verdicts, 22 exact reports/two transport checks, allocation/partial-read/backend-code/budget checks and all-source fuzz pass; completed legacy/modern per-target observers are qualified separately; native admission and complete circular currentness remain open |
@@ -1979,7 +2173,7 @@ claimed.
 | NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds pass; scoped native client-1.0 prefixes also compare; complete extensions, current history, native transaction analysis and recovery remain open |
 | Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
 | Transaction/durability reference model | Exclusive serialized owner, complete private/log credits, data/WAL/commit/home/checkpoint ordering, arbitrary pending-sector eviction, partial/full I/O failures and interrupted abstract replay against independently authored NTFS endpoints | 49,855 modeled states, 22 ownership contracts, 14 history refusals, 1,205 interrupted-recovery states, 47 complete native-byte diagnostics/content checks and four unsafe-order witnesses passed; typed in-memory evidence, no native journal or product write API; see RECOVERY-MODEL.md |
-| Write/recovery | Private bounded initialized-data/timestamp WAL, owned history, native redo/compensation and real image persistence; allocation, namespace and crash/durability acceptance | Executed C recovery passes 110 writer and 120 recovery interruptions, complete private-source image comparisons and idempotent reopen; three earlier C-authored states pass Windows. New tail-copy/retained-root Windows acceptance and writable FSKit remain open; no arbitrary dirty mount admission |
+| Write/recovery | Bounded initialized-data/timestamp WAL, retained native roots, redo/compensation and real image persistence | 110 writer interruption states and 264 interrupted-recovery states pass offline/native Windows checks; 264 healthy events and 154 exact injected USA warnings reviewed. Exact installed FSKit postimage passes Windows checks. Allocation, resize, namespace/general history/ring wrap/growth, hardware power cuts and device writes remain open |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry; whole-volume selected per-file framing with explicit fixed-internal/inert and narrowly owned canonical repair source exceptions | 74 resolver contracts plus 46 whole-store/nine complete-volume store verdicts and 65 per-file diagnostic images, 496 allocation/730 partial-and-full store read positions, six operation profiles and whole-volume fault/budget checks; eight per-file fault layouts and staged parser/I/O boundaries; four independent complete leaf-view/descriptor geometries and three public NIST stores/user descriptors passed; Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |

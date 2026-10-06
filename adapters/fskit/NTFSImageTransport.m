@@ -8,6 +8,7 @@
 @interface NTFSImageTransport ()
 - (enum ntfs_result)claimImage;
 - (void)unclaimImage;
+- (BOOL)checkFile;
 - (enum ntfs_result)readAt:(uint64_t)offset bytes:(void *)buffer length:(size_t)length;
 - (enum ntfs_result)writeAt:(uint64_t)offset
 		      bytes:(const void *)buffer
@@ -21,6 +22,10 @@
 - (BOOL)readerAvailable:(uint64_t)generation;
 - (uint64_t)imageBytes;
 - (void)finishTransfer;
+/* Preserve and balance the original native scope; these narrow boundaries also
+ * let component peers observe admission without claiming sandbox acceptance. */
+- (BOOL)beginSecurityScopeForURL:(NSURL *)url;
+- (void)endSecurityScopeForURL:(NSURL *)url;
 /* Narrow native transfer boundaries permit fault injection without replacing
  * ownership, reader exclusion, revocation or poisoning in component tests. */
 - (enum ntfs_result)transferWriteAt:(uint64_t)offset
@@ -185,6 +190,8 @@ image_release(void *context, void *bytes, size_t size)
 	struct ntfs_overwrite_image _image;
 	dev_t _device;
 	ino_t _inode;
+	uid_t _fileOwnerUserID;
+	gid_t _fileOwnerGroupID;
 	uint64_t _generation;
 	NSUInteger _readers;
 	size_t _allocatedBytes;
@@ -192,6 +199,13 @@ image_release(void *context, void *bytes, size_t size)
 }
 
 - (instancetype)initWithResource:(FSPathURLResource *)resource error:(NSError **)error
+{
+	return [self initWithResource:resource requireSecurityScope:NO error:error];
+}
+
+- (instancetype)initWithResource:(FSPathURLResource *)resource
+	    requireSecurityScope:(BOOL)required
+			   error:(NSError **)error
 {
 	struct stat status;
 	int result = EINVAL;
@@ -205,8 +219,15 @@ image_release(void *context, void *bytes, size_t size)
 		    resource.isWritable && resource.url.isFileURL) {
 			_resource = resource;
 			_url = resource.url;
-			_scoped = [_url startAccessingSecurityScopedResource];
-			result = ntfs_overwrite_image_open(_url.fileSystemRepresentation, &_image);
+			_scoped = [self beginSecurityScopeForURL:_url];
+			if (required && !_scoped) {
+				result = EACCES;
+			} else if (resource.isRevoked) {
+				result = EIO;
+			} else {
+				result = ntfs_overwrite_image_open(
+				    _url.fileSystemRepresentation, &_image);
+			}
 			if (result == 0 && fstat(_image.fd, &status) != 0) {
 				result = errno;
 			}
@@ -221,6 +242,8 @@ image_release(void *context, void *bytes, size_t size)
 			if (result == 0) {
 				_device = status.st_dev;
 				_inode = status.st_ino;
+				_fileOwnerUserID = status.st_uid;
+				_fileOwnerGroupID = status.st_gid;
 			}
 		} else if ([resource isKindOfClass:FSPathURLResource.class] &&
 		    !resource.isWritable) {
@@ -239,8 +262,18 @@ image_release(void *context, void *bytes, size_t size)
 {
 	ntfs_overwrite_image_close(&_image);
 	if (_scoped) {
-		[_url stopAccessingSecurityScopedResource];
+		[self endSecurityScopeForURL:_url];
 	}
+}
+
+- (BOOL)beginSecurityScopeForURL:(NSURL *)url
+{
+	return [url startAccessingSecurityScopedResource];
+}
+
+- (void)endSecurityScopeForURL:(NSURL *)url
+{
+	[url stopAccessingSecurityScopedResource];
 }
 
 - (struct ntfs_overwrite_environment)overwriteEnvironment
@@ -258,7 +291,9 @@ image_release(void *context, void *bytes, size_t size)
 		if (_resource.isRevoked) {
 			_image.uncertain = true;
 		}
-		return _image.fd >= 0 && !_image.uncertain;
+		/* Cached native metadata and access checks also require the originally
+		 * authorized backing object, even when no data transfer is needed. */
+		return _image.fd >= 0 && !_image.uncertain && [self checkFile];
 	}
 }
 
@@ -269,16 +304,27 @@ image_release(void *context, void *bytes, size_t size)
 	}
 }
 
+- (uid_t)fileOwnerUserID
+{
+	return _fileOwnerUserID;
+}
+
+- (gid_t)fileOwnerGroupID
+{
+	return _fileOwnerGroupID;
+}
+
 - (BOOL)checkFile
 {
 	struct stat file, path;
 
-	if (!self.isAvailable || fstat(_image.fd, &file) != 0 ||
-	    lstat(_url.fileSystemRepresentation, &path) != 0 || !S_ISREG(file.st_mode) ||
-	    !S_ISREG(path.st_mode) || file.st_nlink != 1 || file.st_size <= 0 ||
-	    (uint64_t)file.st_size != _image.environment.reader.size_bytes ||
+	if (_image.fd < 0 || _image.uncertain || _resource.isRevoked ||
+	    fstat(_image.fd, &file) != 0 || lstat(_url.fileSystemRepresentation, &path) != 0 ||
+	    !S_ISREG(file.st_mode) || !S_ISREG(path.st_mode) || file.st_nlink != 1 ||
+	    file.st_size <= 0 || (uint64_t)file.st_size != _image.environment.reader.size_bytes ||
 	    file.st_dev != _device || file.st_ino != _inode || path.st_dev != _device ||
-	    path.st_ino != _inode) {
+	    path.st_ino != _inode || file.st_uid != _fileOwnerUserID ||
+	    file.st_gid != _fileOwnerGroupID) {
 		_image.uncertain = true;
 		return NO;
 	}

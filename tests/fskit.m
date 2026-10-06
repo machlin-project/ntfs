@@ -190,7 +190,7 @@ test_volume(NSData *image)
 	const char hello[] = "Hello from NTFS.\n";
 	TestReader *reader = [[TestReader alloc] init];
 	NTFSResource *resource;
-	NTFSLegacyVolume *volume;
+	NTFSTestLegacyVolume *volume;
 	struct ntfs_environment env;
 	struct ntfs_volume *core = NULL;
 	FSItem *root, *file, *again;
@@ -222,7 +222,7 @@ test_volume(NSData *image)
 	    reader.reads == before);
 	env = [resource environment];
 	assert(ntfs_mount(&env, NULL, &core) == NTFS_OK);
-	volume = [[NTFSLegacyVolume alloc] initWithCore:core resource:resource];
+	volume = [[NTFSTestLegacyVolume alloc] initWithCore:core resource:resource];
 	assert(volume != nil);
 	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
@@ -295,9 +295,12 @@ test_volume(NSData *image)
 		 assert(e == nil);
 		 replies++;
 	       }];
-	assert([volume readItem:file offset:0 bytes:buffer length:1 completed:&done] ==
-	    (ntfs_test_native_reclaim_available() ? NTFS_STALE : NTFS_OK));
-	assert(done == (ntfs_test_native_reclaim_available() ? 0 : 1));
+	assert(volume.reclaimAttempts == 1);
+	printf(
+	    "OBSERVED: standalone native reclaim accepted=%u\n", (unsigned)volume.reclaimAccepted);
+	assert([volume readItem:file offset:0 bytes:buffer length:1
+		      completed:&done] == (volume.reclaimAccepted ? NTFS_STALE : NTFS_OK));
+	assert(done == (volume.reclaimAccepted ? 0 : 1));
 	file = [volume lookup:[FSFileName nameWithString:@"fragmented.bin"]
 		  inDirectory:root
 		   storedName:&stored

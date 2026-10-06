@@ -53,6 +53,9 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 @property(readonly) uid_t nativeUserID;
 @property(readonly) gid_t nativeGroupID;
 - (void)invalidate;
+/* Native deactivation replies only after any active mutation has drained and
+ * the image's exclusive owner has been released. */
+- (void)invalidateWithReplyHandler:(void (^)(void))reply;
 /* Admission state can be inspected without waiting for an outstanding read.
  * Unmount retains item identities for reclamation; invalidation is terminal. */
 @property(readonly) NTFSVolumeLifecycle lifecycle;
@@ -108,7 +111,8 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 API_AVAILABLE(macos(27.0))
 @interface NTFSModernVolume
-    : NTFSVolume <FSVolumeHandler, FSVolumeReadWriteHandler, FSVolumeXattrHandler>
+    : NTFSVolume <FSVolumeHandler, FSVolumeReadWriteHandler, FSVolumeXattrHandler,
+	  FSVolumeAccessCheckHandler, FSVolumeOpenCloseHandler>
 @end
 #endif
 

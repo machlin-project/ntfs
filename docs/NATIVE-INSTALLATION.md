@@ -1,28 +1,64 @@
 # Native development installation
 
-Installed acceptance belongs to a dedicated stock macOS VM. Do not install this
+The disposable macOS 27 test clone has the personally development-signed universal
+app installed and enabled. It embeds the exact signed extension that passes
+initialized ordinary-file writing. Strict signatures, exact installed files,
+matching executable/dSYM identities and actual enabled FSClient path pass
+independent review. The preserved macOS 26.5 reading baseline and unrelated ext4
+installation are unchanged. This is not distribution signing or notarization.
+
+The installed owner performs `pwrite`/`fsync` and shared-mapping mutation after
+closing the writer descriptor. Another descriptor and a prefaulted read mapping
+observe exact final data; modified/changed times advance, while identity, size,
+native ownership and mode stay unchanged. Authenticated root and nobody opens
+are denied in all three tested modes. Ordinary unmount releases the backing
+image. Two fresh CLI mounts of one saved image URL preserve the same full
+postimage and exact data/metadata, and normally unmount with no backing descriptor.
+The exact postimage then passes independent native Windows data/ADS/time/File ID/
+ACL, clean-state, read-only chkdsk and healthy-event checks. See ACCEPTANCE.md for
+reports and remaining unsupported mutations.
+
+The app uses the original authorized URL as a writable `FSPathURLResource` and
+[FSClient.mountSingleVolume](https://developer.apple.com/documentation/fskit/fsclient/mountsinglevolume(resource:bundleid:options:completionhandler:))
+with explicit image-editing policy. The host needs FSKit Mounter and user-selected
+read/write entitlements. Ordinary vnode attributes remain available for kernel
+mount construction without granting namespace or data authority; metadata
+confidentiality across native attribute caches is not claimed.
+
+Use the installed app's `--image-command status`, `import`, `mount`, `unmount` and
+`unmount-path` through `scripts/fskit_image.py`. Picker-selected external images
+are saved as app-scope bookmarks. Automation imports only a file name from the
+app's private Inbox, creates a real bookmark and requires positive scope restore.
+This passes in the signed sandbox even with the console locked. Saved identifiers
+survive process exit; bookmark bytes are never printed. Mount revalidates identity
+and ownership. Ordinary unmount uses backing-owner authority; the kernel's
+mount-owner ID does not identify who may read or write the image.
+
+The actual written image moved into the app's Inbox after the preceding mount
+released its owner. Device, inode, bytes, native UID/GID, mode and single-link
+identity remained exact. Both new cycles use that same new saved URL. The earlier
+source URL is not represented as still valid. Generated reports retain exact
+paths, IDs, artifact hashes, loaded identities and command results.
+
+Initial OS extension enablement remains an ordinary Settings action. During app
+installation, launching staged command binaries also registered their nested
+extensions. Removing only those task staging registrations and registering the
+installed host/module recovered the installed path but left it disabled. A
+PlugInKit election marker did not prove FSClient enablement. After the user
+unlocked the VM, one ordinary Machlin NTFS Settings toggle restored the exact
+enabled installed path. Subsequent mount/check/unmount cycles use no UI input.
+Always run commands from the installed bundle; do not launch a staging copy.
+
+The system `mount` command prefers block resources when a module advertises block
+and path support; its image attempts failed before extension launch. Changing a
+path to a file URL did not select the path operation. Use the app's public FSClient
+route. The direct-build fallback must use the actual `_NSExtensionMain` entry point
+and SDK 27 metadata, as the normal Xcode build does. Preceding startup and
+root-attribute authorization failures and their exact diagnostics remain retained.
+
+Installed acceptance belongs to a dedicated stock macOS VM. Never install this
 preview on the development host. Source builds, development signing, native
-discovery, enabled admission, mounted behavior and distribution are separate stages.
-
-The current isolated `machlin-ntfs-fskit-26.5.2` guest reports macOS 26.5.2/arm64
-and its actual stock kernel after manual login. Its retained ext4 installation
-remains enabled and idle. The fresh NTFS development build is installed in
-`/Applications/Machlin NTFS.app`; all eight regular bundle files match the reviewed
-signed source. Both installed signatures pass strict verification. App and extension
-report build 3 and minimum macOS 26.5. The embedded development profile includes
-this guest and the FSKit entitlement. This is not distribution signing or notarization.
-
-Normal app launch and LaunchServices/PlugInKit registration discover the installed
-extension. After manual console unlock, ordinary By Category → File System Extensions
-enablement succeeds without an authentication dialog. The public FSClient query
-reports its exact installed path and `enabled: true`; ext4 stays enabled and idle.
-Two synthetic fixture reading runs now pass and their task attachments are cleaned up.
-Ownership enforcement remains unqualified as recorded below. Separately,
-the Windows VM stays at its account-password screen at the user's request.
-
-Evidence is under `artifacts/fskit-guest-26.5.2/`: `signed/review/`, `installation/`,
-`modules-helper/`, `read-preparation/` and `native-read/`. Reports retain source/artifact identities,
-commands, exits and actual guest observations; source history remains in Git.
+discovery/enablement, mounted behavior and distribution are separate stages.
 
 ## Public module query
 

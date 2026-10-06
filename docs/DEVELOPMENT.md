@@ -16,6 +16,44 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+## Installed image commands
+
+The signed app exposes `--image-command status|import FILE_NAME|mount IMAGE_ID|unmount IMAGE_ID`
+and `unmount-path MOUNT_PATH`. Use `scripts/fskit_image.py` with an explicit dedicated
+Tart VM and a fresh ignored output directory. It always runs the installed app,
+closes stdin and retains the native JSON reply, exits and raw diagnostics. It
+changes no VM lifecycle state and never retries an invocation automatically.
+
+```sh
+python3 scripts/fskit_image.py --vm machlin-ntfs-fskit-27.0.1 \
+  --output artifacts/image-status-next status
+python3 scripts/fskit_image.py --vm machlin-ntfs-fskit-27.0.1 \
+  --output artifacts/image-import-next import generated.ntfs
+python3 scripts/fskit_image.py --vm machlin-ntfs-fskit-27.0.1 \
+  --output artifacts/image-mount-next mount SAVED_IMAGE_ID
+python3 scripts/fskit_image.py --vm machlin-ntfs-fskit-27.0.1 \
+  --output artifacts/image-unmount-next unmount SAVED_IMAGE_ID
+```
+
+`status` returns the app's private Inbox path and saved images. Prepare only an
+inactive, explicitly owned generated test image in that Inbox before `import`.
+Import accepts a basename, creates a real app-scope bookmark and positively
+restores it. For external files, the ordinary picker grant is saved instead.
+Mount restores scope without UI and checks unchanged backing identity/ownership;
+ordinary unmount drains the native owner. A deadline may leave a remote operation
+pending: retain the failure and inspect native state before any next action.
+Do not run a staged app binary: its launch may register the staged extension.
+Initial OS extension enablement may require the ordinary Settings toggle;
+PlugInKit election output does not prove actual FSClient enablement.
+
+The installed checker `tests/mounted_write.c` has separate `write`, `check` and
+`deny` modes. `write` verifies positioned I/O/fsync and shared mappings against
+independent before/after files; `check` reopens the exact result without mutation;
+`deny` checks all three open modes for an authenticated foreign caller. Generated
+acceptance reports bind actual loaded identities, full-image bytes, fresh mounts
+and the independent Windows postimage. This is bounded initialized overwriting;
+unsupported mutation families remain explicit in WRITES.md.
+
 Current checkpoint-transaction qualification runs `checkpoint-transactions`,
 `checkpoint-transactions-cli` and the four `fuzz-checkpoint-transaction` variants,
 then the full 160 fatal-ASan/UBSan suites. The original author is

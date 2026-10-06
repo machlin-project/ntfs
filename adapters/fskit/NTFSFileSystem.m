@@ -2,6 +2,8 @@
 #import "NTFSFileSystem.h"
 #import "NTFSVolume.h"
 #import "NTFSCheckTask.h"
+#import "NTFSImageTransport.h"
+#import "NTFSImageVolume.h"
 #include <errno.h>
 
 typedef NS_ENUM(NSUInteger, NTFSFileSystemPhase) {
@@ -43,6 +45,12 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	return repair ? NTFS_READ_ONLY : NTFS_OK;
 }
 
+@interface NTFSFileSystem ()
+- (void)loadImageResource:(FSPathURLResource *)resource
+		  options:(FSTaskOptions *)options
+	     replyHandler:(void (^)(FSVolume *, NSError *))reply;
+@end
+
 @implementation NTFSFileSystem {
 	NTFSVolume *_volume;
 	FSResource *_resource;
@@ -57,6 +65,14 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	return [[NTFSResource alloc] initWithReader:reader];
 }
 
+- (NTFSImageTransport *)newImageTransportWithResource:(FSPathURLResource *)resource
+						error:(NSError **)error
+{
+	return [[NTFSImageTransport alloc] initWithResource:resource
+				       requireSecurityScope:YES
+						      error:error];
+}
+
 - (struct ntfs_validation_limits)validationLimits
 {
 	struct ntfs_validation_limits limits;
@@ -68,43 +84,73 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 - (void)probeResource:(FSResource *)resource
 	 replyHandler:(void (^)(FSProbeResult *, NSError *))reply
 {
-	__attribute__((objc_precise_lifetime)) NTFSResource *owner;
+	__attribute__((objc_precise_lifetime)) NTFSResource *owner = nil;
+	__attribute__((objc_precise_lifetime)) NTFSImageTransport *image = nil;
+	struct ntfs_overwrite_environment imageEnvironment = {0};
 	struct ntfs_environment env;
 	struct ntfs_info info;
 	struct ntfs_operation_limits limits;
 	struct ntfs_resource_read_budget budget = {0};
-	enum ntfs_result result;
+	enum ntfs_result result = NTFS_OK;
+	NSError *error = nil;
+	FSProbeResult *probe;
 
-	if (![resource isKindOfClass:FSBlockDeviceResource.class]) {
+	if ([resource isKindOfClass:FSPathURLResource.class]) {
+		image = [self newImageTransportWithResource:(FSPathURLResource *)resource
+						      error:&error];
+		if (image == nil) {
+			reply(nil, error != nil ? error : ntfs_error(NTFS_NO_MEMORY));
+			return;
+		}
+		imageEnvironment = [image overwriteEnvironment];
+		result = [image performExclusiveAccess:^{
+		  return imageEnvironment.claim(imageEnvironment.reader.context);
+		}];
+		if (result == NTFS_OK) {
+			owner = [image newReadResource];
+			if (owner == nil) {
+				result = image.isAvailable ? NTFS_NO_MEMORY : NTFS_IO;
+			}
+		}
+	} else if ([resource isKindOfClass:FSBlockDeviceResource.class]) {
+		owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
+		if (owner == nil) {
+			result = NTFS_INVALID;
+		}
+	} else {
 		reply(FSProbeResult.notRecognizedProbeResult, nil);
 		return;
 	}
-	owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
-	if (owner == nil) {
-		reply(nil, ntfs_error(NTFS_INVALID));
-		return;
-	}
-	env = [owner environment];
-	ntfs_operation_default_limits(&limits);
-	result = [owner beginReadBudget:&budget limits:&limits];
 	if (result == NTFS_OK) {
-		@try {
-			result = ntfs_probe(&env, &info);
-		} @finally {
-			(void)[owner endReadBudget:&budget];
+		env = [owner environment];
+		ntfs_operation_default_limits(&limits);
+		result = [owner beginReadBudget:&budget limits:&limits];
+		if (result == NTFS_OK) {
+			@try {
+				/* Probe publishes no write owner and never performs recovery. */
+				result = ntfs_probe(&env, &info);
+			} @finally {
+				(void)[owner endReadBudget:&budget];
+			}
 		}
 	}
+	if (image != nil) {
+		/* Drop the immutable lease before the claim. No image owner escapes. */
+		owner = nil;
+		imageEnvironment.unclaim(imageEnvironment.reader.context);
+	}
 	if (result == NTFS_NOT_NTFS) {
-		reply(FSProbeResult.notRecognizedProbeResult, nil);
+		probe = FSProbeResult.notRecognizedProbeResult;
 	} else if (result != NTFS_OK) {
 		reply(nil, ntfs_error(result));
+		return;
 	} else {
-		reply([FSProbeResult
-			  usableProbeResultWithName:@"NTFS"
-					containerID:[[FSContainerIdentifier alloc]
-							initWithUUID:ntfs_uuid(info.serial)]],
-		    nil);
+		probe = [FSProbeResult
+		    usableProbeResultWithName:@"NTFS"
+				  containerID:[[FSContainerIdentifier alloc]
+						  initWithUUID:ntfs_uuid(info.serial)]];
 	}
+	reply(probe, ntfs_native_result_error(probe, nil));
 }
 
 - (void)loadResource:(FSResource *)resource
@@ -123,6 +169,12 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	BOOL reserved = NO, force = NO;
 	NTFSNativeAccessMode accessMode = NTFSNativeAccessUnselected;
 
+	if ([resource isKindOfClass:FSPathURLResource.class]) {
+		[self loadImageResource:(FSPathURLResource *)resource
+				options:options
+			   replyHandler:reply];
+		return;
+	}
 	@synchronized(self) {
 		if (_phase != NTFSFileSystemIdle || _volume != nil) {
 			result = NTFS_BUSY;
@@ -139,6 +191,10 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	}
 	/* Never hold the controller monitor across core I/O or volume ownership. */
 	result = ntfs_native_access_mode(options.taskOptions, &accessMode);
+	if (result == NTFS_OK && accessMode == NTFSNativeAccessImageEditing) {
+		/* A block resource has no qualified offline-image ownership contract. */
+		result = NTFS_UNSUPPORTED;
+	}
 	if (result == NTFS_OK) {
 		force = [options.taskOptions containsObject:@"-f"];
 		owner = [self newResourceWithReader:(id<NTFSBlockReader>)resource];
@@ -211,6 +267,83 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	reply(loaded, ntfs_error(result));
 }
 
+/* The complete image operation owns policy, scope and recovery before publication.
+ * Block devices keep their independent immutable extraction contract. */
+- (void)loadImageResource:(FSPathURLResource *)resource
+		  options:(FSTaskOptions *)options
+	     replyHandler:(void (^)(FSVolume *, NSError *))reply
+{
+	__attribute__((objc_precise_lifetime)) NTFSImageTransport *image = nil;
+	NTFSVolume *loaded = nil;
+	NTFSNativeAccessMode selected = NTFSNativeAccessUnselected;
+	enum ntfs_result result = NTFS_OK;
+	NSError *failure = nil;
+	BOOL reserved = NO, modern = NO;
+
+	@synchronized(self) {
+		if (_phase != NTFSFileSystemIdle || _volume != nil) {
+			result = NTFS_BUSY;
+		} else if (![resource isKindOfClass:FSPathURLResource.class]) {
+			result = NTFS_UNSUPPORTED;
+		} else {
+			_phase = NTFSFileSystemLoading;
+			reserved = YES;
+		}
+	}
+	if (!reserved) {
+		reply(nil, ntfs_error(result));
+		return;
+	}
+	result = ntfs_native_access_mode(options.taskOptions, &selected);
+	if (result == NTFS_OK && selected == NTFSNativeAccessUnselected) {
+		failure = [NSError errorWithDomain:NSPOSIXErrorDomain code:EACCES userInfo:nil];
+	} else if (result == NTFS_OK && selected != NTFSNativeAccessImageEditing) {
+		result = NTFS_UNSUPPORTED;
+	} else if (result == NTFS_OK) {
+		result = ntfs_native_image_options(options.taskOptions);
+	}
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+	if (@available(macOS 27.0, *)) {
+		modern = YES;
+	}
+#endif
+	if (failure == nil && result == NTFS_OK && !modern) {
+		result = NTFS_UNSUPPORTED;
+	}
+	if (failure == nil) {
+		failure = ntfs_error(result);
+	}
+	if (failure == nil) {
+		/* Policy is complete before scope, open, claim or recovery. Keep the
+		 * daemon's original resource; no URL reconstruction or forced load. */
+		image = [self newImageTransportWithResource:resource error:&failure];
+		failure = ntfs_native_result_error(image, failure);
+	}
+	if (failure == nil) {
+		loaded = ntfs_image_editing_volume_create(image, &failure);
+		failure = ntfs_native_result_error(loaded, failure);
+		if (failure == nil && !image.isAvailable) {
+			failure = ntfs_error(NTFS_IO);
+		}
+	}
+	if (failure != nil && loaded != nil) {
+		[loaded invalidate];
+		loaded = nil;
+	}
+	@synchronized(self) {
+		if (failure == nil) {
+			_volume = loaded;
+			_resource = resource;
+			_resourceOwner = nil;
+			self.containerStatus = FSContainerStatus.ready;
+		} else {
+			self.containerStatus = [FSContainerStatus blockedWithStatus:failure];
+		}
+		_phase = NTFSFileSystemIdle;
+	}
+	reply(loaded, failure);
+}
+
 - (void)unloadResource:(FSResource *)resource
 	       options:(FSTaskOptions *)options
 	  replyHandler:(void (^)(NSError *))reply
@@ -218,12 +351,17 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 	NTFSVolume *volume = nil;
 	enum ntfs_result result = NTFS_OK;
 	BOOL reserved = NO;
+	void (^retire)(void);
 
 	(void)options;
 	@synchronized(self) {
 		if (_phase != NTFSFileSystemIdle) {
 			result = NTFS_BUSY;
-		} else if (_resource != nil && _resource != resource) {
+		} else if (_resource != nil && _resource != resource &&
+		    !([_resource isKindOfClass:FSPathURLResource.class] &&
+			[resource isKindOfClass:FSPathURLResource.class] &&
+			[((FSPathURLResource *)_resource).url
+			    isEqual:((FSPathURLResource *)resource).url])) {
 			result = NTFS_INVALID;
 		} else {
 			_phase = NTFSFileSystemUnloading;
@@ -231,18 +369,26 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 			reserved = YES;
 		}
 	}
-	if (reserved) {
-		[volume invalidate];
-		@synchronized(self) {
-			_volume = nil;
-			_resource = nil;
-			_resourceOwner = nil;
-			_phase = NTFSFileSystemIdle;
-			self.containerStatus =
-			    [FSContainerStatus notReadyWithStatus:ntfs_error(NTFS_STALE)];
-		}
+	if (!reserved) {
+		reply(ntfs_error(result));
+		return;
 	}
-	reply(ntfs_error(result));
+	retire = ^{
+	  @synchronized(self) {
+		  self->_volume = nil;
+		  self->_resource = nil;
+		  self->_resourceOwner = nil;
+		  self->_phase = NTFSFileSystemIdle;
+		  self.containerStatus =
+		      [FSContainerStatus notReadyWithStatus:ntfs_error(NTFS_STALE)];
+	  }
+	  reply(nil);
+	};
+	if (volume == nil) {
+		retire();
+	} else {
+		[volume invalidateWithReplyHandler:retire];
+	}
 }
 
 - (NSProgress *)completeRejectedTask:(FSTask *)task error:(NSError *)failure
@@ -296,6 +442,8 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 		if (result == NTFS_OK) {
 			if (_phase != NTFSFileSystemIdle) {
 				result = NTFS_BUSY;
+			} else if (_volume.nativeImageEditing) {
+				result = NTFS_UNSUPPORTED;
 			} else if (_volume == nil || _resourceOwner == nil) {
 				result = NTFS_STALE;
 			} else {

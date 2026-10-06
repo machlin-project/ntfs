@@ -3,7 +3,8 @@
 The implementation now includes a private owning C writer for initialized data,
 modified/changed times and the archive bit, and a private native redo/compensation
 recovery executor. Both execute real persistence on offline Windows-source clones.
-They do not yet admit a writable FSKit product. The immutable environment has no
+The separate authorized-image FSKit owner passes installed bounded overwriting;
+general NTFS mutation remains unsupported. The immutable environment has no
 write method; the public data-only owner keeps its narrower
 [DATA-OVERWRITE.md](DATA-OVERWRITE.md) contract.
 
@@ -83,7 +84,7 @@ and interrupted recovery use the same permanent poison contract. A settled reope
 performs no writes and one real persistence barrier. Arbitrary native transaction
 families and general checkpoint/truncation remain outside this bounded contract.
 
-All 174 fatal ASan/UBSan suites, selected-Xcode style and both freestanding targets
+All 175 fatal ASan/UBSan suites, selected-Xcode style and both freestanding targets
 under the 2-KiB frame ceiling pass. Independent complete FILE/page goldens cover
 metadata planning, tail copies, compensation and retained roots. The writer tests
 110 write/barrier interruption profiles through actual C recovery. A further 120
@@ -101,27 +102,54 @@ conversion, structural checks and comparison pass; source images remain frozen
 and unchanged. The complete C-written initialized-data/timestamp image now also
 passes a fresh Windows boot, exact files/ADS/time, preserved identity/ACL,
 read-only chkdsk and healthy this-boot events. First-clean and both-clean
-retained-root images pass separately. The executed loser/winner native cases are
-still in progress. Earlier unobservable VM attempts and failed event-provider
+retained-root images pass separately. The actual C-executed loser/winner recovery
+results now pass the same fresh native checks, and the original baseline disk and
+its actual loaded boot are restored and verified. Earlier unobservable VM attempts and failed event-provider
 queries remain failures; fresh native wevtutil XML closes the event-observation
 gap for the accepted cases. The active VM disk is not edited while open.
 
-The private FSKit authorized-image owner now executes the same writer and real
-persistence, closes every immutable reader before mutation, and shares the core
-allocation cap across view replacement. Stable FSItems rebind a fresh view and
-metadata after writing. Complete-image, fresh-stat, zero-write reopen, post-commit
-allocation refusal/retry and reentrant mutation-drain checks pass within 56
-component groups, with eleven runtime SKIPs. It retains caller exclusion of
-uncooperative access/mappings; it is not a block-device or installed sandbox/cache
-admission result. The new app build/settings query timed out before compilation;
-component compilation does not qualify universal app products.
+The FSKit authorized-image owner executes the same writer and real persistence,
+closes every immutable reader before mutation and shares the core allocation cap
+across fresh views. Component tests cover durable completion, retry after
+allocation refusal and reentrant drain. The installed signed route independently
+passes native owner writes, root/nobody open refusal, observer/shared mappings,
+two fresh saved-URL mounts and ordinary teardown. Current components pass 59 host
+groups with thirteen runtime SKIPs and all 76 native groups with zero SKIPs and
+871 unchanged inputs. Scope restoration and installed kernel cache outcomes come
+from actual native tests, not numerical component credentials. Exclusivity still
+requires caller exclusion of uncooperative access; device writing remains closed.
 
-Next acceptance must qualify the new tail-copy/retained-root writer and recovery
-at every publication boundary in Windows, then admit the authorized image route
-with installed scope validation and coherent native item/cache lifetimes.
-Writable FSKit, allocation,
-resize and namespace mutations remain under implementation. Boot stills do not
-establish continuous video; unavailable event-provider queries remain unavailable.
+Test-only real-image interruption capture reserves its event bytes before owner
+admission and distinguishes attempted native I/O from an injected zero-prefix
+failure. A new focused sanitized suite passes 105 exact transfer/full-image
+profiles, complete metadata/data validation and unchanged zero-write reopen.
+Persistence failures are injected after a real barrier; this does not model loss
+of pending device-cache writes. Seven frozen native-source pilot VHDs likewise pass
+C recovery and complete partition/virtual-disk comparisons. They use unique GPT
+container identities without changing unrelated filesystem bytes. All seven
+pilot images and all 110 native writer-prefix/persistence-error images now pass
+Windows VHD recovery, exact files/ADS/time/identity/ACL, clean state, read-only
+chkdsk and independent original event/input review. Native interrupted recovery
+additionally has 264 actual C profiles (260 faults and four complete cases),
+complete partition/virtual-disk validation and idempotent reopen. Eleven original
+Windows batches pass 242 cases; a fresh final batch passes the remaining 22 after
+the VM's external stop. Main independently verifies all 418 original events,
+including 264 matching healthy observations and 154 exactly predicted USA warnings,
+with no unrelated warning or repair. The original interrupted invocation and
+failed immediate event review remain retained. Delayed native queries use the
+same original final-22 mount interval; no test image is remounted. Complete bounded
+native interrupted recovery now passes. Constructed sector-prefix/error states
+remain distinct from cold boot or a hardware power interruption.
+
+The installed authorized-image route now passes real scope restoration,
+authenticated owner writes and root/nobody open refusal, coherent observer/shared
+mappings, ordinary teardown and two fresh mounts using one saved URL through the
+CLI. The exact postimage passes native Windows file/ADS/time/identity/ACL,
+read-only chkdsk, clean-state and raw healthy-event review. All 76 native
+component groups pass with zero SKIPs. ACCEPTANCE.md owns the complete reports.
+Allocation/free, resize, resident/sparse/compressed/ADS writes, namespace mutation,
+general journal histories and block-device writing remain under implementation.
+Hardware power interruptions remain unqualified.
 
 Evidence is retained under `artifacts/overwrite/`, including
 `windows-C-wal-probes-20261006/`, `native-compensation-witness-20261006/`,

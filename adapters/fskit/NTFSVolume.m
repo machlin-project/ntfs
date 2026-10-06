@@ -4,10 +4,12 @@
 #import "NTFSImageVolume.h"
 #include "../../core/write_internal.h"
 #include <errno.h>
+#include <os/log.h>
 #include <unistd.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <time.h>
 #include <ntfs/wof.h>
 
 enum {
@@ -47,6 +49,31 @@ invalid_directory_cookie(void)
 	return [NSError errorWithDomain:NSPOSIXErrorDomain
 				   code:FSErrorInvalidDirectoryCookie
 			       userInfo:nil];
+}
+
+static NSError *
+image_access_denied(void)
+{
+	return [NSError errorWithDomain:NSPOSIXErrorDomain code:EACCES userInfo:nil];
+}
+
+static id
+image_write_failure(NSError **error, enum ntfs_result result)
+{
+	if (error != NULL) {
+		*error = ntfs_error(result);
+	}
+	return nil;
+}
+
+static BOOL
+image_file_write_type(const struct ntfs_stat *stat)
+{
+	return !stat->directory && !stat->reparse &&
+	    (stat->reference & NTFS_REFERENCE_RECORD_MASK) >= NTFS_FIRST_USER_RECORD &&
+	    (stat->file_attributes &
+		(NTFS_FILE_READ_ONLY | NTFS_FILE_SYSTEM | NTFS_FILE_COMPRESSED |
+		    NTFS_FILE_ENCRYPTED | NTFS_FILE_SPARSE)) == 0;
 }
 
 static FSDirectoryCookie
@@ -216,6 +243,7 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 	uint64_t parentReference;
 	struct ntfs_stat stat;
 	struct ntfs_link_counts links;
+	FSVolumeOpenModes nativeOpenModes;
 }
 @property(strong) NTFSVolume *owner;
 @end
@@ -267,11 +295,43 @@ item_id(uint64_t reference)
 - (enum ntfs_result)ensureImageView;
 - (void)finishUnmountWithReplyHandler:(void (^)(void))reply;
 - (void)attachImageTransport:(NTFSImageTransport *)transport
-		  writeOwner:(struct ntfs_overwrite *)owner;
+		  writeOwner:(struct ntfs_overwrite *)owner
+	       nativeEditing:(BOOL)editing;
 @end
 
-NTFSVolume *
-ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
+static enum ntfs_result
+native_access_selection(NSArray<NSString *> *arguments, NTFSNativeAccessMode current, BOOL editing,
+    NTFSNativeAccessMode *selected)
+{
+	NTFSNativeAccessMode requested;
+	enum ntfs_result result;
+
+	*selected = current;
+	result = ntfs_native_access_mode(arguments, &requested);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (requested == NTFSNativeAccessImageEditing && !editing) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (current != NTFSNativeAccessUnselected && requested != NTFSNativeAccessUnselected &&
+	    requested != current) {
+		return NTFS_INVALID;
+	}
+	if (editing) {
+		result = ntfs_native_image_options(arguments);
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
+	if (requested != NTFSNativeAccessUnselected) {
+		*selected = requested;
+	}
+	return NTFS_OK;
+}
+
+static NTFSVolume *
+image_volume_create(NTFSImageTransport *transport, BOOL editing, NSError **error)
 {
 	struct ntfs_overwrite_environment environment;
 	struct ntfs_overwrite_admission *admission = NULL;
@@ -311,7 +371,9 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 		if (volume == nil) {
 			result = NTFS_NO_MEMORY;
 		} else {
-			[volume attachImageTransport:transport writeOwner:owner];
+			[volume attachImageTransport:transport
+					  writeOwner:owner
+				       nativeEditing:editing];
 		}
 	}
 	if (result != NTFS_OK) {
@@ -323,6 +385,18 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 		*error = ntfs_error(result);
 	}
 	return volume;
+}
+
+NTFSVolume *
+ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
+{
+	return image_volume_create(transport, NO, error);
+}
+
+NTFSVolume *
+ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
+{
+	return image_volume_create(transport, YES, error);
 }
 
 @implementation NTFSVolume {
@@ -349,6 +423,7 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 	enum ntfs_result _mountError, _checkFailure;
 	NTFSImageTransport *_imageTransport;
 	struct ntfs_overwrite *_writeOwner;
+	BOOL _nativeImageEditing, _nativeReplyPreparing;
 	NSUInteger _readOperations;
 	BOOL _imageViewPending, _imageViewOpening, _imageMutationActive;
 	enum ntfs_result _itemAdmission;
@@ -611,10 +686,17 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 
 - (void)attachImageTransport:(NTFSImageTransport *)transport
 		  writeOwner:(struct ntfs_overwrite *)owner
+	       nativeEditing:(BOOL)editing
 {
 	NSAssert(_imageTransport == nil && _writeOwner == NULL, @"NTFS image owner binding");
 	_imageTransport = transport;
 	_writeOwner = owner;
+	_nativeImageEditing = editing;
+	if (editing) {
+		_nativeAccessMode = NTFSNativeAccessImageEditing;
+		_nativeUserID = transport.fileOwnerUserID;
+		_nativeGroupID = transport.fileOwnerGroupID;
+	}
 }
 
 - (enum ntfs_result)ensureImageView
@@ -723,7 +805,7 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 			if (_imageTransport == nil || _writeOwner == NULL) {
 				return NTFS_UNSUPPORTED;
 			}
-			if (_readOperations != 0 || _imageViewOpening) {
+			if (_readOperations != 0 || _imageViewOpening || _nativeReplyPreparing) {
 				return NTFS_BUSY;
 			}
 			result = [self ensureImageView];
@@ -795,6 +877,271 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 	} @finally {
 		[_publicationLock unlock];
 	}
+}
+
+- (BOOL)nativeImageEditing
+{
+	return _nativeImageEditing;
+}
+
+- (NSError *)imageCallerErrorWithRealUserID:(uid_t)realUserID effectiveUserID:(uid_t)effectiveUserID
+{
+	/* FSContext supplies these values in native handlers. No process-global
+	 * credential, group membership or privileged bypass grants image access. */
+	return _nativeImageEditing &&
+		(realUserID != _nativeUserID || effectiveUserID != _nativeUserID)
+	    ? image_access_denied()
+	    : nil;
+}
+
+- (NSError *)checkImageAccessToItem:(FSItem *)item
+		    requestedAccess:(FSAccessMask)access
+			 realUserID:(uid_t)realUserID
+		    effectiveUserID:(uid_t)effectiveUserID
+			    allowed:(BOOL *)allowed
+{
+	NTFSItem *value;
+	FSAccessMask supported;
+	NSError *error;
+	enum ntfs_result result;
+
+	if (allowed == NULL) {
+		return ntfs_error(NTFS_INVALID);
+	}
+	*allowed = NO;
+	if (!_nativeImageEditing) {
+		return ntfs_error(NTFS_READ_ONLY);
+	}
+	/* Deny a different native principal before opening an immutable view. */
+	error = [self imageCallerErrorWithRealUserID:realUserID effectiveUserID:effectiveUserID];
+	if (error != nil) {
+		return nil;
+	}
+	@synchronized(self) {
+		result = [self ensureImageView];
+		if (result == NTFS_OK) {
+			result = [self admissionResult];
+		}
+		if (result != NTFS_OK) {
+			return ntfs_error(result);
+		}
+		value = [self checkedItem:item];
+		if (value == nil) {
+			return ntfs_error(_itemAdmission);
+		}
+		supported = FSAccessReadData | FSAccessReadAttributes | FSAccessReadXattr |
+		    FSAccessReadSecurity;
+		if (value->stat.directory && value->linkTarget == nil) {
+			supported |= FSAccessSearch;
+		} else if (image_file_write_type(&value->stat) && value->linkTarget == nil) {
+			supported |= FSAccessWriteData;
+		}
+		*allowed = (access & ~supported) == 0;
+		return nil;
+	}
+}
+
+- (NSError *)openImageItem:(FSItem *)item
+		 withModes:(FSVolumeOpenModes)modes
+		realUserID:(uid_t)realUserID
+	   effectiveUserID:(uid_t)effectiveUserID
+{
+	__block NSError *error = nil;
+
+	[self performItemPublication:^{
+	  FSAccessMask access = 0;
+	  BOOL allowed = NO;
+	  NTFSItem *value;
+
+	  @synchronized(self) {
+		  if (modes == 0 ||
+		      (modes & ~(FSVolumeOpenModesRead | FSVolumeOpenModesWrite)) != 0) {
+			  error = ntfs_error(NTFS_INVALID);
+			  return;
+		  }
+		  if ((modes & FSVolumeOpenModesRead) != 0) {
+			  access |= FSAccessReadData;
+		  }
+		  if ((modes & FSVolumeOpenModesWrite) != 0) {
+			  access |= FSAccessWriteData;
+		  }
+		  error = [self checkImageAccessToItem:item
+				       requestedAccess:access
+					    realUserID:realUserID
+				       effectiveUserID:effectiveUserID
+					       allowed:&allowed];
+		  if (error != nil || !allowed) {
+			  error = error != nil ? error : image_access_denied();
+			  return;
+		  }
+		  value = [self checkedItem:item];
+		  if (value == nil) {
+			  error = ntfs_error(self->_itemAdmission);
+		  } else {
+			  value->nativeOpenModes |= modes;
+		  }
+	  }
+	}];
+	return error;
+}
+
+- (NSError *)closeImageItem:(FSItem *)item keepingModes:(FSVolumeOpenModes)modes
+{
+	__block NSError *error = nil;
+
+	[self performItemPublication:^{
+	  NTFSItem *value;
+
+	  @synchronized(self) {
+		  if (![item isKindOfClass:NTFSItem.class] || ((NTFSItem *)item).owner != self) {
+			  error = ntfs_error(NTFS_STALE);
+			  return;
+		  }
+		  value = (NTFSItem *)item;
+		  if ((modes & ~value->nativeOpenModes) != 0) {
+			  error = ntfs_error(NTFS_INVALID);
+		  } else {
+			  /* Final mmap close removes the last capability without allocating
+			   * a view or depending on new caller authorization. */
+			  value->nativeOpenModes = modes;
+		  }
+	  }
+	}];
+	return error;
+}
+
+- (NSError *)imageReadErrorForItem:(FSItem *)item
+{
+	if (!_nativeImageEditing) {
+		return nil;
+	}
+	@synchronized(self) {
+		if (![item isKindOfClass:NTFSItem.class] || ((NTFSItem *)item).owner != self) {
+			return ntfs_error(NTFS_STALE);
+		}
+		/* A write-only descriptor also needs native page-in for a partial-page
+		 * write. The kernel retains the descriptor's user-visible access mode. */
+		return ((NTFSItem *)item)->nativeOpenModes == 0 ? image_access_denied() : nil;
+	}
+}
+
+- (id)writeImageContents:(NSData *)contents
+		  toFile:(FSItem *)item
+		atOffset:(off_t)offset
+		fileTime:(uint64_t)fileTime
+	    prepareReply:(id (^)(FSItemAttributes *, size_t))prepare
+		   error:(NSError **)error
+{
+	FSItemAttributes *attributes = nil;
+	NSError *attributeError = nil;
+	NTFSItem *value;
+	struct ntfs_time time;
+	size_t completed = 0;
+	id prepared = nil;
+	enum ntfs_result result;
+
+	if (error != NULL) {
+		*error = nil;
+	}
+	[_publicationLock lock];
+	@try {
+		@synchronized(self) {
+			if (!_nativeImageEditing) {
+				return image_write_failure(error, NTFS_READ_ONLY);
+			}
+			if (![contents isKindOfClass:NSData.class] || offset < 0 ||
+			    prepare == nil || fileTime > INT64_MAX) {
+				return image_write_failure(error, NTFS_INVALID);
+			}
+			if (contents.length > NTFS_OVERWRITE_MAX_BYTES) {
+				return image_write_failure(error, NTFS_RANGE);
+			}
+			if (_nativeReplyPreparing) {
+				return image_write_failure(error, NTFS_BUSY);
+			}
+			if (![item isKindOfClass:NTFSItem.class] ||
+			    ((NTFSItem *)item).owner != self) {
+				return image_write_failure(error, NTFS_STALE);
+			}
+			value = (NTFSItem *)item;
+			if ((value->nativeOpenModes & FSVolumeOpenModesWrite) == 0) {
+				if (error != NULL) {
+					*error = image_access_denied();
+				}
+				return nil;
+			}
+			_nativeReplyPreparing = YES;
+			@try {
+				attributes = [self attributes:item error:&attributeError];
+				if (attributes == nil) {
+					if (error != NULL) {
+						*error = attributeError;
+					}
+					return nil;
+				}
+				if (contents.length != 0) {
+					ntfs_decode_time(fileTime, &time);
+					attributes.modifyTime =
+					    (struct timespec){time.seconds, time.nanoseconds};
+					attributes.changeTime = attributes.modifyTime;
+				}
+				prepared = prepare(attributes, contents.length);
+				if (prepared == nil) {
+					return image_write_failure(error, NTFS_NO_MEMORY);
+				}
+			} @finally {
+				_nativeReplyPreparing = NO;
+			}
+			if ((value->nativeOpenModes & FSVolumeOpenModesWrite) == 0) {
+				if (error != NULL) {
+					*error = image_access_denied();
+				}
+				return nil;
+			}
+			result = [self overwriteImageItem:item
+						   offset:offset
+						    bytes:contents.bytes
+						   length:contents.length
+						 fileTime:fileTime
+						completed:&completed];
+			if (result != NTFS_OK) {
+				return image_write_failure(error, result);
+			}
+			NSAssert(
+			    completed == contents.length, @"Complete NTFS image write byte count");
+			return prepared;
+		}
+	} @finally {
+		[_publicationLock unlock];
+	}
+}
+
+- (enum ntfs_result)currentImageFileTime:(uint64_t *)fileTime
+{
+	struct timespec time;
+	uint64_t seconds, ticks, fraction;
+
+	if (fileTime == NULL) {
+		return NTFS_INVALID;
+	}
+	*fileTime = 0;
+	if (clock_gettime(CLOCK_REALTIME, &time) != 0) {
+		return NTFS_IO;
+	}
+	if (time.tv_sec < 0 || time.tv_nsec < 0 || (uint64_t)time.tv_nsec >= NSEC_PER_SEC) {
+		return NTFS_RANGE;
+	}
+	seconds = (uint64_t)time.tv_sec;
+	if (seconds > (INT64_MAX - NTFS_TIME_EPOCH) / NTFS_TIME_TICKS) {
+		return NTFS_RANGE;
+	}
+	ticks = NTFS_TIME_EPOCH + seconds * NTFS_TIME_TICKS;
+	fraction = (uint64_t)time.tv_nsec / (NSEC_PER_SEC / NTFS_TIME_TICKS);
+	if (fraction > INT64_MAX - ticks) {
+		return NTFS_RANGE;
+	}
+	*fileTime = ticks + fraction;
+	return NTFS_OK;
 }
 
 - (FSItem *)lookup:(FSFileName *)name
@@ -1107,8 +1454,20 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 		__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
 		enum ntfs_result status;
 		FSItem *value;
+		NTFSNativeAccessMode selected;
+		NTFSVolumeLifecycle state;
 
 		*error = nil;
+		state = self.lifecycle;
+		if (_nativeImageEditing &&
+		    (state == NTFSVolumeLoaded || state == NTFSVolumeActive)) {
+			status =
+			    native_access_selection(arguments, _nativeAccessMode, YES, &selected);
+			if (status != NTFS_OK) {
+				*error = ntfs_error(status);
+				return nil;
+			}
+		}
 
 		status = [self beginOperation:&operation
 				   readBudget:&budget
@@ -1287,6 +1646,7 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 	item->node = NULL;
 	item->linkTarget = nil;
 	item->directoryPath = nil;
+	item->nativeOpenModes = 0;
 	item.owner = nil;
 }
 
@@ -1315,6 +1675,9 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 
 - (BOOL)reclaimIfEligible:(FSItem *)item cleanup:(void (^)(void))cleanup
 {
+	if ([item isKindOfClass:NTFSItem.class] && ((NTFSItem *)item)->nativeOpenModes != 0) {
+		return NO;
+	}
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 	if (@available(macOS 27.0, *)) {
 		return [item tryReclaimWithBlock:cleanup];
@@ -1372,6 +1735,26 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 		}
 	} @finally {
 		[_publicationLock unlock];
+	}
+}
+
+- (void)invalidateWithReplyHandler:(void (^)(void))reply
+{
+	BOOL deferred;
+
+	[self invalidate];
+	@synchronized(self) {
+		deferred = _imageMutationActive;
+	}
+	if (deferred) {
+		/* Reentrant native deactivation cannot wait on its own C call. The
+		 * other execution context waits for publication and completes teardown
+		 * before allowing FSKit to acknowledge that the volume is inactive. */
+		dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		  [self invalidateWithReplyHandler:reply];
+		});
+	} else {
+		reply();
 	}
 }
 
@@ -1745,13 +2128,13 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 			*error = ntfs_error(NTFS_IO);
 			return nil;
 		}
-		result = ntfs_native_access_mode(arguments, &requested);
+		result = native_access_selection(
+		    arguments, _nativeAccessMode, _nativeImageEditing, &requested);
 		if (result != NTFS_OK) {
 			*error = ntfs_error(result);
 			return nil;
 		}
-		if (requested == NTFSNativeAccessUnselected &&
-		    _nativeAccessMode == NTFSNativeAccessUnselected) {
+		if (requested == NTFSNativeAccessUnselected) {
 			*error = [NSError
 			    errorWithDomain:NSPOSIXErrorDomain
 				       code:EACCES
@@ -1786,7 +2169,9 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 		if (item != nil) {
 			[_lifecycleLock lock];
 			if (_lifecycle == NTFSVolumeLoaded || _lifecycle == NTFSVolumeActive) {
-				_nativeAccessMode = NTFSNativeAccessExtraction;
+				if (_nativeAccessMode == NTFSNativeAccessUnselected) {
+					_nativeAccessMode = requested;
+				}
 				_active = YES;
 				_lifecycle = NTFSVolumeActive;
 			} else {
@@ -1959,6 +2344,9 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 	attrs.gid = _nativeGroupID;
 	attrs.mode =
 	    stat->directory && !link ? NTFS_READ_ONLY_DIRECTORY_MODE : NTFS_READ_ONLY_FILE_MODE;
+	if (_nativeImageEditing && !link && image_file_write_type(stat)) {
+		attrs.mode |= S_IWUSR;
+	}
 	attrs.type =
 	    link ? FSItemTypeSymlink : (stat->directory ? FSItemTypeDirectory : FSItemTypeFile);
 	attrs.fileID = item_id(stat->reference);
@@ -2665,7 +3053,15 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 	}
 	@synchronized(self) {
 		state = self.lifecycle;
-		result = [self ensureImageView];
+		result = NTFS_OK;
+		if (_nativeImageEditing &&
+		    (state == NTFSVolumeActive || state == NTFSVolumeUnmounted)) {
+			result = native_access_selection(
+			    options.taskOptions, _nativeAccessMode, YES, &requested);
+		}
+		if (result == NTFS_OK) {
+			result = [self ensureImageView];
+		}
 		if (result == NTFS_OK) {
 			result = state == NTFSVolumeInvalidating ||
 				state == NTFSVolumeInvalidated || state == NTFSVolumeDraining ||
@@ -2682,7 +3078,8 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 			result = NTFS_IO;
 		}
 		if (result == NTFS_OK) {
-			result = ntfs_native_access_mode(options.taskOptions, &requested);
+			result = native_access_selection(options.taskOptions, _nativeAccessMode,
+			    _nativeImageEditing, &requested);
 		}
 		if (result == NTFS_OK) {
 			[_lifecycleLock lock];
@@ -2697,6 +3094,11 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 			}
 		}
 		error = ntfs_error(result);
+	}
+	if (_nativeImageEditing) {
+		os_log_info(OS_LOG_DEFAULT,
+		    "NTFS image mount reply: status=%u state=%lu options=%lu", (unsigned)result,
+		    (unsigned long)state, (unsigned long)options.taskOptions.count);
 	}
 	reply(error);
 }
@@ -2776,6 +3178,13 @@ ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
 
 - (FSMountOptions)requestedMountOptions
 {
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+	if (@available(macOS 27.0, *)) {
+		if (_nativeImageEditing) {
+			return 0;
+		}
+	}
+#endif
 	return FSMountOptionsReadOnly;
 }
 

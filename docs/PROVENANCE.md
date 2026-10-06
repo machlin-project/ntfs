@@ -1,5 +1,34 @@
 # Code provenance
 
+The bounded initialized-data writer, native timestamp/archive transaction,
+tail-copy publication, redo/compensation executor and FSKit image integration are
+original repository implementations. Format facts use the original field research
+already cited below, plus retained Windows-authored test images and journal packets.
+The original native compensation packet supplies a wire witness; no Windows or
+NTFS-3G implementation code is imported. This is not a source-isolated clean-room
+claim. Standalone NTFS-3G tools under ignored vendor state are used only as external
+read/comparison utilities for documented offline corpora.
+
+The app image picker, saved-bookmark commands and versioned VM CLI harness are
+original implementations. They create and positively restore genuine app-scope
+bookmarks through Apple's documented Foundation APIs; no bookmark or sandbox
+authority is fabricated. The picker and mounting workflow use Apple's documented
+[path URL resource](https://developer.apple.com/documentation/fskit/fspathurlresource)
+and [single-volume client mount](https://developer.apple.com/documentation/fskit/fsclient/mountsinglevolume(resource:bundleid:options:completionhandler:))
+interfaces. Apple's original
+[mount command resource selection](https://github.com/apple-oss-distributions/diskdev_cmds/blob/main/disklib/fskit_support.m)
+explains the observed preference for block resources in mixed-resource modules.
+That command implementation is inspected for diagnosis only; no Apple mounting
+implementation or foreign NTFS implementation is copied into the product.
+
+Whole synthetic transfer goldens are independently authored. Native-image
+interruption fixtures also use frozen C-encoded frames, separately checking USA
+guard selection, physical routing, complete partition/virtual-disk bytes and
+source preservation. Their native Windows acceptance is an independent result:
+Windows mounts the exact prepared image, verifies files/ADS/time/identity/ACL,
+runs read-only chkdsk and supplies bounded original event XML. A byte match with
+a frozen encoder output alone is not native recovery evidence.
+
 The immutable recovery-input composition, exact checkpoint/history binding,
 transaction lifetime map, root verification and counted volume allocation context
 are original repository code over the existing owned journal components. Original

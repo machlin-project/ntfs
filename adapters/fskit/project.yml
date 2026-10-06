@@ -73,9 +73,11 @@ targets:
     platform: macOS
     sources:
       - App.swift
+      - ImageCommands.swift
     dependencies:
       - target: NTFSExtension
         embed: true
+      - sdk: FSKit.framework
     settings:
       base:
         PRODUCT_NAME: Machlin NTFS

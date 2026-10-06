@@ -11,6 +11,13 @@ handoff, not a production NTFS driver. Build, component tests and installed nati
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
+The [native ordinary-file journal continuation](docs/NATIVE-WRITE-JOURNAL.md)
+now proves bounded redo/undo and torn-FILE recovery in Windows and adds private C
+metadata/page planning with independent byte goldens. A separate-page checkpoint
+interruption fails native boot health and remains an explicit write-admission gate.
+These helpers perform no device writes; timestamped filesystem and FSKit writing
+remain under implementation.
+
 An experimental separate [data-overwrite owner](docs/DATA-OVERWRITE.md) now writes
 bounded initialized ordinary file ranges on private images. Complete byte comparison,
 169 fatal-sanitizer suites and a Windows cold-boot/file/ADS/chkdsk roundtrip pass.

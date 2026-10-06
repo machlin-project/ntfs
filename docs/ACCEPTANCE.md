@@ -1,5 +1,37 @@
 # Acceptance
 
+## Native ordinary-file snapshot and journal planning
+
+The [native journal continuation](NATIVE-WRITE-JOURNAL.md) adds private C FILE and
+three-page log planning. It performs no device writes and does not admit FSKit
+mutations. All 171 fatal-ASan/UBSan suites, selected-Xcode style and both
+freestanding architecture checks under the 2-KiB frame ceiling pass. Focused
+checks include 23 complete metadata profiles, required allocation/read failures,
+ten independent complete record/page goldens, refusal/retry and sector-mix checks.
+The read-only native-plan diagnostic also produces ten C frames from the unchanged
+original Windows volume after full validation and complete quiet-history binding.
+Those frames have not themselves undergone a Windows recovery roundtrip.
+
+| Native experiment | Actual evidence | Disposition |
+| --- | --- | --- |
+| Timestamp update without MFT binding | Original time retained; boot requested full check | FAIL, retained |
+| MFT-bound timestamp update | Expected new time, four content hashes, ADS, identity/ACL, chkdsk and healthy boot events | PASS for that exact family |
+| Four complete/torn FILE redo/undo states | Confirmed histories select new time; unconfirmed histories select original time; all native checks pass | PASS for simulated sector-boundary states |
+| Separate prepare and commit pages | Correct undo or redo despite original RSTR endpoint | PASS for bounded states |
+| Empty checkpoint before RSTR publication | Later native file/chkdsk pass, but initial T event requests full offline check | FAIL; blocks complete persistence protocol |
+| First or both clean RSTR copies after complete home/checkpoint | Expected new time and all native checks with healthy boot events | PASS for complete publication states |
+
+Native reports and retained candidates/post-boot images are in
+`artifacts/overwrite/windows-wal-binding-probe-20261006/`,
+`windows-wal-snapshot-probes-20261006/` and
+`windows-wal-pipeline-probes-20261006/`. C checks have separate write-journal
+focused/full-core/native-plan artifact directories. Ordinary shutdown, exact
+original restoration and actual baseline boot/QGA/plaintext-volume verification
+pass after each batch. Stills do not establish continuous boot coverage;
+unavailable event-provider queries are retained without inferring absent repairs.
+These experiments do not qualify hardware power cuts, C replay, a complete durable
+writer, writable FSKit, allocation/resize or namespace changes.
+
 ## Initialized data overwrite continuation
 
 The separate experimental overwrite owner passes complete prewrite validation,

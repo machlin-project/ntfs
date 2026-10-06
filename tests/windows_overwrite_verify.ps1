@@ -21,6 +21,7 @@ $report = [ordered]@{
     checks = @()
     fskitWritesQualified = $false
 }
+$timeMismatch = $false
 try {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -77,6 +78,18 @@ try {
         if (-not $passed) {
             throw ('Native file bytes disagree: ' + $entry.relativePath)
         }
+        if ($entry.PSObject.Properties.Name -contains 'lastWriteFileTime') {
+            if ($entry.lastWriteFileTime -notmatch '^[0-9]{1,19}$') {
+                throw 'A bounded native file-time observation is required.'
+            }
+            $actualTime = $file.LastWriteTimeUtc.ToFileTimeUtc().ToString([Globalization.CultureInfo]::InvariantCulture)
+            $report.lastWriteTime = [ordered]@{ relativePath=$entry.relativePath;
+                fileTime=$actualTime; expectedFileTime=$entry.lastWriteFileTime;
+                passed=($actualTime -eq $entry.lastWriteFileTime) }
+            if (-not $report.lastWriteTime.passed) {
+                $timeMismatch = $true
+            }
+        }
     }
     $stream = $expected.namedStream
     if ($stream.relativePath -ne 'resident.txt' -or $stream.name -ne 'original-stream' -or
@@ -109,6 +122,9 @@ try {
     $report.chkdsk = [ordered]@{ exitCode=$LASTEXITCODE; output=@($chkdsk | ForEach-Object { "$_" }) }
     if ($report.chkdsk.exitCode -ne 0) {
         throw 'Read-only native chkdsk did not pass.'
+    }
+    if ($timeMismatch) {
+        throw 'Native journal recovery did not publish the expected file time.'
     }
     $report.stage = 'complete'
     $report.success = $true

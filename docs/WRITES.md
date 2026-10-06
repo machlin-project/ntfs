@@ -1,5 +1,13 @@
 # Writable ownership and recovery contract
 
+The [native ordinary-file journal continuation](NATIVE-WRITE-JOURNAL.md) now
+qualifies the MFT binding, full FILE snapshot and timestamp update family with
+Windows redo/undo and torn-home experiments. Separate prepare/commit pages pass,
+but the intermediate empty-checkpoint state requests native repair. Its later
+healthy state and chkdsk do not close that failure. Private C snapshot/page planning
+passes independent byte checks; the owning durable writer and FSKit remain gated
+on recovery and checkpoint publication acceptance.
+
 The experimental separate [initialized-data overwrite owner](DATA-OVERWRITE.md)
 now physically writes already initialized ordinary file ranges on exclusively
 owned private images while preserving every metadata byte. Its actual Windows

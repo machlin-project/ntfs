@@ -1,6 +1,8 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSVolume.h"
 #import "NTFSNames.h"
+#import "NTFSImageVolume.h"
+#include "../../core/write_internal.h"
 #include <errno.h>
 #include <unistd.h>
 #include <limits.h>
@@ -262,7 +264,66 @@ item_id(uint64_t reference)
 - (FSItem *)activateWithArguments:(NSArray<NSString *> *)arguments error:(NSError **)error;
 - (FSItem *)performActivation:(NSArray<NSString *> *)arguments error:(NSError **)error;
 - (enum ntfs_result)operationBudgetResult;
+- (enum ntfs_result)ensureImageView;
+- (void)finishUnmountWithReplyHandler:(void (^)(void))reply;
+- (void)attachImageTransport:(NTFSImageTransport *)transport
+		  writeOwner:(struct ntfs_overwrite *)owner;
 @end
+
+NTFSVolume *
+ntfs_image_volume_create(NTFSImageTransport *transport, NSError **error)
+{
+	struct ntfs_overwrite_environment environment;
+	struct ntfs_overwrite_admission *admission = NULL;
+	__block struct ntfs_write_recovery_report recovered;
+	__block struct ntfs_overwrite *owner = NULL;
+	struct ntfs_environment view;
+	struct ntfs_volume *core = NULL;
+	__attribute__((objc_precise_lifetime)) NTFSResource *resource = nil;
+	NTFSVolume *volume = nil;
+	enum ntfs_result result = NTFS_INVALID;
+
+	if (transport != nil) {
+		environment = [transport overwriteEnvironment];
+		admission =
+		    environment.reader.allocate(environment.reader.context, sizeof(*admission));
+		result = admission == NULL ? NTFS_NO_MEMORY : [transport performExclusiveAccess:^{
+		  return ntfs_write_owner_open(&environment, admission, &recovered, &owner);
+		}];
+		if (admission != NULL) {
+			environment.reader.release(
+			    environment.reader.context, admission, sizeof(*admission));
+		}
+	}
+	if (result == NTFS_OK) {
+		resource = [transport newReadResource];
+		result = resource != nil    ? NTFS_OK
+		    : transport.isAvailable ? NTFS_NO_MEMORY
+					    : NTFS_IO;
+	}
+	if (result == NTFS_OK) {
+		view = [resource environment];
+		result = ntfs_mount(&view, NULL, &core);
+	}
+	if (result == NTFS_OK) {
+		volume = ntfs_volume_create_with_policies(
+		    core, resource, nil, NTFSNativeAccessExtraction);
+		if (volume == nil) {
+			result = NTFS_NO_MEMORY;
+		} else {
+			[volume attachImageTransport:transport writeOwner:owner];
+		}
+	}
+	if (result != NTFS_OK) {
+		(void)ntfs_unmount(core);
+		resource = nil;
+		ntfs_overwrite_close(owner);
+	}
+	if (error != NULL) {
+		*error = ntfs_error(result);
+	}
+	return volume;
+}
 
 @implementation NTFSVolume {
 	struct ntfs_volume *_core;
@@ -286,6 +347,11 @@ item_id(uint64_t reference)
 	BOOL _maintenanceOnly;
 	NTFSVolumeLifecycle _beforeMaintenance;
 	enum ntfs_result _mountError, _checkFailure;
+	NTFSImageTransport *_imageTransport;
+	struct ntfs_overwrite *_writeOwner;
+	NSUInteger _readOperations;
+	BOOL _imageViewPending, _imageViewOpening, _imageMutationActive;
+	enum ntfs_result _itemAdmission;
 }
 
 - (instancetype)initWithCore:(struct ntfs_volume *)core resource:(NTFSResource *)resource
@@ -502,6 +568,10 @@ item_id(uint64_t reference)
 	NTFSVolumeLifecycle state;
 
 	*resource = nil;
+	result = [self ensureImageView];
+	if (result != NTFS_OK) {
+		return result;
+	}
 	if (activating) {
 		state = self.lifecycle;
 		result = state != NTFSVolumeLoaded && state != NTFSVolumeActive ? NTFS_STALE
@@ -526,8 +596,205 @@ item_id(uint64_t reference)
 	if (result != NTFS_OK) {
 		(void)ntfs_operation_end(operation, NULL);
 		*resource = nil;
+	} else {
+		_readOperations++;
 	}
 	return result;
+}
+
+- (void)endReadOperation:(struct ntfs_operation *)operation
+{
+	NSAssert(_readOperations != 0, @"NTFS native operation accounting");
+	(void)ntfs_operation_end(operation, NULL);
+	_readOperations--;
+}
+
+- (void)attachImageTransport:(NTFSImageTransport *)transport
+		  writeOwner:(struct ntfs_overwrite *)owner
+{
+	NSAssert(_imageTransport == nil && _writeOwner == NULL, @"NTFS image owner binding");
+	_imageTransport = transport;
+	_writeOwner = owner;
+}
+
+- (enum ntfs_result)ensureImageView
+{
+	__attribute__((objc_precise_lifetime)) NTFSResource *resource;
+	struct ntfs_environment environment;
+	struct ntfs_volume *core = NULL;
+	struct ntfs_info info;
+	enum ntfs_result result;
+	NTFSVolumeLifecycle state;
+
+	if (!_imageViewPending) {
+		return NTFS_OK;
+	}
+	state = self.lifecycle;
+	if (_imageViewOpening || state == NTFSVolumeWriting) {
+		return NTFS_BUSY;
+	}
+	if (state != NTFSVolumeLoaded && state != NTFSVolumeActive &&
+	    state != NTFSVolumeUnmounted) {
+		return NTFS_STALE;
+	}
+	if (!_imageTransport.isAvailable) {
+		return NTFS_IO;
+	}
+	_imageViewOpening = YES;
+	@try {
+		resource = [_imageTransport newReadResource];
+		if (resource == nil) {
+			return _imageTransport.isAvailable ? NTFS_NO_MEMORY : NTFS_IO;
+		}
+		environment = [resource environment];
+		result = ntfs_mount(&environment, NULL, &core);
+		if (result == NTFS_OK) {
+			ntfs_get_info(core, &info);
+			if (info.serial != _info.serial || info.size_bytes != _info.size_bytes ||
+			    info.cluster_count != _info.cluster_count ||
+			    info.sector_size != _info.sector_size ||
+			    info.cluster_size != _info.cluster_size ||
+			    info.record_size != _info.record_size ||
+			    info.index_size != _info.index_size) {
+				result = NTFS_STALE;
+			}
+		}
+		if (result == NTFS_OK) {
+			_core = core;
+			_resource = resource;
+			_imageViewPending = NO;
+		} else {
+			(void)ntfs_unmount(core);
+			if (result != NTFS_NO_MEMORY) {
+				[_imageTransport invalidate];
+			}
+		}
+		return result;
+	} @finally {
+		_imageViewOpening = NO;
+	}
+}
+
+- (enum ntfs_result)detachImageView
+{
+	NTFSItem *item;
+	enum ntfs_result result;
+
+	for (item in _items.objectEnumerator.allObjects) {
+		[self clearItemCaches:item];
+		ntfs_node_close(item->node);
+		item->node = NULL;
+		/* The path remains a numeric ancestry token. Its old core pointer is
+		 * never followed; rebind it before any native consumer can use it. */
+	}
+	[_paths removeAllObjects];
+	result = ntfs_unmount(_core);
+	if (result == NTFS_OK) {
+		_core = NULL;
+		_resource = nil;
+		_imageViewPending = YES;
+	}
+	return result;
+}
+
+- (enum ntfs_result)overwriteImageItem:(FSItem *)item
+				offset:(off_t)offset
+				 bytes:(const void *)bytes
+				length:(size_t)length
+			      fileTime:(uint64_t)fileTime
+			     completed:(size_t *)completed
+{
+	__block enum ntfs_result result;
+	__block struct ntfs_write_range_report written = {0};
+	NTFSItem *value;
+	uint64_t reference;
+
+	if (completed == NULL) {
+		return NTFS_INVALID;
+	}
+	*completed = 0;
+	[_publicationLock lock];
+	@try {
+		@synchronized(self) {
+			if (self.lifecycle == NTFSVolumeInvalidating ||
+			    self.lifecycle == NTFSVolumeInvalidated) {
+				return NTFS_STALE;
+			}
+			if (_imageTransport == nil || _writeOwner == NULL) {
+				return NTFS_UNSUPPORTED;
+			}
+			if (_readOperations != 0 || _imageViewOpening) {
+				return NTFS_BUSY;
+			}
+			result = [self ensureImageView];
+			if (result == NTFS_OK) {
+				result = [self admissionResult];
+			}
+			if (result != NTFS_OK) {
+				return result;
+			}
+			value = [self checkedItem:item];
+			if (value == nil) {
+				return _itemAdmission;
+			}
+			if (offset < 0 || (length != 0 && bytes == NULL) || fileTime > INT64_MAX) {
+				return NTFS_INVALID;
+			}
+			if (length > NTFS_OVERWRITE_MAX_BYTES) {
+				return NTFS_RANGE;
+			}
+			if (length == 0) {
+				return NTFS_OK;
+			}
+			reference = value->stat.reference;
+			[_lifecycleLock lock];
+			if (_lifecycle == NTFSVolumeActive && _pendingUnmounts == 0) {
+				_lifecycle = NTFSVolumeWriting;
+				result = NTFS_OK;
+			} else {
+				result = NTFS_STALE;
+			}
+			[_lifecycleLock unlock];
+			if (result != NTFS_OK) {
+				return result;
+			}
+			_imageMutationActive = YES;
+			@try {
+				result = [self detachImageView];
+				if (result == NTFS_OK) {
+					result = [_imageTransport performExclusiveAccess:^{
+					  return ntfs_write_existing_range(self->_writeOwner,
+					      reference, (uint64_t)offset, bytes, length, fileTime,
+					      &written);
+					}];
+				}
+				if (written.execution.poisoned) {
+					[_imageTransport invalidate];
+				}
+				if (result == NTFS_OK) {
+					*completed = (size_t)written.completed_bytes;
+				}
+				/* No allocation follows durable completion. The next read mounts
+				 * a fresh immutable view and lazily rebinds its stable FSItem. */
+				return result;
+			} @finally {
+				BOOL invalidating;
+
+				_imageMutationActive = NO;
+				[_lifecycleLock lock];
+				invalidating = _lifecycle == NTFSVolumeInvalidating;
+				if (_lifecycle == NTFSVolumeWriting) {
+					_lifecycle = NTFSVolumeActive;
+				}
+				[_lifecycleLock unlock];
+				if (invalidating) {
+					[self invalidate];
+				}
+			}
+		}
+	} @finally {
+		[_publicationLock unlock];
+	}
 }
 
 - (FSItem *)lookup:(FSFileName *)name
@@ -571,7 +838,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -610,7 +877,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -649,7 +916,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -688,7 +955,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -727,7 +994,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -770,7 +1037,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -818,7 +1085,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -866,7 +1133,7 @@ item_id(uint64_t reference)
 			return value;
 		} @finally {
 			(void)[resource endReadBudget:&budget];
-			(void)ntfs_operation_end(&operation, NULL);
+			[self endReadOperation:&operation];
 		}
 	}
 }
@@ -1073,6 +1340,11 @@ item_id(uint64_t reference)
 	[_publicationLock lock];
 	@try {
 		@synchronized(self) {
+			if (_imageMutationActive) {
+				/* A native transfer can reenter the owner. Admission is already
+				 * closed; release the C owner only after its call has returned. */
+				return;
+			}
 			[_readCachePolicy stop];
 			for (item in _items.objectEnumerator.allObjects) {
 				[self releaseItem:item];
@@ -1089,6 +1361,10 @@ item_id(uint64_t reference)
 			_active = NO;
 			if (_core == NULL) {
 				_resource = nil;
+				ntfs_overwrite_close(_writeOwner);
+				_writeOwner = NULL;
+				_imageTransport = nil;
+				_imageViewPending = NO;
 				[_lifecycleLock lock];
 				_lifecycle = NTFSVolumeInvalidated;
 				[_lifecycleLock unlock];
@@ -1113,15 +1389,123 @@ item_id(uint64_t reference)
 {
 	NTFSItem *value;
 
+	_itemAdmission = NTFS_STALE;
 	if (_core == NULL || !_active || ![item isKindOfClass:NTFSItem.class]) {
 		return nil;
 	}
 	value = (NTFSItem *)item;
-	if (value.owner != self || value->node == NULL) {
+	if (value.owner != self) {
 		return nil;
 	}
+	if (value->node == NULL && _imageTransport != nil) {
+		_itemAdmission = [self rebindImageItem:value];
+		if (_itemAdmission != NTFS_OK) {
+			return nil;
+		}
+	} else if (value->node == NULL) {
+		return nil;
+	}
+	_itemAdmission = NTFS_OK;
 	[self finishReadCaches:value];
 	return value;
+}
+
+- (NTFSDirectoryPath *)rebindImagePath:(NTFSDirectoryPath *)old result:(enum ntfs_result *)result
+{
+	NSMutableArray<NTFSDirectoryPath *> *ancestry = [NSMutableArray array];
+	NTFSDirectoryPath *entry, *path = nil, *found;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stat stat;
+	NSUInteger index;
+
+	*result = NTFS_OK;
+	for (entry = old; entry != nil; entry = entry.parent) {
+		if (ancestry.count >= NTFS_FSKIT_LINK_COMPONENT_LIMIT) {
+			*result = NTFS_RANGE;
+			return nil;
+		}
+		[ancestry addObject:entry];
+	}
+	for (index = ancestry.count; index != 0; index--) {
+		entry = ancestry[index - 1];
+		found = [_paths objectForKey:@(entry.reference)];
+		if (found != nil) {
+			if (found.volume != _core || found.parent.reference != path.reference) {
+				*result = NTFS_CORRUPT;
+				return nil;
+			}
+			path = found;
+			continue;
+		}
+		*result = ntfs_node_open(_core, entry.reference, &node);
+		if (*result == NTFS_OK) {
+			*result = ntfs_node_metadata(node, &stat);
+			if (*result == NTFS_OK && (!stat.directory || stat.reparse)) {
+				*result = NTFS_CORRUPT;
+			}
+		}
+		ntfs_node_close(node);
+		node = NULL;
+		if (*result != NTFS_OK) {
+			return nil;
+		}
+		if (_paths.count >= NTFS_FSKIT_PATH_LIMIT) {
+			*result = NTFS_NO_MEMORY;
+			return nil;
+		}
+		path = [[NTFSDirectoryPath alloc] initWithVolume:_core
+						       reference:entry.reference
+							  parent:path];
+		if (path == nil) {
+			*result = NTFS_NO_MEMORY;
+			return nil;
+		}
+		[_paths setObject:path forKey:@(entry.reference)];
+	}
+	return path;
+}
+
+- (enum ntfs_result)rebindImageItem:(NTFSItem *)item
+{
+	struct ntfs_node *node = NULL;
+	struct ntfs_stat stat;
+	struct ntfs_link_counts links;
+	NTFSDirectoryPath *path = nil;
+	enum ntfs_result result;
+
+	/* The private writer changes initialized data and SI timestamps only. Full
+	 * sequence references, namespace ancestry, reparse targets and allocation
+	 * remain fixed by its validated transaction, not by a same-serial guess. */
+	result = ntfs_node_open(_core, item->stat.reference, &node);
+	if (result == NTFS_OK) {
+		result = ntfs_node_metadata(node, &stat);
+	}
+	if (result == NTFS_OK &&
+	    (stat.directory != item->stat.directory || stat.reparse != item->stat.reparse)) {
+		result = NTFS_STALE;
+	}
+	if (result == NTFS_OK && (!stat.reparse || item->wof)) {
+		result = ntfs_node_stat(node, &stat);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_node_link_counts(node, &links);
+	}
+	if (result == NTFS_OK && item->directoryPath != nil) {
+		path = [self rebindImagePath:item->directoryPath result:&result];
+	}
+	if (result == NTFS_OK) {
+		if (item->linkTarget != nil) {
+			stat.size = item->stat.size;
+			stat.allocated_size = item->stat.allocated_size;
+		}
+		item->node = node;
+		item->stat = stat;
+		item->links = links;
+		item->directoryPath = path;
+	} else {
+		ntfs_node_close(node);
+	}
+	return result;
 }
 
 - (enum ntfs_result)admissionResult
@@ -1301,7 +1685,11 @@ item_id(uint64_t reference)
 	}
 	item = [_items objectForKey:@(path.reference)];
 	if (item != nil) {
-		if ([self checkedItem:item] != item || item->directoryPath != path) {
+		if ([self checkedItem:item] != item) {
+			*error = ntfs_error(_itemAdmission);
+			return nil;
+		}
+		if (item->directoryPath != path) {
 			*error = ntfs_error(NTFS_CORRUPT);
 			return nil;
 		}
@@ -1440,7 +1828,7 @@ item_id(uint64_t reference)
 		}
 		parent = [self checkedItem:directory];
 		if (parent == nil) {
-			*error = ntfs_error(NTFS_STALE);
+			*error = ntfs_error(_itemAdmission);
 			return nil;
 		}
 		if (parent->directoryPath == nil) {
@@ -1550,7 +1938,7 @@ item_id(uint64_t reference)
 		}
 		value = [self checkedItem:item];
 		if (value == nil) {
-			*error = ntfs_error(NTFS_STALE);
+			*error = ntfs_error(_itemAdmission);
 			return nil;
 		}
 		return [self attributesForStat:&value->stat
@@ -1599,7 +1987,7 @@ item_id(uint64_t reference)
 		}
 		value = [self checkedItem:item];
 		if (value == nil) {
-			*error = ntfs_error(NTFS_STALE);
+			*error = ntfs_error(_itemAdmission);
 			return nil;
 		}
 		if (value->linkTarget == nil) {
@@ -1627,7 +2015,7 @@ item_id(uint64_t reference)
 		}
 		value = [self checkedItem:item];
 		if (value == nil) {
-			return NTFS_STALE;
+			return _itemAdmission;
 		}
 		@try {
 			if (offset < 0) {
@@ -1694,7 +2082,7 @@ item_id(uint64_t reference)
 		}
 		value = [self checkedItem:item];
 		if (value == nil) {
-			*error = ntfs_error(NTFS_STALE);
+			*error = ntfs_error(_itemAdmission);
 			return nil;
 		}
 		@try {
@@ -1816,7 +2204,7 @@ item_id(uint64_t reference)
 		}
 		value = [self checkedItem:item];
 		if (value == nil) {
-			*error = ntfs_error(NTFS_STALE);
+			*error = ntfs_error(_itemAdmission);
 			return nil;
 		}
 		@try {
@@ -1981,7 +2369,7 @@ item_id(uint64_t reference)
 		}
 		item = [self checkedItem:directory];
 		if (item == nil) {
-			return ntfs_error(NTFS_STALE);
+			return ntfs_error(_itemAdmission);
 		}
 		if (item->directoryPath == nil) {
 			return ntfs_error(NTFS_NOT_DIRECTORY);
@@ -2241,9 +2629,16 @@ item_id(uint64_t reference)
 	  NTFSItem *value;
 
 	  @synchronized(self) {
-		  value = [self checkedItem:item];
+		  if (self->_imageTransport != nil && [item isKindOfClass:NTFSItem.class] &&
+		      ((NTFSItem *)item).owner == self) {
+			  /* Reclaim must release an identity even when a replacement read
+			   * view cannot allocate. It need not reopen a core node first. */
+			  value = (NTFSItem *)item;
+		  } else {
+			  value = [self checkedItem:item];
+		  }
 		  if (value == nil) {
-			  error = ntfs_error(NTFS_STALE);
+			  error = ntfs_error(self->_itemAdmission);
 		  } else {
 			  [self reclaimIfEligible:value
 					  cleanup:^{
@@ -2270,15 +2665,19 @@ item_id(uint64_t reference)
 	}
 	@synchronized(self) {
 		state = self.lifecycle;
-		result = state == NTFSVolumeInvalidating || state == NTFSVolumeInvalidated ||
-			state == NTFSVolumeDraining || state == NTFSVolumeChecking
-		    ? NTFS_STALE
-		    : _maintenanceOnly	       ? _mountError
-		    : _checkFailure != NTFS_OK ? _checkFailure
-		    : _core == NULL || !_active ||
-			(state != NTFSVolumeActive && state != NTFSVolumeUnmounted)
-		    ? NTFS_STALE
-		    : NTFS_OK;
+		result = [self ensureImageView];
+		if (result == NTFS_OK) {
+			result = state == NTFSVolumeInvalidating ||
+				state == NTFSVolumeInvalidated || state == NTFSVolumeDraining ||
+				state == NTFSVolumeChecking
+			    ? NTFS_STALE
+			    : _maintenanceOnly	       ? _mountError
+			    : _checkFailure != NTFS_OK ? _checkFailure
+			    : _core == NULL || !_active ||
+				(state != NTFSVolumeActive && state != NTFSVolumeUnmounted)
+			    ? NTFS_STALE
+			    : NTFS_OK;
+		}
 		if (result == NTFS_OK && !_resource.isAvailable) {
 			result = NTFS_IO;
 		}
@@ -2310,10 +2709,21 @@ item_id(uint64_t reference)
 		_lifecycle = NTFSVolumeDraining;
 	}
 	[_lifecycleLock unlock];
+	[self finishUnmountWithReplyHandler:reply];
+}
+
+- (void)finishUnmountWithReplyHandler:(void (^)(void))reply
+{
+	__block BOOL deferred = NO;
+
 	[self performItemPublication:^{
 	  NTFSItem *item;
 
 	  @synchronized(self) {
+		  if (self->_imageMutationActive) {
+			  deferred = YES;
+			  return;
+		  }
 		  [self->_readCachePolicy stop];
 		  for (item in self->_items.objectEnumerator.allObjects) {
 			  [self clearItemCaches:item];
@@ -2326,16 +2736,40 @@ item_id(uint64_t reference)
 		  [self->_lifecycleLock unlock];
 	  }
 	}];
-	reply();
+	if (deferred) {
+		/* A reentrant unmount cannot wait on its own mutation. A different
+		 * execution context drains publication before completing the reply. */
+		dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		  [self finishUnmountWithReplyHandler:reply];
+		});
+	} else {
+		reply();
+	}
 }
 
 - (void)synchronizeWithFlags:(FSSyncFlags)flags replyHandler:(void (^)(NSError *))reply
 {
 	NSError *error;
+	struct ntfs_overwrite_environment environment;
+	enum ntfs_result result;
 
 	(void)flags;
 	@synchronized(self) {
-		error = ntfs_error([self admissionResult]);
+		if (_imageTransport == nil) {
+			result = [self admissionResult];
+		} else if (self.lifecycle != NTFSVolumeActive || !_active) {
+			result = NTFS_STALE;
+		} else {
+			/* The writer already persisted its complete transaction. A later
+			 * native sync still reaches the real barrier, without allocating a
+			 * replacement view or requiring its metadata to be readable. */
+			environment = [_imageTransport overwriteEnvironment];
+			result = environment.persist(environment.reader.context);
+			if (result != NTFS_OK) {
+				[_imageTransport invalidate];
+			}
+		}
+		error = ntfs_error(result);
 	}
 	reply(error);
 }

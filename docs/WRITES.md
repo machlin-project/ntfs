@@ -21,6 +21,22 @@ the timestamped transaction and recovery entry points stay private. The immutabl
 environment cannot write, and the FSKit adapter still rejects mutations with
 EROFS. Do not enable individual FSKit writes by adding a pwrite callback.
 
+The private FSKit image transport now supplies a real persistence route for an
+explicitly authorized ordinary image URL. It retains the source security scope,
+reuses the exact POSIX backend and requires `F_FULLFSYNC`. Counted immutable reader
+leases exclude writes before I/O; revoked generations cannot regain availability.
+Backing-file replacement/resize, uncertain short transfers and failed persistence
+fail closed. Its advisory lock requires caller exclusion of uncooperative access,
+and does not authorize arbitrary images or devices. Component tests perform a
+complete timestamped C write and fresh read/recovery reopen through this transport.
+A private image-volume owner now preserves FSItem identity while closing and
+replacing all immutable core state. Lazy view/node reconstruction retries allocation
+refusal without serving old metadata; durable completion keeps its actual byte
+count. Unmount/invalidation drain an admitted mutation before releasing its owner,
+including reentrant requests. FSKit path-resource loading, installed kernel cache
+coherence/sandbox authorization and the new Windows publication protocol remain
+admission gates. All native mutation handlers remain read-only.
+
 The [recovery-input owner](RECOVERY-INPUTS.md) now internally binds the owning
 checkpoint and complete retained oldest-to-endpoint packet interval, distinguishing
 transaction lifetimes and verifying checkpoint roots. It survives source close and

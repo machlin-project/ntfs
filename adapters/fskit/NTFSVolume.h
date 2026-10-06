@@ -10,7 +10,8 @@ typedef NS_ENUM(NSUInteger, NTFSVolumeLifecycle) {
 	NTFSVolumeUnmounted,
 	NTFSVolumeInvalidating,
 	NTFSVolumeInvalidated,
-	NTFSVolumeChecking
+	NTFSVolumeChecking,
+	NTFSVolumeWriting
 };
 
 @interface NTFSVolume : FSVolume <FSVolumePathConfOperations>

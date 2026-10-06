@@ -19,24 +19,40 @@ writer interruptions and 120 interrupted-recovery profiles. The full 174-suite
 baseline passed; a subsequent provenance fix passed 173 unchanged suites and its
 corrected focused suite, style and both freestanding targets separately. Failed
 command/fixture attempts remain retained. FSKit writes stay unadmitted pending
-the new native publication and persistence/lifetime acceptance.
+the new native publication and installed persistence/cache acceptance.
+
+The private FSKit authorized-image owner now closes every immutable child/lease
+before writing and lazily rebinds stable FSItems to a fresh core. It preserves
+durable completion across later ENOMEM and drains reentrant unmount/invalidation
+before releasing the C owner. All 56 component groups pass with eleven runtime
+SKIPs and style in `artifacts/overwrite/fskit-image-volume-drain-weak-20261006/`.
+This does not admit native write handlers or installed path resources. Complete
+app preparation/settings queries time out without compilation/products; compiler
+startup succeeds, while Xcode GUI inspection is unavailable. Read the distinct
+attempts recorded in ACCEPTANCE.md before choosing another build route.
 
 Three earlier C-authored frame states actually passed Windows; those reports are
 in `artifacts/overwrite/windows-C-wal-probes-20261006/`. Ready new source-clone
 writer and C-recovered loser/winner candidates are in
 `write-existing-native-io-20261006/` and `write-recovery-native-io-20261006/`.
-Their generated manifests/outcomes carry exact paths, digests and expected bytes;
-none has a Windows pass. Other retained-root/progress candidates also remain
-unqualified. Never convert private-image success into guest acceptance.
+Their generated manifests/outcomes carry exact paths, digests and expected bytes.
+The complete actual C-written image has a native Windows pass with exact modified
+data/time, files/ADS, identity/ACL, chkdsk and healthy this-boot evidence. The two
+executed recovery candidates remain in progress. Other intermediate/sector
+candidates remain unqualified. Never convert private-image success into guest
+acceptance.
 
-Sol remains the exclusive Windows VM operator. A later hidden start reports
-started and a task-owned QEMULauncher holds the exact active test disk, but QGA
-does not respond and no usable VM window is available. This is an unobservable
-guest, not a boot pass. Preserve the running disk and failed evidence; do not
-swap it, force/reset the VM, repeat start loops or change host boot/policy. The
-host-state clarification is pending. Ordinary recovery/verification may resume
-when an observable guest/window is available, using the existing guarded harness
-and explicit target binding. VM commands run from the absolute lab directory.
+Sol remains the exclusive Windows VM operator. The guest is now observable through
+QGA using bounded CMD-child PowerShell commands; actual baseline boot, plaintext
+Disk 1/T: identity, original files/ADS/timestamps and chkdsk pass. Retained-root
+first-clean and both-clean candidates also pass native file/time/identity/ACL,
+chkdsk and bounded this-boot healthy events. The actual C writer/recovery batch is
+still in progress, with the original baseline preserved inactive. Get the current
+owner's handoff before any operation: preserve running disk/state, do not force or
+repeat starts/verifiers, and do not change host boot/policy. Empty QGA/tool success
+is never evidence. The native event collector uses exact boot-filtered wevtutil
+XML because the original Get-WinEvent query failed; unavailable earlier queries
+remain failures. VM commands run from the absolute lab directory.
 
 ## Owned recovery inputs and original Windows volume
 

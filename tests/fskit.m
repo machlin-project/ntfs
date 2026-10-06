@@ -19,6 +19,8 @@
 #import "fskit_lookup.h"
 #import "fskit_maintenance.h"
 #import "fskit_access.h"
+#import "fskit_image_transport.h"
+#import "fskit_image_volume.h"
 
 @implementation TestReader
 
@@ -1308,6 +1310,10 @@ main(int argc, char **argv)
 
 		assert(argc == 2);
 		test_result_and_resource_admission();
+		ntfs_test_fskit_image_transport([[@(argv[1]) stringByDeletingLastPathComponent]
+		    stringByAppendingPathComponent:@"../write-journal-fixtures"]);
+		ntfs_test_fskit_image_volume([[@(argv[1]) stringByDeletingLastPathComponent]
+		    stringByAppendingPathComponent:@"../write-journal-fixtures"]);
 		ntfs_test_fskit_read_path();
 		image = [NSData dataWithContentsOfFile:@(argv[1])];
 		assert(image != nil);

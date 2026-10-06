@@ -35,6 +35,11 @@ targets:
       - NTFSCheckTask.h
       - NTFSResource.m
       - NTFSResource.h
+      - NTFSImageTransport.m
+      - NTFSImageTransport.h
+      - NTFSImageVolume.h
+      - ../posix/overwrite_image.c
+      - ../posix/overwrite_image.h
       - NTFSNames.m
       - NTFSNames.h
       - NTFSLinks.m

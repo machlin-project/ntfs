@@ -28,6 +28,16 @@ This public data-only contract preserves metadata bytes. The timestamped writer
 and recovery owner are separate private implementations; writable FSKit behavior
 and acceptance remain open.
 
+The private FSKit image owner now retains an authorized path URL and security
+scope, performs real file persistence and closes every immutable reader before
+mutation. Stable FSItems lazily bind a fresh core view after writing; old metadata
+and stream caches never survive that transition. All 56 component groups pass with
+eleven explicit runtime SKIPs, including durable completion despite subsequent
+allocation refusal, view/node retries, mutation drain and permanent I/O poison.
+Path-resource load/mutation admission and installed sandbox/cache qualification
+remain open. The new app build and project-settings query timed out before
+compilation; prior universal app builds do not qualify these adapter changes.
+
 A new [recovery-input owner](docs/RECOVERY-INPUTS.md) internally acquires the owning
 checkpoint and exact retained client history through the completed endpoint,
 separates reused transaction lifetimes and binds checkpoint roots. Owned packets

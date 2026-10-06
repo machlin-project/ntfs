@@ -98,13 +98,28 @@ expected image and full allocation validation passes. Two additional original
 C-authored pending source clones execute redo and compensation with real I/O;
 complete image comparisons pass and a second recovery writes nothing. Qcow2
 conversion, structural checks and comparison pass; source images remain frozen
-and unchanged. These new candidates have not booted in Windows. VM access became
-unobservable during a later diagnostic batch; an unobserved start or empty QGA
-response is not a boot-health pass. The active VM disk is not edited while open.
+and unchanged. The complete C-written initialized-data/timestamp image now also
+passes a fresh Windows boot, exact files/ADS/time, preserved identity/ACL,
+read-only chkdsk and healthy this-boot events. First-clean and both-clean
+retained-root images pass separately. The executed loser/winner native cases are
+still in progress. Earlier unobservable VM attempts and failed event-provider
+queries remain failures; fresh native wevtutil XML closes the event-observation
+gap for the accepted cases. The active VM disk is not edited while open.
+
+The private FSKit authorized-image owner now executes the same writer and real
+persistence, closes every immutable reader before mutation, and shares the core
+allocation cap across view replacement. Stable FSItems rebind a fresh view and
+metadata after writing. Complete-image, fresh-stat, zero-write reopen, post-commit
+allocation refusal/retry and reentrant mutation-drain checks pass within 56
+component groups, with eleven runtime SKIPs. It retains caller exclusion of
+uncooperative access/mappings; it is not a block-device or installed sandbox/cache
+admission result. The new app build/settings query timed out before compilation;
+component compilation does not qualify universal app products.
 
 Next acceptance must qualify the new tail-copy/retained-root writer and recovery
-at every publication boundary in Windows, then admit an authorized FSKit
-persistence route and coherent metadata lifetimes. Writable FSKit, allocation,
+at every publication boundary in Windows, then admit the authorized image route
+with installed scope validation and coherent native item/cache lifetimes.
+Writable FSKit, allocation,
 resize and namespace mutations remain under implementation. Boot stills do not
 establish continuous video; unavailable event-provider queries remain unavailable.
 

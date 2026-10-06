@@ -16,6 +16,43 @@ optional wire extension, so older update-sequence arrays do not overlap a falsel
 required header tail. Both header layouts have complete synthetic image tests.
 The environment supplies allocation, deallocation and bounded exact reads.
 It has no write method. Media must remain immutable for an entire mounted owner.
+
+The private `NTFSImageTransport` platform component holds the original authorized
+`FSPathURLResource` and balances successful security-scope access for its lifetime.
+[FSKit transports that scope intact](https://developer.apple.com/documentation/fskit/fspathurlresource).
+The transport opens only an existing writable, singly linked ordinary image;
+it neither creates/truncates backing files nor derives device paths. POSIX flock
+coordinates cooperating owners, and its caller must exclude uncooperative users
+and mappings. This is an offline-image contract, not arbitrary file exclusivity
+or block-device admission.
+
+Each published immutable image reader retains a counted lease and claim generation.
+Writes refuse before I/O while any lease survives, so native callers must close all
+core children and drop read resources before mutation. Unclaim, revocation, changed
+file identity/size and uncertain transfer/persistence prevent successful stale
+reads. A subsequent immutable reader sees a fresh core epoch. Image readers and the
+writer share one 64-MiB core allocation cap; private reservation may precede claim,
+while all media I/O requires it. The existing read environment remains unchanged.
+Native transfers reuse the POSIX image backend, with mandatory `F_FULLFSYNC` and
+no cache-only fallback. A complete exclusive operation also excludes reader
+publication between transfers. Reentrant unclaim poisons the transport and defers
+lock release until the native transfer returns. The component is not yet selected
+by FSKit resource loading; installed scope and exclusivity remain unqualified.
+
+The private image-volume factory acquires and recovers its C owner before publishing
+an immutable view. Its initialized-range operation closes all item caches, nodes
+and read leases under publication/operation serialization before calling the
+writer. Stable FSItems retain full sequence-bearing references and numeric ancestry;
+no consumer follows an old core pointer. Successful completion allocates nothing.
+The next read mounts a fresh view and lazily rebinds each item, including metadata,
+stream catalog and directory ancestry. Allocation refusal is retryable and never
+serves stale bytes or converts a durable write into an unreported failure.
+Unmount closes admission before draining mutation; a reentrant request defers its
+reply to a different execution context. Invalidation similarly defers C-owner
+release until the active write returns. Uncertain I/O remains permanently poisoned.
+These component contracts do not establish installed kernel page-cache/mmap
+coherence or native mutation admission. Native write handlers remain read-only.
+
 Format values live in `core/disk.h`; implementation budgets live in
 `core/internal.h` and the public default limits. Field positions come from
 `sizeof`/`offsetof`. Tests author their own named wire fields and geometry so

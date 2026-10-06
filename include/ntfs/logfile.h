@@ -77,6 +77,9 @@ struct ntfs_logfile_update {
 	uint64_t target_vcn;
 	uint16_t redo_operation, undo_operation, target_attribute, lcn_count;
 	uint16_t record_offset, attribute_offset, cluster_index, attribute_flags;
+	/* Native compensation can retain a length for omitted undo storage.
+	 * The returned undo span remains empty and safe to address. */
+	uint16_t compensation_undo_bytes;
 	struct ntfs_logfile_span redo, undo, lcns;
 };
 
@@ -478,7 +481,11 @@ enum ntfs_result ntfs_logfile_record_decode(
  * from the client payload start. Compact/truncated forms without the reserved
  * storage are CORRUPT. Original input and unused capacity remain uninterpreted.
  * Operation codes, target identifiers and LCNs are opaque format values; they
- * confer no writable address or recovery decision. Redo/undo may share bytes. */
+ * confer no writable address or recovery decision. Redo/undo may share bytes.
+ * An original native compensation form ends exactly after its nonempty redo,
+ * with undo offset at that endpoint and the same retained length. This has no
+ * undo storage: undo.length is zero and compensation_undo_bytes preserves the
+ * declared inactive length. Other out-of-bounds spans remain CORRUPT. */
 enum ntfs_result ntfs_logfile_update_decode(const void *, size_t, struct ntfs_logfile_update *);
 /* Decode the complete bounded NTFS client payload's 64-byte common restart
  * prefix for client formats 0.0/1.0. Other client versions are UNSUPPORTED.

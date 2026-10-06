@@ -1,16 +1,31 @@
 # Acceptance
 
-## Native ordinary-file snapshot and journal planning
+## Native ordinary-file writing and recovery
 
-The [native journal continuation](NATIVE-WRITE-JOURNAL.md) adds private C FILE and
-three-page log planning. It performs no device writes and does not admit FSKit
-mutations. All 171 fatal-ASan/UBSan suites, selected-Xcode style and both
-freestanding architecture checks under the 2-KiB frame ceiling pass. Focused
-checks include 23 complete metadata profiles, required allocation/read failures,
-ten independent complete record/page goldens, refusal/retry and sector-mix checks.
-The read-only native-plan diagnostic also produces ten C frames from the unchanged
-original Windows volume after full validation and complete quiet-history binding.
-Those frames have not themselves undergone a Windows recovery roundtrip.
+The [native journal continuation](NATIVE-WRITE-JOURNAL.md) now executes private
+initialized-data/timestamp transactions and native redo/compensation recovery.
+All 174 fatal-ASan/UBSan suites, selected-Xcode style and both freestanding targets
+under the 2-KiB frame ceiling pass. Independent FILE/page goldens, complete fresh
+overlay validation, reservation/read faults, poison and sector-mix checks pass.
+Actual C recovery resolves 110 writer-interruption profiles; a further 120
+profiles interrupt recovery and successfully restart it. Reopen is idempotent.
+Public data-only behavior and immutable read environments remain unchanged.
+The later provenance guard refuses a torn FILE with an unrelated or absent
+compensation LSN. Its first negative test incorrectly treated the ordinary
+fixture's valid zero before-LSN as unrelated; that failure is retained. A separate
+nonzero-before transaction corrects the test and both no-I/O refusals pass. The
+corresponding full run passed the other 173 suites; the corrected focused suite,
+style and both freestanding checks pass separately. An earlier direct compile
+without the selected SDK failed to find `assert.h`; the documented build script
+corrects the command environment without a source workaround.
+
+On frozen original Windows-source clones, actual `pwrite`/`F_FULLFSYNC` changes
+8193 initialized bytes and timestamps, and separately executes native redo and
+compensation for two pending histories. Independent complete partition/GPT-disk
+comparisons, full allocation validation, second recovery with zero writes and
+qcow2 checks pass. These new writer/recovery candidates have not booted in Windows.
+Their tail-copy/retained-root protocol remains a native acceptance gate; FSKit
+mutation admission, allocation/resize and namespace changes remain open.
 
 | Native experiment | Actual evidence | Disposition |
 | --- | --- | --- |
@@ -20,6 +35,9 @@ Those frames have not themselves undergone a Windows recovery roundtrip.
 | Separate prepare and commit pages | Correct undo or redo despite original RSTR endpoint | PASS for bounded states |
 | Empty checkpoint before RSTR publication | Later native file/chkdsk pass, but initial T event requests full offline check | FAIL; blocks complete persistence protocol |
 | First or both clean RSTR copies after complete home/checkpoint | Expected new time and all native checks with healthy boot events | PASS for complete publication states |
+| Three C-authored original frame states | Uncommitted torn home selects old time; committed torn home and complete clean publication select new time; content/ADS/identity/ACL/chkdsk/boot checks pass | PASS for those exact states |
+| Original Windows compensation packet | Exact redo bytes and same-lifetime previous/undo-next/Forget bindings; native inactive undo count decoded safely | PASS for observed wire form; not new recovery acceptance |
+| New C tail-copy/retained-root writer and recovery | Actual private-image persistence, full byte comparison and repeated C recovery pass | Windows acceptance OPEN |
 
 Native reports and retained candidates/post-boot images are in
 `artifacts/overwrite/windows-wal-binding-probe-20261006/`,
@@ -29,8 +47,14 @@ focused/full-core/native-plan artifact directories. Ordinary shutdown, exact
 original restoration and actual baseline boot/QGA/plaintext-volume verification
 pass after each batch. Stills do not establish continuous boot coverage;
 unavailable event-provider queries are retained without inferring absent repairs.
-These experiments do not qualify hardware power cuts, C replay, a complete durable
-writer, writable FSKit, allocation/resize or namespace changes.
+These Windows experiments do not qualify hardware power cuts, the new retained-root
+writer/recovery publication protocol, writable FSKit, allocation/resize or namespace
+changes. Later VM starts became unobservable; no guest health is inferred from a
+running host process or empty Guest Agent response. The active disk stays untouched
+while open. New private-I/O evidence is in
+`artifacts/overwrite/write-existing-native-io-20261006/` and
+`write-recovery-native-io-20261006/`; the current full C run is in
+`write-recovery-full-20261006/`.
 
 ## Initialized data overwrite continuation
 
@@ -1884,7 +1908,7 @@ claimed.
 | NTFS client restart common prefix | Client 0.0/1.0 64-byte version/analysis/table-anchor fields, raw LSN/count pairs and opaque tail, immutable bounded input with no I/O/allocation and zero errors/padding | 77 aligned/unaligned verdicts, 75 exact CLI reports/two transport checks and all 77 fixed fuzz seeds pass; scoped native client-1.0 prefixes also compare; complete extensions, current history, native transaction analysis and recovery remain open |
 | Selected NTFS client restart record | Exact assembled framing using selected header length, RESTART type, active index/sequence, exact NTFS name and stored nonzero restart LSN before common-prefix decoding | 165 aligned/unaligned verdicts across 19 sources, 161 exact CLI reports/four transports and cached callback/fault/zero-output checks passed; all complete pairs fixed-replayed; physical/current-history provenance, native registration and complete checkpoint semantics remain open |
 | Transaction/durability reference model | Exclusive serialized owner, complete private/log credits, data/WAL/commit/home/checkpoint ordering, arbitrary pending-sector eviction, partial/full I/O failures and interrupted abstract replay against independently authored NTFS endpoints | 49,855 modeled states, 22 ownership contracts, 14 history refusals, 1,205 interrupted-recovery states, 47 complete native-byte diagnostics/content checks and four unsafe-order witnesses passed; typed in-memory evidence, no native journal or product write API; see RECOVERY-MODEL.md |
-| Write/recovery | Native replay, allocation, namespace transactions, crash/durability matrix | Product implementation remains open; read-only primitives and abstract reference-model replay do not provide native recovery or permit writes/dirty mounts |
+| Write/recovery | Private bounded initialized-data/timestamp WAL, owned history, native redo/compensation and real image persistence; allocation, namespace and crash/durability acceptance | Executed C recovery passes 110 writer and 120 recovery interruptions, complete private-source image comparisons and idempotent reopen; three earlier C-authored states pass Windows. New tail-copy/retained-root Windows acceptance and writable FSKit remain open; no arbitrary dirty mount admission |
 | Security descriptors and storage | MS-DTYP framing and ACL states; bounded immutable `$Secure` and per-file attribute snapshots, checked indexes/hash/copies and fault retry; whole-volume selected per-file framing with explicit fixed-internal/inert and narrowly owned canonical repair source exceptions | 74 resolver contracts plus 46 whole-store/nine complete-volume store verdicts and 65 per-file diagnostic images, 496 allocation/730 partial-and-full store read positions, six operation profiles and whole-volume fault/budget checks; eight per-file fault layouts and staged parser/I/O boundaries; four independent complete leaf-view/descriptor geometries and three public NIST stores/user descriptors passed; Windows/native authorization qualification incomplete |
 | Discretionary token decisions | Ordered plain allow/deny DACLs, exact generic file masks, ordinary owner/OWNER RIGHTS and enabled/disabled/deny-only/restricting contexts, no partial grants, bounds and immutable snapshots | 196,809 local decisions including 196,608 independent per-right oracles; bounded context fuzz passed; Windows AccessCheck/full/native authorization incomplete |
 | Windows access observations | Original in-memory descriptors, queried disposable tokens, native MapGenericMask/AccessCheck results, bounded offline transport and explicit mismatch/unsupported/error reports | 337 local transport/SDK/acquisition/reporting contracts passed; Windows acquisition and native DACL comparison not run |

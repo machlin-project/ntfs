@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "internal.h"
+#include "write_internal.h"
 #include "logfile_tables_disk.h"
 #include <ntfs/overwrite.h>
 
@@ -34,6 +34,10 @@ struct overwrite_journal_workspace {
 	struct ntfs_logfile_checkpoint_capture capture;
 	struct ntfs_recovery_record record;
 };
+
+static enum ntfs_result reject_change_journal(struct ntfs_volume *);
+static enum ntfs_result transaction_write(void *, uint64_t, const void *, size_t, size_t *);
+static enum ntfs_result transaction_persist(void *);
 
 static bool
 separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
@@ -230,12 +234,18 @@ reject_hibernation(struct ntfs_volume *volume)
 	return result;
 }
 
-enum ntfs_result
-ntfs_overwrite_open(const struct ntfs_overwrite_environment *environment,
-    struct ntfs_overwrite_admission *admission, struct ntfs_overwrite **out)
+static enum ntfs_result
+open_owner(const struct ntfs_overwrite_environment *environment,
+    struct ntfs_overwrite_admission *admission, struct ntfs_overwrite **out,
+    struct ntfs_write_recovery_report *recovery)
 {
 	struct ntfs_overwrite *owner;
 	struct ntfs_volume *volume = NULL;
+	struct ntfs_write_recovery_workspace *work = NULL;
+	struct ntfs_overwrite_environment backend;
+	void *allocation = NULL;
+	size_t allocation_bytes;
+	uintptr_t aligned;
 	struct ntfs_limits limits;
 	enum ntfs_result result, closed;
 
@@ -274,9 +284,11 @@ ntfs_overwrite_open(const struct ntfs_overwrite_environment *environment,
 	admission->claimed = true;
 	ntfs_default_limits(&limits);
 	limits.record_cache_entries = 0;
-	result = ntfs_validate(&owner->reader, &limits, NULL, &admission->validation);
-	if (result != NTFS_OK) {
-		goto done;
+	if (recovery == NULL) {
+		result = ntfs_validate(&owner->reader, &limits, NULL, &admission->validation);
+		if (result != NTFS_OK) {
+			goto done;
+		}
 	}
 	result = ntfs_mount(&owner->reader, &limits, &volume);
 	if (result != NTFS_OK) {
@@ -290,8 +302,30 @@ ntfs_overwrite_open(const struct ntfs_overwrite_environment *environment,
 		goto done;
 	}
 	result = reject_hibernation(volume);
-	if (result == NTFS_OK) {
+	if (result == NTFS_OK && recovery == NULL) {
 		result = quiet_journal(owner, volume, admission);
+	} else if (result == NTFS_OK) {
+		result = reject_change_journal(volume);
+		if (result != NTFS_OK) {
+			goto done;
+		}
+		allocation_bytes = sizeof(*work) + environment->alignment - 1u;
+		allocation = overwrite_allocate(owner, allocation_bytes);
+		if (allocation == NULL) {
+			result = NTFS_NO_MEMORY;
+			goto done;
+		}
+		aligned = ((uintptr_t)allocation + environment->alignment - 1u) &
+		    ~(uintptr_t)(environment->alignment - 1u);
+		work = (void *)aligned;
+		backend = owner->backend;
+		backend.reader = owner->reader;
+		backend.write = transaction_write;
+		backend.persist = transaction_persist;
+		result = ntfs_write_recover_prepare(volume, &backend, work);
+		if (result == NTFS_OK) {
+			admission->validation = work->validation;
+		}
 	}
 
 done:
@@ -301,9 +335,16 @@ done:
 			result = closed;
 		}
 	}
-	if (result == NTFS_OK) {
+	if (result == NTFS_OK && recovery != NULL) {
+		result = ntfs_write_recover_execute(work, &owner->poisoned, recovery);
+		admission->quiescent = result == NTFS_OK && recovery->homes_persisted;
+		admission->persistence_succeeded = result == NTFS_OK && recovery->completed;
+	} else if (result == NTFS_OK) {
 		result = environment->persist(environment->reader.context);
 		admission->persistence_succeeded = result == NTFS_OK;
+	}
+	if (allocation != NULL) {
+		overwrite_release(owner, allocation, allocation_bytes);
 	}
 	if (result != NTFS_OK) {
 		ntfs_overwrite_close(owner);
@@ -311,6 +352,31 @@ done:
 	}
 	*out = owner;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_overwrite_open(const struct ntfs_overwrite_environment *environment,
+    struct ntfs_overwrite_admission *admission, struct ntfs_overwrite **out)
+{
+	return open_owner(environment, admission, out, NULL);
+}
+
+enum ntfs_result
+ntfs_write_owner_open(const struct ntfs_overwrite_environment *environment,
+    struct ntfs_overwrite_admission *admission, struct ntfs_write_recovery_report *recovery,
+    struct ntfs_overwrite **out)
+{
+	if (environment == NULL || admission == NULL || recovery == NULL || out == NULL ||
+	    !separate(environment, sizeof(*environment), admission, sizeof(*admission)) ||
+	    !separate(environment, sizeof(*environment), out, sizeof(*out)) ||
+	    !separate(admission, sizeof(*admission), out, sizeof(*out)) ||
+	    !separate(environment, sizeof(*environment), recovery, sizeof(*recovery)) ||
+	    !separate(admission, sizeof(*admission), recovery, sizeof(*recovery)) ||
+	    !separate(out, sizeof(*out), recovery, sizeof(*recovery))) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(recovery, sizeof(*recovery));
+	return open_owner(environment, admission, out, recovery);
 }
 
 void
@@ -564,5 +630,218 @@ done:
 	report->poisoned = owner->poisoned;
 	overwrite_release(owner, allocation, allocation_bytes);
 	overwrite_release(owner, spans, OVERWRITE_MAX_SPANS * sizeof(*spans));
+	return result;
+}
+
+static enum ntfs_result
+reject_change_journal(struct ntfs_volume *volume)
+{
+	static const uint16_t extend_name[] = {'$', 'E', 'x', 't', 'e', 'n', 'd'};
+	static const uint16_t journal_name[] = {'$', 'U', 's', 'n', 'J', 'r', 'n', 'l'};
+	struct ntfs_node *root = NULL, *extend = NULL, *journal = NULL;
+	struct ntfs_stat stat;
+	enum ntfs_result result;
+
+	result = ntfs_root(volume, &root);
+	if (result == NTFS_OK) {
+		result = ntfs_lookup(
+		    root, extend_name, sizeof(extend_name) / sizeof(*extend_name), &extend);
+	}
+	if (result == NTFS_NOT_FOUND) {
+		result = NTFS_OK;
+		goto done;
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_node_metadata(extend, &stat);
+	}
+	if (result == NTFS_OK &&
+	    (!stat.directory ||
+		(stat.reference & NTFS_REFERENCE_RECORD_MASK) != NTFS_EXTEND_RECORD)) {
+		result = NTFS_CORRUPT;
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_lookup(
+		    extend, journal_name, sizeof(journal_name) / sizeof(*journal_name), &journal);
+		if (result == NTFS_OK) {
+			result = NTFS_UNSUPPORTED;
+		} else if (result == NTFS_NOT_FOUND) {
+			result = NTFS_OK;
+		}
+	}
+
+done:
+	ntfs_node_close(journal);
+	ntfs_node_close(extend);
+	ntfs_node_close(root);
+	return result;
+}
+
+static enum ntfs_result
+transaction_write(void *context, uint64_t offset, const void *image, size_t bytes, size_t *actual)
+{
+	struct ntfs_overwrite *owner = context;
+
+	return owner->backend.write(owner->backend.reader.context, offset, image, bytes, actual);
+}
+
+static enum ntfs_result
+transaction_persist(void *context)
+{
+	struct ntfs_overwrite *owner = context;
+
+	return owner->backend.persist(owner->backend.reader.context);
+}
+
+enum ntfs_result
+ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t offset,
+    const void *data, size_t bytes, uint64_t filetime, struct ntfs_write_range_report *report)
+{
+	struct ntfs_write_transaction_workspace *transaction = NULL;
+	struct ntfs_write_execution_workspace *execution;
+	struct ntfs_write_replay_plan *overlay = NULL;
+	struct ntfs_validation_report *validation = NULL;
+	struct ntfs_write_data_span *data_spans = NULL;
+	struct overwrite_span *spans = NULL;
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_node *node = NULL;
+	struct ntfs_overwrite_environment backend;
+	uint8_t *image = NULL, *allocation = NULL, *execution_allocation = NULL;
+	uint64_t first, end;
+	size_t image_bytes, allocation_bytes, execution_bytes;
+	uint32_t count = 0, index;
+	enum ntfs_result result, closed;
+
+	if (owner == NULL || report == NULL ||
+	    !separate(owner, sizeof(*owner), report, sizeof(*report)) ||
+	    !separate(data, bytes, report, sizeof(*report)) ||
+	    !separate(data, bytes, owner, sizeof(*owner))) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(report, sizeof(*report));
+	report->requested_bytes = bytes;
+	if (owner->poisoned) {
+		report->execution.poisoned = true;
+		return NTFS_IO;
+	}
+	if (filetime > INT64_MAX) {
+		return NTFS_INVALID;
+	}
+	if (bytes > NTFS_OVERWRITE_MAX_BYTES || bytes > UINT64_MAX - offset ||
+	    offset + bytes > UINT64_MAX - owner->backend.alignment) {
+		return NTFS_RANGE;
+	}
+	if (bytes == 0) {
+		return NTFS_OK;
+	}
+	if (owner->info.sector_size != NTFS_WRITE_SECTOR_BYTES ||
+	    owner->info.cluster_size != NTFS_WRITE_CLUSTER_BYTES ||
+	    owner->info.record_size != NTFS_WRITE_RECORD_BYTES ||
+	    owner->backend.alignment > NTFS_WRITE_CLUSTER_BYTES) {
+		return NTFS_UNSUPPORTED;
+	}
+	first = offset & ~(uint64_t)(owner->backend.alignment - 1u);
+	end = (offset + bytes + owner->backend.alignment - 1u) &
+	    ~(uint64_t)(owner->backend.alignment - 1u);
+	image_bytes = (size_t)(end - first);
+	allocation_bytes = image_bytes + owner->backend.alignment - 1u;
+	execution_bytes = sizeof(*execution) + NTFS_WRITE_CLUSTER_BYTES - 1u;
+	transaction = overwrite_allocate(owner, sizeof(*transaction));
+	validation = overwrite_allocate(owner, sizeof(*validation));
+	overlay = overwrite_allocate(owner, sizeof(*overlay));
+	spans = overwrite_allocate(owner, OVERWRITE_MAX_SPANS * sizeof(*spans));
+	data_spans = overwrite_allocate(owner, OVERWRITE_MAX_SPANS * sizeof(*data_spans));
+	allocation = overwrite_allocate(owner, allocation_bytes);
+	execution_allocation = overwrite_allocate(owner, execution_bytes);
+	if (transaction == NULL || validation == NULL || overlay == NULL || spans == NULL ||
+	    data_spans == NULL || allocation == NULL || execution_allocation == NULL) {
+		result = NTFS_NO_MEMORY;
+		goto done;
+	}
+	image = (void *)(((uintptr_t)allocation + owner->backend.alignment - 1u) &
+	    ~(uintptr_t)(owner->backend.alignment - 1u));
+	execution = (void *)(((uintptr_t)execution_allocation + NTFS_WRITE_CLUSTER_BYTES - 1u) &
+	    ~(uintptr_t)(NTFS_WRITE_CLUSTER_BYTES - 1u));
+	owner->read_calls = 0;
+	owner->read_bytes = 0;
+	result = ntfs_validate(&owner->reader, NULL, NULL, validation);
+	if (result == NTFS_OK) {
+		result = ntfs_mount(&owner->reader, NULL, &volume);
+	}
+	if (result == NTFS_OK) {
+		result = reject_hibernation(volume);
+	}
+	if (result == NTFS_OK) {
+		result = reject_change_journal(volume);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_node_open(volume, reference, &node);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_write_prepare_transaction(node, filetime, transaction);
+	}
+	ntfs_node_close(node);
+	node = NULL;
+	if (volume != NULL) {
+		closed = ntfs_unmount(volume);
+		volume = NULL;
+		if (closed != NTFS_OK) {
+			result = closed;
+		}
+	}
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	result = prepare_range(owner, reference, offset, bytes, spans, &count, image, first, end);
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	ntfs_copy(image + offset - first, data, bytes);
+	for (index = 0; index < count; index++) {
+		data_spans[index] = (struct ntfs_write_data_span){
+		    spans[index].physical, image + spans[index].offset, spans[index].bytes};
+	}
+	transaction->execution.data = data_spans;
+	transaction->execution.spans = count;
+	ntfs_zero(overlay, sizeof(*overlay));
+	ntfs_copy(&overlay->file, &transaction->file, sizeof(overlay->file));
+	result = ntfs_write_validate_overlay(&owner->reader, overlay, validation);
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	backend = owner->backend;
+	backend.reader = owner->reader;
+	backend.write = transaction_write;
+	backend.persist = transaction_persist;
+	result = ntfs_write_execute_prepare(&backend, &transaction->execution, execution);
+	if (result == NTFS_OK) {
+		result = ntfs_write_execute(execution, &owner->poisoned, &report->execution);
+	}
+	if (result == NTFS_OK) {
+		report->completed_bytes = bytes;
+	}
+
+done:
+	report->execution.poisoned = owner->poisoned;
+	if (execution_allocation != NULL) {
+		overwrite_release(owner, execution_allocation, execution_bytes);
+	}
+	if (allocation != NULL) {
+		overwrite_release(owner, allocation, allocation_bytes);
+	}
+	if (data_spans != NULL) {
+		overwrite_release(owner, data_spans, OVERWRITE_MAX_SPANS * sizeof(*data_spans));
+	}
+	if (spans != NULL) {
+		overwrite_release(owner, spans, OVERWRITE_MAX_SPANS * sizeof(*spans));
+	}
+	if (overlay != NULL) {
+		overwrite_release(owner, overlay, sizeof(*overlay));
+	}
+	if (validation != NULL) {
+		overwrite_release(owner, validation, sizeof(*validation));
+	}
+	if (transaction != NULL) {
+		overwrite_release(owner, transaction, sizeof(*transaction));
+	}
 	return result;
 }

@@ -187,6 +187,9 @@ cases(const char *directory)
 		guards(is_page ? size : 0);
 		if (result != NTFS_OK) {
 			assert(memcmp(&first, &zero, output_size) == 0);
+		} else if (strcmp(name, "compensation-omitted-undo.update") == 0) {
+			assert(first.update.compensation_undo_bytes == first.update.redo.length &&
+			    first.update.undo.length == 0 && first.update.undo.offset == size);
 		} else if (strcmp(name, "maximum-clients.restart") == 0) {
 			assert(first.restart.client_count == TEST_CLIENTS_PER_LARGE_PAGE);
 		}

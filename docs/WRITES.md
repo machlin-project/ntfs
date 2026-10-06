@@ -2,17 +2,22 @@
 
 The [native ordinary-file journal continuation](NATIVE-WRITE-JOURNAL.md) now
 qualifies the MFT binding, full FILE snapshot and timestamp update family with
-Windows redo/undo and torn-home experiments. Separate prepare/commit pages pass,
-but the intermediate empty-checkpoint state requests native repair. Its later
-healthy state and chkdsk do not close that failure. Private C snapshot/page planning
-passes independent byte checks; the owning durable writer and FSKit remain gated
-on recovery and checkpoint publication acceptance.
+Windows redo/undo and torn-home experiments, including three C-authored native
+states. A private owning C writer now executes initialized-data and timestamp
+transactions, and a private recovery owner executes redo or native compensation.
+Actual `pwrite`/`F_FULLFSYNC` on source clones passes whole-image comparison and
+idempotent reopen. The bounded model passes 110 writer-interruption profiles and
+120 interruptions during recovery. These are implementation and private-image
+results, not writable product admission. The new tail-copy/retained-root sequence
+still needs Windows qualification at each publication boundary. The earlier
+intermediate empty-checkpoint state requested native repair; its later healthy
+state and chkdsk do not close that failure.
 
 The experimental separate [initialized-data overwrite owner](DATA-OVERWRITE.md)
 now physically writes already initialized ordinary file ranges on exclusively
 owned private images while preserving every metadata byte. Its actual Windows
-cold-boot/file/ADS/chkdsk roundtrip passes. This is not filesystem `write(2)`:
-timestamps and metadata transactions remain unimplemented. The immutable read
+cold-boot/file/ADS/chkdsk roundtrip passes. Its public contract remains data-only;
+the timestamped transaction and recovery entry points stay private. The immutable read
 environment cannot write, and the FSKit adapter still rejects mutations with
 EROFS. Do not enable individual FSKit writes by adding a pwrite callback.
 
@@ -118,25 +123,25 @@ unchanged original Recovery journal has no transaction anchor. Positive native
 transaction histories, continuation ownership and interrupted Windows recovery
 remain required before enabling writes.
 
-The next core implementation sequence is:
+The next implementation and acceptance sequence is:
 
-1. Build bounded copy/current-history ownership over the complete physical scan:
-   resolve competing prefixes, identify the completed endpoint/unfinished tail
-   independently of restart-time CurrentLsn and qualify ordered continuation
-   provenance. Acquire the owning NTFS
-   client restart record, and validate complete checkpoint tables and native
-   transaction analysis. Existing read-only packet observers and the reference
-   durability model are groundwork; they do not close this recovery contract.
-2. Extend the separate writable owner with reservations/credits, native log planning
-   and redo/undo recovery. The experimental metadata-preserving owner already has
-   exclusive claim, full allocation checks, complete quiet native inputs and real
-   barrier/poison contracts. Keep metadata and product writes disabled while native
-   transaction recovery lacks acceptance.
+1. Qualify the private bounded history owner, executed redo/compensation and
+   tail-copy/retained-root publication against Windows at every intermediate
+   state. It owns an exact quiet origin and at most 64 complete transaction
+   families, independently of RSTR CurrentLsn. Unknown families, checkpoint
+   advancement, circular wrap, growth and `$UsnJrnl` remain refused. This does not
+   replace complete arbitrary native checkpoint/current-history analysis.
+2. Provide the FSKit owner with an authorized exclusive transport, real persistence,
+   serialized mutation and coherent immutable-view replacement. The private C
+   writer already reserves work, validates complete reconstructed metadata before
+   mutation, closes read owners and poisons uncertain I/O. Keep product mutation
+   admission closed until its native recovery and persistence gates pass.
 3. Qualify bounded writes to existing initialized file ranges without allocation
    or size changes, with explicit partial-write and fsync semantics. Interrupt
    writes/barriers and verify recovery, metadata and data against Windows/chkdsk.
-   The successful offline-image overwrite and injected callback-failure checks now
-   pass; actual power interruption, timestamp transactions and FSKit remain open.
+   Private timestamped writes and executed interrupted recovery now pass actual
+   image I/O and injected failure checks. Actual power interruption, the new
+   Windows publication sequence and FSKit acceptance remain open.
 4. Expand to allocation, resize, creation, deletion and rename, with dedicated
    namespace/security/lifetime and crash tests for each mutation family.
 

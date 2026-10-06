@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 #include "logfile_internal.h"
+#include "logfile_tables_disk.h"
 
 enum {
 	LOG_MAX_CLIENTS = NTFS_LOGFILE_MAX_PAGE_BYTES / sizeof(struct ntfs_disk_log_client),
@@ -520,9 +521,17 @@ ntfs_logfile_update_decode(const void *input, size_t size, struct ntfs_logfile_u
 	 * when lcn_count is zero; it changes span admission, never the vector count. */
 	prefix = info.lcn_count == 0 ? sizeof(struct ntfs_disk_log_update_storage)
 				     : sizeof(*header) + info.lcns.length;
-	if (prefix > size || !update_span(info.redo, prefix, size) ||
-	    !update_span(info.undo, prefix, size)) {
+	if (prefix > size || !update_span(info.redo, prefix, size)) {
 		return NTFS_CORRUPT;
+	}
+	if (!update_span(info.undo, prefix, size)) {
+		if (info.undo_operation != NTFS_LOG_OP_COMPENSATION || info.redo.length == 0 ||
+		    (size_t)info.redo.offset + info.redo.length != size ||
+		    info.undo.offset != size || info.undo.length != info.redo.length) {
+			return NTFS_CORRUPT;
+		}
+		info.compensation_undo_bytes = (uint16_t)info.undo.length;
+		info.undo.length = 0;
 	}
 	*out = info;
 	return NTFS_OK;

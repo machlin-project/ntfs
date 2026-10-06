@@ -1371,10 +1371,12 @@ main(int argc, char **argv)
 	} else {
 		printf(",\"redo_operation\":%u,\"undo_operation\":%u,\"target_attribute\":%u,"
 		       "\"lcn_count\":%u,\"record_offset\":%u,\"attribute_offset\":%u,"
-		       "\"cluster_index\":%u,\"attribute_flags\":%u,\"target_vcn\":%" PRIu64,
+		       "\"cluster_index\":%u,\"attribute_flags\":%u,\"target_vcn\":%" PRIu64
+		       ",\"compensation_undo_bytes\":%u",
 		    update.redo_operation, update.undo_operation, update.target_attribute,
 		    update.lcn_count, update.record_offset, update.attribute_offset,
-		    update.cluster_index, update.attribute_flags, update.target_vcn);
+		    update.cluster_index, update.attribute_flags, update.target_vcn,
+		    update.compensation_undo_bytes);
 		span("redo", update.redo);
 		span("undo", update.undo);
 		span("lcns", update.lcns);

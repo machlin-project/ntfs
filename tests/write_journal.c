@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { TEST_PATH_BYTES = 4096, TEST_INDEX_BYTES = 1024 * 1024, TEST_LOG_LOCATIONS = 5 };
+enum { TEST_PATH_BYTES = 4096, TEST_INDEX_BYTES = 1024 * 1024, TEST_LOG_LOCATIONS = 7 };
 
 #define TEST_REFERENCE (UINT64_C(7) << NTFS_REFERENCE_SEQUENCE_SHIFT | UINT64_C(25))
 #define TEST_FILETIME UINT64_C(134357146906613431)
@@ -118,6 +118,8 @@ prepare(
 	offsets[2] = test->plan.reservation.prepare_offset;
 	offsets[3] = test->plan.reservation.commit_offset;
 	offsets[4] = test->plan.reservation.checkpoint_offset;
+	offsets[5] = NTFS_LFS_RESTART_PAGES * NTFS_WRITE_CLUSTER_BYTES;
+	offsets[6] = (NTFS_LFS_RESTART_PAGES + 1) * NTFS_WRITE_CLUSTER_BYTES;
 	for (index = 0; index < TEST_LOG_LOCATIONS; index++) {
 		run = ntfs_run_find(log, offsets[index] / NTFS_WRITE_CLUSTER_BYTES);
 		assert(run != NULL && run->lcn != NTFS_HOLE);
@@ -143,6 +145,32 @@ golden(const char *directory, const char *name, const void *actual, size_t lengt
 	expected = load(directory, name, &bytes);
 	assert(bytes == length && memcmp(expected, actual, length) == 0);
 	free(expected);
+}
+
+static void
+abort_golden(const char *directory, struct journal_case *test)
+{
+	struct ntfs_write_abort_plan *plan = calloc(1, sizeof(*plan));
+	struct ntfs_logfile_record record;
+	uint8_t *packet;
+	size_t bytes;
+
+	assert(plan != NULL);
+	assert(ntfs_write_abort_encode(&test->selected, test->capture.client.sequence,
+		   &test->plan.reservation, &test->file, &test->work, plan) == NTFS_OK);
+	assert(plan->offset == test->plan.reservation.commit_offset &&
+	    plan->compensation_lsn == test->plan.reservation.commit_lsn);
+	golden(directory, "abort.expected", plan->page, sizeof(plan->page));
+	golden(directory, "abort-copy.expected", plan->copy, sizeof(plan->copy));
+	golden(directory, "abort-after.expected", plan->file.after, sizeof(plan->file.after));
+	golden(directory, "abort-protected.expected", plan->file.protected_after,
+	    sizeof(plan->file.protected_after));
+	packet = load(directory, "abort.packet", &bytes);
+	assert(ntfs_logfile_record_decode(
+		   packet, bytes, sizeof(struct ntfs_disk_log_record), &record) == NTFS_OK &&
+	    record.lsn == plan->end_lsn);
+	free(packet);
+	free(plan);
 }
 
 static void
@@ -249,6 +277,105 @@ refusals(struct journal_case *test)
 }
 
 static void
+copy_fixture(const char *directory, const char *name, void *out, size_t length)
+{
+	uint8_t *data;
+	size_t bytes;
+
+	data = load(directory, name, &bytes);
+	assert(bytes == length);
+	memcpy(out, data, bytes);
+	free(data);
+}
+
+static void
+followup(const char *directory, struct journal_case *test)
+{
+	struct ntfs_write_log_reservation reservation;
+	uint64_t tail_lsn = test->plan.reservation.commit_lsn;
+	uint64_t first = test->plan.reservation.commit_offset + NTFS_WRITE_CLUSTER_BYTES;
+
+	copy_fixture(directory, "retained-0.expected", test->restart[0], sizeof(test->restart[0]));
+	copy_fixture(directory, "retained-1.expected", test->restart[1], sizeof(test->restart[1]));
+	copy_fixture(
+	    directory, "followup-before.expected", test->file.before, sizeof(test->file.before));
+	copy_fixture(
+	    directory, "followup-after.expected", test->file.after, sizeof(test->file.after));
+	copy_fixture(directory, "followup-protected.expected", test->file.protected_after,
+	    sizeof(test->file.protected_after));
+	test->input.tail_lsn = tail_lsn;
+	assert(ntfs_write_journal_reserve_tail(
+		   &test->selected, tail_lsn, test->file.snapshot_bytes, &reservation) == NTFS_OK);
+	assert(reservation.prepare_offset == first &&
+	    reservation.commit_offset == first + NTFS_WRITE_CLUSTER_BYTES);
+	assert(ntfs_write_journal_encode(&test->input, &test->work, &test->plan) == NTFS_OK);
+	golden(
+	    directory, "followup-prepare.expected", test->plan.prepare, sizeof(test->plan.prepare));
+	golden(directory, "followup-commit.expected", test->plan.commit, sizeof(test->plan.commit));
+	golden(directory, "followup-dirty-0.expected", test->plan.dirty_restart[0],
+	    sizeof(test->plan.dirty_restart[0]));
+	golden(directory, "followup-dirty-1.expected", test->plan.dirty_restart[1],
+	    sizeof(test->plan.dirty_restart[1]));
+	golden(directory, "followup-retained-0.expected", test->plan.retained_restart[0],
+	    sizeof(test->plan.retained_restart[0]));
+	golden(directory, "followup-retained-1.expected", test->plan.retained_restart[1],
+	    sizeof(test->plan.retained_restart[1]));
+	test->input.tail_lsn = test->selected.current_lsn - 1;
+	refused(test, NTFS_STALE);
+	test->input.tail_lsn =
+	    tail_lsn + (UINT64_C(1) << (NTFS_LFS_LSN_BITS - test->selected.sequence_bits));
+	refused(test, NTFS_STALE);
+	test->input.tail_lsn = tail_lsn;
+	assert(ntfs_write_journal_encode(&test->input, &test->work, &test->plan) == NTFS_OK);
+	puts("PASS: appended transaction and advanced USA retain exact original checkpoint roots; "
+	     "stale and wrapped tail refusals");
+}
+
+static void
+guards(const char *directory, struct journal_case *test)
+{
+	uint8_t *before = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	uint8_t *frame = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	uint8_t *mixed = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	size_t sector, bytes = NTFS_WRITE_CLUSTER_BYTES;
+	unsigned mask, sectors = NTFS_WRITE_CLUSTER_BYTES / NTFS_MST_STRIDE;
+
+	assert(before != NULL && frame != NULL && mixed != NULL);
+	memcpy(before, test->plan.prepare, bytes);
+	memcpy(frame, test->plan.prepare, bytes);
+	assert(ntfs_write_guard_frame(before, bytes, frame, &test->work) == NTFS_OK);
+	golden(directory, "guarded-prepare.expected", frame, bytes);
+	for (mask = 1; mask + 1 < (1u << sectors); mask++) {
+		for (sector = 0; sector < sectors; sector++) {
+			memcpy(mixed + sector * NTFS_MST_STRIDE,
+			    ((mask & (1u << sector)) ? frame : before) + sector * NTFS_MST_STRIDE,
+			    NTFS_MST_STRIDE);
+		}
+		assert(ntfs_fixup(mixed, bytes, "RCRD") == NTFS_CORRUPT);
+	}
+	copy_fixture(directory, "guard-many-tail-before.input", before, bytes);
+	memcpy(frame, test->plan.prepare, bytes);
+	assert(ntfs_write_guard_frame(before, bytes, frame, &test->work) == NTFS_OK);
+	golden(directory, "guard-many-tail.expected", frame, bytes);
+	copy_fixture(directory, "guard-wrap-before.input", before, bytes);
+	copy_fixture(directory, "guard-wrap-after.input", frame, bytes);
+	assert(ntfs_write_guard_frame(before, bytes, frame, &test->work) == NTFS_OK);
+	golden(directory, "prepare.expected", frame, bytes);
+	assert(ntfs_write_guard_frame(frame, bytes, frame, &test->work) == NTFS_INVALID);
+	assert(ntfs_write_guard_frame(before, bytes, frame, (void *)frame) == NTFS_INVALID);
+	memcpy(frame, test->plan.prepare, bytes);
+	frame[NTFS_MST_STRIDE - sizeof(uint16_t)] ^= 1;
+	memcpy(mixed, frame, bytes);
+	assert(ntfs_write_guard_frame(before, bytes, frame, &test->work) == NTFS_CORRUPT);
+	assert(memcmp(frame, mixed, bytes) == 0);
+	free(mixed);
+	free(frame);
+	free(before);
+	puts("PASS: guarded USA avoids every preceding sector marker; all sector mixtures, "
+	     "sequence wrap and unchanged invalid output");
+}
+
+static void
 run_vectors(const char *directory)
 {
 	struct journal_case *test = calloc(1, sizeof(*test));
@@ -279,6 +406,10 @@ run_vectors(const char *directory)
 	    sizeof(test->file.protected_after));
 	golden(directory, "prepare.expected", test->plan.prepare, sizeof(test->plan.prepare));
 	golden(directory, "commit.expected", test->plan.commit, sizeof(test->plan.commit));
+	golden(directory, "prepare-copy.expected", test->plan.prepare_copy,
+	    sizeof(test->plan.prepare_copy));
+	golden(directory, "commit-copy.expected", test->plan.commit_copy,
+	    sizeof(test->plan.commit_copy));
 	golden(
 	    directory, "checkpoint.expected", test->plan.checkpoint, sizeof(test->plan.checkpoint));
 	golden(directory, "dirty-0.expected", test->plan.dirty_restart[0],
@@ -289,6 +420,10 @@ run_vectors(const char *directory)
 	    sizeof(test->plan.clean_restart[0]));
 	golden(directory, "clean-1.expected", test->plan.clean_restart[1],
 	    sizeof(test->plan.clean_restart[1]));
+	golden(directory, "retained-0.expected", test->plan.retained_restart[0],
+	    sizeof(test->plan.retained_restart[0]));
+	golden(directory, "retained-1.expected", test->plan.retained_restart[1],
+	    sizeof(test->plan.retained_restart[1]));
 	reads = device.reads;
 	allocations = device.allocations;
 	refusals(test);
@@ -298,14 +433,21 @@ run_vectors(const char *directory)
 		memcpy(mixed, test->plan.dirty_restart[0], NTFS_WRITE_CLUSTER_BYTES);
 		memcpy(mixed, test->plan.clean_restart[0], prefix);
 		assert(ntfs_fixup(mixed, NTFS_WRITE_CLUSTER_BYTES, "RSTR") == NTFS_CORRUPT);
+		memcpy(mixed, test->plan.dirty_restart[0], NTFS_WRITE_CLUSTER_BYTES);
+		memcpy(mixed, test->plan.retained_restart[0], prefix);
+		assert(ntfs_fixup(mixed, NTFS_WRITE_CLUSTER_BYTES, "RSTR") == NTFS_CORRUPT);
 	}
+	abort_golden(directory, test);
+	guards(directory, test);
+	followup(directory, test);
+	assert(device.reads == reads && device.allocations == allocations);
 	assert(memcmp(data, original, bytes) == 0);
 	free(mixed);
 	free(original);
 	free(data);
 	free(test);
-	puts("PASS: ten independent whole-record/page goldens; separate WAL/commit/checkpoint, "
-	     "repeated USA and immutable source");
+	puts("PASS: independent whole-record/page goldens; WAL/commit copies, retained and "
+	     "advanced checkpoints, repeated USA and immutable source");
 }
 
 static void
@@ -324,7 +466,7 @@ save(const char *directory, const char *name, const void *data, size_t bytes)
 }
 
 static void
-native(const char *path, uint64_t reference, uint64_t filetime, const char *directory)
+native(const char *path, uint64_t reference, uint64_t filetime, const char *directory, bool copies)
 {
 	struct journal_case *test = calloc(1, sizeof(*test));
 	struct ntfs_validation_report *validation = calloc(1, sizeof(*validation));
@@ -357,6 +499,16 @@ native(const char *path, uint64_t reference, uint64_t filetime, const char *dire
 	save(directory, "after.bin", test->file.after, sizeof(test->file.after));
 	save(directory, "protected.bin", test->file.protected_after,
 	    sizeof(test->file.protected_after));
+	if (copies) {
+		save(directory, "prepare-copy.bin", test->plan.prepare_copy,
+		    sizeof(test->plan.prepare_copy));
+		save(directory, "commit-copy.bin", test->plan.commit_copy,
+		    sizeof(test->plan.commit_copy));
+		save(directory, "retained-0.bin", test->plan.retained_restart[0],
+		    sizeof(test->plan.retained_restart[0]));
+		save(directory, "retained-1.bin", test->plan.retained_restart[1],
+		    sizeof(test->plan.retained_restart[1]));
+	}
 	r = &test->plan.reservation;
 	printf("{\"scope\":\"private-native-WAL-plan-no-device-writes\",\"reference\":%llu,"
 	       "\"filetime\":%llu,"
@@ -364,6 +516,7 @@ native(const char *path, uint64_t reference, uint64_t filetime, const char *dire
 	       "\"open_lsn\":%llu,\"snapshot_lsn\":%llu,\"update_lsn\":%llu,\"commit_lsn\":%llu,"
 	       "\"bootstrap_lsn\":%llu,\"checkpoint_lsn\":%llu,\"physical\":[%llu,%llu,%llu,%llu,%"
 	       "llu],"
+	       "\"copy_physical\":[%llu,%llu],"
 	       "\"mft_cluster_physical\":%llu,\"mft_record_physical\":%llu}\n",
 	    (unsigned long long)reference, (unsigned long long)filetime,
 	    (unsigned long long)r->prepare_offset, (unsigned long long)r->commit_offset,
@@ -373,6 +526,7 @@ native(const char *path, uint64_t reference, uint64_t filetime, const char *dire
 	    (unsigned long long)r->checkpoint_lsn, (unsigned long long)test->physical[0],
 	    (unsigned long long)test->physical[1], (unsigned long long)test->physical[2],
 	    (unsigned long long)test->physical[3], (unsigned long long)test->physical[4],
+	    (unsigned long long)test->physical[5], (unsigned long long)test->physical[6],
 	    (unsigned long long)test->file.cluster_physical,
 	    (unsigned long long)(test->file.cluster_physical +
 		test->file.cluster_index * NTFS_WRITE_SECTOR_BYTES));
@@ -390,12 +544,13 @@ main(int argc, char **argv)
 		run_vectors(argv[1]);
 		return 0;
 	}
-	assert(argc == 6 && strcmp(argv[1], "--native") == 0);
+	assert(argc == 6 &&
+	    (strcmp(argv[1], "--native") == 0 || strcmp(argv[1], "--native-copies") == 0));
 	errno = 0;
 	reference = strtoull(argv[3], &end, 16);
 	assert(errno == 0 && end != argv[3] && *end == '\0');
 	filetime = strtoull(argv[4], &end, 10);
 	assert(errno == 0 && end != argv[4] && *end == '\0');
-	native(argv[2], reference, filetime, argv[5]);
+	native(argv[2], reference, filetime, argv[5], strcmp(argv[1], "--native-copies") == 0);
 	return 0;
 }

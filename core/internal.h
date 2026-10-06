@@ -222,6 +222,12 @@ enum ntfs_result ntfs_security_evaluate_dacl_impl(const struct ntfs_security *sn
 enum ntfs_result ntfs_logfile_open_volume_impl(struct ntfs_volume *volume,
     const struct ntfs_logfile_limits *limits, struct ntfs_logfile_report *report,
     struct ntfs_logfile **out);
+/* Private owning-history acquisition may select the actual dirty copy when
+ * equal legacy roots differ only in their clean hint. The ordinary read API
+ * keeps its conflict refusal; caller already owns a governed volume operation. */
+enum ntfs_result ntfs_logfile_open_volume_retained_impl(struct ntfs_volume *volume,
+    const struct ntfs_logfile_limits *limits, struct ntfs_logfile_report *report,
+    struct ntfs_logfile **out);
 enum ntfs_result ntfs_io(struct ntfs_volume *, uint64_t, void *, size_t);
 enum ntfs_result ntfs_boot(
     const struct ntfs_environment *, struct ntfs_info *, uint64_t *, uint64_t *);

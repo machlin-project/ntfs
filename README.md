@@ -12,17 +12,21 @@ acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md)
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
 The [native ordinary-file journal continuation](docs/NATIVE-WRITE-JOURNAL.md)
-now proves bounded redo/undo and torn-FILE recovery in Windows and adds private C
-metadata/page planning with independent byte goldens. A separate-page checkpoint
-interruption fails native boot health and remains an explicit write-admission gate.
-These helpers perform no device writes; timestamped filesystem and FSKit writing
-remain under implementation.
+now includes a private C writer for initialized data, modified/changed times and
+the archive bit, plus executed native redo and compensation recovery. Actual
+`pwrite`/`F_FULLFSYNC` on frozen Windows-source clones passes independent whole-image
+comparison and idempotent recovery. All 174 fatal-sanitizer suites, style and both
+freestanding architecture checks pass. The earlier C-authored snapshot/commit
+frames also pass three Windows recovery states. The new tail-copy/retained-root
+publication sequence still needs Windows qualification before FSKit writing can
+be admitted; an earlier empty-checkpoint interruption failed native boot health.
 
 An experimental separate [data-overwrite owner](docs/DATA-OVERWRITE.md) now writes
 bounded initialized ordinary file ranges on private images. Complete byte comparison,
 169 fatal-sanitizer suites and a Windows cold-boot/file/ADS/chkdsk roundtrip pass.
-Metadata bytes remain unchanged; native metadata WAL, timestamps and writable FSKit
-behavior remain required before ordinary filesystem writing can be admitted.
+This public data-only contract preserves metadata bytes. The timestamped writer
+and recovery owner are separate private implementations; writable FSKit behavior
+and acceptance remain open.
 
 A new [recovery-input owner](docs/RECOVERY-INPUTS.md) internally acquires the owning
 checkpoint and exact retained client history through the completed endpoint,

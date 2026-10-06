@@ -45,6 +45,7 @@ MULTI_PAGE = 0x0001
 RECORD_DELETING = 0x0002
 RECORD_ADDING = 0x0004
 UPDATE_RESIDENT = 0x0007
+COMPENSATION = 0x0001
 RECORD_END = 0x00000001
 OPEN_COUNT = 19
 CLIENT_SEQUENCE = 7
@@ -201,7 +202,8 @@ def update(lcns=(PHYSICAL_LCN,), redo=REDO, undo=UNDO, shared=False,
     data[prefix:prefix + len(redo)] = redo
     data[undo_offset:undo_offset + len(undo)] = undo
     expected = {key: values[key] for key in ('redo_operation', 'undo_operation', 'target_attribute') if key in values}
-    expected.update(target_attribute=0, lcn_count=len(lcns), record_offset=TARGET_RECORD_OFFSET, attribute_offset=TARGET_ATTRIBUTE_OFFSET,
+    expected.update(target_attribute=0, lcn_count=len(lcns), compensation_undo_bytes=0,
+        record_offset=TARGET_RECORD_OFFSET, attribute_offset=TARGET_ATTRIBUTE_OFFSET,
         cluster_index=0, attribute_flags=ATTRIBUTE_ACTS_ON_MFT, target_vcn=TARGET_VCN,
         redo=dict(offset=prefix, length=len(redo)), undo=dict(offset=undo_offset, length=len(undo)),
         lcns=dict(offset=UPDATE.size, length=len(lcns) * LSN_BYTES))
@@ -416,6 +418,22 @@ def author(output):
     fields = update()[1]
     fields['redo_operation'] = NO_CLIENT
     add('opaque-operation', 'update', packet, fields=fields)
+    compensation, expected = update(undo=b'')
+    UPDATE.put(compensation, 'undo_operation', COMPENSATION)
+    UPDATE.put(compensation, 'undo_bytes', len(REDO))
+    expected['undo_operation'] = COMPENSATION
+    expected['compensation_undo_bytes'] = len(REDO)
+    add('compensation-omitted-undo', 'update', compensation, fields=expected)
+    for name, changes in (
+        ('wrong-operation', dict(undo_operation=UPDATE_RESIDENT)),
+        ('wrong-length', dict(undo_bytes=len(REDO) + 1)),
+        ('wrong-endpoint', dict(undo_offset=len(compensation) + ALIGNMENT)),
+        ('missing-redo', dict(redo_bytes=0)),
+    ):
+        malformed = bytearray(compensation)
+        for field, value in changes.items():
+            UPDATE.put(malformed, field, value)
+        add('compensation-' + name, 'update', malformed, CORRUPT)
     lcnless = update(lcns=())[0]
     add('lcnless-compact', 'update', update(lcns=(), include_unused_slot=False)[0], CORRUPT)
     add('lcnless-common-prefix', 'update', lcnless[:UPDATE.offsets['lcns'] + WORD_BYTES], CORRUPT)

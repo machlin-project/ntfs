@@ -7,6 +7,37 @@ changes are included. Publishing source and choosing a public license remain
 separate decisions. Native writes are requested continuation work; WRITES.md
 defines the recovery and durability requirements before writable admission.
 
+## Current writer, recovery and VM ownership
+
+Private C now writes initialized data plus modified/changed times/archive and
+executes native redo or compensation recovery. The bounded writer retains original
+client roots instead of publishing the earlier disqualified empty checkpoint.
+Read NATIVE-WRITE-JOURNAL.md for the 64-family, no-wrap/no-growth and unsupported
+change-journal contract. Actual source-clone `pwrite`/`F_FULLFSYNC`, entire
+partition/GPT-disk comparison and idempotent recovery pass. The model passes 110
+writer interruptions and 120 interrupted-recovery profiles. The full 174-suite
+baseline passed; a subsequent provenance fix passed 173 unchanged suites and its
+corrected focused suite, style and both freestanding targets separately. Failed
+command/fixture attempts remain retained. FSKit writes stay unadmitted pending
+the new native publication and persistence/lifetime acceptance.
+
+Three earlier C-authored frame states actually passed Windows; those reports are
+in `artifacts/overwrite/windows-C-wal-probes-20261006/`. Ready new source-clone
+writer and C-recovered loser/winner candidates are in
+`write-existing-native-io-20261006/` and `write-recovery-native-io-20261006/`.
+Their generated manifests/outcomes carry exact paths, digests and expected bytes;
+none has a Windows pass. Other retained-root/progress candidates also remain
+unqualified. Never convert private-image success into guest acceptance.
+
+Sol remains the exclusive Windows VM operator. A later hidden start reports
+started and a task-owned QEMULauncher holds the exact active test disk, but QGA
+does not respond and no usable VM window is available. This is an unobservable
+guest, not a boot pass. Preserve the running disk and failed evidence; do not
+swap it, force/reset the VM, repeat start loops or change host boot/policy. The
+host-state clarification is pending. Ordinary recovery/verification may resume
+when an observable guest/window is available, using the existing guarded harness
+and explicit target binding. VM commands run from the absolute lab directory.
+
 ## Owned recovery inputs and original Windows volume
 
 The new `ntfs_recovery_open` composition internally captures the selected client's

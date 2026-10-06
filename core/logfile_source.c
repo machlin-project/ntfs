@@ -87,6 +87,10 @@ _Static_assert(sizeof(struct ntfs_disk_log_fast_page) ==
 	    sizeof(uint16_t) + sizeof(uint32_t),
     "fast-page prefix layout");
 
+static enum ntfs_result source_open(const struct ntfs_environment *,
+    const struct ntfs_logfile_limits *, struct ntfs_logfile_report *, struct ntfs_logfile **,
+    bool retained_roots);
+
 void
 ntfs_logfile_default_limits(struct ntfs_logfile_limits *limits)
 {
@@ -192,13 +196,40 @@ probe_restart(struct ntfs_logfile *source, struct ntfs_logfile_probe *probe)
 }
 
 static enum ntfs_result
-discover(struct ntfs_logfile *source)
+retained_hint_difference(const struct ntfs_logfile_restart *a, const uint8_t *left,
+    const struct ntfs_logfile_restart *b, const uint8_t *right)
+{
+	size_t flags = offsetof(struct ntfs_disk_log_restart_area, flags);
+	size_t end = flags + sizeof(((struct ntfs_disk_log_restart_area *)0)->flags);
+
+	if (a->major != NTFS_LFS_MAJOR_LEGACY || a->minor != NTFS_LFS_MINOR_LEGACY ||
+	    a->system_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+	    a->log_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+	    a->record_header_bytes != sizeof(struct ntfs_disk_log_record) ||
+	    a->page_data_offset != sizeof(struct ntfs_disk_log_fast_page) || a->client_count != 1 ||
+	    a->in_use_head != 0 || a->free_head != NTFS_LOGFILE_NO_CLIENT ||
+	    b->client_count != a->client_count || b->in_use_head != a->in_use_head ||
+	    b->free_head != a->free_head || a->area.length != b->area.length ||
+	    a->area.length < end || a->flags == b->flags ||
+	    (a->flags != 0 && a->flags != NTFS_LOGFILE_RESTART_CLEAN) ||
+	    (b->flags != 0 && b->flags != NTFS_LOGFILE_RESTART_CLEAN)) {
+		return NTFS_UNSUPPORTED;
+	}
+	return ntfs_equal(left + a->area.offset, right + b->area.offset, flags) &&
+		ntfs_equal(
+		    left + a->area.offset + end, right + b->area.offset + end, a->area.length - end)
+	    ? NTFS_OK
+	    : NTFS_UNSUPPORTED;
+}
+
+static enum ntfs_result
+discover(struct ntfs_logfile *source, bool retained_roots)
 {
 	struct ntfs_logfile_probe *probe;
 	struct ntfs_logfile_restart *selected = &source->restart;
 	uint64_t offset = 0;
 	uint16_t index;
-	bool unsupported = false, conflict = false;
+	bool unsupported = false, conflict = false, select_dirty;
 	enum ntfs_result result;
 
 	for (index = 0; index < NTFS_LOGFILE_RESTART_PROBES; index++) {
@@ -214,6 +245,7 @@ discover(struct ntfs_logfile *source)
 		}
 		unsupported |= result == NTFS_UNSUPPORTED;
 		if (result == NTFS_OK) {
+			select_dirty = false;
 			if (source->report.selected_probe == NTFS_LOGFILE_NO_PROBE) {
 				source->report.selection = NTFS_LOGFILE_SINGLE_COPY;
 			} else if (!same_geometry(selected, &probe->restart)) {
@@ -223,7 +255,17 @@ discover(struct ntfs_logfile *source)
 				    !ntfs_equal(source->selected + selected->area.offset,
 					source->scratch + probe->restart.area.offset,
 					selected->area.length)) {
-					conflict = true;
+					if (retained_roots &&
+					    retained_hint_difference(selected, source->selected,
+						&probe->restart, source->scratch) == NTFS_OK) {
+						/* Retain the observable copy conflict and select an
+						 * actual dirty snapshot; no source flag is altered.
+						 */
+						source->report.selection = NTFS_LOGFILE_CONFLICT;
+						select_dirty = probe->restart.flags == 0;
+					} else {
+						conflict = true;
+					}
 				} else {
 					source->report.selection = NTFS_LOGFILE_EQUAL_COPIES;
 				}
@@ -231,7 +273,9 @@ discover(struct ntfs_logfile *source)
 				source->report.selection = NTFS_LOGFILE_NEWER_COPY;
 			}
 			if (source->report.selected_probe == NTFS_LOGFILE_NO_PROBE ||
-			    (!conflict && probe->restart.current_lsn > selected->current_lsn)) {
+			    (!conflict &&
+				(probe->restart.current_lsn > selected->current_lsn ||
+				    select_dirty))) {
 				*selected = probe->restart;
 				source->report.selected_probe = index;
 				ntfs_copy(source->selected, source->scratch, probe->page_bytes);
@@ -309,9 +353,9 @@ recovery_volume_release(void *context, void *bytes, size_t size)
 	ntfs_free(context, bytes, size);
 }
 
-enum ntfs_result
-ntfs_logfile_open_volume_impl(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
-    struct ntfs_logfile_report *report, struct ntfs_logfile **out)
+static enum ntfs_result
+open_volume(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
+    struct ntfs_logfile_report *report, struct ntfs_logfile **out, bool retained_roots)
 {
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *stream = NULL;
@@ -367,7 +411,7 @@ ntfs_logfile_open_volume_impl(struct ntfs_volume *volume, const struct ntfs_logf
 	node = NULL;
 	environment = (struct ntfs_environment){
 	    NTFS_API_VERSION, stream, stream->size, volume_read, volume_allocate, volume_release};
-	result = ntfs_logfile_open(&environment, &policy, report, out);
+	result = source_open(&environment, &policy, report, out, retained_roots);
 	if (result == NTFS_OK) {
 		(*out)->backing = stream;
 		stream = NULL;
@@ -379,9 +423,23 @@ done:
 }
 
 enum ntfs_result
-ntfs_logfile_open(const struct ntfs_environment *environment,
-    const struct ntfs_logfile_limits *requested, struct ntfs_logfile_report *report,
+ntfs_logfile_open_volume_impl(struct ntfs_volume *volume, const struct ntfs_logfile_limits *limits,
+    struct ntfs_logfile_report *report, struct ntfs_logfile **out)
+{
+	return open_volume(volume, limits, report, out, false);
+}
+
+enum ntfs_result
+ntfs_logfile_open_volume_retained_impl(struct ntfs_volume *volume,
+    const struct ntfs_logfile_limits *limits, struct ntfs_logfile_report *report,
     struct ntfs_logfile **out)
+{
+	return open_volume(volume, limits, report, out, true);
+}
+
+static enum ntfs_result
+source_open(const struct ntfs_environment *environment, const struct ntfs_logfile_limits *requested,
+    struct ntfs_logfile_report *report, struct ntfs_logfile **out, bool retained_roots)
 {
 	struct ntfs_logfile_limits limits;
 	struct ntfs_logfile *source;
@@ -424,7 +482,7 @@ ntfs_logfile_open(const struct ntfs_environment *environment,
 	if (source->raw == NULL || source->scratch == NULL || source->selected == NULL) {
 		result = NTFS_NO_MEMORY;
 	} else {
-		result = discover(source);
+		result = discover(source, retained_roots);
 	}
 	if (result != NTFS_OK) {
 		source->report.selected_probe = NTFS_LOGFILE_NO_PROBE;
@@ -441,6 +499,14 @@ ntfs_logfile_open(const struct ntfs_environment *environment,
 	}
 	*out = source;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_open(const struct ntfs_environment *environment,
+    const struct ntfs_logfile_limits *requested, struct ntfs_logfile_report *report,
+    struct ntfs_logfile **out)
+{
+	return source_open(environment, requested, report, out, false);
 }
 
 enum ntfs_result

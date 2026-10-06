@@ -72,13 +72,45 @@ same_restart(const struct ntfs_logfile_restart *a, const struct ntfs_logfile_res
 	    a->clients.length == b->clients.length && a->clean_hint == b->clean_hint;
 }
 
-enum ntfs_result
-ntfs_write_journal_reserve_tail(const struct ntfs_logfile_restart *restart, uint64_t tail_lsn,
-    uint16_t snapshot_bytes, struct ntfs_write_log_reservation *out)
+static uint32_t
+aligned_bytes(uint32_t bytes)
+{
+	return (bytes + NTFS_WIRE_ALIGNMENT - 1u) / NTFS_WIRE_ALIGNMENT * NTFS_WIRE_ALIGNMENT;
+}
+
+static bool
+resident_change_valid(const struct ntfs_write_file_plan *file)
+{
+	struct ntfs_attr_view attribute;
+	const uint8_t *value;
+	size_t bytes, record_offset, value_offset;
+
+	if (file->resident_bytes == 0) {
+		return file->resident_record_offset == 0 && file->resident_attribute_offset == 0;
+	}
+	if (ntfs_attr_find(file->before, sizeof(file->before), NTFS_ATTRIBUTE_DATA, NULL, 0,
+		UINT16_MAX, &attribute) != NTFS_OK ||
+	    attribute.flags != 0 || ntfs_attr_value(&attribute, &value, &bytes) != NTFS_OK) {
+		return false;
+	}
+	record_offset = (size_t)(attribute.bytes - file->before);
+	value_offset = (size_t)(value - attribute.bytes);
+	return file->resident_record_offset == record_offset &&
+	    file->resident_attribute_offset >= value_offset &&
+	    ntfs_bounds(record_offset, attribute.length, file->snapshot_bytes) &&
+	    ntfs_bounds(value_offset, bytes, attribute.length) &&
+	    ntfs_bounds(
+		file->resident_attribute_offset - value_offset, file->resident_bytes, bytes);
+}
+
+static enum ntfs_result
+reserve_tail(const struct ntfs_logfile_restart *restart, uint64_t tail_lsn, uint16_t snapshot_bytes,
+    uint16_t resident_bytes, struct ntfs_write_log_reservation *out)
 {
 	struct ntfs_logfile_lsn current, tail;
 	uint64_t first;
-	uint32_t snapshot_offset, update_offset, checkpoint_offset;
+	uint32_t snapshot_offset, update_offset, checkpoint_offset, resident_offset,
+	    resident_packet;
 	enum ntfs_result result;
 
 	if (restart == NULL || out == NULL ||
@@ -92,6 +124,9 @@ ntfs_write_journal_reserve_tail(const struct ntfs_logfile_restart *restart, uint
 	if (snapshot_bytes < sizeof(struct ntfs_disk_record) ||
 	    snapshot_bytes > NTFS_WRITE_RECORD_BYTES || snapshot_bytes % NTFS_WIRE_ALIGNMENT != 0) {
 		return NTFS_CORRUPT;
+	}
+	if (resident_bytes > NTFS_WRITE_RECORD_BYTES) {
+		return NTFS_RANGE;
 	}
 	result = ntfs_logfile_lsn_decode(restart, restart->current_lsn, &current);
 	if (result != NTFS_OK) {
@@ -118,9 +153,17 @@ ntfs_write_journal_reserve_tail(const struct ntfs_logfile_restart *restart, uint
 	update_offset = snapshot_offset + sizeof(struct ntfs_disk_log_record) +
 	    sizeof(struct ntfs_disk_log_update_storage) + snapshot_bytes;
 	checkpoint_offset = NTFS_WRITE_LOG_DATA_OFFSET + NTFS_WRITE_BOOTSTRAP_BYTES;
+	resident_offset =
+	    update_offset + sizeof(struct ntfs_disk_log_record) + WRITE_CHANGE_PAYLOAD_BYTES;
+	resident_packet = sizeof(struct ntfs_disk_log_record) +
+	    sizeof(struct ntfs_disk_log_update_storage) + aligned_bytes(resident_bytes) +
+	    resident_bytes;
 	if (!ntfs_bounds(update_offset,
 		sizeof(struct ntfs_disk_log_record) + WRITE_CHANGE_PAYLOAD_BYTES,
 		NTFS_WRITE_CLUSTER_BYTES) ||
+	    (resident_bytes != 0 &&
+		!ntfs_bounds(
+		    resident_offset, aligned_bytes(resident_packet), NTFS_WRITE_CLUSTER_BYTES)) ||
 	    !ntfs_bounds(
 		checkpoint_offset, NTFS_WRITE_CHECKPOINT_BYTES, NTFS_WRITE_CLUSTER_BYTES)) {
 		return NTFS_RANGE;
@@ -137,7 +180,26 @@ ntfs_write_journal_reserve_tail(const struct ntfs_logfile_restart *restart, uint
 	out->snapshot_offset = (uint16_t)snapshot_offset;
 	out->update_offset = (uint16_t)update_offset;
 	out->checkpoint_record_offset = (uint16_t)checkpoint_offset;
+	if (resident_bytes != 0) {
+		out->resident_offset = (uint16_t)resident_offset;
+		out->resident_lsn = lsn(restart, first + resident_offset);
+	}
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_write_journal_reserve_tail(const struct ntfs_logfile_restart *restart, uint64_t tail_lsn,
+    uint16_t snapshot_bytes, struct ntfs_write_log_reservation *out)
+{
+	return reserve_tail(restart, tail_lsn, snapshot_bytes, 0, out);
+}
+
+enum ntfs_result
+ntfs_write_journal_reserve_resident_tail(const struct ntfs_logfile_restart *restart,
+    uint64_t tail_lsn, uint16_t snapshot_bytes, uint16_t resident_bytes,
+    struct ntfs_write_log_reservation *out)
+{
+	return reserve_tail(restart, tail_lsn, snapshot_bytes, resident_bytes, out);
 }
 
 enum ntfs_result
@@ -341,7 +403,8 @@ encode_updates(const struct ntfs_write_journal_input *input,
 	struct ntfs_disk_log_open_attribute entry = {0};
 	struct ntfs_logfile_update_input update = {0};
 	uint8_t lcn_wire[sizeof(uint64_t)];
-	uint32_t bytes;
+	uint32_t bytes, next;
+	uint64_t last_lsn;
 	size_t change_offset;
 	enum ntfs_result result;
 
@@ -393,12 +456,35 @@ encode_updates(const struct ntfs_write_journal_input *input,
 		    NTFS_LOGFILE_RECORD_UPDATE, NTFS_WRITE_TRANSACTION_KEY, 0, work->payload,
 		    bytes);
 	}
-	if (result == NTFS_OK) {
-		result = encode_page(work, reservation->update_lsn,
-		    (uint16_t)(reservation->update_offset + sizeof(struct ntfs_disk_log_record) +
-			bytes),
-		    false, out->prepare);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	last_lsn = reservation->update_lsn;
+	next = reservation->update_offset + sizeof(struct ntfs_disk_log_record) + bytes;
+	if (file->resident_bytes != 0) {
+		change_offset =
+		    (size_t)file->resident_record_offset + file->resident_attribute_offset;
+		update.record_offset = file->resident_record_offset;
+		update.attribute_offset = file->resident_attribute_offset;
+		update.redo =
+		    (struct ntfs_logfile_buffer){file->after + change_offset, file->resident_bytes};
+		update.undo = (struct ntfs_logfile_buffer){
+		    file->before + change_offset, file->resident_bytes};
+		result = payload(work, &update, &bytes);
+		if (result == NTFS_OK) {
+			result = emit_packet(work, reservation->resident_offset,
+			    reservation->resident_lsn, reservation->update_lsn,
+			    reservation->update_lsn, NTFS_LOGFILE_RECORD_UPDATE,
+			    NTFS_WRITE_TRANSACTION_KEY, 0, work->payload, bytes);
+		}
+		if (result != NTFS_OK) {
+			return result;
+		}
+		last_lsn = reservation->resident_lsn;
+		next = reservation->resident_offset +
+		    aligned_bytes(sizeof(struct ntfs_disk_log_record) + bytes);
+	}
+	result = encode_page(work, last_lsn, (uint16_t)next, false, out->prepare);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -411,8 +497,8 @@ encode_updates(const struct ntfs_write_journal_input *input,
 	result = payload(work, &update, &bytes);
 	if (result == NTFS_OK) {
 		result = emit_packet(work, NTFS_WRITE_LOG_DATA_OFFSET, reservation->commit_lsn,
-		    reservation->update_lsn, 0, NTFS_LOGFILE_RECORD_UPDATE,
-		    NTFS_WRITE_TRANSACTION_KEY, NTFS_LOGFILE_RECORD_DELETING, work->payload, bytes);
+		    last_lsn, 0, NTFS_LOGFILE_RECORD_UPDATE, NTFS_WRITE_TRANSACTION_KEY,
+		    NTFS_LOGFILE_RECORD_DELETING, work->payload, bytes);
 	}
 	if (result == NTFS_OK) {
 		result = encode_page(work, reservation->commit_lsn,
@@ -473,17 +559,56 @@ encode_copy(struct ntfs_write_journal_workspace *work, const void *home, uint64_
 	    work->restored, sizeof(work->restored), out, NTFS_WRITE_CLUSTER_BYTES);
 }
 
+static enum ntfs_result
+emit_compensation(struct ntfs_write_journal_workspace *work,
+    const struct ntfs_write_file_plan *file, uint16_t record_offset, uint16_t attribute_offset,
+    uint16_t change_bytes, uint16_t offset, uint64_t sequence_lsn, uint64_t previous_lsn,
+    uint64_t undo_next_lsn, uint32_t *packet_bytes)
+{
+	struct ntfs_logfile_update_input update = {0};
+	struct ntfs_disk_log_update_storage *stored;
+	uint8_t lcn[sizeof(uint64_t)];
+	uint32_t bytes;
+	enum ntfs_result result;
+
+	ntfs_put_u64(lcn, file->target_lcn);
+	update.redo_operation = NTFS_LOG_OP_UPDATE_RESIDENT_VALUE;
+	update.undo_operation = NTFS_LOG_OP_COMPENSATION;
+	update.target_attribute = NTFS_WRITE_MFT_KEY;
+	update.attribute_flags = NTFS_WRITE_MFT_TARGET_FLAG;
+	update.record_offset = record_offset;
+	update.attribute_offset = attribute_offset;
+	update.cluster_index = file->cluster_index;
+	update.target_vcn = file->target_vcn;
+	update.lcns = (struct ntfs_logfile_buffer){lcn, sizeof(lcn)};
+	update.redo = (struct ntfs_logfile_buffer){
+	    file->before + record_offset + attribute_offset, change_bytes};
+	result = payload(work, &update, &bytes);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	/* Native compensation omits undo storage while retaining its original
+	 * declared length. Its inactive offset is exactly the complete endpoint. */
+	stored = (void *)work->payload;
+	ntfs_put_u16(stored->header.undo_bytes, change_bytes);
+	result = emit_packet(work, offset, sequence_lsn, previous_lsn, undo_next_lsn,
+	    NTFS_LOGFILE_RECORD_UPDATE, NTFS_WRITE_TRANSACTION_KEY, 0, work->payload, bytes);
+	if (result == NTFS_OK) {
+		*packet_bytes = aligned_bytes(sizeof(struct ntfs_disk_log_record) + bytes);
+	}
+	return result;
+}
+
 enum ntfs_result
 ntfs_write_abort_encode(const struct ntfs_logfile_restart *restart, uint16_t sequence,
     const struct ntfs_write_log_reservation *reservation, const struct ntfs_write_file_plan *file,
     struct ntfs_write_journal_workspace *work, struct ntfs_write_abort_plan *out)
 {
 	struct ntfs_logfile_update_input update = {0};
-	struct ntfs_disk_log_update_storage *stored;
 	struct ntfs_disk_record *header;
 	struct ntfs_logfile_lsn open;
-	uint8_t lcn[sizeof(uint64_t)];
-	uint32_t bytes, next;
+	uint32_t bytes, next, resident_offset;
+	uint64_t previous_lsn;
 	size_t change;
 	enum ntfs_result result;
 
@@ -504,13 +629,16 @@ ntfs_write_abort_encode(const struct ntfs_logfile_restart *restart, uint16_t seq
 	change = (size_t)file->record_offset + file->attribute_offset;
 	if (file->snapshot_bytes > NTFS_WRITE_RECORD_BYTES ||
 	    file->change_bytes != WRITE_CHANGE_BYTES ||
-	    !ntfs_bounds(change, file->change_bytes, file->snapshot_bytes)) {
+	    !ntfs_bounds(change, file->change_bytes, file->snapshot_bytes) ||
+	    !resident_change_valid(file)) {
 		return NTFS_INVALID;
 	}
 	result = ntfs_logfile_lsn_decode(restart, reservation->open_lsn, &open);
 	if (result != NTFS_OK) {
 		return result;
 	}
+	resident_offset = reservation->update_offset + sizeof(struct ntfs_disk_log_record) +
+	    WRITE_CHANGE_PAYLOAD_BYTES;
 	if (open.record_offset != NTFS_WRITE_LOG_DATA_OFFSET ||
 	    open.page_offset != reservation->prepare_offset ||
 	    reservation->commit_offset != open.page_offset + NTFS_WRITE_CLUSTER_BYTES ||
@@ -528,39 +656,40 @@ ntfs_write_abort_encode(const struct ntfs_logfile_restart *restart, uint16_t seq
 		lsn(restart, reservation->prepare_offset + reservation->snapshot_offset) ||
 	    reservation->update_lsn !=
 		lsn(restart, reservation->prepare_offset + reservation->update_offset) ||
+	    (file->resident_bytes == 0 &&
+		(reservation->resident_offset != 0 || reservation->resident_lsn != 0)) ||
+	    (file->resident_bytes != 0 &&
+		(reservation->resident_offset != resident_offset ||
+		    reservation->resident_lsn !=
+			lsn(restart, reservation->prepare_offset + resident_offset))) ||
 	    reservation->commit_lsn !=
 		lsn(restart, reservation->commit_offset + NTFS_WRITE_LOG_DATA_OFFSET)) {
 		return NTFS_CORRUPT;
 	}
 	ntfs_zero(work, sizeof(*work));
 	work->client.sequence = sequence;
-	ntfs_put_u64(lcn, file->target_lcn);
-	update.redo_operation = NTFS_LOG_OP_UPDATE_RESIDENT_VALUE;
-	update.undo_operation = NTFS_LOG_OP_COMPENSATION;
-	update.target_attribute = NTFS_WRITE_MFT_KEY;
-	update.attribute_flags = NTFS_WRITE_MFT_TARGET_FLAG;
-	update.record_offset = file->record_offset;
-	update.attribute_offset = file->attribute_offset;
-	update.cluster_index = file->cluster_index;
-	update.target_vcn = file->target_vcn;
-	update.lcns = (struct ntfs_logfile_buffer){lcn, sizeof(lcn)};
-	update.redo = (struct ntfs_logfile_buffer){file->before + change, file->change_bytes};
-	result = payload(work, &update, &bytes);
-	if (result != NTFS_OK) {
-		return result;
+	next = NTFS_WRITE_LOG_DATA_OFFSET;
+	previous_lsn = reservation->update_lsn;
+	if (file->resident_bytes != 0) {
+		out->resident_compensation_lsn = reservation->commit_lsn;
+		result = emit_compensation(work, file, file->resident_record_offset,
+		    file->resident_attribute_offset, file->resident_bytes, (uint16_t)next,
+		    reservation->commit_lsn, reservation->resident_lsn, reservation->update_lsn,
+		    &bytes);
+		if (result != NTFS_OK) {
+			goto failed;
+		}
+		next += bytes;
+		previous_lsn = reservation->commit_lsn;
 	}
-	/* Native compensation omits undo storage while retaining its original
-	 * declared length. Its inactive offset is exactly the complete endpoint. */
-	stored = (void *)work->payload;
-	ntfs_put_u16(stored->header.undo_bytes, file->change_bytes);
-	result = emit_packet(work, NTFS_WRITE_LOG_DATA_OFFSET, reservation->commit_lsn,
-	    reservation->update_lsn, reservation->snapshot_lsn, NTFS_LOGFILE_RECORD_UPDATE,
-	    NTFS_WRITE_TRANSACTION_KEY, 0, work->payload, bytes);
+	out->compensation_lsn = lsn(restart, reservation->commit_offset + next);
+	result = emit_compensation(work, file, file->record_offset, file->attribute_offset,
+	    file->change_bytes, (uint16_t)next, out->compensation_lsn, previous_lsn,
+	    reservation->snapshot_lsn, &bytes);
 	if (result != NTFS_OK) {
-		return result;
+		goto failed;
 	}
-	next = NTFS_WRITE_LOG_DATA_OFFSET + sizeof(struct ntfs_disk_log_record) + bytes;
-	out->compensation_lsn = reservation->commit_lsn;
+	next += bytes;
 	out->end_lsn = lsn(restart, reservation->commit_offset + next);
 	ntfs_zero(&update, sizeof(update));
 	update.redo_operation = NTFS_LOG_OP_FORGET_TRANSACTION;
@@ -589,6 +718,7 @@ ntfs_write_abort_encode(const struct ntfs_logfile_restart *restart, uint16_t seq
 		result = ntfs_record_protect(out->file.after, sizeof(out->file.after),
 		    out->file.protected_after, sizeof(out->file.protected_after));
 	}
+failed:
 	if (result != NTFS_OK) {
 		ntfs_zero(out, sizeof(*out));
 	}
@@ -751,6 +881,7 @@ ntfs_write_journal_encode(const struct ntfs_write_journal_input *input,
 	}
 	file = input->file;
 	if (file->mft_reference != (UINT64_C(1) << NTFS_REFERENCE_SEQUENCE_SHIFT) ||
+	    !resident_change_valid(file) ||
 	    (file->reference & NTFS_REFERENCE_RECORD_MASK) < NTFS_FIRST_USER_RECORD ||
 	    file->cluster_index >= NTFS_WRITE_CLUSTER_BYTES / NTFS_WRITE_SECTOR_BYTES ||
 	    file->cluster_index % (NTFS_WRITE_RECORD_BYTES / NTFS_WRITE_SECTOR_BYTES) != 0 ||
@@ -760,13 +891,14 @@ ntfs_write_journal_encode(const struct ntfs_write_journal_input *input,
 		result = NTFS_UNSUPPORTED;
 		goto failed;
 	}
-	result = ntfs_write_journal_reserve_tail(
-	    &work->restart[0], input->tail_lsn, file->snapshot_bytes, &out->reservation);
+	result = ntfs_write_journal_reserve_resident_tail(&work->restart[0], input->tail_lsn,
+	    file->snapshot_bytes, file->resident_bytes, &out->reservation);
 	if (result != NTFS_OK) {
 		goto failed;
 	}
 	if (ntfs_u64(((const struct ntfs_disk_record *)file->after)->lsn) !=
-		out->reservation.update_lsn ||
+		(out->reservation.resident_lsn != 0 ? out->reservation.resident_lsn
+						    : out->reservation.update_lsn) ||
 	    ntfs_u64(((const struct ntfs_disk_record *)file->before)->lsn) >=
 		out->reservation.update_lsn) {
 		result = NTFS_STALE;

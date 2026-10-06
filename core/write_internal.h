@@ -28,12 +28,15 @@ enum {
 	NTFS_WRITE_CHECKPOINT_BYTES = sizeof(struct ntfs_disk_log_record) +
 	    sizeof(struct ntfs_disk_log_client_restart) + NTFS_WRITE_QUIET_EXTENSION_BYTES,
 	NTFS_WRITE_STANDARD_BYTES =
-	    sizeof(struct ntfs_disk_standard) + sizeof(struct ntfs_disk_standard_extension)
+	    sizeof(struct ntfs_disk_standard) + sizeof(struct ntfs_disk_standard_extension),
+	NTFS_WRITE_UPDATE_PAYLOAD_BYTES =
+	    sizeof(struct ntfs_disk_log_update_storage) + 2 * NTFS_WRITE_RECORD_BYTES
 };
 
 struct ntfs_write_file_plan {
 	uint64_t reference, mft_reference, target_vcn, target_lcn, cluster_physical;
 	uint16_t cluster_index, record_offset, attribute_offset, change_bytes, snapshot_bytes;
+	uint16_t resident_record_offset, resident_attribute_offset, resident_bytes;
 	/* Complete private restored FILE snapshots, followed by protected output.
 	 * No borrowed node, record, attribute or stream survives preparation. */
 	uint8_t before[NTFS_WRITE_RECORD_BYTES], after[NTFS_WRITE_RECORD_BYTES];
@@ -49,10 +52,17 @@ struct ntfs_write_file_plan {
 enum ntfs_result ntfs_write_prepare_metadata(
     struct ntfs_node *, uint64_t filetime, uint64_t lsn, struct ntfs_write_file_plan *);
 
+/* Prepare an unchanged-size resident DATA overwrite and SI times in one private
+ * FILE image. The journal must separately bind both resident update operations;
+ * this pure helper does not grant write or recovery admission. */
+enum ntfs_result ntfs_write_prepare_resident_metadata(struct ntfs_node *, uint64_t filetime,
+    uint64_t lsn, uint64_t offset, const void *, size_t, struct ntfs_write_file_plan *);
+
 struct ntfs_write_log_reservation {
 	uint64_t prepare_offset, commit_offset, checkpoint_offset;
 	uint64_t open_lsn, snapshot_lsn, update_lsn, commit_lsn, bootstrap_lsn, checkpoint_lsn;
-	uint16_t snapshot_offset, update_offset, checkpoint_record_offset;
+	uint64_t resident_lsn;
+	uint16_t snapshot_offset, update_offset, checkpoint_record_offset, resident_offset;
 };
 
 struct ntfs_write_journal_input {
@@ -79,7 +89,7 @@ struct ntfs_write_journal_plan {
 
 struct ntfs_write_journal_workspace {
 	uint8_t restored[NTFS_WRITE_CLUSTER_BYTES], page[NTFS_WRITE_CLUSTER_BYTES];
-	uint8_t payload[sizeof(struct ntfs_disk_log_update_storage) + NTFS_WRITE_RECORD_BYTES];
+	uint8_t payload[NTFS_WRITE_UPDATE_PAYLOAD_BYTES];
 	struct ntfs_logfile_restart restart[NTFS_LFS_RESTART_PAGES];
 	struct ntfs_logfile_client client;
 };
@@ -94,6 +104,9 @@ enum ntfs_result ntfs_write_journal_reserve(const struct ntfs_logfile_restart *,
     uint16_t snapshot_bytes, struct ntfs_write_log_reservation *);
 enum ntfs_result ntfs_write_journal_reserve_tail(const struct ntfs_logfile_restart *,
     uint64_t tail_lsn, uint16_t snapshot_bytes, struct ntfs_write_log_reservation *);
+enum ntfs_result ntfs_write_journal_reserve_resident_tail(const struct ntfs_logfile_restart *,
+    uint64_t tail_lsn, uint16_t snapshot_bytes, uint16_t resident_bytes,
+    struct ntfs_write_log_reservation *);
 enum ntfs_result ntfs_write_journal_encode(const struct ntfs_write_journal_input *,
     struct ntfs_write_journal_workspace *, struct ntfs_write_journal_plan *);
 /* Reprotect one complete private FILE/RSTR/RCRD publication with a USA marker
@@ -109,7 +122,7 @@ enum ntfs_result ntfs_write_quiet_bind(const struct ntfs_logfile_restart *,
     const struct ntfs_logfile_client *, const void *bootstrap, const void *checkpoint);
 
 struct ntfs_write_abort_plan {
-	uint64_t offset, compensation_lsn, end_lsn;
+	uint64_t offset, compensation_lsn, end_lsn, resident_compensation_lsn;
 	struct ntfs_write_file_plan file;
 	uint8_t page[NTFS_WRITE_CLUSTER_BYTES], copy[NTFS_WRITE_CLUSTER_BYTES];
 };
@@ -126,7 +139,8 @@ enum {
 	NTFS_WRITE_REPLAY_SNAPSHOT,
 	NTFS_WRITE_REPLAY_UPDATE,
 	NTFS_WRITE_REPLAY_COMMIT,
-	NTFS_WRITE_REPLAY_PACKETS
+	NTFS_WRITE_REPLAY_PACKETS,
+	NTFS_WRITE_REPLAY_MAX_PACKETS = NTFS_WRITE_REPLAY_PACKETS + 3
 };
 
 struct ntfs_write_replay_input {
@@ -138,6 +152,9 @@ struct ntfs_write_replay_input {
 	/* Present only when packet[COMMIT] is the complete native compensation
 	 * update followed by this exact transaction deletion record. */
 	struct ntfs_logfile_buffer abort;
+	/* A resident DATA update follows SI. On undo its compensation precedes
+	 * packet[COMMIT], which remains the SI compensation followed by abort. */
+	struct ntfs_logfile_buffer resident, resident_compensation;
 };
 
 struct ntfs_write_replay_workspace {
@@ -145,6 +162,8 @@ struct ntfs_write_replay_workspace {
 	struct ntfs_logfile_update update[NTFS_WRITE_REPLAY_PACKETS];
 	struct ntfs_logfile_record abort_record;
 	struct ntfs_logfile_update abort_update;
+	struct ntfs_logfile_record resident_record, resident_compensation_record;
+	struct ntfs_logfile_update resident_update, resident_compensation_update;
 	struct ntfs_write_log_reservation reservation;
 	uint8_t snapshot[NTFS_WRITE_RECORD_BYTES], checked[NTFS_WRITE_RECORD_BYTES];
 };
@@ -153,6 +172,8 @@ struct ntfs_write_replay_plan {
 	struct ntfs_write_file_plan file;
 	uint64_t open_lsn, snapshot_lsn, update_lsn, commit_lsn;
 	uint64_t compensation_lsn, abort_lsn, end_lsn;
+	uint64_t resident_lsn, resident_compensation_lsn;
+	uint16_t prepared_packets, packets;
 	bool committed, compensated;
 };
 
@@ -170,9 +191,9 @@ enum ntfs_result ntfs_write_replay_prepare(struct ntfs_volume *,
 enum {
 	NTFS_WRITE_HISTORY_TRANSACTIONS = 64,
 	NTFS_WRITE_HISTORY_PACKETS =
-	    2 + NTFS_WRITE_HISTORY_TRANSACTIONS * (NTFS_WRITE_REPLAY_PACKETS + 1) + 2,
-	NTFS_WRITE_HISTORY_PACKET_BYTES = sizeof(struct ntfs_disk_log_record) +
-	    sizeof(struct ntfs_disk_log_update_storage) + NTFS_WRITE_RECORD_BYTES,
+	    2 + NTFS_WRITE_HISTORY_TRANSACTIONS * NTFS_WRITE_REPLAY_MAX_PACKETS + 2,
+	NTFS_WRITE_HISTORY_PACKET_BYTES =
+	    sizeof(struct ntfs_disk_log_record) + NTFS_WRITE_UPDATE_PAYLOAD_BYTES,
 	NTFS_WRITE_HISTORY_INDEX_BYTES = 1024 * 1024
 };
 
@@ -274,6 +295,8 @@ struct ntfs_write_transaction_workspace {
  * captured under the caller's immutable serialized epoch. No write occurs. */
 enum ntfs_result ntfs_write_prepare_transaction(
     struct ntfs_node *, uint64_t filetime, struct ntfs_write_transaction_workspace *);
+enum ntfs_result ntfs_write_prepare_resident_transaction(struct ntfs_node *, uint64_t filetime,
+    uint64_t offset, const void *, size_t, struct ntfs_write_transaction_workspace *);
 enum ntfs_result ntfs_write_history_settled(
     struct ntfs_volume *, const struct ntfs_write_history *);
 
@@ -376,14 +399,15 @@ struct ntfs_write_range_report {
 	uint64_t requested_bytes, completed_bytes;
 };
 
-/* Private image experiment only. The separate initialized-data owner supplies
+/* Private bounded image writing. The separate overwrite owner supplies
  * exclusive authorized claim, memory/read governors and the true persistence
  * transport. Fresh full validation, native history/settled-home binding and
  * absence of hibernation/change-journal state precede private planning. Every
  * immutable epoch closes before device writes. Allocation/size/namespace/ADS
- * stay unchanged; the bounded initialized overwrite updates ordinary SI times.
- * Native interruption qualification and recovery execution must precede public
- * writable admission. The read-only API and FSKit are not wired to this helper. */
+ * stay unchanged; resident DATA and initialized nonresident ranges use their
+ * owning FILE journal family and update ordinary SI times. FSKit's image owner
+ * calls this helper only after closing all immutable readers. Block resources
+ * remain read-only, and the metadata-preserving overwrite API is separate. */
 enum ntfs_result ntfs_write_existing_range(struct ntfs_overwrite *, uint64_t reference,
     uint64_t offset, const void *, size_t, uint64_t filetime, struct ntfs_write_range_report *);
 

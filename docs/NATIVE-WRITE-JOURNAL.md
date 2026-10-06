@@ -147,7 +147,26 @@ mappings, ordinary teardown and two fresh mounts using one saved URL through the
 CLI. The exact postimage passes native Windows file/ADS/time/identity/ACL,
 read-only chkdsk, clean-state and raw healthy-event review. All 76 native
 component groups pass with zero SKIPs. ACCEPTANCE.md owns the complete reports.
-Allocation/free, resize, resident/sparse/compressed/ADS writes, namespace mutation,
+The unchanged-size resident continuation adds a resident DATA redo/undo after SI;
+loser recovery publishes DATA compensation before SI compensation and the undo
+FILE. All 91 actual writer interruption states and 264 interrupted-recovery states
+pass complete offline and Windows recovery checks. Independent raw XML review
+binds respectively 91/264 healthy events and 56/154 precisely predicted USA warnings,
+with no unrelated warning or repair. Installed resident positioned/shared-mapping
+writing, fresh saved-URL remount and exact Windows postimage also pass; see
+ACCEPTANCE.md for the independently reviewed evidence.
+
+Five new isolated publication states retain the settled ForgetTransaction as the
+empty checkpoint's analysis anchor, instead of adding a new bootstrap transaction.
+They pass native health, exact files/ADS/times, initialized identity, clean state,
+read-only chkdsk and original-event review. The source supplies original native
+empty checkpoints with that kind of anchor. This is a byte-level hypothesis,
+not an executed C checkpoint, interruption gate or circular-wrap qualification.
+Resident identity/ACL was not separately collected in this experimental run;
+its complete FILE remains identical offline. The earlier failing checkpoint
+family remains disqualified and product admission is unchanged.
+
+Allocation/free, resize, sparse/compressed/ADS writes, namespace mutation,
 general journal histories and block-device writing remain under implementation.
 Hardware power interruptions remain unqualified.
 

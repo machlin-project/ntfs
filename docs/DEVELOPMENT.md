@@ -46,12 +46,13 @@ Do not run a staged app binary: its launch may register the staged extension.
 Initial OS extension enablement may require the ordinary Settings toggle;
 PlugInKit election output does not prove actual FSClient enablement.
 
-The installed checker `tests/mounted_write.c` has separate `write`, `check` and
-`deny` modes. `write` verifies positioned I/O/fsync and shared mappings against
+The installed checker `tests/mounted_write.c` has separate `write`, `check`,
+`resident-write`, `resident-check` and `deny` modes. The write modes verify
+positioned I/O/fsync and shared mappings against
 independent before/after files; `check` reopens the exact result without mutation;
 `deny` checks all three open modes for an authenticated foreign caller. Generated
 acceptance reports bind actual loaded identities, full-image bytes, fresh mounts
-and the independent Windows postimage. This is bounded initialized overwriting;
+and the independent Windows postimage. This is bounded existing-file overwriting;
 unsupported mutation families remain explicit in WRITES.md.
 
 Current checkpoint-transaction qualification runs `checkpoint-transactions`,

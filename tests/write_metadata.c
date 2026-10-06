@@ -168,8 +168,86 @@ vectors(const char *directory)
 	free(plan);
 }
 
+#define TEST_RESIDENT_REFERENCE (UINT64_C(7) << NTFS_REFERENCE_SEQUENCE_SHIFT | UINT64_C(24))
+static const uint8_t resident_payload[] = "MACHLIN_RESIDENT";
+
+enum { TEST_RESIDENT_OFFSET = 5 };
+
+static enum ntfs_result
+metadata_prepare(struct ntfs_node *node, uint64_t filetime, uint64_t lsn,
+    struct ntfs_write_file_plan *plan, bool resident)
+{
+	if (resident) {
+		return ntfs_write_prepare_resident_metadata(node, filetime, lsn,
+		    TEST_RESIDENT_OFFSET, resident_payload, sizeof(resident_payload) - 1, plan);
+	}
+	return ntfs_write_prepare_metadata(node, filetime, lsn, plan);
+}
+
 static void
-faults(const char *directory)
+resident_vectors(const char *directory)
+{
+	struct ntfs_write_file_plan *plan = malloc(sizeof(*plan));
+	struct ntfs_volume *volume;
+	struct ntfs_node *node;
+	struct fuzz_device device = {0};
+	char *path = malloc(TEST_PATH_BYTES);
+	char name[TEST_NAME_BYTES];
+	FILE *rows;
+	uint8_t *data, *original, *payload;
+	unsigned long long reference, time, lsn, offset;
+	unsigned requested, record, attribute, count = 0;
+	size_t bytes, payload_bytes;
+	int code, parsed;
+
+	assert(plan != NULL && path != NULL);
+	parsed = snprintf(path, TEST_PATH_BYTES, "%s/cases.rows", directory);
+	assert(parsed > 0 && parsed < TEST_PATH_BYTES);
+	rows = fopen(path, "rb");
+	assert(rows != NULL);
+	while ((parsed = fscanf(rows, "%127s %d %llu %llu %llu %llu %u %u %u", name, &code,
+		    &reference, &time, &lsn, &offset, &requested, &record, &attribute)) != EOF) {
+		assert(parsed == 9);
+		data = load(directory, name, "img", &bytes);
+		payload = load(directory, name, "payload", &payload_bytes);
+		assert(payload_bytes == requested);
+		original = malloc(bytes);
+		assert(original != NULL);
+		memcpy(original, data, bytes);
+		device.data = data;
+		device.size = bytes;
+		volume = mount(&device);
+		node = open_node(volume, &device, reference);
+		memset(plan, -1, sizeof(*plan));
+		assert(ntfs_write_prepare_resident_metadata(node, time, lsn, offset, payload,
+			   requested, plan) == (enum ntfs_result)code);
+		if (code == NTFS_OK) {
+			assert(plan->reference == reference && plan->resident_bytes == requested &&
+			    plan->resident_record_offset == record &&
+			    plan->resident_attribute_offset == attribute);
+			assert(memcmp(plan->before, node->record, NTFS_WRITE_RECORD_BYTES) == 0);
+		} else {
+			zero_output(plan);
+		}
+		ntfs_node_close(node);
+		assert(ntfs_unmount(volume) == NTFS_OK && device.memory == 0);
+		if (code == NTFS_OK) {
+			oracle(directory, name, plan);
+		}
+		assert(memcmp(data, original, bytes) == 0);
+		free(payload);
+		free(original);
+		free(data);
+		count++;
+	}
+	assert(!ferror(rows) && fclose(rows) == 0 && count != 0);
+	printf("PASS: %u independent resident FILE/data/USA/admission profiles\n", count);
+	free(path);
+	free(plan);
+}
+
+static void
+faults(const char *directory, bool resident)
 {
 	struct ntfs_write_file_plan *plan = malloc(sizeof(*plan));
 	struct ntfs_volume *volume;
@@ -187,8 +265,8 @@ faults(const char *directory)
 	device.data = data;
 	device.size = bytes;
 	volume = mount(&device);
-	node = open_node(volume, &device, TEST_REFERENCE);
-	assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, plan) == NTFS_OK);
+	node = open_node(volume, &device, (resident ? TEST_RESIDENT_REFERENCE : TEST_REFERENCE));
+	assert(metadata_prepare(node, TEST_TIME, TEST_LSN, plan, resident) == NTFS_OK);
 	allocations = device.allocations;
 	reads = device.reads;
 	assert(allocations != 0 && reads != 0);
@@ -198,18 +276,19 @@ faults(const char *directory)
 		full_failed_read = mode == 2;
 		for (position = 1; position <= (mode == 0 ? allocations : reads); position++) {
 			volume = mount(&device);
-			node = open_node(volume, &device, TEST_REFERENCE);
+			node = open_node(
+			    volume, &device, (resident ? TEST_RESIDENT_REFERENCE : TEST_REFERENCE));
 			device.fail_allocation = mode == 0 ? position : 0;
 			device.fail_read = mode == 0 ? 0 : position;
 			memset(plan, -1, sizeof(*plan));
-			assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, plan) ==
+			assert(metadata_prepare(node, TEST_TIME, TEST_LSN, plan, resident) ==
 			    (mode == 0 ? NTFS_NO_MEMORY : NTFS_IO));
 			zero_output(plan);
 			device.fail_allocation = 0;
 			device.fail_read = 0;
 			device.reads = 0;
-			assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, plan) ==
-			    NTFS_OK);
+			assert(
+			    metadata_prepare(node, TEST_TIME, TEST_LSN, plan, resident) == NTFS_OK);
 			oracle(directory, "ordinary", plan);
 			ntfs_node_close(node);
 			assert(ntfs_unmount(volume) == NTFS_OK && device.memory == 0);
@@ -224,13 +303,13 @@ faults(const char *directory)
 }
 
 static void
-preflight(const char *directory)
+preflight(const char *directory, bool resident)
 {
 	struct ntfs_write_file_plan *plan = malloc(sizeof(*plan));
 	struct fuzz_device device = {0};
 	struct ntfs_volume *volume;
 	struct ntfs_node *node;
-	struct ntfs_operation scope;
+	struct ntfs_operation scope = {0};
 	struct ntfs_operation_limits limits;
 	struct ntfs_info info;
 	uint8_t *data;
@@ -242,18 +321,28 @@ preflight(const char *directory)
 	device.data = data;
 	device.size = bytes;
 	volume = mount(&device);
-	node = open_node(volume, &device, TEST_REFERENCE);
+	node = open_node(volume, &device, (resident ? TEST_RESIDENT_REFERENCE : TEST_REFERENCE));
 	reads = device.reads;
 	allocations = device.allocations;
-	assert(ntfs_write_prepare_metadata(NULL, TEST_TIME, TEST_LSN, plan) == NTFS_INVALID);
-	assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, NULL) == NTFS_INVALID);
-	assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, (void *)node->record) ==
+	assert(metadata_prepare(NULL, TEST_TIME, TEST_LSN, plan, resident) == NTFS_INVALID);
+	assert(metadata_prepare(node, TEST_TIME, TEST_LSN, NULL, resident) == NTFS_INVALID);
+	assert(metadata_prepare(node, TEST_TIME, TEST_LSN, (void *)node->record, resident) ==
 	    NTFS_INVALID);
+	assert(metadata_prepare(node, TEST_TIME, TEST_LSN, (void *)node, resident) == NTFS_INVALID);
 	assert(
-	    ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, (void *)node) == NTFS_INVALID);
-	assert(
-	    ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, (void *)volume) == NTFS_INVALID);
+	    metadata_prepare(node, TEST_TIME, TEST_LSN, (void *)volume, resident) == NTFS_INVALID);
 	assert(device.reads == reads && device.allocations == allocations);
+	if (resident) {
+		assert(ntfs_write_prepare_resident_metadata(node, TEST_TIME, TEST_LSN,
+			   TEST_RESIDENT_OFFSET, NULL, sizeof(resident_payload) - 1,
+			   plan) == NTFS_INVALID);
+		assert(ntfs_write_prepare_resident_metadata(node, TEST_TIME, TEST_LSN,
+			   TEST_RESIDENT_OFFSET, resident_payload, 0, plan) == NTFS_INVALID);
+		assert(ntfs_write_prepare_resident_metadata(node, TEST_TIME, TEST_LSN,
+			   TEST_RESIDENT_OFFSET, plan, sizeof(resident_payload) - 1,
+			   plan) == NTFS_INVALID);
+		assert(device.reads == reads && device.allocations == allocations);
+	}
 	info = volume->info;
 	for (profile = 0; profile < 5; profile++) {
 		volume->info = info;
@@ -275,7 +364,7 @@ preflight(const char *directory)
 			break;
 		}
 		memset(plan, -1, sizeof(*plan));
-		assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, plan) ==
+		assert(metadata_prepare(node, TEST_TIME, TEST_LSN, plan, resident) ==
 		    NTFS_UNSUPPORTED);
 		zero_output(plan);
 		assert(device.reads == reads && device.allocations == allocations);
@@ -285,11 +374,11 @@ preflight(const char *directory)
 	limits.work = 1;
 	assert(ntfs_operation_begin(volume, &limits, &scope) == NTFS_OK);
 	memset(plan, -1, sizeof(*plan));
-	assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, plan) == NTFS_RANGE);
+	assert(metadata_prepare(node, TEST_TIME, TEST_LSN, plan, resident) == NTFS_RANGE);
 	zero_output(plan);
 	assert(ntfs_operation_end(&scope, NULL) == NTFS_OK);
 	device.reads = 0;
-	assert(ntfs_write_prepare_metadata(node, TEST_TIME, TEST_LSN, plan) == NTFS_OK);
+	assert(metadata_prepare(node, TEST_TIME, TEST_LSN, plan, resident) == NTFS_OK);
 	oracle(directory, "ordinary", plan);
 	ntfs_node_close(node);
 	assert(ntfs_unmount(volume) == NTFS_OK && device.memory == 0);
@@ -301,9 +390,14 @@ preflight(const char *directory)
 int
 main(int argc, char **argv)
 {
-	assert(argc == 2);
+	assert(argc == 2 || argc == 3);
 	vectors(argv[1]);
-	faults(argv[1]);
-	preflight(argv[1]);
+	faults(argv[1], false);
+	preflight(argv[1], false);
+	if (argc == 3) {
+		resident_vectors(argv[2]);
+		faults(argv[2], true);
+		preflight(argv[2], true);
+	}
 	return 0;
 }

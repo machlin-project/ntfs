@@ -64,7 +64,10 @@ admit(const struct ntfs_overwrite_environment *backend,
 	    !ntfs_bounds((size_t)file->cluster_index * NTFS_WRITE_SECTOR_BYTES,
 		NTFS_WRITE_RECORD_BYTES, NTFS_WRITE_CLUSTER_BYTES) ||
 	    ntfs_u64(((const struct ntfs_disk_record *)file->after)->lsn) !=
-		input->journal->reservation.update_lsn) {
+		(input->journal->reservation.resident_lsn != 0
+			? input->journal->reservation.resident_lsn
+			: input->journal->reservation.update_lsn) ||
+	    (file->resident_bytes != 0 && input->spans != 0)) {
 		return NTFS_INVALID;
 	}
 	for (index = 0; index < NTFS_WRITE_EXECUTE_LOG_LOCATIONS; index++) {

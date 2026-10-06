@@ -704,6 +704,7 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 	struct overwrite_span *spans = NULL;
 	struct ntfs_volume *volume = NULL;
 	struct ntfs_node *node = NULL;
+	struct ntfs_attr_view attribute;
 	struct ntfs_overwrite_environment backend;
 	uint8_t *image = NULL, *allocation = NULL, *execution_allocation = NULL;
 	uint64_t first, end;
@@ -777,7 +778,14 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 		result = ntfs_node_open(volume, reference, &node);
 	}
 	if (result == NTFS_OK) {
-		result = ntfs_write_prepare_transaction(node, filetime, transaction);
+		result = ntfs_attr_find(node->record, owner->info.record_size, NTFS_ATTRIBUTE_DATA,
+		    NULL, 0, UINT16_MAX, &attribute);
+		if (result == NTFS_OK && !attribute.disk->nonresident) {
+			result = ntfs_write_prepare_resident_transaction(
+			    node, filetime, offset, data, bytes, transaction);
+		} else if (result == NTFS_OK || result == NTFS_NOT_FOUND) {
+			result = ntfs_write_prepare_transaction(node, filetime, transaction);
+		}
 	}
 	ntfs_node_close(node);
 	node = NULL;
@@ -791,14 +799,17 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 	if (result != NTFS_OK) {
 		goto done;
 	}
-	result = prepare_range(owner, reference, offset, bytes, spans, &count, image, first, end);
-	if (result != NTFS_OK) {
-		goto done;
-	}
-	ntfs_copy(image + offset - first, data, bytes);
-	for (index = 0; index < count; index++) {
-		data_spans[index] = (struct ntfs_write_data_span){
-		    spans[index].physical, image + spans[index].offset, spans[index].bytes};
+	if (transaction->file.resident_bytes == 0) {
+		result = prepare_range(
+		    owner, reference, offset, bytes, spans, &count, image, first, end);
+		if (result != NTFS_OK) {
+			goto done;
+		}
+		ntfs_copy(image + offset - first, data, bytes);
+		for (index = 0; index < count; index++) {
+			data_spans[index] = (struct ntfs_write_data_span){
+			    spans[index].physical, image + spans[index].offset, spans[index].bytes};
+		}
 	}
 	transaction->execution.data = data_spans;
 	transaction->execution.spans = count;

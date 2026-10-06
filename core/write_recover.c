@@ -157,7 +157,8 @@ log_home(
 		last = record.lsn;
 		ntfs_copy(work->guard.page + next, work->history.packet[first + index],
 		    work->history.bytes[first + index]);
-		next += work->history.bytes[first + index];
+		next += (work->history.bytes[first + index] + NTFS_WIRE_ALIGNMENT - 1u) /
+		    NTFS_WIRE_ALIGNMENT * NTFS_WIRE_ALIGNMENT;
 	}
 	input.bytes = NTFS_WRITE_CLUSTER_BYTES;
 	input.major = NTFS_LFS_MAJOR_LEGACY;
@@ -211,16 +212,14 @@ journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 
 	for (index = 0; index < work->history.transactions; index++) {
 		current = &work->history.transaction[index];
-		result = log_home(log, first, NTFS_WRITE_REPLAY_COMMIT, work);
+		result = log_home(log, first, current->prepared_packets, work);
 		if (result != NTFS_OK) {
 			return result;
 		}
-		count = current->compensated ? NTFS_WRITE_REPLAY_PACKETS + 1
-		    : current->committed     ? NTFS_WRITE_REPLAY_PACKETS
-					     : NTFS_WRITE_REPLAY_COMMIT;
+		count = current->packets;
 		if (current->committed || current->compensated) {
-			result = log_home(log, first + NTFS_WRITE_REPLAY_COMMIT,
-			    count - NTFS_WRITE_REPLAY_COMMIT, work);
+			result = log_home(log, first + current->prepared_packets,
+			    count - current->prepared_packets, work);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -284,18 +283,39 @@ same_file(const uint8_t *actual, const struct ntfs_write_file_plan *file, const 
 }
 
 static bool
+apply_home_redo(struct ntfs_write_recovery_workspace *work, size_t packet, uint16_t record_offset,
+    uint16_t attribute_offset, uint16_t bytes, uint64_t lsn)
+{
+	struct ntfs_logfile_record record;
+	struct ntfs_logfile_update update;
+	const uint8_t *body;
+
+	if (ntfs_logfile_record_decode(work->history.packet[packet], work->history.bytes[packet],
+		sizeof(struct ntfs_disk_log_record), &record) != NTFS_OK) {
+		return false;
+	}
+	body = work->history.packet[packet] + record.data.offset;
+	if (ntfs_logfile_update_decode(body, record.data.length, &update) != NTFS_OK ||
+	    update.redo.length != bytes ||
+	    !ntfs_bounds(
+		(size_t)record_offset + attribute_offset, bytes, NTFS_WRITE_RECORD_BYTES)) {
+		return false;
+	}
+	ntfs_put_u64(((struct ntfs_disk_record *)(void *)work->guard.page)->lsn, lsn);
+	ntfs_copy(
+	    work->guard.page + record_offset + attribute_offset, body + update.redo.offset, bytes);
+	return true;
+}
+
+static bool
 known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
     struct ntfs_write_recovery_workspace *work, bool torn)
 {
 	const struct ntfs_write_replay_plan *transaction;
 	const struct ntfs_disk_record *header = (const void *)actual;
 	const struct ntfs_disk_record *before;
-	struct ntfs_logfile_record record;
-	struct ntfs_logfile_update update;
-	const uint8_t *body;
 	size_t index, first = RECOVER_ORIGIN_PACKETS;
 	uint64_t lsn = ntfs_u64(header->lsn);
-	enum ntfs_result result;
 
 	for (index = 0; index < work->history.transactions; index++) {
 		transaction = &work->history.transaction[index];
@@ -315,8 +335,13 @@ known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
 				    ntfs_u64(header->base_reference) == 0 &&
 				    (lsn == ntfs_u64(before->lsn) ||
 					lsn == transaction->update_lsn ||
+					(transaction->file.resident_bytes != 0 &&
+					    lsn == transaction->resident_lsn) ||
 					(transaction->compensated &&
 					    lsn == transaction->compensation_lsn) ||
+					(transaction->compensated &&
+					    transaction->file.resident_bytes != 0 &&
+					    lsn == transaction->resident_compensation_lsn) ||
 					(work->close_transaction &&
 					    work->abort.file.reference == file->reference &&
 					    lsn == work->abort.compensation_lsn))) {
@@ -329,35 +354,47 @@ known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
 			} else {
 				/* Even a complete uncommitted redo home belongs to the log's
 				 * full snapshot and exact change; it must be compensated. */
-				result = ntfs_logfile_record_decode(
-				    work->history.packet[first + NTFS_WRITE_REPLAY_UPDATE],
-				    work->history.bytes[first + NTFS_WRITE_REPLAY_UPDATE],
-				    sizeof(struct ntfs_disk_log_record), &record);
-				if (result != NTFS_OK) {
-					return false;
-				}
-				body = work->history.packet[first + NTFS_WRITE_REPLAY_UPDATE] +
-				    record.data.offset;
-				if (ntfs_logfile_update_decode(body, record.data.length, &update) !=
-				    NTFS_OK) {
-					return false;
-				}
 				ntfs_copy(work->guard.page, transaction->file.before,
 				    NTFS_WRITE_RECORD_BYTES);
-				ntfs_put_u64(
-				    ((struct ntfs_disk_record *)(void *)work->guard.page)->lsn,
-				    transaction->update_lsn);
-				ntfs_copy(work->guard.page + transaction->file.record_offset +
+				if (!apply_home_redo(work, first + NTFS_WRITE_REPLAY_UPDATE,
+					transaction->file.record_offset,
 					transaction->file.attribute_offset,
-				    body + update.redo.offset, transaction->file.change_bytes);
+					transaction->file.change_bytes, transaction->update_lsn)) {
+					return false;
+				}
 				if (same_file(actual, &transaction->file, work->guard.page)) {
 					return true;
 				}
+				if (transaction->file.resident_bytes != 0) {
+					if (!apply_home_redo(work, first + NTFS_WRITE_REPLAY_COMMIT,
+						transaction->file.resident_record_offset,
+						transaction->file.resident_attribute_offset,
+						transaction->file.resident_bytes,
+						transaction->resident_lsn)) {
+						return false;
+					}
+					if (same_file(
+						actual, &transaction->file, work->guard.page)) {
+						return true;
+					}
+					if (transaction->compensated) {
+						if (!apply_home_redo(work,
+							first + transaction->prepared_packets,
+							transaction->file.resident_record_offset,
+							transaction->file.resident_attribute_offset,
+							transaction->file.resident_bytes,
+							transaction->resident_compensation_lsn)) {
+							return false;
+						}
+						if (same_file(actual, &transaction->file,
+							work->guard.page)) {
+							return true;
+						}
+					}
+				}
 			}
 		}
-		first += transaction->compensated ? NTFS_WRITE_REPLAY_PACKETS + 1
-		    : transaction->committed	  ? NTFS_WRITE_REPLAY_PACKETS
-						  : NTFS_WRITE_REPLAY_COMMIT;
+		first += transaction->packets;
 	}
 	return false;
 }

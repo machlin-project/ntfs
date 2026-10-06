@@ -43,7 +43,7 @@ installed scope passes for the tested authorized image; arbitrary uncooperative
 access is still outside the ownership contract.
 
 The private image-volume factory acquires and recovers its C owner before publishing
-an immutable view. Its initialized-range operation closes all item caches, nodes
+an immutable view. Its existing-file range operation closes all item caches, nodes
 and read leases under publication/operation serialization before calling the
 writer. Stable FSItems retain full sequence-bearing references and numeric ancestry;
 no consumer follows an old core pointer. Successful completion allocates nothing.

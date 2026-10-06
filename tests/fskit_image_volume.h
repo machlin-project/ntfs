@@ -2,3 +2,5 @@
 #import <Foundation/Foundation.h>
 
 void ntfs_test_fskit_image_volume(NSString *fixtures);
+
+void ntfs_test_fskit_resident_image_volume(NSString *fixtures);

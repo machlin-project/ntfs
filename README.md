@@ -7,8 +7,9 @@ The owner intends a later open-source release; no open-source license is granted
 today. See LICENSE and docs/PROVENANCE.md.
 
 The implementation provides bounded read-only extraction and experimental editing
-of existing initialized ordinary-file ranges in offline images. It is not a
-production NTFS driver. Build, component tests and installed native
+of existing ordinary-file ranges in offline images. Installed initialized-range
+and resident-range acceptance are complete. It is not a production NTFS driver.
+Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
@@ -42,12 +43,18 @@ input. Automation imports generated images only from the app's own Inbox;
 external files require an ordinary picker grant. Initial OS extension enablement
 is separate from repeated mount/test automation. See [DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-The current core checkpoint passes 175 fatal ASan/UBSan suites, selected-Xcode
-style and both freestanding architectures. FSKit components pass 59 host groups
-with thirteen explicit runtime SKIPs and all 76 native groups with zero SKIPs and
-871 unchanged inputs. The personally signed universal app and matching extension
-are installed and enabled only in the disposable test VM. Allocation/free,
-resize, create/delete/rename, resident/sparse/compressed/ADS writes, Windows ACL
+The current resident implementation passes 176 fatal ASan/UBSan suites, selected-Xcode
+style and both freestanding architectures. FSKit components pass 63 host groups
+with thirteen explicit runtime SKIPs and all 80 native groups with zero SKIPs,
+preserving 871 preceding inputs and twelve new resident files. All 91 actual
+resident writer interruption states and all 264 interrupted-recovery states
+pass offline and native Windows recovery, with independent original-event review.
+The personally signed universal app is installed in the disposable test VM.
+Actual resident `pwrite`/`fsync`, observer and shared-mapping coherence, ordinary
+unmount and a fresh saved-URL mount pass. The exact postimage passes Windows
+file/ADS/FILETIME/identity/ACL, clean state, read-only chkdsk and original healthy
+event review. Allocation/free, resize,
+create/delete/rename, sparse/compressed/ADS writes, Windows ACL
 mutation and block-device writes remain unsupported. Distribution signing,
 notarization and commercial release acceptance remain open.
 

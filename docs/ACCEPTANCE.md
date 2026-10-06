@@ -1,5 +1,75 @@
 # Acceptance
 
+## Resident ordinary-file overwrite continuation
+
+The new C implementation admits unchanged-size resident DATA in an ordinary
+modern FILE, under the same exclusive owner and native journal contract. Its
+prepared transaction contains the full FILE before-snapshot, standard-information
+update and resident-value redo/undo. Loser recovery persists DATA and
+standard-information compensation before publishing the complete undo FILE.
+Unknown families and allocation/size/name changes remain refused.
+
+All 176 fatal ASan/UBSan suites, selected-Xcode style and both freestanding
+architectures pass. Sixteen metadata profiles and seven independent resident
+journal families include complete FILE/page/image goldens, preserved named
+streams, history binding, admission refusals and recovery faults. All 91 actual
+writer states pass complete image oracles, C recovery, unchanged reopen and
+native Windows file/ADS/time/File ID/ACL, clean state and read-only chkdsk.
+Independent raw XML review binds 91 healthy events and 56 exactly predicted
+torn-journal warnings, with no unrelated warning or repair.
+
+All 264 actual interrupted-recovery states pass offline whole-image checks,
+independent transfer schedules, complete FILE oracles, full validation and
+idempotent reopen. The four paths include loser compensation, torn winner FILE,
+prepare-copy promotion and commit-copy promotion. All 264 states now also pass
+native Windows file/ADS/time/File ID/ACL, clean state, read-only chkdsk and
+ordinary detach, with the original test volume unchanged. Independent raw XML
+review binds 264 healthy events and 154 exactly predicted torn-journal warnings;
+no unrelated warning or repair is admitted. The first review used the writer
+preparation field name against the recovery report and failed before event
+inspection. Its correction preserves that failure and reviews the same original
+run; no native invocation is repeated.
+
+The resident FSKit components pass 63 host groups with thirteen explicit runtime
+SKIPs and all 80 native groups with zero SKIPs on actual macOS 27.0.1. Four
+resident profiles check exact full FILE/WAL images, stable items, fresh cache
+rebinding, poison and reentrant drain. All 871 preceding fixture files, twelve
+new resident fixture files and sixteen packaged tools/inputs remain unchanged.
+The first cached-resident-read callback assertion failed: a cached resident read
+does not perform backend I/O. The corrected test uses a nonresident neighbor to
+exercise the intended reentrant callback; production behavior was unchanged.
+
+The personally signed universal app and extension now pass installed resident
+`pwrite`/`fsync`, observer/prefaulted-mapping coherence and shared writable mapping
+after descriptor close. The 47-byte result preserves File ID, native ownership,
+mode and size while advancing modified/changed times. Ordinary unmount releases
+the backing image; a fresh saved-URL mount returns identical bytes/metadata without
+changing the whole image. The prior accepted initialized image remains unchanged.
+
+The exact exported result passes independent whole-FILE/image comparison, full
+validation and zero-write idempotent recovery. A unique nonboot/nonsystem VHD passes
+Windows four-file/ADS/both FILETIMEs/File IDs/ACLs, clean state, read-only chkdsk
+and ordinary detach with the original test volume unchanged. Main independently
+binds the original matching healthy event and empty repair-provider results.
+Initial registration briefly disagreed between discovery clients; stable discovery
+then showed the new module disabled. Ordinary guest Settings enablement restores
+both public API proofs at the exact installed path. The installation failure is
+retained; continuation verifies the installed package without reinstalling it.
+Subsequent import/mount/write/remount operations require no GUI or credential input.
+This qualifies bounded resident overwriting, not general writing.
+Evidence and retained failures are under `artifacts/overwrite/`, in
+`resident-owner-full-core-20261006/`, `resident-writer-interruptions-20261006/`,
+`windows-resident-writer-batches-20261006/`,
+`resident-recovery-interruptions-20261006/`,
+`windows-resident-recovery-batches-20261006/`,
+`fskit-resident-component-host-read-corrected-20261006/`,
+`mac-resident-native-component-20261006/` and the resident app build/sign/package
+directories, `mac-resident-installed-acceptance12-20261006/`,
+`mac-resident-postimage-export-20261006/`,
+`resident-mounted-postimage-preparation-20261006/` and
+`windows-resident-mounted-postimage-20261006/`.
+No generated image, credential or binary identity is committed.
+
 ## Native ordinary-file writing and recovery
 
 Installed macOS 27 initialized-range image writing now passes actual owner
@@ -45,7 +115,7 @@ remain retained; fresh final execution and read-only delayed event queries of th
 original interval close the bounded gate without remounting for events. See
 `windows-recovery-prefix-complete-delayed-main-review-20261006/`.
 
-Current core qualification is 175 fatal ASan/UBSan suites, style and both
+That initialized-family checkpoint passed 175 fatal ASan/UBSan suites, style and both
 freestanding architectures. FSKit components pass 59 host groups with thirteen
 explicit runtime SKIPs and 76 native groups with zero SKIPs and 871 unchanged
 inputs. The current universal personally signed app is installed and enabled;
@@ -59,7 +129,7 @@ executed in the postimage run, with every raw observation retained.
 
 This is acceptance of initialized ordinary-file overwriting on exclusively owned
 authorized images. General journal histories, ring wrap/growth, allocation/free,
-resize, resident/sparse/compressed/ADS writes, namespace and Windows ACL mutation,
+resize, sparse/compressed/ADS writes, namespace and Windows ACL mutation,
 block-device writing, hardware power cuts, broad native stress and distribution
 remain open. The user allows Windows alongside Debian; never terminate UTM or
 operate unrelated VMs.

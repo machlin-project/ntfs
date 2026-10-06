@@ -33,6 +33,7 @@ function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
         if ($entry.PSObject.Properties.Name -contains 'lastWriteFileTime') {
             $time = $file.LastWriteTimeUtc.ToFileTimeUtc().ToString([Globalization.CultureInfo]::InvariantCulture)
             if ($time -ne $entry.lastWriteFileTime) { throw 'Native file time mismatch.' }
+            $result.checks[-1]['lastWriteFileTime'] = $time
             $result.lastWriteTime = [ordered]@{ fileTime=$time; expectedFileTime=$entry.lastWriteFileTime; passed=$true }
         }
     }
@@ -54,6 +55,21 @@ function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
         ($actualFileId -join "`n") -ne ($fileId.output -join "`n")) { throw 'Native ACL or file identity changed.' }
     $result.targetAcl = $actualAcl
     $result.fileId = [ordered]@{ exitCode=$exit; output=$actualFileId }
+    $residentIdentityDeclared = $expected.PSObject.Properties.Name -contains 'residentFileId'
+    $residentAclDeclared = $expected.PSObject.Properties.Name -contains 'residentAcl'
+    if ($residentIdentityDeclared -ne $residentAclDeclared) { throw 'Incomplete expected resident identity.' }
+    if ($residentIdentityDeclared) {
+        $residentPath = Join-Path $root 'resident.txt'
+        $residentAcl = (Get-Acl -LiteralPath $residentPath).Sddl
+        $residentFileId = @(& "$env:SystemRoot\System32\fsutil.exe" file queryfileid $residentPath 2>&1)
+        $residentIdExit = $LASTEXITCODE
+        if ($residentAcl -ne $expected.residentAcl -or $residentIdExit -ne 0 -or
+            ($residentFileId -join "`n") -ne ($expected.residentFileId.output -join "`n")) {
+            throw 'Native resident ACL or file identity changed.'
+        }
+        $residentTime = (Get-Item -LiteralPath $residentPath).LastWriteTimeUtc.ToFileTimeUtc().ToString([Globalization.CultureInfo]::InvariantCulture)
+        $result.resident = [ordered]@{ acl=$residentAcl; fileId=[ordered]@{exitCode=$residentIdExit;output=$residentFileId};lastWriteFileTime=$residentTime;passed=$true }
+    }
     $result.success = $true
     return $result
 }

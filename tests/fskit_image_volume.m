@@ -11,6 +11,8 @@
 enum {
 	TEST_IMAGE_FILE_OFFSET = 123,
 	TEST_IMAGE_WRITE_BARRIERS = 10,
+	TEST_RESIDENT_WRITE_BARRIERS = 9,
+	TEST_RESIDENT_FILE_OFFSET = 5,
 	TEST_IMAGE_FILE_NANOSECONDS = 661343100,
 	TEST_IMAGE_READ_SAMPLE = 64,
 	TEST_IMAGE_SHORT_DIVISOR = 2,
@@ -485,21 +487,22 @@ deactivate_volume(NTFSVolume *volume, void (^reply)(NSError *))
 }
 
 static void
-image_volume_case(
-    NSString *path, NSData *source, NSData *payload, NSData *expected, ImageVolumeCase mode)
+image_volume_case(NSString *path, NSData *source, NSData *payload, NSData *expected,
+    NSString *fileName, NSString *neighborName, NSUInteger offset, NSUInteger writeBarriers,
+    BOOL residentData, ImageVolumeCase mode)
 {
 	__attribute__((objc_precise_lifetime)) ImageVolumeTransport *transport;
 	__weak ImageVolumeTransport *callbackTransport;
 	ImageVolumePathResource *peer;
 	NTFSVolume *volume;
-	FSItem *root, *file, *resident, *again;
+	FSItem *root, *file, *neighbor, *again, *reentrantReadItem;
 	FSItemAttributes *before, *after;
 	NSArray<FSFileName *> *xattrs, *freshXattrs;
 	NSMutableData *read = [NSMutableData dataWithLength:payload.length];
 	NSData *uncertain;
 	uint8_t sample[TEST_IMAGE_READ_SAMPLE];
 	size_t completed, committed;
-	NSUInteger writes, barriers, index;
+	NSUInteger writes, barriers, index, reentrantReadOffset;
 	dispatch_semaphore_t drained = dispatch_semaphore_create(0);
 	__block BOOL unmounted = NO, mounted = NO, synced = NO, deactivated = NO;
 	NSError *error = nil;
@@ -519,32 +522,37 @@ image_volume_case(
 	assert(volume != nil && error == nil && transport.isClaimed);
 	root = [volume activateExtraction:&error];
 	assert(root != nil && error == nil);
-	file = lookup_item(volume, root, @"fragmented.bin");
-	resident = lookup_item(volume, root, @"hello.txt");
+	file = lookup_item(volume, root, fileName);
+	neighbor = lookup_item(volume, root, neighborName);
 	before = [volume attributes:file error:&error];
 	assert(before != nil && error == nil);
 	xattrs = [volume xattrsForItem:file error:&error];
 	assert(xattrs != nil && error == nil);
 	assert([volume readItem:file
-			 offset:TEST_IMAGE_FILE_OFFSET
+			 offset:offset
 			  bytes:sample
 			 length:sizeof(sample)
 		      completed:&completed] == NTFS_OK &&
 	    completed == sizeof(sample));
+	/* Resident data is already present in its immutable FILE snapshot. Read a
+	 * nonresident neighbor to enter the native read callback while the owning
+	 * volume operation still excludes a nested resident mutation. */
+	reentrantReadItem = residentData ? neighbor : file;
+	reentrantReadOffset = residentData ? TEST_IMAGE_FILE_OFFSET : offset;
 	writes = transport.nativeWrites;
 	transport.nextRead = ^{
 	  size_t nested = SIZE_MAX;
 
 	  assert([volume overwriteImageItem:file
-				     offset:TEST_IMAGE_FILE_OFFSET
+				     offset:offset
 				      bytes:payload.bytes
 				     length:payload.length
 				   fileTime:TEST_IMAGE_FILE_TIME
 				  completed:&nested] == NTFS_BUSY &&
 	      nested == 0);
 	};
-	assert([volume readItem:file
-			 offset:TEST_IMAGE_FILE_OFFSET
+	assert([volume readItem:reentrantReadItem
+			 offset:reentrantReadOffset
 			  bytes:sample
 			 length:sizeof(sample)
 		      completed:&completed] == NTFS_OK &&
@@ -552,7 +560,7 @@ image_volume_case(
 	assert(transport.nextRead == nil && transport.nativeWrites == writes);
 	transport.shortWrite = mode == ImageVolumeShortWrite;
 	if (mode == ImageVolumeAllocationFailure) {
-		transport.denyAfterBarrier = transport.nativeBarriers + TEST_IMAGE_WRITE_BARRIERS;
+		transport.denyAfterBarrier = transport.nativeBarriers + writeBarriers;
 	}
 	if (mode == ImageVolumeReentrantUnmount || mode == ImageVolumeReentrantInvalidate ||
 	    mode == ImageVolumeReentrantDeactivate) {
@@ -582,13 +590,13 @@ image_volume_case(
 		  }
 		  assert(retainedTransport.isClaimed);
 		  assert([volume readItem:file
-				   offset:TEST_IMAGE_FILE_OFFSET
+				   offset:offset
 				    bytes:sample
 				   length:sizeof(sample)
 				completed:&nested] == NTFS_STALE &&
 		      nested == 0);
 		  assert([volume overwriteImageItem:file
-					     offset:TEST_IMAGE_FILE_OFFSET
+					     offset:offset
 					      bytes:payload.bytes
 					     length:payload.length
 					   fileTime:TEST_IMAGE_FILE_TIME
@@ -597,7 +605,7 @@ image_volume_case(
 		};
 	}
 	result = [volume overwriteImageItem:file
-				     offset:TEST_IMAGE_FILE_OFFSET
+				     offset:offset
 				      bytes:payload.bytes
 				     length:payload.length
 				   fileTime:TEST_IMAGE_FILE_TIME
@@ -615,7 +623,7 @@ image_volume_case(
 		assert([[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
 		assert([volume attributes:file error:&error] == nil && error.code == ESTALE);
 		assert([volume overwriteImageItem:file
-					   offset:TEST_IMAGE_FILE_OFFSET
+					   offset:offset
 					    bytes:payload.bytes
 					   length:payload.length
 					 fileTime:TEST_IMAGE_FILE_TIME
@@ -628,13 +636,13 @@ image_volume_case(
 		uncertain = [NSData dataWithContentsOfFile:path];
 		assert([volume attributes:file error:&error] == nil && error.code == EIO);
 		assert([volume readItem:file
-				 offset:TEST_IMAGE_FILE_OFFSET
+				 offset:offset
 				  bytes:sample
 				 length:sizeof(sample)
 			      completed:&completed] == NTFS_IO &&
 		    completed == 0);
 		assert([volume overwriteImageItem:file
-					   offset:TEST_IMAGE_FILE_OFFSET
+					   offset:offset
 					    bytes:payload.bytes
 					   length:payload.length
 					 fileTime:TEST_IMAGE_FILE_TIME
@@ -650,7 +658,7 @@ image_volume_case(
 			assert(
 			    [volume attributes:file error:&error] == nil && error.code == ENOMEM);
 			assert([volume readItem:file
-					 offset:TEST_IMAGE_FILE_OFFSET
+					 offset:offset
 					  bytes:sample
 					 length:sizeof(sample)
 				      completed:&completed] == NTFS_NO_MEMORY &&
@@ -690,14 +698,15 @@ image_volume_case(
 			transport.denyAllocations = NO;
 		}
 		after = [volume attributes:file error:&error];
-		assert(after != nil && error == nil && after.fileID == before.fileID);
+		assert(after != nil && error == nil && after.fileID == before.fileID &&
+		    after.size == before.size && after.mode == before.mode);
 		assert(after.modifyTime.tv_sec == TEST_IMAGE_FILE_SECONDS &&
 		    after.modifyTime.tv_nsec == TEST_IMAGE_FILE_NANOSECONDS &&
 		    after.changeTime.tv_sec == TEST_IMAGE_FILE_SECONDS &&
 		    after.changeTime.tv_nsec == TEST_IMAGE_FILE_NANOSECONDS);
-		again = lookup_item(volume, root, @"fragmented.bin");
-		assert(again == file && lookup_item(volume, root, @"hello.txt") == resident);
-		assert([volume attributes:resident error:&error] != nil && error == nil);
+		again = lookup_item(volume, root, fileName);
+		assert(again == file && lookup_item(volume, root, neighborName) == neighbor);
+		assert([volume attributes:neighbor error:&error] != nil && error == nil);
 		freshXattrs = [volume xattrsForItem:file error:&error];
 		assert(freshXattrs != nil && error == nil && freshXattrs.count == xattrs.count);
 		/* FSFileName instances can be recreated when a catalog closes. Compare
@@ -706,7 +715,7 @@ image_volume_case(
 			assert([freshXattrs[index].data isEqualToData:xattrs[index].data]);
 		}
 		assert([volume readItem:file
-				 offset:TEST_IMAGE_FILE_OFFSET
+				 offset:offset
 				  bytes:read.mutableBytes
 				 length:read.length
 			      completed:&completed] == NTFS_OK &&
@@ -1053,7 +1062,9 @@ ntfs_test_fskit_image_volume(NSString *fixtures)
 							     error:&error]);
 	for (mode = ImageVolumeNormal; mode < ImageVolumeCaseCount; mode++) {
 		@autoreleasepool {
-			image_volume_case(path, source, payload, expected, mode);
+			image_volume_case(path, source, payload, expected, @"fragmented.bin",
+			    @"hello.txt", TEST_IMAGE_FILE_OFFSET, TEST_IMAGE_WRITE_BARRIERS, NO,
+			    mode);
 		}
 	}
 	image_access_reply_case(path, source, payload, expected, NO);
@@ -1068,4 +1079,50 @@ ntfs_test_fskit_image_volume(NSString *fixtures)
 	       "durable reply\n");
 	printf("PASS: authorized image probe scope refusal and balance, released read claim and "
 	       "unchanged source without recovery\n");
+}
+
+void
+ntfs_test_fskit_resident_image_volume(NSString *fixtures)
+{
+	NSString *directory = [NSTemporaryDirectory()
+	    stringByAppendingPathComponent:[@"machlin-ntfs-resident-image-volume-"
+					       stringByAppendingString:NSUUID.UUID.UUIDString]];
+	NSString *path = [directory stringByAppendingPathComponent:@"owned.img"];
+	NSArray<NSString *> *profiles =
+	    @[ @"ordinary", @"odd-length", @"whole-value", @"named-stream-preserved" ];
+	NSString *profile, *input;
+	NSData *source, *payload, *expected;
+	ImageVolumeCase mode;
+	NSUInteger offset;
+	NSError *error = nil;
+
+	assert([NSFileManager.defaultManager createDirectoryAtPath:directory
+				       withIntermediateDirectories:NO
+							attributes:@{
+								NSFilePosixPermissions : @0700
+							}
+							     error:&error]);
+	for (profile in profiles) {
+		input = [fixtures stringByAppendingPathComponent:profile];
+		source = [NSData
+		    dataWithContentsOfFile:[input stringByAppendingPathComponent:@"source.img"]];
+		payload = [NSData
+		    dataWithContentsOfFile:[input stringByAppendingPathComponent:@"payload.input"]];
+		expected = [NSData dataWithContentsOfFile:
+			[input stringByAppendingPathComponent:@"execute-final.img"]];
+		offset = [profile isEqualToString:@"whole-value"] ? 0 : TEST_RESIDENT_FILE_OFFSET;
+		assert(source != nil && payload != nil && expected != nil);
+		for (mode = ImageVolumeNormal; mode < ImageVolumeCaseCount; mode++) {
+			@autoreleasepool {
+				image_volume_case(path, source, payload, expected, @"hello.txt",
+				    @"fragmented.bin", offset, TEST_RESIDENT_WRITE_BARRIERS, YES,
+				    mode);
+			}
+		}
+		printf(
+		    "PASS: resident image %s complete FILE/WAL bytes, identity, view replacement, "
+		    "allocation retry, mutation drain and poison\n",
+		    profile.UTF8String);
+	}
+	assert([NSFileManager.defaultManager removeItemAtPath:directory error:&error]);
 }

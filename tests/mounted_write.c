@@ -13,7 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 
-/* The independent Windows workload owns this initialized ordinary-file range.
+/* The independent Windows workloads own these ordinary-file byte ranges.
  * These are native syscall tests, never a direct call to the portable writer. */
 enum {
 	FILE_BYTES = 1024 * 1024,
@@ -24,9 +24,24 @@ enum {
 	MAPPED_PATCH_OFFSET = 1801,
 	MAPPED_PATCH_BYTES = 257,
 	MAPPED_PATCH_MASK = 0x3f,
+	RESIDENT_FILE_BYTES = 47,
+	RESIDENT_WRITE_OFFSET = 5,
+	RESIDENT_MAPPED_PATCH_OFFSET = 4,
+	RESIDENT_MAPPED_PATCH_BYTES = 4,
 	READ_WINDOW = 65521,
 	FILE_MODE = 0600
 };
+
+struct write_profile {
+	size_t file_bytes, write_offset, write_bytes, mapped_offset, mapped_bytes;
+	bool resident;
+};
+
+static const uint8_t resident_payload[] = "MACHLIN_RESIDENT";
+static const struct write_profile initialized_profile = {
+    FILE_BYTES, WRITE_OFFSET, WRITE_BYTES, MAPPED_PATCH_OFFSET, MAPPED_PATCH_BYTES, false};
+static const struct write_profile resident_profile = {RESIDENT_FILE_BYTES, RESIDENT_WRITE_OFFSET,
+    sizeof(resident_payload) - 1u, RESIDENT_MAPPED_PATCH_OFFSET, RESIDENT_MAPPED_PATCH_BYTES, true};
 
 #define CHECK(condition)                                                                           \
 	do {                                                                                       \
@@ -38,15 +53,15 @@ enum {
 	} while (0)
 
 static void
-read_contents(int fd, uint8_t *bytes)
+read_contents(int fd, uint8_t *bytes, size_t file_bytes)
 {
 	size_t offset = 0, length;
 	ssize_t completed;
 	struct stat stat;
 
-	CHECK(fstat(fd, &stat) == 0 && S_ISREG(stat.st_mode) && stat.st_size == FILE_BYTES);
-	while (offset < FILE_BYTES) {
-		length = FILE_BYTES - offset;
+	CHECK(fstat(fd, &stat) == 0 && S_ISREG(stat.st_mode) && stat.st_size == (off_t)file_bytes);
+	while (offset < file_bytes) {
+		length = file_bytes - offset;
 		if (length > READ_WINDOW) {
 			length = READ_WINDOW;
 		}
@@ -57,24 +72,24 @@ read_contents(int fd, uint8_t *bytes)
 }
 
 static uint8_t *
-oracle(const char *path)
+oracle(const char *path, size_t file_bytes)
 {
-	uint8_t *bytes = malloc(FILE_BYTES);
+	uint8_t *bytes = malloc(file_bytes);
 	int fd;
 
 	CHECK(bytes != NULL);
 	fd = open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
 	CHECK(fd >= 0);
-	read_contents(fd, bytes);
+	read_contents(fd, bytes, file_bytes);
 	CHECK(close(fd) == 0);
 	return bytes;
 }
 
 static void
-same_contents(int fd, const uint8_t *expected, uint8_t *scratch)
+same_contents(int fd, const uint8_t *expected, uint8_t *scratch, size_t file_bytes)
 {
-	read_contents(fd, scratch);
-	CHECK(memcmp(scratch, expected, FILE_BYTES) == 0);
+	read_contents(fd, scratch, file_bytes);
+	CHECK(memcmp(scratch, expected, file_bytes) == 0);
 }
 
 static void
@@ -116,6 +131,7 @@ main(int argc, char **argv)
 {
 	struct statfs filesystem;
 	struct stat before, after;
+	const struct write_profile *profile;
 	uint8_t *baseline, *final, *expected, *scratch;
 	uint8_t payload[WRITE_BYTES];
 	uint8_t *mappedRead, *mappedWrite;
@@ -129,28 +145,37 @@ main(int argc, char **argv)
 		deny_fresh_opens(argv[2]);
 		return EXIT_SUCCESS;
 	}
-	if (argc != 5 || (strcmp(argv[1], "write") != 0 && strcmp(argv[1], "check") != 0)) {
+	if (argc != 5 ||
+	    (strcmp(argv[1], "write") != 0 && strcmp(argv[1], "check") != 0 &&
+		strcmp(argv[1], "resident-write") != 0 && strcmp(argv[1], "resident-check") != 0)) {
 		fprintf(stderr,
-		    "Usage: ntfs-mounted-write write|check FILE BASELINE FINAL\n"
+		    "Usage: ntfs-mounted-write write|check|resident-write|resident-check FILE "
+		    "BASELINE FINAL\n"
 		    "       ntfs-mounted-write deny FILE\n");
 		return EXIT_FAILURE;
 	}
-	writing = strcmp(argv[1], "write") == 0;
+	profile = strncmp(argv[1], "resident-", sizeof("resident-") - 1u) == 0
+	    ? &resident_profile
+	    : &initialized_profile;
+	writing = strcmp(argv[1], "write") == 0 || strcmp(argv[1], "resident-write") == 0;
 	CHECK(getuid() == geteuid() && geteuid() != 0);
-	baseline = oracle(argv[3]);
-	final = oracle(argv[4]);
-	expected = malloc(FILE_BYTES);
-	scratch = malloc(FILE_BYTES);
+	baseline = oracle(argv[3], profile->file_bytes);
+	final = oracle(argv[4], profile->file_bytes);
+	expected = malloc(profile->file_bytes);
+	scratch = malloc(profile->file_bytes);
 	CHECK(expected != NULL && scratch != NULL);
-	memcpy(expected, baseline, FILE_BYTES);
-	for (index = 0; index < WRITE_BYTES; index++) {
-		payload[index] = (uint8_t)(index * PAYLOAD_MULTIPLIER + PAYLOAD_INCREMENT);
+	memcpy(expected, baseline, profile->file_bytes);
+	for (index = 0; index < profile->write_bytes; index++) {
+		payload[index] = profile->resident
+		    ? resident_payload[index]
+		    : (uint8_t)(index * PAYLOAD_MULTIPLIER + PAYLOAD_INCREMENT);
 	}
-	memcpy(expected + WRITE_OFFSET, payload, WRITE_BYTES);
-	for (index = 0; index < MAPPED_PATCH_BYTES; index++) {
-		expected[WRITE_OFFSET + MAPPED_PATCH_OFFSET + index] ^= MAPPED_PATCH_MASK;
+	memcpy(expected + profile->write_offset, payload, profile->write_bytes);
+	for (index = 0; index < profile->mapped_bytes; index++) {
+		expected[profile->write_offset + profile->mapped_offset + index] ^=
+		    MAPPED_PATCH_MASK;
 	}
-	CHECK(memcmp(expected, final, FILE_BYTES) == 0);
+	CHECK(memcmp(expected, final, profile->file_bytes) == 0);
 	fd = open(argv[2], (writing ? O_RDWR : O_RDONLY) | O_NOFOLLOW | O_CLOEXEC);
 	CHECK(fd >= 0 && fstatfs(fd, &filesystem) == 0);
 	CHECK(strcmp(filesystem.f_fstypename, "machlinntfs") == 0);
@@ -158,51 +183,62 @@ main(int argc, char **argv)
 	CHECK(before.st_uid == getuid() && (before.st_mode & ALLPERMS) == FILE_MODE);
 	metadata("before", fd);
 	if (writing) {
-		same_contents(fd, baseline, scratch);
+		same_contents(fd, baseline, scratch, profile->file_bytes);
 		observer = open(argv[2], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
 		CHECK(observer >= 0);
-		mappedRead = mmap(NULL, FILE_BYTES, PROT_READ, MAP_SHARED, observer, 0);
-		CHECK(mappedRead != MAP_FAILED && memcmp(mappedRead, baseline, FILE_BYTES) == 0);
-		CHECK(pwrite(fd, payload, sizeof(payload), WRITE_OFFSET) == WRITE_BYTES);
+		mappedRead = mmap(NULL, profile->file_bytes, PROT_READ, MAP_SHARED, observer, 0);
+		CHECK(mappedRead != MAP_FAILED &&
+		    memcmp(mappedRead, baseline, profile->file_bytes) == 0);
+		CHECK(pwrite(fd, payload, profile->write_bytes, (off_t)profile->write_offset) ==
+		    (ssize_t)profile->write_bytes);
 		CHECK(fsync(fd) == 0);
-		memcpy(expected, baseline, FILE_BYTES);
-		memcpy(expected + WRITE_OFFSET, payload, WRITE_BYTES);
-		same_contents(fd, expected, scratch);
-		same_contents(observer, expected, scratch);
-		CHECK(memcmp(mappedRead, expected, FILE_BYTES) == 0);
+		memcpy(expected, baseline, profile->file_bytes);
+		memcpy(expected + profile->write_offset, payload, profile->write_bytes);
+		same_contents(fd, expected, scratch, profile->file_bytes);
+		same_contents(observer, expected, scratch, profile->file_bytes);
+		CHECK(memcmp(mappedRead, expected, profile->file_bytes) == 0);
 		metadata("after-pwrite-fsync", observer);
-		mappedWrite = mmap(NULL, FILE_BYTES, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+		mappedWrite =
+		    mmap(NULL, profile->file_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 		CHECK(mappedWrite != MAP_FAILED);
 		/* The kernel must retain the write capability for this mapping after
 		 * its descriptor closes, until native page-out and final mmap close. */
 		CHECK(close(fd) == 0);
 		fd = -1;
-		for (index = 0; index < MAPPED_PATCH_BYTES; index++) {
-			mappedWrite[WRITE_OFFSET + MAPPED_PATCH_OFFSET + index] ^=
+		for (index = 0; index < profile->mapped_bytes; index++) {
+			mappedWrite[profile->write_offset + profile->mapped_offset + index] ^=
 			    MAPPED_PATCH_MASK;
 		}
-		CHECK(msync(mappedWrite, FILE_BYTES, MS_SYNC) == 0 && fsync(observer) == 0);
-		CHECK(memcmp(mappedRead, final, FILE_BYTES) == 0);
-		same_contents(observer, final, scratch);
-		CHECK(munmap(mappedWrite, FILE_BYTES) == 0 && munmap(mappedRead, FILE_BYTES) == 0);
+		CHECK(
+		    msync(mappedWrite, profile->file_bytes, MS_SYNC) == 0 && fsync(observer) == 0);
+		CHECK(memcmp(mappedRead, final, profile->file_bytes) == 0);
+		same_contents(observer, final, scratch, profile->file_bytes);
+		CHECK(munmap(mappedWrite, profile->file_bytes) == 0 &&
+		    munmap(mappedRead, profile->file_bytes) == 0);
 		CHECK(close(observer) == 0);
 		fd = open(argv[2], O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
 		CHECK(fd >= 0);
 	}
-	same_contents(fd, final, scratch);
+	same_contents(fd, final, scratch, profile->file_bytes);
 	CHECK(fstat(fd, &after) == 0 && before.st_ino == after.st_ino &&
 	    before.st_size == after.st_size && before.st_uid == after.st_uid &&
 	    before.st_gid == after.st_gid && before.st_mode == after.st_mode);
 	CHECK(after.st_mtimespec.tv_sec == after.st_ctimespec.tv_sec &&
 	    after.st_mtimespec.tv_nsec == after.st_ctimespec.tv_nsec);
+	if (writing && profile->resident) {
+		CHECK(after.st_mtimespec.tv_sec > before.st_mtimespec.tv_sec ||
+		    (after.st_mtimespec.tv_sec == before.st_mtimespec.tv_sec &&
+			after.st_mtimespec.tv_nsec > before.st_mtimespec.tv_nsec));
+	}
 	metadata("final", fd);
 	CHECK(close(fd) == 0);
 	free(scratch);
 	free(expected);
 	free(final);
 	free(baseline);
-	printf("{\"result\":\"PASS\",\"writing\":%s,\"exactBytes\":%u,"
+	printf("{\"result\":\"PASS\",\"writing\":%s,\"exactBytes\":%zu,\"resident\":%s,"
 	       "\"mmapWriteAfterDescriptorClose\":%s}\n",
-	    writing ? "true" : "false", FILE_BYTES, writing ? "true" : "false");
+	    writing ? "true" : "false", profile->file_bytes, profile->resident ? "true" : "false",
+	    writing ? "true" : "false");
 	return EXIT_SUCCESS;
 }

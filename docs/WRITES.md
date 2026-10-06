@@ -1,5 +1,51 @@
 # Writable ownership and recovery contract
 
+The unchanged-size resident continuation now has a private DATA redo/undo packet
+after the standard-information update, with two ordered compensation packets
+for a loser. It changes no attribute length or namespace/storage allocation.
+Full independent FILE/page/image oracles and all 176 sanitized suites pass.
+All 91 actual writer states and all 264 interrupted-recovery states pass
+offline/native Windows recovery and original event review. Installed resident
+syscalls, fresh saved-URL remount and the exact FSKit Windows postimage now pass,
+including original healthy-event review. All 80 native FSKit component groups
+pass with zero SKIPs; installed acceptance is separately established.
+See the current continuation in [ACCEPTANCE.md](ACCEPTANCE.md).
+
+## Ordinary mutation implementation batch
+
+The next implementation unit combines storage allocation, file-size changes,
+namespace mutation and journal reuse. These are required behavior, not current
+acceptance. The existing signed resident image build remains an independent
+checkpoint while this unit is developed.
+
+One exclusive C owner must prepare all affected FILE/INDX images, mapping pairs,
+volume/MFT/index bitmaps and native redo/undo before mutation. New immutable views
+must observe one complete operation. Preparation failures, collisions and ENOSPC
+leave the whole image unchanged. Attempted transfer or persistence failures poison
+the owner; recovery must choose the complete old or committed metadata state,
+including allocation and namespace. Allocation cannot publish uninitialized bytes
+or recycle storage still referenced by an object. MFT reference generations must
+reject stale references after reuse. Existing named streams and security remain
+intact; creation must implement and test its inherited security contract.
+
+Tests precede implementation of the complete unit. A shared mixed scenario creates
+files and directories, writes past EOF, changes resident storage into nonresident
+storage, grows through fragmented space, shrinks and clears newly exposed bytes,
+moves and replaces names, unlinks objects and reuses their storage. A larger
+directory scenario forces index splits and MFT growth. Failure cases cover full
+space, name collisions, nonempty directories, stale references, read/allocation
+refusal, every transfer/barrier and interrupted recovery. Sustained mixed operations
+must reuse the journal beyond the previous retained-history limit; circular wrap
+must preserve its qualified LSN and checkpoint semantics.
+
+Development uses compilation and focused C tests for the affected contracts. One
+full sanitized core/component regression closes the implementation unit. Only then
+does one prepared installed macOS/Windows acceptance batch exercise the complete
+scenario, native cache/mmap behavior and recovery inputs. No new feature receives
+an individual VM cycle before that local boundary. Block-device admission,
+encoded/named-stream mutation and general Windows ACL mutation are separate
+contracts and do not become supported through this batch.
+
 The [native ordinary-file journal](NATIVE-WRITE-JOURNAL.md) qualifies the bounded
 MFT binding, full FILE snapshot, timestamp/archive update, native redo and
 compensation family. Actual source-clone `pwrite`/`F_FULLFSYNC`, whole-image

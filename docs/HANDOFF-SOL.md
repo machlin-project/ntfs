@@ -25,9 +25,9 @@ lifecycle change occurred. Obtain current ownership before relying on this snaps
 Exact VM IDs, paths, saved image IDs, loaded UUIDs and hashes live in ignored reports.
 Do not read an active UTM disk image on the host or force/repair test attachments.
 
-## Accepted initialized-file writing
+## Accepted existing-file writing
 
-The core owns a bounded native initialized-data/timestamp/archive journal family
+The core owns bounded native initialized-data and resident-data journal families
 with retained original client roots, complete FILE snapshots and native redo or
 compensation. Quiet origin, at most 64 complete families, no ring wrap/growth and
 unsupported change-journal/volume/file features are explicit admission limits.
@@ -35,9 +35,11 @@ The immutable read environment has no write method. Arbitrary dirty-media
 recovery and generic native history are not qualified.
 
 Actual source-clone persistence and whole-image/idempotent-reopen checks pass.
-All 110 actual writer interruption states and 264 interrupted-recovery states pass
-native Windows VHD recovery. Main's independent review binds 264 healthy events
-and 154 exactly injected USA warnings, with no unrelated warning or repair.
+All 110 initialized writer states and 264 interrupted-recovery states pass native
+Windows recovery. The resident family separately passes 91 writer states and
+264 interrupted-recovery states. Main's independent raw XML review binds each
+case to its healthy event and exactly predicted USA warnings, with no unrelated
+warning or repair.
 Read NATIVE-WRITE-JOURNAL.md; retain original failed/interrupted invocations.
 Do not remount a case solely to obtain delayed events.
 
@@ -59,6 +61,15 @@ Windows confirms exact files/ADS/FILETIME/File ID/ACL, clean state, read-only ch
 and one matching healthy raw NTFS event. Candidate detach and original-volume
 before/after guards pass. General writing and hardware power cuts are not implied.
 Main review is `artifacts/overwrite/windows-mounted-postimage-20261006/main-review.json`.
+
+The installed resident family also passes positioned and shared-mapping writes,
+observer/prefaulted-mapping coherence, fresh same-saved-URL remount and ordinary
+unmount. Its exact postimage passes independent whole-FILE/image checks, full
+validation and zero-write idempotent recovery. Windows accepts all four files,
+ADS, both FILETIMEs, both observed File IDs/ACLs, clean state, read-only chkdsk and
+ordinary detach. Main binds the original healthy raw event and empty repair
+providers. The accepted initialized image remains unchanged. See
+`artifacts/overwrite/windows-resident-mounted-postimage-20261006/main-review.json`.
 
 ## Installed app and CLI harness
 
@@ -87,9 +98,10 @@ Do not re-register staging copies or touch unrelated modules.
 
 ## Current evidence and limits
 
-Core: 175 fatal ASan/UBSan suites, selected-Xcode style and both freestanding
-architectures passed. FSKit: 59 host groups with thirteen explicit runtime SKIPs;
-76 native groups, zero SKIPs and 871 unchanged inputs. Failed startup, registration,
+Core: 176 fatal ASan/UBSan suites, selected-Xcode style and both freestanding
+architectures passed. FSKit: 63 host groups with thirteen explicit runtime SKIPs;
+80 native groups, zero SKIPs, 871 preceding inputs and twelve resident inputs.
+Failed startup, registration,
 root-attribute authorization and initial harness-diagnostic attempts remain retained.
 Ordinary vnode attributes permit kernel mount construction without granting data
 or namespace rights. Native attribute-cache confidentiality is not claimed.
@@ -102,11 +114,19 @@ Acceptance reports are under `artifacts/overwrite/`:
 - `mounted-postimage-windows-preparation-20261006/`: independent whole-image/VHD oracle.
 - `windows-mounted-postimage-20261006/`: native postimage and independent XML review.
 - `windows-recovery-prefix-complete-delayed-main-review-20261006/`: complete bounded interruptions.
+- `mac-resident-installed-acceptance12-20261006/`: installed resident write and fresh remount.
+- `windows-resident-mounted-postimage-20261006/`: resident native postimage and independent XML review.
 
-Allocation/free, resize, create/delete/rename, resident/sparse/compressed/ADS writes,
+Allocation/free, resize, create/delete/rename, sparse/compressed/ADS writes,
 Windows ACL mutation, generic journal history/ring wrap/growth, block-device writes,
-hardware power cuts and broad native stress remain open. Next implementation
-extends resident ordinary-file writing with a complete native WAL/recovery family;
-main must design/test/review it before writable admission. Unsupported rejection,
+hardware power cuts and broad native stress remain open. The next connected
+implementation batch covers ordinary allocation/free, resize and namespace
+mutations with their complete native WAL/recovery contract. Main writes the
+batch tests first, implements the connected operations, then reviews one complete
+local regression before preparing the VM batch. Do not introduce per-feature
+VM loops during implementation. The five native Forget-anchored checkpoint
+observations are byte-level experiments; actual C checkpoint execution,
+interrupted publication and circular reuse remain unqualified.
+Unsupported rejection,
 building or private serialization is not feature acceptance. Continue through the
 user's broad write scope; do not mark the goal complete at this checkpoint.

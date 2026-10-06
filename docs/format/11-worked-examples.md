@@ -96,6 +96,34 @@ Checking bitmap bit 6 or multiplying the child VCN by cluster size selects the
 wrong block. USA, stored VCN and ancestor key bounds remain necessary after the
 address conversion.
 
+## Address a bitmap range
+
+Choose a 4096-byte bitmap cluster at stream VCN 2, physically mapped to LCN 200.
+A native update in our one-cluster profile has `first=44` and `bits=1`:
+
+```text
+bits per cluster       = 4096 × 8 = 32768
+stream-global bit      = 2 × 32768 + 44 = 65580
+byte within cluster    = 44 // 8 = 5
+bit within byte        = 44 % 8 = 4
+mask                   = 1 << 4 = 0x10
+logical stream byte    = 2 × 4096 + 5 = 8197
+physical volume byte   = 200 × 4096 + 5 = 819205
+```
+
+The eight-byte range payload is `2C 00 00 00 01 00 00 00`. Setting the bit changes
+only mask `0x10` in that byte; clearing the same range is its inverse when the
+original bit was clear. A set program must not include previously set bits in
+its inverse range, or rollback would incorrectly free them. The converse holds
+for clear programs.
+
+`target_vcn` selects the logical bitmap page. The range uses bit units within
+that page; neither `first=8197` nor `first=65580` represents the authored update.
+The LCN is an address only after the complete owner binds the bitmap attribute,
+current mapping and physical bounds. This nonzero-VCN example is locally verified
+arithmetic, not an accepted native recovery profile. See
+[bitmap wire forms](09-logfile.md#bitmap-ranges-two-dwords-measured-in-bits).
+
 ## A journal record across circular wrap
 
 Choose a 4096-byte-page LFS 1.1 journal with two restart pages, two copy pages and

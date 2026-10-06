@@ -283,6 +283,15 @@ ntfs_error(enum ntfs_result result)
 	case NTFS_NO_MEMORY:
 		code = ENOMEM;
 		break;
+	case NTFS_NO_SPACE:
+		code = ENOSPC;
+		break;
+	case NTFS_EXISTS:
+		code = EEXIST;
+		break;
+	case NTFS_NOT_EMPTY:
+		code = ENOTEMPTY;
+		break;
 	case NTFS_NOT_FOUND:
 		code = ENOENT;
 		break;

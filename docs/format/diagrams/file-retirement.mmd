@@ -1,0 +1,11 @@
+flowchart TB
+    A["Active FILE predecessor\nsequence g · links n\nFlags f include IN_USE"] --> D["0x03 Deallocate FILE\nEmpty redo span"]
+    D --> R["Private C retirement\nNext nonzero sequence\nflags 0 · links n\nOther logical bytes retained"]
+    A --> U["Native 0x02 Initialize inverse\nFirst 24 FILE bytes\nOriginal header state"]
+    R -. "Private undo" .-> U
+    U --> B["Restored predecessor header\nsequence g · links n · flags f\nBody outside inverse span"]
+    D -.-> T["Complete transaction still required\nMFT and cluster allocation bits\nParent FILE and INDX updates\nNative WAL and compensation\nDurable barriers"]
+    classDef verified fill:#edf4ff,stroke:#4774af,color:#203e68
+    classDef required fill:#f4effa,stroke:#8862a3,color:#503461
+    class A,D,R,U,B verified
+    class T required

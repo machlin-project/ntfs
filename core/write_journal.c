@@ -747,6 +747,7 @@ ntfs_write_guard_frame(const void *before, size_t bytes, void *protected_after,
 	ntfs_copy(work->restored, protected_after, bytes);
 	header = (const void *)work->restored;
 	if (!ntfs_equal(header->magic, "FILE", sizeof(header->magic)) &&
+	    !ntfs_equal(header->magic, "INDX", sizeof(header->magic)) &&
 	    !ntfs_equal(header->magic, "RSTR", sizeof(header->magic)) &&
 	    !ntfs_equal(header->magic, "RCRD", sizeof(header->magic))) {
 		return NTFS_UNSUPPORTED;

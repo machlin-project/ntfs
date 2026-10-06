@@ -1,0 +1,19 @@
+flowchart TB
+    S["Sealed ordinary mutation\nComplete regions + logical owners"] --> C["Private operation compiler\nCopied before / after images"]
+    C --> F["FILE images\nSnapshot · replacement · retirement"]
+    C --> I["INDX images\nWhole-buffer hypothesis"]
+    C --> B["Bitmap ranges\nSet / clear inverses"]
+    F --> P["Complete generated packet program\nOAT opens → metadata updates → Forget"]
+    I --> P
+    B --> P
+    P --> J["Owned protected LFS pages\nExplicit proved floor / tail / successor"]
+    P --> U["Bound complete metadata prefix\nCompensation in reverse → Forget"]
+    J --> G["Native execution qualification\nPhysical guards · ordering · Windows recovery"]
+    U --> G
+    C -. "Separate initialization" .-> D["User DATA\nInitialized bytes and zero gaps"]
+    D --> G
+    G -. "Still required" .-> A["Writable owner and FSKit admission"]
+    classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
+    classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
+    class S,C,F,I,B,P,J,U,D private
+    class G,A gate

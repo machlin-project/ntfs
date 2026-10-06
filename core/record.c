@@ -104,7 +104,7 @@ ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs
 }
 
 enum ntfs_result
-ntfs_record_validate(void *buffer, size_t size)
+ntfs_record_decode(void *buffer, size_t size, bool require_active)
 {
 	struct ntfs_disk_record *r = buffer;
 	struct ntfs_attr_view a;
@@ -120,7 +120,8 @@ ntfs_record_validate(void *buffer, size_t size)
 	position = ntfs_u16(r->attrs_offset);
 	flags = ntfs_u16(r->flags);
 	if (ntfs_u32(r->allocated) != size || used > size || position < sizeof(*r) ||
-	    position % NTFS_WIRE_ALIGNMENT != 0 || (flags & NTFS_RECORD_IN_USE) == 0 ||
+	    position % NTFS_WIRE_ALIGNMENT != 0 ||
+	    (require_active && (flags & NTFS_RECORD_IN_USE) == 0) ||
 	    (flags &
 		~(NTFS_RECORD_IN_USE | NTFS_RECORD_DIRECTORY | NTFS_RECORD_UNINTERPRETED |
 		    NTFS_RECORD_VIEW_INDEX)) != 0 ||
@@ -133,6 +134,12 @@ ntfs_record_validate(void *buffer, size_t size)
 		result = ntfs_attr_at(buffer, used, &position, &a);
 	} while (result == NTFS_OK);
 	return result == NTFS_END ? NTFS_OK : result;
+}
+
+enum ntfs_result
+ntfs_record_validate(void *buffer, size_t size)
+{
+	return ntfs_record_decode(buffer, size, true);
 }
 
 enum ntfs_result
@@ -229,7 +236,14 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 	v->stats.record_cache_misses++;
 	result = ntfs_stream_exact(v->mft, offset, record, v->info.record_size);
 	if (result == NTFS_OK) {
-		result = ntfs_record_validate(record, v->info.record_size);
+		result = ntfs_record_decode(record, v->info.record_size, false);
+		if (result == NTFS_OK &&
+		    (ntfs_u16(((const struct ntfs_disk_record *)(const void *)record)->flags) &
+			NTFS_RECORD_IN_USE) == 0) {
+			/* Valid retired records cannot publish a node or enter its cache.
+			 * Torn or malformed free headers still retain their decoding error. */
+			result = NTFS_NOT_FOUND;
+		}
 	}
 	if (result != NTFS_OK) {
 		ntfs_free(v, record, v->info.record_size);

@@ -80,7 +80,10 @@ enum ntfs_result {
 	NTFS_END,
 	NTFS_BUSY,
 	/* Appended: existing result values remain stable. */
-	NTFS_TOO_MANY_LINKS
+	NTFS_TOO_MANY_LINKS,
+	NTFS_NO_SPACE,
+	NTFS_EXISTS,
+	NTFS_NOT_EMPTY
 };
 
 struct ntfs_volume;

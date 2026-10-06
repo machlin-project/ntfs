@@ -1,5 +1,145 @@
 # Acceptance
 
+## Ordinary mutation planning and complete LFS placement
+
+The active connected write batch now has a pure ordinary mutation planner and a
+pure LFS 1.1 packet-placement owner. These are local planning components; general
+WAL execution, interrupted recovery, checkpoint advancement and writable FSKit
+namespace/resize admission remain open.
+
+Independent LFS fixtures pass 24 placement profiles, 16 complete projected
+journals and 4,167 exact pages. The tests cover old tail continuations, circular
+wrap, retained floor/prefix preservation, whole-batch capacity, ordinal links,
+sequence exhaustion, complete strict assembly, borrowed input lifetime and every
+allocation failure with exact retry. A packet starts on a fresh page, and each
+page describes one physical transfer. This does not qualify native multi-page
+publication or floor reuse.
+
+Every ordinary private cluster now retains its sequence-bearing logical FILE
+owner, attribute type/name, stream offset and explicit MFT replica role. The
+planner tests check every region against its complete projected stream mapping
+through growth/shrink, resident conversion, fragmented allocation and zero gaps,
+rename/replacement/removal, index/MFT growth, ENOSPC and generation reuse. Every
+read/allocation failure preserves the source and retries to the same complete
+regions and targets. Getter outputs that alias private before/after storage
+refuse without damaging the plan.
+
+MFTMirr protection now excludes its own actual predecessor markers. The test
+deliberately makes the old mirror counter equal to the proposed primary counter
+and checks every changed FILE's mixed sector pairs. Bootstrap compares both
+fully restored MFT zero images except for their independent two-byte USA counters;
+every other byte remains required, and a differing FILE LSN still refuses mount.
+The focused fatal-ASan/UBSan mutation suite and the basic core unit both pass.
+The missing test declaration and the initial bootstrap-counter failure are
+retained separately from the corrected passes. A broader batch regression and
+native execution have not run for these changes.
+
+A read-only metadata-mapped inventory of the frozen Windows journal preserves
+70 original packet samples from 1,238 complete local updates across 24 opcode-pair
+forms. Before/after source hashes agree. Native FILE deallocation has an observed
+24-byte Initialize undo prefix; INDX initialization has an observed nonresident
+update prefix. No complete-local Write-end FILE/index witness is present in this
+inventory. These are framing/format observations, not selected current history
+or native operation execution acceptance. The first inventory attempt confused
+the independent run author's cluster count with a VCN; its refusal remains
+retained, and the correction checks the named lowest VCN and counted allocation.
+
+Independent re-reading binds all 70 samples to their exact original restored page
+slots and agrees with 140 C common-header/update views, including active spans,
+LCNs and inactive compensation lengths. The source journal and decoder identity
+remain unchanged. This is complete-local framing evidence, not owning history.
+
+The separate bitmap compiler now passes 22 independently authored programs and
+4,122 exact native set/clear payloads. Full-cluster and first/last-bit bounds,
+byte/sector crossings, mixed allocation/free, named index and MFT bitmaps,
+nonzero/wide VCNs, the 4096-interval ceiling, allocation failure/retry, input
+lifetime and pointer/output aliases pass under fatal ASan/UBSan. Redo produces
+the complete planned cluster; reverse undo restores its exact predecessor and
+repeat redo is idempotent. Six original native shared-span bitmap payloads also
+pass independently authored private bit effects. The expanded complete ordinary
+mutation scenario checks every bitmap region's forward/inverse program without
+additional reads. No physical write, OAT binding, compensation or native recovery
+admission is supplied by these components.
+
+The full complete-local observation now retains all 1,238 original updates.
+A separate read-only retirement check maps 33 original Deallocate/Initialize
+packets through the checked MFT and retains five exact packet/home-LSN matches;
+28 different-home-LSN slots remain excluded. All five clear MFT bits and match
+the complete predicted 24-byte header transition: generation advances, flags
+clear and links remain stored, including one two-link record. This corrects the
+ordinary planner's prior link-count clearing. The complete pre-retirement bodies
+are not independently captured; native source bytes and source hashes are unchanged.
+
+The pure retirement compiler and private apply helper pass 22 independent
+program/refusal profiles under fatal ASan/UBSan. Exact snapshot/payload bytes,
+all four cluster slots, multiple records, directory framing, retained named
+streams/nonzero unused bytes, wide MFT coordinates, local sequence wrap,
+idempotence, source-independent lifetime, allocation failure/retry and
+pointer/payload/destination refusals pass. Five original native pairs also
+reproduce the exact matched home headers and private inverse effects over
+their captured bodies. Every retired slot in the complete ordinary mutation
+scenario agrees with the native program's forward/inverse effects without
+additional reads. These results add no device writes, OAT/history binding,
+compensation execution or native Windows recovery admission. Broader batch and
+native acceptance remain open.
+
+Evidence is in `artifacts/overwrite/`, under `log-batch-pages-focused-20261006/`,
+`log-batch-pages-focused-sdk-20261006/`, `log-batch-pages-mutation-targets-20261006/`,
+the mutation-guards/mirror-bootstrap and native-target-evidence directories,
+`native-operation-observation-counted-runs-20261007/`,
+`native-operation-decoder-review-20261007/`, `log-batch-pages-bitmap-programs-20261006/`
+and `native-bitmap-private-effects-20261007/`. The living format
+reference adds complete placement and logical/physical target relationships,
+bitmap range units and an authored coordinate example, with original rendered
+diagrams and verified local links.
+The expanded packet inventory and retirement evidence are in
+`native-operation-full-local-20261007/`,
+`native-file-retirement-observation-20261007/`, its separate execution directory,
+`native-file-retirement-private-effects-20261007/` and
+`file-retirement-focused-20261007/`. The format book adds the native header
+transition, distinct new-record inverse boundary and an original retirement
+diagram; current writing admission remains the qualified overwrite family.
+
+The experimental complete-operation compiler now owns all changed regions,
+distinct OAT identities and exact metadata payloads. It prepares original and
+compensation page batches, binds compensation to the original OAT/update packets,
+and preserves explicit floor/tail/successor ownership as a caller obligation.
+Connected private tests cover 2,577 mutation programs, 19,561 metadata updates,
+13,584 complete or partial inverse prefixes and 23 program/page/compensation
+allocation failures with exact retry. The separate page tests reconstruct every
+independently authored packet from protected output, including continuation and
+wrap, and reject each damaged sector tail or output alias without partial copying.
+Wrong original client/packet/tail bindings refuse compensation without leaks or I/O.
+
+The prefix test found a real new-FILE ordering gap: initialization preceded its
+separate inverse record. The selected inverse now precedes initialization; a
+prefix containing only that inverse leaves its exact unpublished predecessor
+unchanged. Complete reverse metadata and selected interrupted prefixes now agree
+locally. This does not qualify Windows execution of that new family.
+
+One complete local checkpoint now passes all 180 fatal ASan/UBSan Meson suites,
+selected-Xcode formatting and freestanding arm64/x86_64 compilation with the
+2-KiB stack ceiling. FSKit host components pass 63 groups with thirteen explicit
+runtime/SDK SKIPs and zero failures. Main review checks every raw Meson result
+and the fatal sanitizer environment. No VM run, app installation or additional
+native acceptance occurred at this boundary.
+
+The complete FILE Initialize/Initialize inverse and whole-INDX nonresident image
+forms remain experimental substitutions. New/free storage provenance, original
+owning history, device execution, MFT bootstrap/mirror recovery, checkpoint reuse
+and whole native loser/winner replay remain required before these preparations
+can be admitted by the write owner or FSKit. The existing qualified overwrite
+family is unchanged. Component checkpoints do not complete the ordinary write batch.
+
+The new focused/failure evidence is in `full-program-*` directories under
+`artifacts/overwrite/`. The full local checkpoint is retained in
+`ordinary-mutation-local-checkpoint-20261007/` and
+`ordinary-mutation-local-checkpoint-default-target-20261007/`; the former also
+retains the incorrectly prescribed Meson `all` target invocation before the
+correct default-target build. The format book describes the experimental forms,
+prefix ordering, explicit remaining ownership questions and a rendered program
+diagram separately from native format facts.
+
 ## Resident ordinary-file overwrite continuation
 
 The new C implementation admits unchanged-size resident DATA in an ordinary

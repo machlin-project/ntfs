@@ -1,0 +1,19 @@
+flowchart TB
+    O["Checked bitmap owner\nFILE reference + generation · attribute/name\nlogical cluster offset · physical cluster"] --> D
+    B["Original bitmap bytes"] --> D["Compare complete private clusters\nPreserve every unchanged bit"]
+    A["Complete planned bitmap bytes"] --> D
+    D --> R["Maximal changed intervals\nfirst bit + bit count · one target VCN"]
+    R --> S["Allocate: 0 → 1\nRedo SET · Undo CLEAR"]
+    R --> C["Retire: 1 → 0\nRedo CLEAR · Undo SET"]
+    S --> P["Owned native payloads\nSupplied OAT key · one LCN · identical inverse range"]
+    C --> P
+    P --> V["Local complete-byte proof\nForward → planned cluster\nReverse → original cluster"]
+    V -.-> W["Required before disk mutation:\ncomplete native transaction owner\nOAT membership · FILE / INDX ordering\nWAL · compensation · persistence · recovery"]
+    classDef local fill:#edf4ff,stroke:#4774af,color:#203e68
+    classDef set fill:#e8f6ef,stroke:#478969,color:#254d3a
+    classDef clear fill:#fff1e7,stroke:#b47445,color:#75451f
+    classDef required fill:#f7f0ff,stroke:#8b65a8,color:#4d3267,stroke-dasharray:5 4
+    class O,B,A,D,R,P,V local
+    class S set
+    class C clear
+    class W required

@@ -174,7 +174,8 @@ ntfs_result_string(enum ntfs_result r)
 	    "unsupported format", "I/O error", "out of memory", "not found", "not a directory",
 	    "is a directory", "invalid argument", "stale file reference", "resource limit",
 	    "read-only filesystem", "volume requires Windows recovery", "end of directory",
-	    "objects still open", "too many symbolic links"};
+	    "objects still open", "too many symbolic links", "insufficient free space",
+	    "name already exists", "directory is not empty"};
 	return (unsigned)r < sizeof(names) / sizeof(names[0]) ? names[r] : "unknown error";
 }
 

@@ -107,6 +107,28 @@ page, even after circular wrap. Reserving a subsequent operation from the start
 page alone can overwrite its continuation. Placement requires the verified
 completed endpoint or canonical successor position.
 
+### Complete batch placement
+
+The pure placement owner now takes an explicit retained floor, completed tail
+LSN and **proved successor LSN**. It protects the entire floor page and every
+page occupied by the earlier tail's continuation. A partial successor page also
+stays protected; a cursor at the fresh page-data start can use that page.
+Capacity for the whole packet set and a representable ending cursor are checked
+before allocation. A revisited floor page means no available circular pages.
+
+Each new packet starts on a fresh page. Each page describes a separate one-page
+physical transfer; the packet's byte extent sets its continuation count. Only
+the ending page carries its complete end LSN and aligned completed boundary.
+Earlier-packet ordinal links are assigned after placement and must match the
+client index, sequence and transaction key. Absolute retained links still need
+the enclosing history owner's membership/lifetime proof.
+
+Independent fixtures check complete pages, preservation of every retained source
+page, old spanning tails, wrap, exact capacity, sequence exhaustion and strict
+record assembly through a projected journal. This is local framing/placement
+evidence. Actual physical mapping, predecessor USA guards, native update meaning,
+publication, floor advancement and Windows recovery remain separate obligations.
+
 ## RCRD page
 
 The common page header is 40 bytes. Offsets are relative to the page:
@@ -227,6 +249,140 @@ directory changes and bitmap operations. Those observations help design a native
 program; they do not establish replay semantics for every opcode or arbitrary
 full-snapshot substitution.
 
+The bounded complete-local-packet inventory also distinguishes exact forms: an
+original Deallocate FILE record has Initialize FILE as its undo and carries only
+a 24-byte header prefix; an original nonresident update initializes an INDX
+prefix with no undo bytes. These witnesses do not justify requiring a complete
+FILE or INDX image for every opcode. The retained local packet set has no Write
+end of FILE or Write end of index-buffer witness. Missing witnesses remain a
+research boundary, even though those names exist in the published vocabulary.
+
+### Experimental complete-image composition
+
+The private [whole-operation compiler](../../core/write_program.h) connects the
+sealed ordinary mutation to OAT opens, metadata updates and compensation pages.
+It owns copied images and exact payloads after the mutation plan closes. Its
+current composition is a local hypothesis, with no device or FSKit admission:
+
+| Region or transition | Private redo / undo composition | Evidence boundary |
+| --- | --- | --- |
+| Changed framed FILE | Full 1024-byte before image as Initialize / Initialize, then the full after image as Initialize / Noop. | Full FILE snapshots are used by the accepted overwrite family; this full before-inverse pair and replacement composition need separate native recovery acceptance. |
+| Retired FILE | Full before inverse above, then empty Deallocate redo with the observed 24-byte Initialize inverse. | The header transition has original witnesses; the complete connected transaction remains unqualified. |
+| Previously uninitialized FILE | Retain Noop / Deallocate with an eight-byte zero MST inverse **before** the full Initialize / Noop redo. | Eight-byte inverse forms have original witnesses. This selected composition, storage-ownership interpretation and consumed-generation rollback need native qualification. |
+| Changed framed INDX | Full 4096-byte restored images as Update nonresident value / Update nonresident value (`0x08 / 0x08`). | Original `0x08` packets exist, but do not establish arbitrary whole-buffer substitution. |
+| New INDX | Full restored image as `0x08 / Noop`; the old owning FILE/bitmap must make the buffer unowned on rollback. | Complete parent, allocation and buffer recovery must be qualified together. |
+| Bitmap | The independently tested set/clear programs below. | Whole OAT/mapping and durability qualification remains separate. |
+
+Retaining the new-FILE inverse first is necessary for the local prefix contract.
+If initialization were logged before its inverse, a complete prefix ending there
+could redo an in-use FILE without enough undo to retire it. The independent
+projected-object tests found that gap; representative incomplete prefixes now
+reconstruct their inverse metadata state. A prefix containing only the new-slot
+inverse leaves its exact unpublished predecessor unchanged. These private effects
+do not prove how Windows will execute that prefix.
+
+The generated sequence opens each distinct owning attribute, then links every
+metadata update within one transaction and ends with Forget. Named `$I30` opens
+retain exact UTF-16 name bytes. Open LSNs name the actual preceding generated
+packet; this is a policy of this composition, not a universal rule for native
+NTFS history. Page placement must independently receive the proved floor, tail
+and exact successor. Compensation binds the original opens and complete metadata
+prefix byte-for-byte, reverses its operations, retains original undo-next links,
+and ends with Forget. It does not acquire or prove current source history.
+
+No user DATA enters these metadata packets. Initialized DATA ordering, actual
+predecessor protection, MFT bootstrap/mirror recovery, checkpoint advancement and
+native loser/winner replay remain execution-owner work. Local framing, allocation
+faults, packet binding and private inverse effects are covered by
+[the connected C scenarios](../../tests/write_mutation.c) and
+[independent page/packet goldens](../../tests/write_batch_pages.c).
+
+### FILE retirement: a header inverse
+
+The observed ordinary retirement pair is **Deallocate FILE (`0x03`) /
+Initialize FILE (`0x02`)**. Redo is empty; undo is the first **24 FILE bytes**,
+ending immediately before `used`. That prefix includes signature, USA location
+and count, FILE LSN, reference generation, links, attribute offset and flags.
+It does not contain the USA array itself, `used`, `allocated`, base reference,
+next attribute instance or attribute bodies. See the
+[FILE field table](02-records-and-fixups.md#file-header).
+
+Five original packets now bind to the exact current home LSN and checked MFT
+allocation bit. Their header transition retains links, advances generation and
+clears flags. The [observation command](../../scripts/observe_native_retirement.py)
+keeps the 28 different-home-LSN records separate; those are not additional
+successful transition witnesses.
+
+The pure C compiler admits only primary MFT clusters whose changed records
+retire under this contract. Each retired slot gets an Initialize/Noop snapshot
+of its full restored **used prefix**, then a Deallocate/Initialize pair with the
+24-byte inverse. It retains private payloads and ordinary ADDING/DELETING
+common-header flag descriptions. Unchanged neighbors may be uninitialized;
+active-record changes, mirrors and unrelated byte changes are refused.
+
+For one LCN, the deallocation client payload is a 40-byte stored update prefix
+plus 24 inverse bytes: **64 bytes**. `target_vcn` names the MFT cluster;
+`cluster_index` is measured in 512-byte blocks within it. A 1024-byte FILE can
+therefore start at cluster indices 0, 2, 4 or 6. `record_offset` and
+`attribute_offset` are zero for this pair.
+
+The private apply helper admits the exact active predecessor or retired successor,
+preserves the body, stamps the caller's redo/compensation LSN and makes repeated
+redo or inverse application idempotent. It does not bind OAT lifetimes or decide
+replay eligibility. Independent vectors and original native payload arithmetic
+are local evidence; native cross-object recovery and physical publication are
+still required.
+
+Do not generalize this pair to every use of Deallocate. The same retained
+operation inventory contains **Noop / Deallocate** packets with an eight-byte
+inverse, including both FILE multi-sector prefixes and zero prefixes. Those
+new-record undo forms are outside this helper's admission and need their own
+allocation/lifetime contract.
+
+### Bitmap ranges: two DWORDs, measured in bits
+
+The published `BITMAP_RANGE` payload has two little-endian DWORDs:
+
+| Offset | Bytes | Field | Unit |
+| --- | --- | --- | --- |
+| `0x00` | 4 | `first` / BitmapOffset | Bit index |
+| `0x04` | 4 | `bits` / NumberOfBits | Number of consecutive bits |
+
+`0x15` sets the range; `0x16` clears it. The original format research describes
+this layout and operation pair. [Linux-NTFS `$LogFile` research](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html)
+
+Our original Windows witnesses include an exact set/clear pair with `first=44`
+and `bits=1`, and a clear/set pair with `first=61` and `bits=1`. Both have one LCN,
+zero target VCN and zero record/attribute/cluster offsets. Redo and undo point
+to the **same eight stored bytes**. Independent original-byte review agrees with
+both C views; the range helper also passes their privately authored byte effects.
+That is format and local arithmetic evidence, not Windows execution acceptance.
+
+The current pure compiler uses one checked 4096-byte bitmap cluster per program.
+Its `first` is relative to that cluster; `target_vcn` carries the cluster's
+stream coordinate. It emits only maximal changed intervals whose original and
+resulting bit values are uniform and opposite. A set has clear as its inverse,
+and a clear has set. Unchanged bits never enter a range. Nonzero VCN coordinates
+have independent local tests; native qualification of that addressing profile
+remains open.
+
+The canonical serializer stores separate identical redo and undo copies: a
+40-byte stored prefix plus two eight-byte ranges gives 56 client bytes. The
+observed shared-span form instead needs 48 client bytes. Span equality is a byte
+relationship, not a requirement that their offsets differ or coincide.
+
+![Bitmap changes become paired native ranges before journal ownership](diagrams/bitmap-redo-undo.svg)
+
+[Diagram source](diagrams/bitmap-redo-undo.mmd) ·
+[Coordinate example](11-worked-examples.md#address-a-bitmap-range)
+
+The compiler retains complete private payloads after input close, rejects
+unsupported owners/geometry and caps a program at 4096 intervals before
+allocation. Its pure apply helper validates the whole pair before changing any
+bit and admits the original shared-span form. OAT membership, physical mapping,
+transaction links, compensation, ordering with FILE/INDX changes and durable
+recovery still belong to the complete native transaction owner.
+
 ## Client checkpoint and restart tables
 
 The NTFS client restart common prefix is 64 bytes: client version, analysis LSN,
@@ -251,6 +407,18 @@ record cannot decide winner/loser state or permit history truncation.
 - Scalar framing: [logfile.c](../../core/logfile.c).
 - Copies, exact assembly and proved history: [logfile_source.c](../../core/logfile_source.c).
 - Pure private encoding: [logfile_encode.c](../../core/logfile_encode.c).
+- Bitmap programs and private range arithmetic: [write_bitmap.c](../../core/write_bitmap.c),
+  [contract](../../core/write_bitmap.h), [independent wire author](../../tests/write_bitmap_fixtures.py)
+  and [exact payload/redo/undo/refusal tests](../../tests/write_bitmap.c).
+- FILE retirement programs and private inverse effects:
+  [write_retirement.c](../../core/write_retirement.c),
+  [contract](../../core/write_retirement.h),
+  [independent wire/state author](../../tests/write_retirement_fixtures.py) and
+  [exact original/private checks](../../tests/write_retirement.c).
+- Complete batch placement: [write_batch_pages.c](../../core/write_batch_pages.c),
+  [its ownership contract](../../core/write_batch_pages.h),
+  [independent page fixtures](../../tests/write_batch_pages_fixtures.py) and
+  [strict projection/fault tests](../../tests/write_batch_pages.c).
 - Table/checkpoint binding: [logfile_tables.c](../../core/logfile_tables.c),
   [checkpoint.c](../../core/checkpoint.c).
 - Independent continuation/wrap authors: [logfile_history_fixtures.py](../../tests/logfile_history_fixtures.py).

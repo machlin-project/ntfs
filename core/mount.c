@@ -191,6 +191,7 @@ ntfs_mount(
 	struct ntfs_stream *upcase = NULL;
 	struct ntfs_directory *directory = NULL;
 	uint8_t *record = NULL, *mirror = NULL;
+	size_t usa_sequence_end, usa_sequence_offset;
 	uint32_t i;
 	bool entered = false;
 	enum ntfs_result result;
@@ -269,8 +270,18 @@ ntfs_mount(
 	if (result == NTFS_OK) {
 		result = ntfs_record_validate(mirror, v->info.record_size);
 	}
-	if (result == NTFS_OK && !ntfs_equal(record, mirror, v->info.record_size)) {
-		result = NTFS_CORRUPT;
+	if (result == NTFS_OK) {
+		/* Both complete FILEs passed MST restoration. A replica has its own
+		 * physical protection counter; compare every other restored byte,
+		 * including USA geometry and saved tails, without requiring that counter. */
+		usa_sequence_offset = ntfs_u16(
+		    ((const struct ntfs_disk_record *)(const void *)record)->mst.usa_offset);
+		usa_sequence_end = usa_sequence_offset + NTFS_MST_WORD_BYTES;
+		if (!ntfs_equal(record, mirror, usa_sequence_offset) ||
+		    !ntfs_equal(record + usa_sequence_end, mirror + usa_sequence_end,
+			v->info.record_size - usa_sequence_end)) {
+			result = NTFS_CORRUPT;
+		}
 	}
 	if (result != NTFS_OK) {
 		goto finish;

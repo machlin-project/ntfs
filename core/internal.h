@@ -232,6 +232,7 @@ enum ntfs_result ntfs_io(struct ntfs_volume *, uint64_t, void *, size_t);
 enum ntfs_result ntfs_boot(
     const struct ntfs_environment *, struct ntfs_info *, uint64_t *, uint64_t *);
 enum ntfs_result ntfs_fixup(void *, size_t, const char *);
+enum ntfs_result ntfs_record_decode(void *, size_t, bool require_active);
 enum ntfs_result ntfs_record_validate(void *, size_t);
 enum ntfs_result ntfs_record_read(struct ntfs_volume *, uint64_t, uint8_t **);
 enum ntfs_result ntfs_attr_at(const uint8_t *, size_t, uint32_t *, struct ntfs_attr_view *);

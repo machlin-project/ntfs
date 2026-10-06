@@ -109,7 +109,7 @@ enum ntfs_result ntfs_write_journal_reserve_resident_tail(const struct ntfs_logf
     struct ntfs_write_log_reservation *);
 enum ntfs_result ntfs_write_journal_encode(const struct ntfs_write_journal_input *,
     struct ntfs_write_journal_workspace *, struct ntfs_write_journal_plan *);
-/* Reprotect one complete private FILE/RSTR/RCRD publication with a USA marker
+/* Reprotect one complete private FILE/INDX/RSTR/RCRD publication with a USA marker
  * absent from every sector tail and plausible USA marker in its actual preceding
  * physical image. Failure leaves the protected output unchanged. The caller
  * supplies complete old bytes under exclusive ownership before any write. */

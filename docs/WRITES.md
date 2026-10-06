@@ -46,6 +46,22 @@ an individual VM cycle before that local boundary. Block-device admission,
 encoded/named-stream mutation and general Windows ACL mutation are separate
 contracts and do not become supported through this batch.
 
+## Refactoring after the next verified commit
+
+The next coherent, tested feature checkpoint is followed by a separate driver
+refactoring plan. A checkpoint commit does not complete the full write objective.
+First review module responsibilities, duplicated code and inconsistent conventions
+across the C core and FSKit owner; record the proposed changes before making them.
+The review includes naming, declaration/formatting rules, memory ownership, cleanup,
+error publication and mutation/recovery interfaces.
+
+Implement the agreed cleanup in focused behavior-preserving commits. Keep format
+interpretation, write ordering, authorization and accepted capabilities unchanged
+within each cleanup commit. Reuse the independent byte, fault, lifetime and recovery
+oracles; run the complete regression at the resulting refactoring boundary. Native
+checks remain required for changes affecting platform lifecycle or persistence.
+Functional writing and recovery gaps retain their original acceptance requirements.
+
 The [native ordinary-file journal](NATIVE-WRITE-JOURNAL.md) qualifies the bounded
 MFT binding, full FILE snapshot, timestamp/archive update, native redo and
 compensation family. Actual source-clone `pwrite`/`F_FULLFSYNC`, whole-image

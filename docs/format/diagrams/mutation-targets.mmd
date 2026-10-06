@@ -1,0 +1,16 @@
+flowchart TB
+    O["Ordinary mutation owner\ncreate · resize · rename · remove"] --> T["Checked logical target\nFILE reference + generation · attribute type/name · stream byte offset"]
+    T --> F["MFT DATA\nFILE records"]
+    T --> I["Directory INDEX_ALLOCATION $I30\nINDX buffers"]
+    T --> B["Volume / MFT / directory bitmap\nDistinct owning attributes"]
+    T --> D["Ordinary file DATA\nInitialized bytes and zero gaps"]
+    F --> R["Private physical cluster regions\nOriginal bytes + complete planned bytes"]
+    I --> R
+    B --> R
+    D --> R
+    F --> M["MFTMirr replica\nIts own actual predecessor protection"]
+    M --> R
+    R --> V["Complete projected-volume validation\nCheck logical mapping against physical regions"]
+    V -. "Required before execution" .-> W["Qualified native redo/undo program\nWAL ownership · persistence · recovery"]
+    classDef planning fill:#edf4ff,stroke:#4774af,color:#203e68
+    class O,T,F,I,B,D,M,R,V planning

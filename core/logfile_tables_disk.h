@@ -9,7 +9,11 @@ enum {
 	NTFS_LOG_OP_NOOP = 0x00,
 	NTFS_LOG_OP_COMPENSATION = 0x01,
 	NTFS_LOG_OP_INITIALIZE_FILE_RECORD = 0x02,
+	NTFS_LOG_OP_DEALLOCATE_FILE_RECORD = 0x03,
 	NTFS_LOG_OP_UPDATE_RESIDENT_VALUE = 0x07,
+	NTFS_LOG_OP_UPDATE_NONRESIDENT_VALUE = 0x08,
+	NTFS_LOG_OP_SET_BITMAP_BITS = 0x15,
+	NTFS_LOG_OP_CLEAR_BITMAP_BITS = 0x16,
 	NTFS_LOG_OP_PREPARE_TRANSACTION = 0x19,
 	NTFS_LOG_OP_COMMIT_TRANSACTION = 0x1a,
 	NTFS_LOG_OP_FORGET_TRANSACTION = 0x1b,
@@ -65,6 +69,10 @@ struct ntfs_disk_log_attribute_name {
 	uint8_t target_attribute[sizeof(uint16_t)], name_bytes[sizeof(uint16_t)];
 };
 
+struct ntfs_disk_log_bitmap_range {
+	uint8_t first[sizeof(uint32_t)], bits[sizeof(uint32_t)];
+};
+
 _Static_assert(sizeof(struct ntfs_disk_log_table) == 24, "NTFS restart table header");
 _Static_assert(
     sizeof(struct ntfs_disk_log_open_attribute_base) == 44, "NTFS client-0 open attribute entry");
@@ -75,4 +83,5 @@ _Static_assert(
 _Static_assert(sizeof(struct ntfs_disk_log_dirty_page) == 32, "NTFS client-1 dirty page prefix");
 _Static_assert(sizeof(struct ntfs_disk_log_transaction) == 40, "NTFS transaction entry");
 _Static_assert(sizeof(struct ntfs_disk_log_attribute_name) == 4, "NTFS attribute name prefix");
+_Static_assert(sizeof(struct ntfs_disk_log_bitmap_range) == 8, "NTFS bitmap range");
 #endif

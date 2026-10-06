@@ -55,6 +55,10 @@ across the C core and FSKit owner; record the proposed changes before making the
 The review includes naming, declaration/formatting rules, memory ownership, cleanup,
 error publication and mutation/recovery interfaces.
 
+The verified local checkpoint now has a concrete
+[driver refactoring plan](REFACTORING.md), including the initial review findings,
+ordered cleanup commits and their verification boundary.
+
 Implement the agreed cleanup in focused behavior-preserving commits. Keep format
 interpretation, write ordering, authorization and accepted capabilities unchanged
 within each cleanup commit. Reuse the independent byte, fault, lifetime and recovery

@@ -439,7 +439,11 @@ Clearing flags or introducing a private journal cannot substitute for this gate.
 - Native encoding/compensation: [write_journal.c](../../core/write_journal.c).
 - Ordinary private regions and logical targets: [write_mutation.h](../../core/write_mutation.h),
   [write_mutation.c](../../core/write_mutation.c),
-  [stream binding](../../core/write_record.c) and
+  [FILE ownership/replacement](../../core/write_record.c),
+  [attribute construction](../../core/write_attribute.c),
+  [stream binding/I/O](../../core/write_stream.c),
+  [directory inspection/key changes](../../core/write_directory.c),
+  [complete index storage construction](../../core/write_directory_store.c) and
   [projected mapping/fault tests](../../tests/write_mutation.c).
 - Bitmap native update preparation and private inverse application:
   [write_bitmap.c](../../core/write_bitmap.c), [contract](../../core/write_bitmap.h)

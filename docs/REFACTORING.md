@@ -54,13 +54,13 @@ and native wire includes, plus a failed header-check wrapper invocation, remain
 retained separately from their corrected evidence. Reports and the consolidated
 review are in `artifacts/overwrite/refactor-write-components-*` directories.
 
-Mutation-construction review, broader naming/cleanup work and FSKit extraction
-remain in the plan; this does not complete driver refactoring. Native lifecycle,
+Broader naming/cleanup review and FSKit extraction remain in the plan;
+this does not complete driver refactoring. Native lifecycle,
 locking, authorization, transfers and reply code are unchanged, so this cleanup
 adds no installed VM acceptance. Functional recovery/write admission retains
 its original native gate.
 
-The next focused cleanup makes successful producer outputs explicit before use
+A subsequent focused cleanup makes successful producer outputs explicit before use
 in nine existing writer modules and the native image-item rebind method. The
 directory constructor retains its exact root allocation size for cleanup; recovery
 selects the last retained transaction only after proving the array is nonempty.
@@ -80,6 +80,39 @@ The main equivalence and final evidence review is under
 `artifacts/overwrite/batch-recovery-main-review-20261007/`; current acceptance is
 recorded in the existing recovery section of ACCEPTANCE.md.
 
+The retained-history functional checkpoint is followed by a separate mutation
+construction cleanup. [FILE ownership and replacement](../core/write_record.c),
+[resident/nonresident attribute construction](../core/write_attribute.c) and
+[stream binding/I/O](../core/write_stream.c) have separate modules.
+[Directory inspection and key changes](../core/write_directory.c) are separate
+from [complete index storage construction](../core/write_directory_store.c).
+The complete store operation still owns its tree construction, allocation/bitmap
+changes, original index provenance and publication into the same mutation plan.
+
+Private helper names identify their owning record, attribute, mapping-pair or
+index action. A shared bounded wire-rounding helper replaces equivalent local
+arithmetic. Mapping-pair sign width uses its actual `uint64_t` operand width in
+bits rather than the unrelated LFS LSN constant. Exported interfaces, fields,
+limits, allocation/work governors, ordered callbacks and error cleanup are retained.
+The cleanup adds no new format, mutation or FSKit admission.
+
+The connected cleanup passes all 186 suites with assertions and fatal ASan/UBSan.
+All 37 actual regular-image writer/recovery postimages and four modeled recovery
+seeds are byte-identical to the preceding functional checkpoint. Main reviews
+35 moved/renamed function bodies, the unchanged private fields/limits/prototypes,
+and ordered callbacks, cleanup and failure publication independently. Both
+architectures pass 124 freestanding and 124 strict Release compilations under the
+2-KiB frame ceiling, plus seventeen standalone private-header checks. The actual
+unsigned app, both extension copies and core archive contain arm64/x86_64, with
+eighteen required module compilation commands and archive members checked.
+The format book passes 385 links and eighteen SVGs; the changed diagram is rendered
+and visually reviewed. Unchanged host FSKit code retains the preceding 63 PASS /
+13 explicit runtime SKIP evidence; it is not rerun or claimed as installed
+acceptance. The first build-option wrapper misread Meson's human-readable help
+column and ran no tests; its failure remains separate from the machine-readable
+option check and sole full regression. Evidence is retained under
+`artifacts/overwrite/refactor-mutation-components-*`.
+
 ## Concrete findings
 
 | Area | Current finding | Proposed change |
@@ -88,7 +121,7 @@ recorded in the existing recovery section of ACCEPTANCE.md.
 | Complete program | Metadata compilation/application and packet/compensation composition now have separate modules behind one private retained owner. | Keep public opaque getters, copied byte lifetime and exact accounting at this boundary when adding new families. |
 | Writer contracts | Component contracts replace the combined header; the native image-owner contract exposes entry points and durable reports. | Include the owning interfaces explicitly and preserve structure fields, policy values and public declarations. |
 | Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |
-| Mutation storage | Record construction, attribute replacement and stream serialization live together in `write_record.c`; directory verification and tree reconstruction live together in `write_directory.c`. | Separate byte construction from namespace/storage algorithms where this removes a real dependency. Keep complete mutation ownership and collation in their existing semantic layer. |
+| Mutation storage | FILE ownership/replacement, attributes and streams have separate modules; directory inspection/key changes and complete index storage construction are separate. One mutation plan retains memory, work, provenance and cleanup ownership. | Review further duplication against these complete operation boundaries. Keep collation, allocation and durability in their semantic layer. |
 | Memory and cleanup | Program, mutation, bitmap, replay and volume owners have distinct accounting, reservation and lifetime rules, with repeated cleanup patterns. | Make local ownership/cleanup conventions uniform. Share byte helpers, not an allocator framework that would erase different governors or change callback order. |
 | FSKit volume | `NTFSVolume.m` owns lifecycle, operation budgets, item/cache publication, rebinding, image access rights, writable-image dispatch and read operations. | Extract private components at existing complete-operation boundaries, keeping serialization, context authorization and teardown with their native owner. |
 | Evidence prose | Acceptance has accumulated long historical sections, while format facts, private hypotheses and product gates now have separate documents. | Keep current contracts easy to find, use links for historical evidence, and preserve useful limitations and reproduction paths. Source and artifact identities remain in Git and generated reports. |
@@ -121,14 +154,12 @@ semantics, allocation policy, native opcode admission or checkpoint advancement
 into cleanup. A discovered behavior defect gets its own failing conformance test
 and functional fix before the cleanup proceeds.
 
-At the next committable retained-history checkpoint, the queued cleanup separates
-FILE record ownership/replacement, resident/nonresident attribute construction and
-stream binding/I/O. Directory inspection/key changes and complete index storage
-construction receive separate modules, sharing only their equivalent bounded entry
-size calculation. Retain the existing mutation owner, allocator/work governors,
-private interfaces and ordered callbacks. Review moved function bodies and compare
-the complete ordinary-file postimages with the functional checkpoint. This is step
-three above; the native FSKit extraction remains a separately reviewed boundary.
+At the committable retained-history checkpoint, the queued cleanup above applies
+step three: complete construction boundaries and equivalent wire rounding.
+Review moved function bodies and compare complete ordinary-file postimages with the
+functional checkpoint. The native FSKit extraction remains a separately reviewed
+boundary; it must preserve authenticated rights, read leases, serialized ownership
+and exactly-once replies before new files or classes are introduced.
 
 ## Conventions to apply
 

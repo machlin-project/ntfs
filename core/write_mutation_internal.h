@@ -76,6 +76,14 @@ struct ntfs_write_mutation_plan {
 	bool sealed, operation_active;
 };
 
+/* Equivalent wire byte rounding; callers retain their existing size admission
+ * and ownership policy. These helpers perform no allocation or I/O. */
+static inline size_t
+ntfs_mutation_align_bytes(size_t bytes)
+{
+	return (bytes + NTFS_WIRE_ALIGNMENT - 1u) & ~(size_t)(NTFS_WIRE_ALIGNMENT - 1u);
+}
+
 extern const uint16_t ntfs_mutation_index_name[4];
 
 void *ntfs_mutation_allocate(struct ntfs_write_mutation_plan *, size_t);

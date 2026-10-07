@@ -1,5 +1,6 @@
 flowchart TB
-    O["Original storage ownership\nMFT initialization / map / bitmap\nIndex map / bitmap"] --> S["Sealed ordinary mutation\nComplete regions + logical owners + provenance"]
+    O["Original storage ownership\nMFT initialization / map / bitmap\nIndex map / bitmap"] --> M["Mutation construction\nFILE ownership · attributes · streams\nDirectory inspection / complete index storage"]
+    M --> S["Sealed ordinary mutation\nComplete regions + logical owners + provenance"]
     S --> C["Private metadata compiler / application\nOne retained program owner · copied images"]
     C --> F["FILE images\nSnapshot · replacement · retirement"]
     C --> I["INDX images\nWhole-buffer hypothesis"]
@@ -24,5 +25,5 @@ flowchart TB
     G -. "Still required" .-> A["Writable owner and FSKit admission"]
     classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
     classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
-    class O,S,C,F,I,B,P,J,U,D,H,E,V,X,K,R,Q,W,Z private
+    class O,M,S,C,F,I,B,P,J,U,D,H,E,V,X,K,R,Q,W,Z private
     class G,A gate

@@ -24,9 +24,13 @@ actual predecessor protection and aligned publication lifetime pass local checks
 including three actual regular-image persistence/reopen cases. The existing
 bounded recovery parser does not accept these new families. A separate experimental
 owner now acquires only reopened media, reconstructs the original/projected metadata,
-recovers torn MFT bootstrap and continues interrupted compensation. Admission is
-the exact quiet origin plus one ordinary-operation lifetime. Mixed and sustained
-history, checkpoint reuse and whole native qualification still precede write-owner
+recovers torn MFT bootstrap and continues interrupted compensation. Admission retains
+the exact quiet origin, a settled qualified prefix and several ordinary groups.
+Private backward views prove previous ownership and FILE generation reuse;
+only the final transaction may require recovery. Completed compensation and
+attribute-open-only prefixes can precede another operation without a fabricated
+completion marker. Sustained checkpoint/ring reuse and whole native qualification
+still precede write-owner
 and FSKit admission; see the current
 [batch evidence](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
 

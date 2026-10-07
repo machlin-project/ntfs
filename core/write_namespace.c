@@ -39,7 +39,8 @@ filename(uint8_t *value, const struct ntfs_write_name *name, uint64_t filetime, 
 	ntfs_put_u64(header->accessed, filetime);
 	ntfs_put_u32(header->attributes, directory ? NTFS_FILE_DIRECTORY : NTFS_FILE_ARCHIVE);
 	header->length = (uint8_t)name->count;
-	header->name_namespace = NTFS_NAMESPACE_WIN32;
+	/* This edge has no DOS counterpart; use the qualified unpaired namespace. */
+	header->name_namespace = NTFS_NAMESPACE_POSIX;
 	for (index = 0; index < name->count; index++) {
 		ntfs_put_u16(
 		    value + sizeof(*header) + index * NTFS_UTF16_UNIT_BYTES, name->units[index]);
@@ -439,7 +440,7 @@ rename_entry(struct ntfs_write_mutation_plan *plan,
 	ntfs_put_u64(new_name->parent, destination->record->reference);
 	ntfs_put_u64(new_name->changed, plan->filetime);
 	new_name->length = (uint8_t)request->destination.count;
-	new_name->name_namespace = NTFS_NAMESPACE_WIN32;
+	new_name->name_namespace = NTFS_NAMESPACE_POSIX;
 	bytes = sizeof(*new_name) + request->destination.count * NTFS_UTF16_UNIT_BYTES;
 	for (index = 0; index < request->destination.count; index++) {
 		ntfs_put_u16(value + sizeof(*new_name) + index * NTFS_UTF16_UNIT_BYTES,

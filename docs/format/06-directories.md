@@ -54,6 +54,47 @@ native identity need explicit owning contracts. The active write planner refuses
 unqualified DOS-pair mutation. See [NATIVE-NAMESPACE.md](../NATIVE-NAMESPACE.md)
 and [LINK-POLICY.md](../LINK-POLICY.md) for current presentation rules.
 
+## Native creation research
+
+The initial experimental create planner emitted one Win32 `FILE_NAME` and one corresponding
+parent index key, with no DOS representation. Complete local validation and native
+file reads alone do not qualify that choice. In a controlled native diagnostic,
+the new file remains readable with its exact expected identity, time and ACL, but
+read-only chkdsk reports a filename-linkage error in both the child FILE and parent
+`$I30`. The same error occurs at FILE slots 16 and 63 with both 72-byte and 48-byte
+standard information; all four use the exact preceding qualified journal. The
+stored filename values remain unchanged in the retained native postimages.
+
+The next diagnostic packet compares a single POSIX representation with a Win32/DOS
+pair and includes a separate clean input for Windows to create the same ordinary
+file. It couples every filename change to its parent key and stored physical link
+count. All three pass native file/metadata checks, clean state and read-only chkdsk,
+with independently reviewed original healthy events and full detached images.
+The Windows-created file has the same long/DOS names as the paired diagnostic,
+with two physical filenames. Its observed short-name creation policy is enabled.
+The accepted unpaired POSIX diagnostic retains one physical filename.
+Microsoft documents a read-only short-name
+policy [query](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-8dot3name).
+The Windows control queries that policy without changing it. A short-name policy
+and a stored namespace designation are separate observations; neither a passing
+lookup nor a policy query proves the accepted creation representation.
+
+[Acceptance](../ACCEPTANCE.md#private-ordinary-operation-image-harness) owns the
+exact experiment reports. The selected unpaired write representation is POSIX
+in both the child filename and parent key; it does not change directory case policy.
+Creation and rename now emit this representation. A regression reopens the complete
+mutation result and checks the child attribute, parent key and physical/primary/DOS
+counts; it fails on the preceding Win32 output and passes after the correction.
+New production support for DOS-pair mutation and complete native WAL/recovery still
+need acceptance before create reaches the FSKit product. These diagnostics retain
+the preceding journal and do not qualify the actual C writer.
+
+A fresh actual C create with this corrected representation still fails Windows
+native health admission before file/chkdsk checks. The complete detached
+postimage retains the POSIX name and unchanged new FILE bytes. Thus the tested
+filename correction is closed, while native journal/recovery composition remains
+unqualified. The failure alone does not identify its packet or replay cause.
+
 ## Index structure
 
 The index's resident root is an attribute named `$I30` with type `$INDEX_ROOT`.

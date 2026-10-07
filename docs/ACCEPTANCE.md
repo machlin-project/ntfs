@@ -46,6 +46,105 @@ These are offline native-source results. Windows replay of new/free FILE and
 whole-INDX families, MFT reservation pressure, sustained native reuse and installed
 general FSKit mutation remain open.
 
+The connected native batch prepares 28 exact inputs: ten complete operations,
+seven actual-C create writer states, seven completed create recoveries, and four
+uncommitted-create/compensation states. The latter include a delivered publication
+before commit and recovery interrupted after its compensation copy. Local fresh
+recovery returns the old namespace and a second recovery writes nothing. Complete
+image/VHD comparisons, unique disk identities and bounded container patches pass
+main review. Intermediate checkpoints are included in the image oracle; the
+earlier packaging failure and completed executions are retained without repeating
+the mutations.
+
+Windows preflight passes collector parsing, four malformed-profile refusals,
+base-image identity/detachment, free candidate letter and current private-network
+checks. Its first complete create image then fails the native health guard before
+file/metadata checks or read-only chkdsk. Main reviews the original matching NTFS
+event: Event ID 98, level 2, `CorruptionActionState=3`. The exact ordinarily detached
+postimage is archived read-only; the guest copy is retained. Its volume-information
+flags change from zero to `0x0101`, while the new FILE record's bytes remain unchanged.
+The original test volume and base image remain unchanged. No repair command,
+remount, native-case retry or VM lifecycle change occurs; the other 27 cases have
+not executed. This is a native rejection with an unresolved cause, not acceptance
+of new/free FILE or whole-INDX semantics. Evidence and main review are under
+`windows-ordinary-mutation-network-20261007/` and
+`windows-ordinary-mutation-failure-observation-20261007/` in `artifacts/overwrite/`.
+
+A separate four-case diagnostic matrix retains the preceding qualified checkpoint
+journal while comparing FILE slots 16 and 63 and 72-byte/48-byte standard information.
+These controlled metadata images are not actual writer/recovery states. All four
+mount as healthy NTFS and pass exact native file/content/time/File ID/ACL checks,
+including the new empty file. Read-only chkdsk rejects all four with the same
+filename-linkage error: the new FILE and its `core-created.txt` entry in the parent
+`$I30` need correction. Main reviews the original healthy mount event for each
+volume and all four exact detached postimages. The original test volume/base remain
+unchanged; no repair, remount or native-case repeat occurs. Neither relocating the
+FILE nor shortening standard information resolves this observed error.
+Evidence is in `ordinary-metadata-diagnostics-inputs-audited-geometry-20261007/`
+and `windows-ordinary-metadata-diagnostics-20261007/`. These results narrow diagnosis;
+they do not qualify the original journal or ordinary mutations.
+
+The next locally reviewed packet compares an unpaired POSIX filename and a
+Win32/DOS pair, plus a clean qualified pre-create input for an actual Windows
+creation control. Its three full-image/container oracles pass, with immutable
+sources. The native control may create only the fixed empty test file on its
+fresh identity-checked candidate; it queries existing short-name policy without
+changing it. All three actual native cases now pass exact file/metadata checks,
+clean state, read-only chkdsk and independent original healthy-event review. Main
+also checks the full native postimages: the unpaired POSIX representation has
+one physical filename, while the paired diagnostic and Windows-created file
+each retain the same long/DOS names and two physical filenames. The observed
+Windows short-name policy is enabled. All three detached images are retained;
+original volume/base and earlier failure evidence remain unchanged.
+Preparation is under `ordinary-filename-contract-inputs-20261007/`; native results
+and main review are under `windows-ordinary-filename-contract-20261007/`.
+This establishes a selected filename representation for the tested profile,
+not acceptance of the actual C mutation journal or FSKit create/rename callbacks.
+
+C creation and rename now emit an unpaired POSIX filename in both the child
+attribute and parent index. A native-derived regression checks these values,
+physical/primary/DOS name counts and fresh-view identity after create and cross-parent
+replacement rename. It first fails on the preceding C output. After the correction,
+all 198 suites pass with fatal ASan/UBSan, selected-Xcode style passes and six strict
+changed-file compilations pass across arm64/x86_64. This closes the local correction,
+not the complete Windows WAL/recovery gate or installed general mutation.
+Evidence is under `ordinary-filename-regression-red-20261007/` and
+`ordinary-filename-contract-local-20261007/`.
+
+A fresh packet uses the frozen current C binary from that passing regression.
+Ten connected operations and seven create/fault profiles again pass independent
+complete-image, content, allocation/metadata validation and fresh recovery checks.
+Main also checks the raw POSIX child/parent names and physical name counts in
+the ten operation results. All 28 newly prepared native inputs pass exact
+logical-image/VHD oracles, distinct disk/partition identity checks and bounded
+container reconstruction. These are new current-C executions; the earlier
+filename diagnostics and failed native cases are not repeated. Evidence and
+main reviews are under `ordinary-posix-sequence-20261007/`,
+`ordinary-posix-profiles-20261007/` and `ordinary-posix-native-inputs-20261007/`.
+
+The first fresh complete-create candidate again fails Windows native health
+admission. Its original NTFS event has ID 98, level 2 and
+`CorruptionActionState=3`. The exact detached postimage retains the corrected
+POSIX filename and unchanged new FILE record bytes; its volume flags change
+from zero to `0x0101`. No native file checks or chkdsk execute, and the remaining
+27 inputs are unexecuted. The original test volume and base are unchanged;
+the guest candidate and read-only full archive are retained, with no repair,
+remount, native-case repeat or VM lifecycle change. Main reviews all changed
+sectors and original event XML. This separates the closed filename correction
+from the still-unresolved actual C native rejection; it does not establish which
+packet, replay rule or cross-object relationship caused that rejection.
+Evidence and main review are under `windows-ordinary-posix-network-20261007/`
+and `windows-ordinary-posix-failure-observation-20261007/`.
+
+Read-only journal observation on the retained Windows creation control and failed
+C create records original restart/page fields and complete local packets. It
+does not assemble spanning records, select complete history or bind every native
+transaction to that create; it cannot supply ordinary-writer acceptance or prove
+the cause of rejection. The source images are unchanged and no VM command runs.
+The explicit scope and next questions are recorded in
+[the format reference](format/09-logfile.md#native-creation-control-a-bounded-journal-observation).
+Evidence is under `native-create-journal-observation-reviewed-fields-20261007/`.
+
 ## Read-only stream component cleanup
 
 Read-only stream ownership, mapping-pair/run processing and data/LZNT1 reads now

@@ -88,7 +88,30 @@ recovery checks. Separate standalone utilities verify native-source content,
 namespace and record identities without changing snapshots. Seven actual-C
 native-source create/fault profiles calibrate the extended transport. These CLI
 results remain distinct from Windows recovery of new/free FILE and whole-INDX
-families or installed FSKit mutation admission; [ACCEPTANCE.md](ACCEPTANCE.md)
+families or installed FSKit mutation admission. The connected 28-input Windows
+batch stops on its first complete create image at native health admission; retain
+its original events and exact detached failure image for diagnosis. Its other
+27 cases are unexecuted. Do not repair/remount the failed fixture, repeat its
+native invocation or infer new-family admission from the passing checkpoint gate.
+Four distinct metadata-only diagnostics retain the preceding qualified journal
+and compare FILE slot/standard-information length. They mount healthy and pass
+native file checks, but all fail read-only chkdsk with the same filename-linkage
+error. Their full detached images and original events are independently reviewed.
+A separate filename-layout/native-creation-control packet passes native/chkdsk,
+original-event and full-postimage review for an unpaired POSIX name, a Win32/DOS
+pair and an actual Windows-created file. The control observes enabled short-name
+creation without changing that policy. The C create and rename output now uses
+the accepted unpaired POSIX designation. The native-derived regression first
+fails on the preceding code, then all 198 fatal-ASan/UBSan suites, style and six
+strict changed-file compilations pass. Actual C WAL/recovery and installed general
+FSKit mutation remain pending. A fresh current-C packet passes ten offline
+operations, seven fault profiles and all 28 native input/container reviews, but
+Windows again rejects its first complete create image before file/chkdsk checks.
+The corrected POSIX filename remains unchanged in the retained full postimage;
+original XML binds the matching NTFS error. The other 27 inputs are unexecuted.
+Retain this separate failure and do not repair, remount or repeat it. Preserve
+every earlier diagnostic outcome.
+[ACCEPTANCE.md](ACCEPTANCE.md)
 records their evidence and remaining gates.
 
 For native Windows batches, use QGA for bounded manifests/reports and

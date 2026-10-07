@@ -143,10 +143,37 @@ The private ordinary-image harness now supports bounded transfer/persistence
 faults and fresh recovery. Its complete regression passes 198 suites; seven
 actual-C native-source create profiles pass full byte/content/validation and
 quiet-reopen checks. Ten connected native-source operations and independent
-standalone read comparisons also pass. Windows qualification of new/free FILE
-and whole-INDX families, MFT reservation pressure and general installed FSKit
-mutations remain open. Prepare their native batch from the reviewed local
-closure; do not inherit their acceptance from the narrower checkpoint gate.
+standalone read comparisons also pass. The connected native batch has 28 reviewed
+inputs, but Windows rejects its first complete create image before file/chkdsk
+checks. Original XML binds a matching NTFS 98/level-2/state-3 error; the volume flags
+change from zero to `0x0101`. The exact detached failure image and guest copy are
+retained, with no repair/remount/retry and unchanged original test volume/base.
+The remaining 27 cases are unexecuted. Main owns diagnosis of this unresolved
+failure; do not rerun the failed batch. See `windows-ordinary-mutation-*` reports
+under `artifacts/overwrite/`. New/free FILE and whole-INDX qualification, MFT
+reservation pressure and general installed FSKit mutation remain open; they do
+not inherit acceptance from the narrower checkpoint gate.
+The separate four-case metadata diagnostic is complete and reviewed: both tested
+FILE slots and both standard-information lengths mount healthy/pass native file
+checks, but all fail read-only chkdsk on the same new-file/parent-index name linkage.
+All exact detached images are retained. The next three-input filename packet now
+passes native/chkdsk and main original-event/postimage review for unpaired POSIX,
+Win32/DOS-pair and actual Windows creation. The control starts from a clean qualified
+pre-create image; its enabled short-name policy yields the observed long/DOS pair.
+The C create/rename representation is corrected to unpaired POSIX; the regression
+first fails on the old code, then all 198 fatal-ASan/UBSan suites, style and six strict
+changed-file compilations pass. The fresh current-C packet is separate from these
+diagnostics. Its ten offline operations, seven create/fault profiles and all 28
+input/container reviews pass. Windows again rejects the first complete-create
+candidate before file/chkdsk checks; its corrected POSIX filename and new FILE
+bytes remain unchanged. Main reviews the original NTFS error and full detached
+postimage. The other 27 inputs are unexecuted; the original volume/base remain
+unchanged, and the failed guest copy and immutable archive are retained.
+See `windows-ordinary-posix-*` reports under `artifacts/overwrite/`.
+The actual C journal gate remains open. Follow the main agent's VM handoff and
+prepared commands; do not repair/remount an earlier failed or diagnostic candidate
+or resume the remaining inputs without a reviewed diagnosis and new packet.
+Passing filename diagnostics do not qualify the ordinary writer.
 Unsupported rejection,
 building or private serialization is not feature acceptance. Continue through the
 user's broad write scope; do not mark the goal complete at this checkpoint.

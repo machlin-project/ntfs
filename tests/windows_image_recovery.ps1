@@ -18,6 +18,107 @@ $candidate = $null
 $attached = $false
 $batch = $null
 
+function Test-NativeOrdinaryFiles($expected, [string]$root) {
+    $descriptorHeaderBytes = 20
+    $descriptorMaximumBytes = 65536
+    $descriptorMaximumBase64Characters = 87384
+    $contentMaximumBytes = 1048576
+    $referenceHexDigits = 16
+    $nativeFileIdHexDigits = 32
+    $names = @('core-created.txt','core-renamed.txt','core-directory','core-directory\child.txt')
+    $entries = @($expected.ordinaryObjects)
+    if ($root -ne 'R:\MachlinWriteCases-native-write-alias-20261006' -or
+        $entries.Count -ne $names.Count) { throw 'Unexpected ordinary namespace profile.' }
+    $result = [ordered]@{ success=$false; checks=@(); rootNames=@(); directoryNames=@() }
+    for ($index = 0; $index -lt $entries.Count; $index++) {
+        $entry = $entries[$index]
+        if ($entry.relativePath -cne $names[$index] -or $entry.present -isnot [bool] -or
+            $entry.directory -isnot [bool] -or $entry.directory -ne ($index -eq 2)) {
+            throw 'Unexpected ordinary object identity or type.'
+        }
+        $path = Join-Path $root $entry.relativePath
+        $file = $null
+        try { $file = Get-Item -LiteralPath $path -ErrorAction Stop }
+        catch {
+            if ($entry.present -or $_.Exception -isnot [System.Management.Automation.ItemNotFoundException]) {
+                throw
+            }
+        }
+        if (-not $entry.present) {
+            if ($null -ne $file) { throw ('Unexpected ordinary object: ' + $entry.relativePath) }
+            $result.checks += [ordered]@{ relativePath=$entry.relativePath; present=$false; passed=$true }
+            continue
+        }
+        if ($null -eq $file -or $file.PSIsContainer -ne $entry.directory -or
+            ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Ordinary object is missing, has the wrong type or is a reparse point.'
+        }
+        if ($entry.reference -notmatch '^[0-9]{1,20}$' -or
+            $entry.lastWriteFileTime -notmatch '^[0-9]{1,20}$' -or
+            $entry.securityDescriptor.Length -gt $descriptorMaximumBase64Characters -or
+            $entry.securityDescriptor -notmatch '^[A-Za-z0-9+/=]+$') {
+            throw 'Unexpected ordinary metadata expectation.'
+        }
+        $reference = [UInt64]::Parse($entry.reference,[Globalization.CultureInfo]::InvariantCulture)
+        $expectedId = $reference.ToString(('x' + $referenceHexDigits),
+            [Globalization.CultureInfo]::InvariantCulture).PadLeft($nativeFileIdHexDigits,'0')
+        $fileId = @(& "$env:SystemRoot\System32\fsutil.exe" file queryfileid $path 2>&1)
+        $idExit = $LASTEXITCODE
+        $idText = $fileId -join "`n"
+        if ($idExit -ne 0 -or $idText -notmatch '0x([0-9a-fA-F]{32})\s*$' -or
+            $Matches[1].ToLowerInvariant() -ne $expectedId) { throw 'Ordinary sequence-bearing File ID differs.' }
+        $time = $file.LastWriteTimeUtc.ToFileTimeUtc().ToString([Globalization.CultureInfo]::InvariantCulture)
+        if ($time -ne $entry.lastWriteFileTime) { throw 'Ordinary modified FILETIME differs.' }
+        $descriptor = [Convert]::FromBase64String($entry.securityDescriptor)
+        if ($descriptor.Length -lt $descriptorHeaderBytes -or
+            $descriptor.Length -gt $descriptorMaximumBytes) { throw 'Ordinary descriptor exceeds its bound.' }
+        $rawSecurity = [Security.AccessControl.RawSecurityDescriptor]::new($descriptor,0)
+        if ($null -ne $rawSecurity.SystemAcl) { throw 'This native ordinary profile does not admit a SACL.' }
+        $expectedAcl = $rawSecurity.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
+        $actualAcl = (Get-Acl -LiteralPath $path).Sddl
+        if ($actualAcl -ne $expectedAcl) { throw 'Ordinary native owner/group/DACL differs from the retained descriptor.' }
+        $row = [ordered]@{ relativePath=$entry.relativePath; present=$true; directory=$file.PSIsContainer;
+            reference=$entry.reference; fileId=[ordered]@{exitCode=$idExit;output=$fileId};
+            lastWriteFileTime=$time; acl=$actualAcl; expectedAcl=$expectedAcl; passed=$false }
+        if (-not $entry.directory) {
+            if ($entry.bytes -lt 0 -or $entry.bytes -gt $contentMaximumBytes -or
+                $entry.sha256 -notmatch '^[a-f0-9]{64}$') { throw 'Unexpected ordinary content expectation.' }
+            $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($file.Length -ne $entry.bytes -or $digest -ne $entry.sha256) {
+                throw ('Ordinary native content differs: ' + $entry.relativePath)
+            }
+            $row.bytes = $file.Length
+            $row.sha256 = $digest
+        }
+        $row.passed = $true
+        $result.checks += $row
+    }
+    $wantedRoot = @('child','initialized.bin','rename-after.txt','resident.txt')
+    foreach ($entry in $entries) {
+        if ($entry.present -and $entry.relativePath -notmatch '\\') { $wantedRoot += $entry.relativePath }
+    }
+    $actualRoot = @(Get-ChildItem -LiteralPath $root -Force | ForEach-Object { $_.Name } | Sort-Object)
+    $wantedRoot = @($wantedRoot | Sort-Object)
+    if ($wantedRoot.Count -ne $actualRoot.Count -or ($wantedRoot.Count -ne 0 -and
+        @(Compare-Object -ReferenceObject $wantedRoot -DifferenceObject $actualRoot -CaseSensitive).Count -ne 0)) {
+        throw 'Ordinary root namespace differs.'
+    }
+    $result.rootNames = $actualRoot
+    if ($entries[2].present) {
+        $wantedChildren = @()
+        if ($entries[3].present) { $wantedChildren += 'child.txt' }
+        $actualChildren = @(Get-ChildItem -LiteralPath (Join-Path $root 'core-directory') -Force |
+            ForEach-Object { $_.Name } | Sort-Object)
+        if ($wantedChildren.Count -ne $actualChildren.Count -or ($wantedChildren.Count -ne 0 -and
+            @(Compare-Object -ReferenceObject $wantedChildren -DifferenceObject $actualChildren -CaseSensitive).Count -ne 0)) {
+            throw 'Ordinary child namespace differs.'
+        }
+        $result.directoryNames = $actualChildren
+    } elseif ($entries[3].present) { throw 'A present child requires its directory.' }
+    $result.success = $true
+    return $result
+}
+
 function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
     if ($root -notmatch '^[TR]:\\MachlinWriteCases-native-write-alias-20261006$' -or
         @($expected.files).Count -ne 4) { throw 'Unexpected workload root or count.' }
@@ -69,6 +170,9 @@ function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
         }
         $residentTime = (Get-Item -LiteralPath $residentPath).LastWriteTimeUtc.ToFileTimeUtc().ToString([Globalization.CultureInfo]::InvariantCulture)
         $result.resident = [ordered]@{ acl=$residentAcl; fileId=[ordered]@{exitCode=$residentIdExit;output=$residentFileId};lastWriteFileTime=$residentTime;passed=$true }
+    }
+    if ($expected.PSObject.Properties.Name -contains 'ordinaryObjects') {
+        $result.ordinary = Test-NativeOrdinaryFiles $expected $root
     }
     $result.success = $true
     return $result
@@ -224,12 +328,13 @@ try {
         Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber 2 -AccessPath 'R:\'
         $volume = Get-Volume -DriveLetter R
         $encryption = Get-BitLockerVolume -MountPoint 'R:'
-        if ($volume.FileSystemType -ne 'NTFS' -or $volume.FileSystemLabel -ne 'MachlinNTFS' -or
-            $volume.HealthStatus -ne 'Healthy' -or $encryption.VolumeStatus -ne 'FullyDecrypted' -or
-            $encryption.EncryptionMethod -ne 'None' -or $encryption.EncryptionPercentage -ne 0) { throw 'Candidate is not the expected healthy plaintext NTFS volume.' }
         $case.disk = $disk | Select-Object Number,Guid,UniqueId,BusType,Size,PartitionStyle,IsBoot,IsSystem,IsOffline,IsReadOnly
         $case.partition = $partition | Select-Object DiskNumber,PartitionNumber,Guid,GptType,Offset,Size,IsBoot,IsSystem
         $case.volume = $volume | Select-Object UniqueId,DriveLetter,FileSystemType,FileSystemLabel,HealthStatus,Size,SizeRemaining
+        $case.encryption = $encryption | Select-Object VolumeStatus,EncryptionMethod,EncryptionPercentage
+        if ($volume.FileSystemType -ne 'NTFS' -or $volume.FileSystemLabel -ne 'MachlinNTFS' -or
+            $volume.HealthStatus -ne 'Healthy' -or $encryption.VolumeStatus -ne 'FullyDecrypted' -or
+            $encryption.EncryptionMethod -ne 'None' -or $encryption.EncryptionPercentage -ne 0) { throw 'Candidate is not the expected healthy plaintext NTFS volume.' }
         $case.stage = 'native-files-and-metadata'
         $case.nativeChecks = Test-NativeFiles $product $product.root $batch.targetAcl $batch.fileId
         $dirty = @(& "$env:SystemRoot\System32\fsutil.exe" dirty query 'R:' 2>&1)

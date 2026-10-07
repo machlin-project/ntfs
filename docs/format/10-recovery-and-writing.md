@@ -498,6 +498,43 @@ checkpoint recovery separately establishes proved settled homes before publishin
 roots. These execution relationships are tested independently from the journal's
 wire framing. They do not establish native new/free FILE or whole-INDX semantics.
 
+The connected native ordinary-operation experiment now supplies a negative
+observation. Its first complete create image reaches Windows attachment with an
+exact independently compared container, then fails native health admission.
+Original XML identifies Event ID 98, level 2 and `CorruptionActionState=3` for that
+candidate volume. The exact post-detach image retains unchanged new FILE bytes,
+but `VOLUME_INFORMATION.Flags` changes from zero to `0x0101`. These values are
+observations, not an interpretation of the additional flag or proof that the
+selected FILE slot caused the failure. Journal replay, new-record semantics and
+cross-object metadata relationships still require diagnosis. No file/chkdsk
+acceptance or repair is inferred; the remaining 27 batch inputs are unexecuted.
+[Acceptance](../ACCEPTANCE.md#private-ordinary-operation-image-harness) records
+the preserved evidence and unchanged original disk/base guards.
+
+A controlled diagnostic then replaces only the new journal with the exact preceding
+qualified checkpoint journal and compares FILE slots 16/63 and 72-byte/48-byte
+`STANDARD_INFORMATION`. All four candidates mount healthy and expose the expected
+new file, data, identity, time and descriptor projection. Read-only chkdsk nevertheless
+reports the same new-file/parent-`$I30` filename-linkage error in all four. Original
+healthy-event XML and complete detached images are reviewed independently. This is
+evidence for separating journal interpretation from namespace metadata diagnosis,
+not a journal-free write protocol or acceptance of any actual writer state. The
+selected FILE slot and standard-information length alone do not resolve the tested
+failure. [Filename research](06-directories.md#native-creation-research) records the
+next controlled representations and remaining interpretation.
+
+Those filename diagnostics subsequently pass for an unpaired POSIX representation
+and a Win32/DOS pair, with a separate Windows creation control. C create/rename
+now emit the selected unpaired POSIX representation. The corrected current-C
+packet passes ten offline operations, seven writer/recovery profiles and 28
+complete native-input/container oracles. Its first complete create nevertheless
+fails native health admission with the same event ID, level, state and volume-flag
+transition. The exact postimage preserves the corrected name and new FILE bytes;
+file/chkdsk checks and the remaining 27 inputs do not execute. This closes the
+tested name-format defect without qualifying the actual native journal program.
+Its packet/replay cause remains unresolved, and whole FILE/INDX composition
+still requires the owning native acceptance gate.
+
 ## Implementation and evidence
 
 - Family preparation: [write_transaction.c](../../core/write_transaction.c).

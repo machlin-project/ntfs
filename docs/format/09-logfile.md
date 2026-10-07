@@ -304,6 +304,27 @@ faults, packet binding and private inverse effects are covered by
 [the connected C scenarios](../../tests/write_mutation.c) and
 [independent page/packet goldens](../../tests/write_batch_pages.c).
 
+### Native creation control: a bounded journal observation
+
+The [filename creation control](06-directories.md#native-creation-research) retains
+an exact detached image after Windows creates the tested empty file. A read-only
+observer derives `$LogFile` storage from allocated FILE 2 and records restart,
+page and complete local packet fields from that image and the failed C create.
+Observed native OAT opens include named parent `$I30`, unnamed MFT DATA and
+allocation bitmaps. Their names, attribute types, file references and flags are
+retained as original observations, rather than inferred from the C program.
+
+This inventory reads only first physical-I/O pages and packets wholly contained
+there. It omits spanning packets and later pages of an I/O group, does not select
+complete owning history, and does not bind every observed transaction to the
+creation operation. Opcode counts or absent forms in this partial inventory
+cannot establish Windows' complete creation protocol. The current C whole-INDX
+redo/undo packet spans multiple pages; both its framing and operation-specific
+replay remain unqualified. Complete native assembly and transaction ownership
+are required before treating this comparison as a cause of the native rejection.
+Reports are under `native-create-journal-observation-reviewed-fields-20261007/`
+in `artifacts/overwrite/`; this observation performs no VM operation or write.
+
 ### FILE retirement: a header inverse
 
 The observed ordinary retirement pair is **Deallocate FILE (`0x03`) /

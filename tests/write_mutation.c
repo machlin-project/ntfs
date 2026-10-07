@@ -1464,6 +1464,48 @@ check_name(struct test_case *test, uint64_t parent, const char *text, uint64_t r
 }
 
 static void
+check_unpaired_name(struct test_case *test, uint64_t parent, const char *text, uint64_t reference)
+{
+	struct ntfs_volume *volume;
+	struct ntfs_node *parent_node = NULL, *child = NULL;
+	struct ntfs_write_name entry;
+	struct ntfs_dirent stored;
+	struct ntfs_link_counts counts;
+	struct ntfs_attr_view attribute;
+	const struct ntfs_disk_filename *filename;
+	const struct ntfs_disk_resident *resident;
+	const uint8_t *value;
+	uint16_t units[TEST_NAME_UNITS];
+	size_t bytes, index;
+
+	entry = name(parent, text, units);
+	volume = view(test);
+	assert(ntfs_node_open(volume, parent, &parent_node) == NTFS_OK);
+	assert(
+	    ntfs_lookup_entry(parent_node, entry.units, entry.count, &child, &stored) == NTFS_OK);
+	assert(stored.reference == reference && stored.parent_reference == parent &&
+	    stored.name_namespace == NTFS_NAMESPACE_POSIX && stored.name_length == entry.count);
+	assert(ntfs_node_link_counts(child, &counts) == NTFS_OK);
+	assert(counts.physical_names == 1 && counts.primary_names == 1 && counts.dos_aliases == 0);
+	assert(ntfs_attr_find(child->record, NTFS_WRITE_RECORD_BYTES, NTFS_ATTR_FILENAME, NULL, 0,
+		   UINT16_MAX, &attribute) == NTFS_OK);
+	assert(ntfs_attr_value(&attribute, &value, &bytes) == NTFS_OK);
+	assert(bytes == sizeof(*filename) + entry.count * NTFS_UTF16_UNIT_BYTES);
+	filename = (const void *)value;
+	resident = (const void *)(attribute.bytes + sizeof(struct ntfs_disk_attr));
+	assert(resident->indexed == 1 && filename->name_namespace == NTFS_NAMESPACE_POSIX &&
+	    filename->length == entry.count && ntfs_u64(filename->parent) == parent);
+	for (index = 0; index < entry.count; index++) {
+		assert(stored.name[index] == entry.units[index]);
+		assert(ntfs_u16(value + sizeof(*filename) + index * NTFS_UTF16_UNIT_BYTES) ==
+		    entry.units[index]);
+	}
+	ntfs_node_close(child);
+	ntfs_node_close(parent_node);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+}
+
+static void
 check_data(struct test_case *test, uint64_t reference, const char *directory, const char *file)
 {
 	struct ntfs_volume *volume;
@@ -1645,6 +1687,9 @@ mixed_operations(const char *source, const char *cases)
 	left = create(test, test->root_reference, "mutation-left", true);
 	right = create(test, test->root_reference, "mutation-right", true);
 	alpha = create(test, left, "alpha.txt", false);
+	check_unpaired_name(test, test->root_reference, "mutation-left", left);
+	check_unpaired_name(test, test->root_reference, "mutation-right", right);
+	check_unpaired_name(test, left, "alpha.txt", alpha);
 	check_security(test, left, cases, "directory-security.bin");
 	check_security(test, right, cases, "directory-security.bin");
 	check_security(test, alpha, cases, "child-file-security.bin");
@@ -1668,6 +1713,7 @@ mixed_operations(const char *source, const char *cases)
 	rename_entry(test, left, "alpha.txt", right, "beta.txt", true, NTFS_OK);
 	check_name(test, left, "alpha.txt", 0, NTFS_NOT_FOUND);
 	check_name(test, right, "beta.txt", alpha, NTFS_OK);
+	check_unpaired_name(test, right, "beta.txt", alpha);
 	check_stale(test, victim);
 	check_data(test, alpha, cases, "regrown.bin");
 	remove_entry(test, test->root_reference, "mutation-right", true, NTFS_NOT_EMPTY);

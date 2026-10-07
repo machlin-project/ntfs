@@ -84,7 +84,18 @@ fresh zero-rewrite recovery. Native snapshot qualification, sustained native
 reuse and FSKit mutation admission still require the connected native acceptance gate.
 The separate actual C checkpoint transition and interrupted-recovery gate now passes
 all 196 Windows states, read-only chkdsk and original-event review; this does not
-qualify new FILE/INDX mutation or sustained native ring reuse. See
+qualify new FILE/INDX mutation or sustained native ring reuse. The connected
+ordinary-operation native batch rejects its first complete create image: Windows
+reports a matching NTFS error and changes the volume flags. The exact detached
+failure image is retained; the remaining 27 inputs have not run. Separate native
+diagnostics establish a filename representation error: unpaired Win32 output fails
+chkdsk, while an unpaired POSIX name and a Win32/DOS pair pass. C create/rename now
+emit the selected POSIX representation, with a regression and all 198 sanitized
+suites passing. A fresh current-C batch also passes ten offline operations and seven
+fault profiles, but Windows again rejects its first complete create image before
+file/chkdsk checks. Its corrected filename is preserved in the exact detached
+failure image; the other 27 inputs remain unexecuted. Actual C journal/recovery
+and FSKit mutation admission remain open. See
 [the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

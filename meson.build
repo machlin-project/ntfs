@@ -8,6 +8,7 @@ core_sources += files('core/write_mutation.c', 'core/write_record.c', 'core/writ
 core_sources += files('core/write_batch_pages.c', 'core/write_bitmap.c', 'core/write_retirement.c', 'core/write_program.c', 'core/write_program_packets.c')
 core_sources += files('core/write_batch_execute.c')
 core_sources += files('core/write_batch_capture.c', 'core/write_batch_tail.c', 'core/write_batch_restore.c', 'core/write_batch_recover.c')
+core_sources += files('core/write_batch_restore_history.c')
 core_sources += files('core/write_payload.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
@@ -43,6 +44,7 @@ test('write-batch-execute', write_batch_execute_test, args: [meson.current_build
 test('write-batch-recovery', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery'], depends: write_mutation_fixture, timeout: 1800)
 test('write-batch-recovery-faults', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery-faults'], depends: write_mutation_fixture, timeout: 1800)
 test('write-batch-recovery-ownership', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery-ownership'], depends: write_mutation_fixture, timeout: 600)
+test('write-batch-recovery-sequence', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery-sequence'], depends: write_mutation_fixture, timeout: 1800)
 write_batch_pages_fixture = custom_target('write-batch-pages-fixtures', output: 'write-batch-pages-fixtures.stamp', command: [python, files('tests/write_batch_pages_fixtures.py'), meson.current_build_dir() / 'write-batch-pages-fixtures', '@OUTPUT@'], depend_files: files('tests/logfile_fixtures.py'), build_by_default: true)
 write_batch_pages_test = executable('ntfs-write-batch-pages-tests', 'tests/write_batch_pages.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('write-batch-pages', write_batch_pages_test, args: [meson.current_build_dir() / 'write-batch-pages-fixtures'], depends: write_batch_pages_fixture, timeout: 300)
@@ -57,6 +59,7 @@ test('write-replay', write_replay_test, args: [meson.current_build_dir() / 'writ
 write_history_fixture = custom_target('write-history-fixtures', output: 'write-history-fixtures.stamp', command: [python, files('tests/write_history_fixtures.py'), meson.current_build_dir() / 'write-history-fixtures', '@OUTPUT@', meson.current_build_dir() / 'write-journal-fixtures'], depends: write_journal_fixture, depend_files: files('tests/fixtures.py', 'tests/filename_storage.py', 'tests/validation_fixtures.py', 'tests/write_journal_fixtures.py', 'tests/logfile_fixtures.py'), build_by_default: true)
 write_history_test = executable('ntfs-write-history-tests', ['tests/write_history.c', 'tests/fuzz_device.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('write-history', write_history_test, args: [meson.current_build_dir() / 'write-history-fixtures', meson.current_build_dir() / 'write-journal-fixtures'], depends: write_history_fixture, timeout: 120)
+test('write-batch-recovery-history', write_batch_execute_test, args: [meson.current_build_dir() / 'write-history-fixtures', meson.current_build_dir(), 'recovery-history'], depends: write_history_fixture, timeout: 1800)
 write_execute_test = executable('ntfs-write-execute-tests', ['tests/write_execute.c', 'tests/image_fault.c', 'tests/fuzz_device.c', 'adapters/posix/overwrite_image.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-D_POSIX_C_SOURCE=200809L', '-D_DARWIN_C_SOURCE', '-Wdeclaration-after-statement'])
 test('write-execute', write_execute_test, args: [meson.current_build_dir() / 'write-journal-fixtures'], depends: write_journal_fixture, timeout: 300)
 test('write-image-interruptions', python, args: [files('tests/write_image_fault.py'), write_execute_test, validator, meson.current_build_dir() / 'write-journal-fixtures'], depends: write_journal_fixture, timeout: 300)

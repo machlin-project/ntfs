@@ -412,12 +412,27 @@ recovery_files_protect(struct ntfs_write_batch_recovery *owner,
 		}
 		offset = slot * NTFS_WRITE_RECORD_BYTES;
 		old = (home->old_slots & (1u << slot)) != 0;
+		if ((home->historical_free_slots & (1u << slot)) != 0) {
+			/* The later initializer discarded free bytes. This privately
+			 * reconstructed retirement has its own generation/bitmap proof;
+			 * it is never a physical recovery publication. */
+			result = ntfs_record_protect(home->after + offset, NTFS_WRITE_RECORD_BYTES,
+			    work->image, sizeof(work->image));
+			if (result != NTFS_OK) {
+				return result;
+			}
+			ntfs_copy(home->after + offset, work->image, NTFS_WRITE_RECORD_BYTES);
+			continue;
+		}
 		ntfs_copy(work->image, home->source + offset, NTFS_WRITE_RECORD_BYTES);
 		result = ntfs_record_decode(work->image, NTFS_WRITE_RECORD_BYTES, false);
 		complete = result == NTFS_OK;
 		known = complete &&
 		    recovery_logical_equal(
 			work->image, home->after + offset, NTFS_WRITE_RECORD_BYTES);
+		if (owner->historical && owner->committed && !known) {
+			return NTFS_STALE;
+		}
 		if (owner->committed && known) {
 			ntfs_copy(
 			    home->after + offset, home->source + offset, NTFS_WRITE_RECORD_BYTES);
@@ -484,6 +499,9 @@ recovery_index_protect(struct ntfs_write_batch_recovery *owner,
 	complete = result == NTFS_OK;
 	known =
 	    complete && recovery_logical_equal(work->image, home->after, NTFS_WRITE_CLUSTER_BYTES);
+	if (owner->historical && owner->committed && !known) {
+		return NTFS_STALE;
+	}
 	if (owner->committed && known) {
 		ntfs_copy(home->after, home->source, sizeof(home->after));
 		return NTFS_OK;
@@ -606,7 +624,7 @@ done:
 
 static enum ntfs_result
 recovery_target_mapping(struct ntfs_write_batch_recovery *owner, struct ntfs_volume *volume,
-    const struct ntfs_batch_recovery_home *home, bool after)
+    struct ntfs_batch_recovery_home *home, bool after)
 {
 	const struct ntfs_write_mutation_target *identity = &owner->target[home->target].identity;
 	struct ntfs_node *node = NULL;
@@ -631,6 +649,7 @@ recovery_target_mapping(struct ntfs_write_batch_recovery *owner, struct ntfs_vol
 	 * FILE mapping is checked separately in the after view. */
 	if (!after && !home->old_index && home->kind == NTFS_WRITE_MUTATION_INDEX &&
 	    result == NTFS_NOT_FOUND) {
+		home->unowned_cluster = true;
 		result = recovery_cluster_free(volume, home->physical);
 		goto done;
 	}
@@ -640,11 +659,13 @@ recovery_target_mapping(struct ntfs_write_batch_recovery *owner, struct ntfs_vol
 	if (!after && home->kind == NTFS_WRITE_MUTATION_FILE &&
 	    home->logical >= stream->clusters * (uint64_t)NTFS_WRITE_CLUSTER_BYTES &&
 	    home->old_slots == 0) {
+		home->unowned_cluster = true;
 		result = recovery_cluster_free(volume, home->physical);
 		goto done;
 	}
 	if (!after && !home->old_index && home->kind == NTFS_WRITE_MUTATION_INDEX &&
 	    home->logical / NTFS_WRITE_CLUSTER_BYTES >= stream->clusters) {
+		home->unowned_cluster = true;
 		result = recovery_cluster_free(volume, home->physical);
 		goto done;
 	}
@@ -655,18 +676,21 @@ recovery_target_mapping(struct ntfs_write_batch_recovery *owner, struct ntfs_vol
 		}
 		goto done;
 	}
-	if (!after && home->kind == NTFS_WRITE_MUTATION_FILE &&
-	    (home->old_slots | home->new_slots) != 0) {
+	if (home->kind == NTFS_WRITE_MUTATION_FILE &&
+	    ((!after && (home->old_slots | home->new_slots) != 0) ||
+		(after && home->historical_free_slots != 0))) {
 		result = ntfs_attribute_open(node, NTFS_ATTR_BITMAP, NULL, 0, &bits);
 		for (slot = 0; result == NTFS_OK && slot < NTFS_BATCH_RECOVERY_FILE_SLOTS; slot++) {
-			if (((home->old_slots | home->new_slots) & (1u << slot)) == 0) {
+			if (((after ? home->historical_free_slots
+				    : home->old_slots | home->new_slots) &
+				(1u << slot)) == 0) {
 				continue;
 			}
-			old_slot = (home->old_slots & (1u << slot)) != 0;
+			old_slot = !after && (home->old_slots & (1u << slot)) != 0;
 			number = home->logical / NTFS_WRITE_RECORD_BYTES + slot;
 			if (!ntfs_bounds(number * NTFS_WRITE_RECORD_BYTES, NTFS_WRITE_RECORD_BYTES,
 				stream->initialized)) {
-				if (old_slot) {
+				if (old_slot || after) {
 					result = NTFS_STALE;
 				}
 				continue;
@@ -723,6 +747,13 @@ recovery_views_validate(
 			goto done;
 		}
 		if (!after) {
+			if (owner->lifetimes <= 1) {
+				result =
+				    ntfs_batch_recovery_qualified_validate(owner, volume, work);
+				if (result != NTFS_OK) {
+					goto done;
+				}
+			}
 			/* Even a prepared open whose first update is absent belongs to a
 			 * current sequence-bearing FILE. This protocol opens existing
 			 * metadata owners, never a not-yet-created FILE identity. */
@@ -837,13 +868,20 @@ ntfs_batch_recovery_restore(
 		if (home->mirror) {
 			continue;
 		}
+		result = ntfs_batch_recovery_history_home_admit(owner, home);
+		if (result != NTFS_OK) {
+			return result;
+		}
 		if (home->kind == NTFS_WRITE_MUTATION_FILE) {
 			result = recovery_files_protect(owner, home, work);
 		} else if (home->kind == NTFS_WRITE_MUTATION_INDEX) {
 			result = recovery_index_protect(owner, home, work);
 		} else {
-			result = !owner->committed &&
-				!ntfs_equal(home->source, home->before, sizeof(home->source))
+			result =
+			    ((!owner->committed &&
+				 !ntfs_equal(home->source, home->before, sizeof(home->source))) ||
+				(owner->historical && owner->committed &&
+				    !ntfs_equal(home->source, home->after, sizeof(home->source))))
 			    ? NTFS_STALE
 			    : NTFS_OK;
 		}

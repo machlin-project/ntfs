@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
 #include "write_batch_recover_internal.h"
+#include "write_batch_history.h"
 #include "mount_internal.h"
 #include <ntfs/record.h>
 
@@ -70,6 +71,7 @@ ntfs_batch_recovery_overlay_read(void *context, uint64_t physical, void *memory,
 {
 	struct ntfs_write_batch_recovery *owner = context;
 	const struct ntfs_batch_recovery_home *home;
+	const struct ntfs_batch_recovery_projection *projection;
 	size_t index;
 	enum ntfs_result result;
 
@@ -92,6 +94,12 @@ ntfs_batch_recovery_overlay_read(void *context, uint64_t physical, void *memory,
 			    owner->view == NTFS_BATCH_RECOVERY_BEFORE ? home->before : home->after,
 			    NTFS_WRITE_CLUSTER_BYTES);
 		}
+	} else if (owner->view == NTFS_BATCH_RECOVERY_HISTORY) {
+		for (index = 0; index < owner->projections; index++) {
+			projection = &owner->projection[index];
+			recovery_overlay_copy(physical, memory, bytes, projection->physical,
+			    projection->before, sizeof(projection->before));
+		}
 	}
 	return NTFS_OK;
 }
@@ -107,15 +115,34 @@ recovery_analysis_close(struct ntfs_write_batch_recovery *owner)
 	}
 	ntfs_batch_recovery_release(
 	    owner, owner->packet, owner->packet_capacity * sizeof(*owner->packet));
-	ntfs_batch_recovery_release(
-	    owner, owner->target, owner->target_capacity * sizeof(*owner->target));
+	if (owner->lifetimes == 0) {
+		ntfs_batch_recovery_release(
+		    owner, owner->target, owner->target_capacity * sizeof(*owner->target));
+	} else {
+		for (index = 0; index < owner->lifetimes; index++) {
+			ntfs_batch_recovery_release(owner, owner->lifetime[index].target,
+			    owner->lifetime[index].target_capacity * sizeof(*owner->target));
+		}
+	}
 	ntfs_batch_recovery_release(
 	    owner, owner->home, owner->home_capacity * sizeof(*owner->home));
+	ntfs_batch_recovery_release(
+	    owner, owner->qualified, owner->qualified_capacity * sizeof(*owner->qualified));
+	ntfs_batch_recovery_release(
+	    owner, owner->lifetime, owner->lifetime_capacity * sizeof(*owner->lifetime));
+	ntfs_batch_recovery_release(
+	    owner, owner->projection, owner->projection_capacity * sizeof(*owner->projection));
 	owner->packet = NULL;
 	owner->target = NULL;
 	owner->home = NULL;
+	owner->qualified = NULL;
+	owner->lifetime = NULL;
+	owner->projection = NULL;
 	owner->packets = owner->packet_capacity = owner->targets = owner->target_capacity = 0;
 	owner->homes = owner->home_capacity = 0;
+	owner->qualified_count = owner->qualified_capacity = 0;
+	owner->lifetimes = owner->lifetime_capacity = owner->projections =
+	    owner->projection_capacity = 0;
 }
 
 void
@@ -144,6 +171,61 @@ const struct ntfs_write_batch_recovery_publication *
 ntfs_write_batch_recovery_get(const struct ntfs_write_batch_recovery *owner, size_t index)
 {
 	return owner == NULL || index >= owner->count ? NULL : &owner->publication[index];
+}
+
+static enum ntfs_result
+recovery_history_write_refuse(
+    void *context, uint64_t offset, const void *bytes, size_t count, size_t *actual)
+{
+	(void)context;
+	(void)offset;
+	(void)bytes;
+	(void)count;
+	*actual = 0;
+	return NTFS_INVALID;
+}
+
+static enum ntfs_result
+recovery_history_persist_refuse(void *context)
+{
+	(void)context;
+	return NTFS_INVALID;
+}
+
+enum ntfs_result
+ntfs_write_batch_history_prepare(
+    const struct ntfs_environment *source, struct ntfs_write_batch_history *out)
+{
+	struct ntfs_write_batch_recovery *owner = NULL;
+	struct ntfs_overwrite_environment backend = {0};
+	enum ntfs_result result;
+
+	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
+	    (source != NULL &&
+		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out)))) {
+		return NTFS_INVALID;
+	}
+	ntfs_zero(out, sizeof(*out));
+	if (source == NULL) {
+		return NTFS_INVALID;
+	}
+	backend.reader = *source;
+	backend.api_version = NTFS_OVERWRITE_API_VERSION;
+	backend.alignment = NTFS_WRITE_SECTOR_BYTES;
+	backend.write = recovery_history_write_refuse;
+	backend.persist = recovery_history_persist_refuse;
+	result = ntfs_write_batch_recover_prepare(&backend, &owner);
+	if (result == NTFS_OK &&
+	    (owner->count != 0 || !owner->prepared ||
+		owner->selected.flags != NTFS_LOGFILE_RESTART_CLEAN)) {
+		result = NTFS_BUSY;
+	}
+	if (result == NTFS_OK) {
+		*out = (struct ntfs_write_batch_history){
+		    owner->selected, owner->origin, owner->client, owner->history};
+	}
+	ntfs_write_batch_recovery_close(owner);
+	return result;
 }
 
 static uint8_t *
@@ -400,6 +482,9 @@ recovery_prepare(struct ntfs_write_batch_recovery *owner)
 	owner->view = NTFS_BATCH_RECOVERY_SOURCE;
 	if (result == NTFS_OK) {
 		result = ntfs_batch_recovery_restore(owner, work);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_batch_recovery_restore_history(owner, work);
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_batch_recovery_pages(owner, &original, &abort);

@@ -11,7 +11,7 @@ separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
 }
 
 static enum ntfs_result
-settled(struct ntfs_volume *volume, const struct ntfs_write_history *history)
+settled_plans(struct ntfs_volume *volume, const struct ntfs_write_replay_plan *plans, size_t count)
 {
 	const struct ntfs_write_file_plan *file;
 	const struct ntfs_disk_record *header;
@@ -19,22 +19,20 @@ settled(struct ntfs_volume *volume, const struct ntfs_write_history *history)
 	size_t index, later, first, end, used;
 	enum ntfs_result result;
 
-	if (history->checkpoint_observed ||
-	    history->transactions > NTFS_WRITE_HISTORY_TRANSACTIONS) {
+	if (count > NTFS_WRITE_HISTORY_TRANSACTIONS) {
 		return NTFS_UNSUPPORTED;
 	}
-	for (index = 0; index < history->transactions; index++) {
-		file = &history->transaction[index].file;
-		if (!history->transaction[index].committed &&
-		    !history->transaction[index].compensated) {
+	for (index = 0; index < count; index++) {
+		file = &plans[index].file;
+		if (!plans[index].committed && !plans[index].compensated) {
 			return NTFS_BUSY;
 		}
-		for (later = index + 1; later < history->transactions; later++) {
-			if (file->reference == history->transaction[later].file.reference) {
+		for (later = index + 1; later < count; later++) {
+			if (file->reference == plans[later].file.reference) {
 				break;
 			}
 		}
-		if (later != history->transactions) {
+		if (later != count) {
 			continue;
 		}
 		header = (const void *)file->after;
@@ -60,6 +58,32 @@ settled(struct ntfs_volume *volume, const struct ntfs_write_history *history)
 		}
 	}
 	return NTFS_OK;
+}
+
+static enum ntfs_result
+settled(struct ntfs_volume *volume, const struct ntfs_write_history *history)
+{
+	if (history->checkpoint_observed) {
+		return NTFS_UNSUPPORTED;
+	}
+	return settled_plans(volume, history->transaction, history->transactions);
+}
+
+enum ntfs_result
+ntfs_write_history_settled_plans(
+    struct ntfs_volume *volume, const struct ntfs_write_replay_plan *plans, size_t count)
+{
+	enum ntfs_result result;
+
+	if (volume == NULL || (count != 0 && plans == NULL)) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_operation_enter(volume);
+	if (result == NTFS_OK) {
+		result = settled_plans(volume, plans, count);
+		ntfs_operation_leave(volume);
+	}
+	return result;
 }
 
 enum ntfs_result

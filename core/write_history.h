@@ -46,4 +46,15 @@ enum ntfs_result ntfs_write_history_capture(
 enum ntfs_result ntfs_write_history_settled(
     struct ntfs_volume *, const struct ntfs_write_history *);
 
+/* Semantic binding of one consecutive qualified lifetime. These helpers do not
+ * acquire or assert a physical history endpoint. The owner must independently
+ * retain the packets and prove their place in its complete client history. */
+enum ntfs_result ntfs_write_history_prepare_transaction(struct ntfs_volume *,
+    const struct ntfs_logfile_restart *, uint64_t, const struct ntfs_logfile_buffer *, size_t,
+    struct ntfs_write_replay_workspace *, struct ntfs_write_replay_plan *, size_t *);
+enum ntfs_result ntfs_write_history_bind_previous(
+    const struct ntfs_write_replay_plan *, size_t, const struct ntfs_write_replay_plan *);
+enum ntfs_result ntfs_write_history_settled_plans(
+    struct ntfs_volume *, const struct ntfs_write_replay_plan *, size_t);
+
 #endif

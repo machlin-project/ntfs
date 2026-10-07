@@ -172,6 +172,113 @@ recovery_unowned_file(
 	    initialized ? "bitmap-clear initialized slot" : "uninitialized allocated MFT tail");
 }
 
+static enum ntfs_result
+recovery_generation_packet(
+    void *context, const struct ntfs_logfile_record_view *view, const void *bytes)
+{
+	uint64_t *lsn = context;
+	struct ntfs_logfile_update update;
+	const struct ntfs_logfile_record *record = &view->record;
+
+	if (*lsn != 0 || record->type != NTFS_LOGFILE_RECORD_UPDATE ||
+	    record->transaction != NTFS_WRITE_TRANSACTION_KEY) {
+		return NTFS_OK;
+	}
+	assert(ntfs_logfile_update_decode((const uint8_t *)bytes + record->data.offset,
+		   record->data.length, &update) == NTFS_OK);
+	if (update.redo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD &&
+	    update.undo_operation == NTFS_LOG_OP_NOOP) {
+		*lsn = record->lsn;
+	}
+	return NTFS_OK;
+}
+
+static void
+recovery_compensated_generation_refusal(const char *directory, const char *image_name)
+{
+	struct test_case *test;
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_logfile *log;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *stream = NULL;
+	struct ntfs_write_batch_recovery *owner;
+	struct ntfs_logfile_restart restart;
+	struct ntfs_logfile_client client;
+	struct ntfs_logfile_history_report history;
+	struct ntfs_logfile_lsn location;
+	struct ntfs_logfile_page_view page;
+	struct ntfs_logfile_update update;
+	struct ntfs_disk_log_record *record;
+	struct ntfs_disk_record *initialized;
+	const struct ntfs_run *run;
+	uint8_t *logical, *encoded, *workspace, *input;
+	uint64_t lsn = 0, vcn, physical;
+	uint16_t sequence;
+	enum ntfs_result result;
+
+	test = prepare_profile(directory, image_name, NTFS_WRITE_RENAME, TEST_RENAMED_FILE);
+	ntfs_write_program_close(test->program);
+	ntfs_write_mutation_plan_close(test->plan);
+	test->program = NULL;
+	test->plan = NULL;
+	logical = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	encoded = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	workspace = malloc(NTFS_WRITE_BATCH_MAX_PACKET_BYTES);
+	input = malloc(test->device.bytes);
+	assert(logical != NULL && encoded != NULL && workspace != NULL && input != NULL);
+	log = journal_open(test, &volume);
+	assert(ntfs_logfile_get_restart(log, &restart) == NTFS_OK &&
+	    ntfs_logfile_get_client(log, 0, &client) == NTFS_OK);
+	assert(ntfs_logfile_visit_records(log, client.oldest_lsn, NTFS_WRITE_BATCH_MAX_PACKETS,
+		   workspace, NTFS_WRITE_BATCH_MAX_PACKET_BYTES, recovery_generation_packet, &lsn,
+		   &history) == NTFS_OK &&
+	    history.complete && history.endpoint_verified && history.tail_lsn == 0 && lsn != 0);
+	assert(ntfs_logfile_lsn_decode(&restart, lsn, &location) == NTFS_OK &&
+	    ntfs_logfile_read_page(
+		log, location.page_offset, logical, NTFS_WRITE_CLUSTER_BYTES, &page) == NTFS_OK &&
+	    page.storage == NTFS_LOGFILE_CIRCULAR);
+	record = (void *)(logical + location.record_offset);
+	assert((ntfs_u16(record->flags) & NTFS_LOGFILE_RECORD_MULTI_PAGE) == 0 &&
+	    ntfs_logfile_update_decode((uint8_t *)record + sizeof(*record),
+		ntfs_u32(record->data_bytes), &update) == NTFS_OK &&
+	    update.redo.length == NTFS_WRITE_RECORD_BYTES);
+	initialized = (void *)((uint8_t *)record + sizeof(*record) + update.redo.offset);
+	sequence = (uint16_t)(ntfs_u16(initialized->sequence) + 1u);
+	ntfs_put_u16(initialized->sequence, sequence == 0 ? 1 : sequence);
+	assert(ntfs_node_by_number(volume, NTFS_LOGFILE_RECORD, &node) == NTFS_OK &&
+	    ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+	vcn = location.page_offset / NTFS_WRITE_CLUSTER_BYTES;
+	run = ntfs_run_find(stream, vcn);
+	assert(run != NULL && run->lcn != NTFS_HOLE && vcn >= run->vcn &&
+	    vcn - run->vcn < run->length);
+	physical = (run->lcn + vcn - run->vcn) * NTFS_WRITE_CLUSTER_BYTES +
+	    location.page_offset % NTFS_WRITE_CLUSTER_BYTES;
+	ntfs_stream_close(stream);
+	ntfs_node_close(node);
+	ntfs_logfile_close(log);
+	assert(ntfs_unmount(volume) == NTFS_OK && test->device.live == 0);
+	/* Alter only the earlier compensated initialization. Its no-op inverse,
+	 * the later actual object, metadata homes and completed endpoint stay exact. */
+	assert(ntfs_record_protect(logical, NTFS_WRITE_CLUSTER_BYTES, encoded,
+		   NTFS_WRITE_CLUSTER_BYTES) == NTFS_OK);
+	memcpy(test->device.visible + physical, encoded, NTFS_WRITE_CLUSTER_BYTES);
+	memcpy(test->device.durable, test->device.visible, test->device.bytes);
+	memcpy(input, test->device.visible, test->device.bytes);
+	owner = (void *)(uintptr_t)1;
+	result = ntfs_write_batch_recover_prepare(&test->backend, &owner);
+	assert(result == NTFS_STALE && owner == NULL && test->device.live == 0 &&
+	    test->device.writes == 0 && test->device.barriers == 0 &&
+	    memcmp(input, test->device.visible, test->device.bytes) == 0 &&
+	    memcmp(input, test->device.durable, test->device.bytes) == 0);
+	free(input);
+	free(workspace);
+	free(encoded);
+	free(logical);
+	finish(test);
+	puts("PASS: a compensated initialization with a different reused generation refuses "
+	     "without writes, leaks or a recovery owner");
+}
+
 static void
 batch_recovery_ownership_tests(const char *directory, const char *output)
 {

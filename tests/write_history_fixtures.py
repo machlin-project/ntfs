@@ -66,6 +66,7 @@ def author(output, source):
     build('prepared-torn-home', 1, home_state='first-sector')
     build('committed-no-home', 2)
     build('committed-torn-home', 2, home_state='first-sector')
+    build('committed-clean-original-root', 2, dirty=False, home_state='complete')
     # This is framing/replay preparation only. Its native intermediate boot-health
     # failure remains a write admission gate, even though exact capture succeeds.
     build('checkpoint-before-publication', 3, home_state='complete')
@@ -141,6 +142,25 @@ def author(output, source):
         STANDARD.put(page, 'created', created ^ 1, value_first)
 
     followup('followup-wrong-previous-file', True, edit=wrong_previous_file, result=CORRUPT)
+
+    # Separate predecessors for complete ordinary recovery. They are not added
+    # to the old history suite's commit-only packet golden table.
+    candidate = bytearray(output.joinpath('quiet-clean.img').read_bytes())
+    first = log_first + manifest['prepare_offset']
+    candidate[first:first + w.PAGE_BYTES] = pages[0]
+    first = log_first + manifest['commit_offset']
+    candidate[first:first + w.PAGE_BYTES] = source.joinpath('abort.expected').read_bytes()
+    candidate[user_first:user_first + f.RECORD] = source.joinpath('abort-protected.expected').read_bytes()
+    output.joinpath('compensated-clean-original-root.img').write_bytes(candidate)
+
+    # A valid retained copy cannot authorize overwriting itself when a qualified
+    # predecessor has no proved complete circular home.
+    candidate = bytearray(output.joinpath('committed-clean-original-root.img').read_bytes())
+    first = log_first + w.RESTART_PAGES * w.PAGE_BYTES
+    candidate[first:first + w.PAGE_BYTES] = source.joinpath('prepare-copy.expected').read_bytes()
+    first = log_first + manifest['prepare_offset'] + w.USA_STRIDE - w.WORD_BYTES
+    candidate[first] ^= 1
+    output.joinpath('qualified-copy-torn-home.img').write_bytes(candidate)
 
     def mixed(name, original, *, result=SUCCESS, corrupt_root=False):
         candidate = bytearray(output.joinpath(original + '.img').read_bytes())

@@ -35,7 +35,9 @@ enum test_profile {
 	TEST_RESIDENT_GROWTH,
 	TEST_EMPTY_DIRECTORY,
 	TEST_MFT_GROWTH,
-	TEST_PAGE_ALIGNMENT
+	TEST_PAGE_ALIGNMENT,
+	TEST_RENAMED_FILE,
+	TEST_CREATED_FILE
 };
 
 union allocation {
@@ -273,6 +275,7 @@ prepare_profile(const char *directory, const char *image, enum ntfs_write_mutati
 	uint16_t name[] = {'b', 'a', 't', 'c', 'h', '-', 'f', 'i', 'l', 'e'};
 	uint16_t original[] = {
 	    'f', 'r', 'a', 'g', 'm', 'e', 'n', 't', 'e', 'd', '.', 'b', 'i', 'n'};
+	uint16_t renamed[] = {'r', 'e', 'n', 'a', 'm', 'e', 'd', '-', 'f', 'i', 'l', 'e'};
 	uint8_t *payload;
 	uint8_t *original_file = NULL;
 	char *path;
@@ -322,6 +325,15 @@ prepare_profile(const char *directory, const char *image, enum ntfs_write_mutati
 	if (kind == NTFS_WRITE_REMOVE_FILE || kind == NTFS_WRITE_RENAME) {
 		request.source.units = original;
 		request.source.count = sizeof(original) / sizeof(original[0]);
+	}
+	if (profile == TEST_RENAMED_FILE) {
+		request.destination.units = renamed;
+		request.destination.count = sizeof(renamed) / sizeof(renamed[0]);
+		if (kind != NTFS_WRITE_RENAME) {
+			request.source = request.destination;
+		}
+	} else if (profile == TEST_CREATED_FILE && kind == NTFS_WRITE_REMOVE_FILE) {
+		request.source = request.destination;
 	}
 	request.reference = TEST_FILE;
 	request.size = TEST_GROW_BYTES;
@@ -1104,7 +1116,7 @@ journal_capacity(const char *directory)
 }
 
 static void
-posix_case(const char *directory, const char *output, unsigned ordinal, const char *source,
+posix_case(const char *directory, const char *output, const char *output_name, const char *source,
     enum ntfs_write_mutation_kind kind, enum test_profile profile)
 {
 	struct test_case *test;
@@ -1125,7 +1137,7 @@ posix_case(const char *directory, const char *output, unsigned ordinal, const ch
 	path = malloc(TEST_PATH_BYTES);
 	expected = malloc(test->device.bytes);
 	assert(path != NULL && expected != NULL);
-	count = snprintf(path, TEST_PATH_BYTES, "%s/operation-%u.img", output, ordinal);
+	count = snprintf(path, TEST_PATH_BYTES, "%s/%s", output, output_name);
 	assert(count > 0 && count < TEST_PATH_BYTES);
 	file = fopen(path, "wbx");
 	assert(file != NULL &&
@@ -1183,9 +1195,12 @@ posix_images(const char *directory, const char *output)
 	assert(path != NULL);
 	count = snprintf(path, TEST_PATH_BYTES, "%s/write-batch-posix-XXXXXX", output);
 	assert(count > 0 && count < TEST_PATH_BYTES && mkdtemp(path) != NULL);
-	posix_case(directory, path, 0, "source.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
-	posix_case(directory, path, 1, "source.img", NTFS_WRITE_GROWING_RANGE, TEST_DEFAULT);
-	posix_case(directory, path, 2, "large-source.img", NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH);
+	posix_case(
+	    directory, path, "operation-0.img", "source.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
+	posix_case(directory, path, "operation-1.img", "source.img", NTFS_WRITE_GROWING_RANGE,
+	    TEST_DEFAULT);
+	posix_case(directory, path, "operation-2.img", "large-source.img", NTFS_WRITE_CREATE_FILE,
+	    TEST_MFT_GROWTH);
 	free(path);
 }
 
@@ -1295,6 +1310,14 @@ main(int argc, char **argv)
 			batch_recovery_tests(argv[1], argv[2]);
 		} else if (strcmp(argv[3], "recovery-ownership") == 0) {
 			batch_recovery_ownership_tests(argv[1], argv[2]);
+		} else if (strcmp(argv[3], "recovery-history") == 0) {
+			batch_recovery_history_tests(argv[1], argv[2]);
+		} else if (strcmp(argv[3], "recovery-sequence") == 0) {
+			batch_recovery_sequence_tests(argv[1], argv[2], false);
+		} else if (strcmp(argv[3], "recovery-reuse") == 0) {
+			batch_recovery_sequence_tests(argv[1], argv[2], true);
+		} else if (strcmp(argv[3], "recovery-reopen") == 0) {
+			batch_recovery_reopen_tests(argv[1], argv[2]);
 		} else {
 			assert(strcmp(argv[3], "recovery-faults") == 0);
 			batch_recovery_callback_tests(argv[1], argv[2]);

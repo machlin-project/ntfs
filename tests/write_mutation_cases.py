@@ -44,6 +44,29 @@ INDEX_BLOCK_FIELDS = ('magic', 'usa_offset', 'usa_count', 'lsn', 'vcn')
 UNUSED_STORAGE_PROFILES = ('file-stale', 'file-torn', 'index-stale', 'index-torn',
                            'index-unused-slot', 'mft-tail-stale', 'mft-tail-torn')
 EXPANDED_JOURNAL_BYTES = 1024 * 1024
+FIRST_USER_RECORD = 16
+MAX_FILE_SEQUENCE = (1 << 16) - 1
+
+
+def wrapped_free_file_image(original):
+    """A quiet, initialized free FILE whose next retirement wraps to generation 1."""
+    import fixtures as f
+    import filename_storage as storage
+    import validation_fixtures as v
+
+    image = bytearray(original)
+    first = f.MFT_LCN * f.CLUSTER + f.MFT_RECORD * f.RECORD
+    _, attributes = storage.record_parts(image[first:first + f.RECORD])
+    bitmap = storage.resident_value(next(attribute for attribute in attributes
+        if storage.attr_header(attribute)['type'] == f.BITMAP))
+    assert not bitmap[FIRST_USER_RECORD // f.BYTE_BITS] & (1 << (FIRST_USER_RECORD % f.BYTE_BITS))
+    first = f.MFT_LCN * f.CLUSTER + v.FRAGMENTED_RECORD * f.RECORD
+    header, attributes = storage.record_parts(image[first:first + f.RECORD])
+    header['sequence'] = MAX_FILE_SEQUENCE
+    header['flags'] = 0
+    f.put_record(image, FIRST_USER_RECORD,
+        storage.encoded_record(FIRST_USER_RECORD, attributes, header))
+    return image
 
 
 def expanded_journal_image(original):
@@ -373,6 +396,8 @@ def author(directory, source=None):
         for name in ('source', *(f'unused-{profile}' for profile in UNUSED_STORAGE_PROFILES)):
             original = (directory / f'{name}.img').read_bytes()
             (directory / f'large-{name}.img').write_bytes(expanded_journal_image(original))
+        large = (directory / 'large-source.img').read_bytes()
+        (directory / 'large-reuse-wrapped.img').write_bytes(wrapped_free_file_image(large))
     manifest = dict(writeOffset=WRITE_OFFSET, payloadBytes=PAYLOAD_BYTES,
                     growBytes=GROW_BYTES, shrinkBytes=SHRINK_BYTES,
                     regrowBytes=REGROW_BYTES, children=CHILDREN,

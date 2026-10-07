@@ -205,8 +205,8 @@ and anchors pass. The generated review is in
 The complete FILE Initialize/Initialize inverse and whole-INDX nonresident image
 forms remain experimental substitutions. A new program does not become accepted
 by the preceding bounded history/recovery parser. The separate private recovery
-owner below now covers one fresh quiet-origin lifetime. Mixed/sustained history,
-checkpoint reuse, whole native loser/winner replay and open-unlink lifetime remain
+owner below now binds retained ordinary lifetimes after a settled qualified prefix.
+Sustained checkpoint reuse, whole native loser/winner replay and open-unlink lifetime remain
 required before write-owner or FSKit admission. The qualified overwrite family
 is unchanged. These checkpoints do not complete the ordinary write batch.
 
@@ -214,9 +214,13 @@ is unchanged. These checkpoints do not complete the ordinary write batch.
 
 The new opaque recovery owner receives only an exclusively claimed immutable
 backend, not an original mutation plan, program or physical executor. It retains
-the exact quiet origin and one ordinary-operation lifetime, including its completed
-or interrupted compensation. Previous qualified write families, another ordinary
-transaction and checkpoint/ring reuse still refuse. Its private journal-acquisition
+the exact quiet origin, an optional settled qualified prefix and several ordinary
+groups, including completed or interrupted compensation. Only the final transaction
+may require recovery; open-only groups have no transaction undo obligation. Earlier
+object views and FILE retirement/reuse generations are proved through private
+backward projections of the full actual history. Unproved index/cluster reuse,
+qualified-family operations after ordinary groups and checkpoint/ring reuse still
+refuse. Its private journal-acquisition
 mount/index do not relax public read-only namespace or uncompleted-copy admission.
 The [format chapter](format/10-recovery-and-writing.md#experimental-fresh-ordinary-operation-recovery)
 describes bootstrap, original storage ownership and publication order.
@@ -231,7 +235,7 @@ Forget. Existing complete inverses must match original undo bytes and links.
 Preparation writes/persists nothing and closes every immutable child. Consumed
 execution is read/allocation free and reports sticky poison after uncertain I/O.
 
-The focused local suites pass sixteen complete/loser storage/operation profiles,
+The preceding one-lifetime focused local suites pass sixteen complete/loser storage/operation profiles,
 each with a second fresh zero-rewrite reopen. Independent journal checks retain
 all original packet bytes/links, exact compensation, home LSNs and unchanged clean
 restart/client roots. Constructed writer-media sweeps cover 496 create, 721 grow
@@ -319,6 +323,71 @@ retains the incorrectly prescribed Meson `all` target invocation before the
 correct default-target build. The format book describes the experimental forms,
 prefix ordering, explicit remaining ownership questions and a rendered program
 diagram separately from native format facts.
+
+### Retained ordinary history and FILE reuse
+
+The connected extension replaces the complete executor's qualified-family packet
+ceiling with a scalar settled-history proof from the ordinary recovery owner.
+It retains the actual physical endpoint and all packets. Earlier closed ordinary
+groups are proved backwards through private complete object views; only the latest
+group can produce recovery publications. A settled qualified prefix uses its
+existing replay binder and must have exact complete circular homes before either
+tail slot is reused. Pending/unsettled/broken qualified predecessors and a sole
+copy over an unproved qualified home refuse without writes or an owner.
+
+Independent committed, repeated and compensated qualified predecessors pass
+396 mixed-history interruption states across create, shrink, rename and remove,
+with a fresh zero-rewrite second recovery. Nine connected ordinary sequences pass
+1,605 interruption states: create/grow/shrink/rename/remove, directory creation and
+removal, two distinct objects, FILE slot reuse, independently authored generation
+wrap, and continuation after completed compensation or one/two open-only groups.
+The final reuse operations also cover both 512-byte-step sector prefix/suffix
+variants. Deleted reference generations never resolve to the new object, and all
+unrelated media bytes remain exact.
+
+The compiler now uses the original MFT bitmap as well as initialization/mapping
+to classify FILE predecessors. A complete free FILE is unowned storage, and
+unchanged free neighbors retain their raw protection bytes. Backward reuse proof
+binds the earlier full owned snapshot, retirement header, set/clear allocation and
+matching sequence, including `65535 → 1`. Completed compensation preserves the
+free state's generation without fabricating its discarded bytes. An independently
+altered compensated generation refuses `STALE` without writes, leaks or an owner;
+the existing false-free-snapshot refusal suite still passes.
+
+Every complete sequence operation executes through the actual regular-file backend,
+closes its writer and backing image, verifies the whole reopened file and supplies
+only that reopened image to the next operation. The batch retains 26 such sequence
+postimages, eight actual old/committed recovery postimages and the preceding three
+writer profiles. Four separately modeled recovered seed images start compensation
+and open-only continuation cases. Fault sweeps after two prior closed groups refuse
+1,440 allocation/994 read failures in the loser and 1,655 allocation/1,096 read
+failures in the winner, with exact retry. Their 162 transfer and 54 persistence
+failure states recover again from both visible and durable bytes.
+
+The single closing local invocation passes all 186 Meson suites with assertions
+enabled, fatal ASan/UBSan, two-process scheduling and zero SKIPs. Raw suite records,
+actual postimages and hashes are retained in
+`artifacts/overwrite/batch-retained-history-final-local-20261007/`. The preceding
+focused failures remain separate: the old qualified-only capture ceiling, missing
+multiple-group binding, a free-FILE provenance error, missing completed-compensation
+reuse, and the test helper's reused predecessor filename. The free-byte oracle's
+normalization correction retains exact comparison for unchanged unowned bytes.
+The prepared expanded continuation check passes all 232 states before closure.
+
+Selected-Xcode style, 118 freestanding and 118 strict Release compilations pass
+for all 59 core sources across arm64/x86_64 under the 2-KiB frame ceiling. Sixteen
+private headers pass independently. Host FSKit remains 63 PASS / 13 explicit
+runtime-SDK SKIP / 0 FAIL. The actual unsigned Release app, both extension bundles
+and core archive contain both architectures; the six ordinary-recovery modules
+have actual compiler commands and archive members in each. The updated diagram
+is rendered and visually reviewed; all 376 local destinations/anchors and eighteen
+SVGs pass. Compiler/product evidence is in
+`artifacts/overwrite/batch-retained-history-release-local-20261007/`.
+
+These are local owning-history and offline persistence proofs. Whole-FILE/INDX
+native replay, historical index/cluster reuse, checkpoint advancement/ring reuse,
+open-unlink lifetime and new FSKit mutation admission remain separate gates. The
+installed app's read-only readiness check adds no new operation acceptance.
 
 ## Driver refactoring
 

@@ -185,9 +185,21 @@ file_predecessors(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_pa
     const struct ntfs_write_mutation_target *target)
 {
 	const struct ntfs_stream *original = plan->volume->mft;
+	struct ntfs_node *mft = NULL;
+	struct ntfs_stream *bitmap = NULL;
 	const struct ntfs_run *run;
 	uint64_t logical, vcn, physical;
+	uint8_t bit;
 	size_t slot, offset;
+	enum ntfs_result result;
+
+	result = ntfs_node_by_number(plan->volume, NTFS_MFT_RECORD, &mft);
+	if (result == NTFS_OK) {
+		result = ntfs_attribute_open(mft, NTFS_ATTR_BITMAP, NULL, 0, &bitmap);
+	}
+	if (result != NTFS_OK) {
+		goto done;
+	}
 
 	for (slot = 0; slot < NTFS_WRITE_CLUSTER_BYTES / NTFS_WRITE_RECORD_BYTES; slot++) {
 		offset = slot * NTFS_WRITE_RECORD_BYTES;
@@ -197,27 +209,43 @@ file_predecessors(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_pa
 		}
 		if (target->mirror) {
 			if (logical >= NTFS_MFT_MIRROR_REQUIRED_RECORDS * NTFS_WRITE_RECORD_BYTES) {
-				return NTFS_CORRUPT;
+				result = NTFS_CORRUPT;
+				goto done;
 			}
 			physical = plan->volume->mirror_lcn * NTFS_WRITE_CLUSTER_BYTES + logical;
 		} else {
 			vcn = logical / NTFS_WRITE_CLUSTER_BYTES;
 			run = ntfs_run_find(original, vcn);
 			if (run == NULL || run->lcn == NTFS_HOLE) {
-				return NTFS_CORRUPT;
+				result = NTFS_CORRUPT;
+				goto done;
 			}
 			physical = (run->lcn + vcn - run->vcn) * NTFS_WRITE_CLUSTER_BYTES +
 			    logical % NTFS_WRITE_CLUSTER_BYTES;
 		}
 		if (physical != patch->physical + offset) {
-			return NTFS_CORRUPT;
+			result = NTFS_CORRUPT;
+			goto done;
 		}
 		if (ntfs_equal(patch->before + offset, "FILE",
 			sizeof(((struct ntfs_disk_mst *)0)->magic))) {
-			patch->predecessor.file_slots |= (uint8_t)(1u << slot);
+			result = ntfs_stream_exact(bitmap,
+			    logical / NTFS_WRITE_RECORD_BYTES / NTFS_BITS_PER_BYTE, &bit,
+			    sizeof(bit));
+			if (result != NTFS_OK) {
+				goto done;
+			}
+			if ((bit &
+				(1u << ((logical / NTFS_WRITE_RECORD_BYTES) %
+				     NTFS_BITS_PER_BYTE))) != 0) {
+				patch->predecessor.file_slots |= (uint8_t)(1u << slot);
+			}
 		}
 	}
-	return NTFS_OK;
+done:
+	ntfs_stream_close(bitmap);
+	ntfs_node_close(mft);
+	return result;
 }
 
 enum ntfs_result

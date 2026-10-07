@@ -121,6 +121,15 @@ semantics, allocation policy, native opcode admission or checkpoint advancement
 into cleanup. A discovered behavior defect gets its own failing conformance test
 and functional fix before the cleanup proceeds.
 
+At the next committable retained-history checkpoint, the queued cleanup separates
+FILE record ownership/replacement, resident/nonresident attribute construction and
+stream binding/I/O. Directory inspection/key changes and complete index storage
+construction receive separate modules, sharing only their equivalent bounded entry
+size calculation. Retain the existing mutation owner, allocator/work governors,
+private interfaces and ordered callbacks. Review moved function bodies and compare
+the complete ordinary-file postimages with the functional checkpoint. This is step
+three above; the native FSKit extraction remains a separately reviewed boundary.
+
 ## Conventions to apply
 
 | Concern | Convention |

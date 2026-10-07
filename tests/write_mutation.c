@@ -366,6 +366,13 @@ verify_predecessors(struct test_case *test, const struct ntfs_write_mutation_pla
 					    logical % NTFS_WRITE_CLUSTER_BYTES;
 				}
 				assert(physical == region.physical + offset);
+				number = logical / NTFS_WRITE_RECORD_BYTES;
+				assert(ntfs_stream_exact(mft_bitmap, number / NTFS_BITS_PER_BYTE,
+					   &bit, sizeof(bit)) == NTFS_OK);
+				if ((bit & (1u << (number % NTFS_BITS_PER_BYTE))) == 0) {
+					program_checks.unowned_file_signatures++;
+					continue;
+				}
 				expected |= (uint8_t)(1u << slot);
 				program_checks.original_file_slots++;
 			}
@@ -432,9 +439,11 @@ program_logical(const struct ntfs_write_mutation_region *region, const void *sou
 	memcpy(out, source, region->bytes);
 	if (region->kind == NTFS_WRITE_MUTATION_FILE) {
 		for (offset = 0; offset < region->bytes; offset += NTFS_WRITE_RECORD_BYTES) {
-			if ((source != region->before ||
-				(region->predecessor.file_slots &
-				    (1u << (offset / NTFS_WRITE_RECORD_BYTES))) != 0) &&
+			if (((region->predecessor.file_slots &
+				 (1u << (offset / NTFS_WRITE_RECORD_BYTES))) != 0 ||
+				(source != region->before &&
+				    memcmp(region->before + offset, region->after + offset,
+					NTFS_WRITE_RECORD_BYTES) != 0)) &&
 			    memcmp(bytes + offset, "FILE",
 				sizeof(((struct ntfs_disk_mst *)0)->magic)) == 0) {
 				assert(ntfs_record_decode(bytes + offset, NTFS_WRITE_RECORD_BYTES,
@@ -465,6 +474,14 @@ program_equal(const struct ntfs_write_mutation_region *region, const void *actua
 	if (region->kind == NTFS_WRITE_MUTATION_FILE || region->kind == NTFS_WRITE_MUTATION_INDEX) {
 		for (offset = 0; offset < region->bytes; offset += span) {
 			mst = (const void *)(expected + offset);
+			if (region->kind == NTFS_WRITE_MUTATION_FILE &&
+			    (region->predecessor.file_slots &
+				(1u << (offset / NTFS_WRITE_RECORD_BYTES))) == 0 &&
+			    memcmp(region->before + offset, region->after + offset, span) == 0) {
+				/* Untouched free storage stays raw, byte for byte. It has
+				 * no logical FILE object whose LSN/USA can be normalized. */
+				continue;
+			}
 			if (undo &&
 			    (region->kind == NTFS_WRITE_MUTATION_FILE
 				    ? (region->predecessor.file_slots &
@@ -495,6 +512,18 @@ program_equal(const struct ntfs_write_mutation_region *region, const void *actua
 			    expected + offset + offsetof(struct ntfs_disk_record, lsn),
 			    sizeof(((struct ntfs_disk_record *)0)->lsn));
 		}
+	}
+	if (memcmp(normalized, expected, region->bytes) != 0) {
+		for (offset = 0; offset < region->bytes && normalized[offset] == expected[offset];
+		    offset++) {
+		}
+		fprintf(stderr,
+		    "program %s mismatch: kind=%u physical=%llu logical=%llu old-slots=%u "
+		    "byte=%zu actual=%u expected=%u\n",
+		    undo ? "inverse" : "forward", region->kind,
+		    (unsigned long long)region->physical,
+		    (unsigned long long)region->target.logical_offset,
+		    region->predecessor.file_slots, offset, normalized[offset], expected[offset]);
 	}
 	assert(memcmp(normalized, expected, region->bytes) == 0);
 	free(normalized);

@@ -197,8 +197,12 @@ qualification of the retained ownership rules before executable admission.
 
 ### Experimental physical execution
 
-The separate [batch executor](../../core/write_batch_execute.h) now acquires an
-original settled history accepted by the preceding bounded writer. It derives
+The separate [batch executor](../../core/write_batch_execute.h) acquires the
+actual complete retained history through a
+[value-only settled-history proof](../../core/write_batch_history.h). The same
+private ordinary-recovery owner proves all journal and metadata homes already
+settled; required recovery returns `BUSY`, and unknown history refuses. No write
+or persistence capability is exposed by this acquisition interface. It derives
 `floor_lsn` from the selected client's oldest record, `tail_lsn` from the proved
 completed endpoint, and `next_lsn` from that endpoint's complete measured extent.
 It passes those values to whole-program placement; it does not estimate a
@@ -248,11 +252,11 @@ journals provide capacity for the positive test. Their LSN widths, owning roots,
 allocation and mirror bytes are rebuilt as test inputs, not through a driver
 checkpoint operation.
 
-This is experimental execution through test and regular-image backends. It does
-not make a new program acceptable to the existing bounded history/recovery
-parser. The separate private recovery owner described below covers one reopened
-ordinary lifetime. Mixed/sustained history, checkpoint reuse, open-unlink lifetime
-and native Windows acceptance remain open before writable-owner or FSKit admission.
+This is experimental execution through test and regular-image backends. The
+separate private recovery owner below binds retained ordinary history and a
+preceding settled qualified family. This does not broaden the installed overwrite
+owner's admission. Sustained checkpoint/ring reuse, open-unlink lifetime and
+native Windows acceptance remain open before writable-owner or FSKit admission.
 
 The implementation separates complete metadata compilation/private application
 from journal packet/page and compensation composition. Both use one retained
@@ -269,10 +273,14 @@ verification and remaining review.
 The [private recovery contract](../../core/write_batch_recover.h) takes an exclusively
 claimed immutable media backend. It receives no original mutation plan, program
 or physical executor. Admission is deliberately narrower than generic NTFS recovery:
-the exact quiet checkpoint/bootstrap pair, one ordinary metadata transaction and
-its optional interrupted compensation. The preceding qualified overwrite family,
-a second ordinary transaction, checkpoint advancement and ring reuse are outside
-this contract. Geometry remains 512-byte sectors, 4-KiB clusters/INDX buffers and
+the exact quiet checkpoint/bootstrap pair, an optional settled qualified overwrite
+prefix, and several ordinary metadata transaction groups. Earlier transactions
+must be committed or fully compensated; only the final transaction can require
+redo or remaining compensation. Attribute opens without any transaction update
+have no undo obligation and remain explicit groups in the actual retained history.
+Checkpoint advancement, ring reuse and a qualified-family operation after an
+ordinary group are outside this contract. Geometry remains 512-byte sectors,
+4-KiB clusters/INDX buffers and
 1-KiB modern FILE records under LFS 1.1.
 
 ### Bootstrap and original ownership
@@ -312,6 +320,47 @@ a syntactically valid free FILE to its own logged full snapshot cannot replace
 this proof. The [independent false-predecessor tests](../../tests/write_batch_recovery_ownership.h)
 author that claim outside the mutation compiler for both a bitmap-clear initialized
 slot and an allocated uninitialized MFT tail.
+
+The mutation compiler applies this same distinction: a complete framed FILE in
+an initialized but bitmap-clear slot is free storage. Its stale body does not
+become an old-object snapshot. Unchanged free neighboring slots retain their
+exact raw bytes, including their existing USA protection.
+
+### Retained groups and private historical views
+
+[History restoration](../../core/write_batch_restore_history.c) walks earlier
+closed ordinary groups backwards through a private physical-cluster projection.
+Each group reconstructs and validates its complete before/after metadata, original
+allocation and logical mappings. The root owner supplies all actual I/O and
+aggregate memory/read governors; private child views borrow the complete retained
+packet history. No endpoint is shortened, packet discarded or old transaction
+replayed into physical media. Earlier committed FILE/INDX/bitmap homes must agree
+with their settled after view. The fully rewound original view then binds the
+qualified prefix using the existing family replay rules.
+
+New initialization can discard bytes from a previously free FILE slot. Such bytes
+remain explicitly unknown in the private backward projection. A preceding committed
+retirement can prove the slot's earlier owned generation using its full old FILE
+snapshot, header inverse, original set MFT bit, settled clear bit and matching
+retired/new sequence. The sequence advances by one in the 16-bit field and skips
+zero (`65535 → 1`). This proof does not turn placeholder bytes into an alleged
+physical predecessor. A fully compensated initialization leaves the same free
+state for a later initialization; matching generations allow the walk to continue
+while those free bytes remain unknown. Unproved index-buffer or cluster reuse
+still refuses.
+
+Ordinary operations restart their OAT keys at the named first physical table key.
+An attribute-open-only prefix can therefore precede a later open group without
+a transaction Forget: it never started the transaction update chain. Each open
+still binds its actual preceding LSN and sequence-bearing owner in the original
+view. A group with updates cannot be bypassed until its real terminal Forget or
+complete compensation is retained. No fabricated completion marker is admitted.
+
+The qualified prefix has a different packed-page layout. Its complete circular
+home pages are independently checked against every retained packet before either
+legacy transfer slot may be reused. A sole retained copy over an unproved/torn
+qualified home is refused; ordinary page reconstruction cannot silently replace
+that provenance.
 
 Both projected views must pass ordinary mount admission before publication; full
 metadata validation always checks the original view and additionally the committed
@@ -359,6 +408,14 @@ Regular-image cases exercise actual `pwrite`, `fsync` and macOS `F_FULLFSYNC`, t
 close/reopen and compare the complete image. These local proofs do not qualify
 the experimental snapshot forms for Windows replay or enable new FSKit operations.
 
+Connected sequence tests use actual closed/reopened regular-image postimages as
+the next operation's input. They cover namespace/data changes, different created
+objects, directory removal and FILE generation reuse. Every interruption is checked
+with original C owners closed, independent old/new reference resolution, all
+unrelated media bytes preserved and a fresh zero-rewrite second recovery. The
+[fixture author](../../tests/write_mutation_cases.py) independently constructs the
+free `65535` sequence predecessor; the driver does not author its own wrap oracle.
+
 ## Checkpoint advancement and ring reuse
 
 ![A retained floor cannot move until homes and a new owning checkpoint are durable](diagrams/checkpoint.svg)
@@ -399,6 +456,11 @@ Clearing flags or introducing a private journal cannot substitute for this gate.
   and [authored capacity/storage inputs](../../tests/write_mutation_cases.py).
 - Bound family replay: [write_replay.c](../../core/write_replay.c).
 - Complete retained family history: [write_history.c](../../core/write_history.c).
+- Ordinary settled-history acquisition: [write_batch_history.h](../../core/write_batch_history.h)
+  and [write_batch_recover.c](../../core/write_batch_recover.c).
+- Ordinary packet/group binding: [write_batch_capture.c](../../core/write_batch_capture.c).
+- Private backward ownership projection:
+  [write_batch_restore_history.c](../../core/write_batch_restore_history.c).
 - Fresh overlay validation: [write_overlay.c](../../core/write_overlay.c).
 - Owning recovery: [write_recover.c](../../core/write_recover.c).
 - Native image-owner boundary: [write_owner.h](../../core/write_owner.h),

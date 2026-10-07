@@ -64,9 +64,9 @@ bind_checkpoint(
 	return ntfs_write_quiet_bind(&origin, &client, out->packet[first], out->packet[first + 1]);
 }
 
-static enum ntfs_result
-bind_previous_file(
-    const struct ntfs_write_history *out, const struct ntfs_write_replay_plan *current)
+enum ntfs_result
+ntfs_write_history_bind_previous(const struct ntfs_write_replay_plan *plans, size_t count,
+    const struct ntfs_write_replay_plan *current)
 {
 	const struct ntfs_write_file_plan *previous;
 	const struct ntfs_disk_record *header = (const void *)current->file.before;
@@ -77,8 +77,8 @@ bind_previous_file(
 	if (end > used) {
 		return NTFS_CORRUPT;
 	}
-	for (index = out->transactions; index > 0; index--) {
-		previous = &out->transaction[index - 1].file;
+	for (index = count; index > 0; index--) {
+		previous = &plans[index - 1].file;
 		if (previous->reference != current->file.reference) {
 			continue;
 		}
@@ -95,19 +95,91 @@ bind_previous_file(
 }
 
 static enum ntfs_result
-decode_update(
-    const struct ntfs_write_history *out, size_t index, struct ntfs_logfile_update *update)
+history_buffer_update(const struct ntfs_logfile_buffer *packet, struct ntfs_logfile_update *update)
 {
 	struct ntfs_logfile_record record;
 	enum ntfs_result result;
 
 	result = ntfs_logfile_record_decode(
-	    out->packet[index], out->bytes[index], sizeof(struct ntfs_disk_log_record), &record);
-	if (result == NTFS_OK) {
-		result = ntfs_logfile_update_decode(
-		    out->packet[index] + record.data.offset, record.data.length, update);
+	    packet->data, packet->bytes, sizeof(struct ntfs_disk_log_record), &record);
+	if (result != NTFS_OK) {
+		return result;
 	}
-	return result;
+	return ntfs_logfile_update_decode(
+	    (const uint8_t *)packet->data + record.data.offset, record.data.length, update);
+}
+
+enum ntfs_result
+ntfs_write_history_prepare_transaction(struct ntfs_volume *volume,
+    const struct ntfs_logfile_restart *origin, uint64_t tail_lsn,
+    const struct ntfs_logfile_buffer *packet, size_t packets,
+    struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out, size_t *consumed)
+{
+	struct ntfs_write_replay_input input = {0};
+	struct ntfs_logfile_update update;
+	size_t index, count;
+	enum ntfs_result result;
+
+	if (volume == NULL || origin == NULL || packet == NULL || work == NULL || out == NULL ||
+	    consumed == NULL) {
+		return NTFS_INVALID;
+	}
+	if (packets < NTFS_WRITE_REPLAY_COMMIT) {
+		return NTFS_UNSUPPORTED;
+	}
+	input.restart = *origin;
+	input.tail_lsn = tail_lsn;
+	ntfs_zero(input.packet, sizeof(input.packet));
+	ntfs_zero(&input.abort, sizeof(input.abort));
+	ntfs_zero(&input.resident, sizeof(input.resident));
+	ntfs_zero(&input.resident_compensation, sizeof(input.resident_compensation));
+	count = NTFS_WRITE_REPLAY_COMMIT;
+	for (index = 0; index < count; index++) {
+		input.packet[index] = packet[index];
+	}
+	index = count;
+	if (index < packets) {
+		result = history_buffer_update(&packet[index], &update);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (update.redo_operation == NTFS_LOG_OP_UPDATE_RESIDENT_VALUE &&
+		    update.undo_operation == NTFS_LOG_OP_UPDATE_RESIDENT_VALUE) {
+			input.resident = packet[index];
+			count++;
+			index++;
+		}
+	}
+	if (index < packets) {
+		result = history_buffer_update(&packet[index], &update);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if (update.redo_operation == NTFS_LOG_OP_UPDATE_RESIDENT_VALUE &&
+		    update.undo_operation == NTFS_LOG_OP_COMPENSATION) {
+			if (input.resident.bytes != 0) {
+				input.resident_compensation = packet[index];
+				count++;
+				index++;
+			}
+			if (packets - index < 2) {
+				return NTFS_UNSUPPORTED;
+			}
+			input.abort = packet[index + 1];
+			count++;
+		}
+		input.packet[NTFS_WRITE_REPLAY_COMMIT] = packet[index];
+		count++;
+	}
+	result = ntfs_write_replay_prepare(volume, &input, work, out);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (out->packets != count) {
+		return NTFS_CORRUPT;
+	}
+	*consumed = count;
+	return NTFS_OK;
 }
 
 static enum ntfs_result
@@ -117,7 +189,7 @@ bind_history(struct ntfs_volume *volume, struct ntfs_write_history_workspace *wo
 	struct ntfs_write_replay_input input = {0};
 	struct ntfs_write_replay_plan *current;
 	struct ntfs_logfile_record record;
-	struct ntfs_logfile_update update;
+	struct ntfs_logfile_buffer packet[NTFS_WRITE_REPLAY_MAX_PACKETS];
 	size_t index, first, count;
 	enum ntfs_result result;
 
@@ -155,62 +227,25 @@ bind_history(struct ntfs_volume *volume, struct ntfs_write_history_workspace *wo
 		if (out->transactions == NTFS_WRITE_HISTORY_TRANSACTIONS) {
 			return NTFS_RANGE;
 		}
-		ntfs_zero(input.packet, sizeof(input.packet));
-		ntfs_zero(&input.abort, sizeof(input.abort));
-		ntfs_zero(&input.resident, sizeof(input.resident));
-		ntfs_zero(&input.resident_compensation, sizeof(input.resident_compensation));
-		count = NTFS_WRITE_REPLAY_COMMIT;
+		count = out->count - first;
+		if (count > NTFS_WRITE_REPLAY_MAX_PACKETS) {
+			count = NTFS_WRITE_REPLAY_MAX_PACKETS;
+		}
 		for (index = 0; index < count; index++) {
-			input.packet[index].data = out->packet[first + index];
-			input.packet[index].bytes = out->bytes[first + index];
-		}
-		index = first + count;
-		if (index < out->count) {
-			result = decode_update(out, index, &update);
-			if (result != NTFS_OK) {
-				return result;
-			}
-			if (update.redo_operation == NTFS_LOG_OP_UPDATE_RESIDENT_VALUE &&
-			    update.undo_operation == NTFS_LOG_OP_UPDATE_RESIDENT_VALUE) {
-				input.resident = (struct ntfs_logfile_buffer){
-				    out->packet[index], out->bytes[index]};
-				count++;
-				index++;
-			}
-		}
-		if (index < out->count) {
-			result = decode_update(out, index, &update);
-			if (result != NTFS_OK) {
-				return result;
-			}
-			if (update.redo_operation == NTFS_LOG_OP_UPDATE_RESIDENT_VALUE &&
-			    update.undo_operation == NTFS_LOG_OP_COMPENSATION) {
-				if (input.resident.bytes != 0) {
-					input.resident_compensation = (struct ntfs_logfile_buffer){
-					    out->packet[index], out->bytes[index]};
-					count++;
-					index++;
-				}
-				if (out->count - index < 2) {
-					return NTFS_UNSUPPORTED;
-				}
-				input.abort = (struct ntfs_logfile_buffer){
-				    out->packet[index + 1], out->bytes[index + 1]};
-				count++;
-			}
-			input.packet[NTFS_WRITE_REPLAY_COMMIT] =
-			    (struct ntfs_logfile_buffer){out->packet[index], out->bytes[index]};
-			count++;
+			packet[index] = (struct ntfs_logfile_buffer){
+			    out->packet[first + index], out->bytes[first + index]};
 		}
 		current = &out->transaction[out->transactions];
-		result = ntfs_write_replay_prepare(volume, &input, &work->replay, current);
+		result = ntfs_write_history_prepare_transaction(volume, &input.restart,
+		    input.tail_lsn, packet, count, &work->replay, current, &count);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		if (current->packets != count) {
 			return NTFS_CORRUPT;
 		}
-		result = bind_previous_file(out, current);
+		result =
+		    ntfs_write_history_bind_previous(out->transaction, out->transactions, current);
 		if (result != NTFS_OK) {
 			return result;
 		}

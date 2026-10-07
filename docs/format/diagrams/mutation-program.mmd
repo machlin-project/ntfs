@@ -1,5 +1,5 @@
 flowchart TB
-    O["Original storage ownership\nMFT initialization / map · index map / bitmap"] --> S["Sealed ordinary mutation\nComplete regions + logical owners + provenance"]
+    O["Original storage ownership\nMFT initialization / map / bitmap\nIndex map / bitmap"] --> S["Sealed ordinary mutation\nComplete regions + logical owners + provenance"]
     S --> C["Private metadata compiler / application\nOne retained program owner · copied images"]
     C --> F["FILE images\nSnapshot · replacement · retirement"]
     C --> I["INDX images\nWhole-buffer hypothesis"]
@@ -8,7 +8,7 @@ flowchart TB
     I --> P
     B --> P
     P --> J["Owned protected LFS pages\nExplicit proved floor / tail / successor"]
-    H["Original settled qualified history\nExact completed extent and successor"] --> J
+    H["Actual complete settled history\nValue-only proof · exact extent / successor"] --> J
     P --> U["Bound complete metadata prefix\nCompensation in reverse → Forget"]
     J --> E["Private physical preparation\nCopied aligned output · actual predecessor guards"]
     C -. "Separate initialization" .-> D["User DATA\nInitialized bytes and zero gaps"]
@@ -16,12 +16,13 @@ flowchart TB
     E --> V["Complete metadata overlay validation\nClose all private immutable children"]
     V --> X["Experimental physical execution\nWAL → DATA → Forget → metadata homes"]
     X --> K["Close original C owners\nReopen immutable media only"]
-    K --> R["Experimental fresh journal recovery\nQuiet origin + one ordinary lifetime\nBootstrap · loser/winner · interrupted compensation"]
+    K --> R["Experimental fresh journal recovery\nQuiet origin · settled qualified prefix\nClosed ordinary groups + final interrupted group"]
     R --> Q["Private before/after ownership proofs\nComplete metadata · exact journal links"]
-    Q --> Z["Preallocated recovery execution\nLog homes → inverse/Forget or metadata → clean roots"]
-    Z --> G["Connected native qualification\nMixed/sustained history · checkpoint reuse\nWindows recovery"]
+    Q --> W["Private backward history proof\nOwned FILE requires set MFT bit\nRetirement / reuse binds reference generation"]
+    W --> Z["Preallocated recovery execution\nLatest log homes → inverse/Forget or metadata → clean roots"]
+    Z --> G["Connected native qualification\nSnapshot replay · sustained checkpoint reuse\nWindows recovery"]
     G -. "Still required" .-> A["Writable owner and FSKit admission"]
     classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
     classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
-    class O,S,C,F,I,B,P,J,U,D,H,E,V,X,K,R,Q,Z private
+    class O,S,C,F,I,B,P,J,U,D,H,E,V,X,K,R,Q,W,Z private
     class G,A gate

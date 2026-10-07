@@ -74,10 +74,11 @@ remove images, native metadata programs, LFS pages and bound inverse prefixes.
 Its experimental physical executor also passes complete test-backend operations
 and three actual ordinary-image write/persistence/reopen cases. A separate private
 owner now derives recovery from reopened media, including torn MFT bootstrap,
-complete old/committed metadata and interrupted compensation. It admits one
-ordinary lifetime after the exact quiet origin. Whole FILE/INDX composition remains
-experimental; mixed/sustained history, checkpoint reuse and FSKit mutation admission
-still require the connected native acceptance gate. See
+complete old/committed metadata and interrupted compensation. It retains a settled
+qualified prefix and several ordinary lifetimes after the exact quiet origin,
+with private backward ownership and FILE generation-reuse proofs. Whole FILE/INDX
+composition remains experimental; native snapshot qualification, sustained checkpoint
+reuse and FSKit mutation admission still require the connected native acceptance gate. See
 [the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

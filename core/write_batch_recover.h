@@ -13,10 +13,13 @@ struct ntfs_write_batch_recovery_publication {
 
 /* Experimental journal-derived recovery of the complete ordinary-mutation
  * family. No original mutation plan, program or execution owner is an input.
- * Admission is limited to the exact quiet origin and one complete-operation
- * lifetime, including its interrupted compensation. Preceding qualified write
- * families, further ordinary transactions and checkpoint/ring reuse are not
- * admitted by this interface.
+ * Admission retains the exact quiet origin, a settled qualified prefix and
+ * complete ordinary-operation lifetimes. Only the last lifetime may require
+ * redo or remaining compensation. Earlier complete before/after object views,
+ * physical mappings and FILE retirement/reuse generations are proved privately
+ * against the full retained history. Original free bytes discarded by later
+ * initialization are never fabricated as physical source evidence. Unproved
+ * index/cluster reuse and checkpoint/ring reuse remain unsupported.
  * The caller authorizes and exclusively claims this immutable backend, excludes
  * readers throughout preparation/execution and keeps its allocator alive until
  * close. Preparation owns every aligned publication and closes every immutable

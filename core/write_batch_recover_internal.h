@@ -4,6 +4,7 @@
 #include "write_batch_recover.h"
 #include "write_batch_pages.h"
 #include "write_mutation.h"
+#include "write_history.h"
 #include <ntfs/checkpoint.h>
 #include <ntfs/validate.h>
 
@@ -19,7 +20,8 @@ enum ntfs_batch_recovery_view {
 	NTFS_BATCH_RECOVERY_SOURCE,
 	NTFS_BATCH_RECOVERY_BOOTSTRAP,
 	NTFS_BATCH_RECOVERY_BEFORE,
-	NTFS_BATCH_RECOVERY_AFTER
+	NTFS_BATCH_RECOVERY_AFTER,
+	NTFS_BATCH_RECOVERY_HISTORY
 };
 
 struct ntfs_batch_recovery_packet {
@@ -42,8 +44,23 @@ struct ntfs_batch_recovery_home {
 	uint64_t logical;
 	uint8_t source[NTFS_WRITE_CLUSTER_BYTES], before[NTFS_WRITE_CLUSTER_BYTES],
 	    after[NTFS_WRITE_CLUSTER_BYTES];
-	uint8_t slots, old_slots, new_slots;
-	bool old_index, mirror;
+	uint8_t slots, old_slots, new_slots, historical_free_slots;
+	bool old_index, mirror, unowned_cluster;
+};
+
+struct ntfs_batch_recovery_lifetime {
+	struct ntfs_batch_recovery_target *target;
+	size_t first, end, targets, target_capacity;
+	size_t first_update, updates, compensations, remaining_undo;
+	bool committed, compensated;
+};
+
+struct ntfs_batch_recovery_projection {
+	uint64_t physical;
+	uint8_t before[NTFS_WRITE_CLUSTER_BYTES];
+	uint8_t unknown_slots;
+	uint16_t next_sequence[NTFS_BATCH_RECOVERY_FILE_SLOTS];
+	bool unknown_index, unowned_cluster;
 };
 
 struct ntfs_write_batch_recovery {
@@ -59,9 +76,15 @@ struct ntfs_write_batch_recovery {
 	struct ntfs_batch_recovery_packet *packet;
 	struct ntfs_batch_recovery_target *target;
 	struct ntfs_batch_recovery_home *home;
+	struct ntfs_write_replay_plan *qualified;
+	struct ntfs_batch_recovery_lifetime *lifetime;
+	struct ntfs_batch_recovery_projection *projection;
+	struct ntfs_write_batch_recovery *history_owner;
 	size_t packets, packet_capacity, targets, target_capacity, homes, home_capacity;
+	size_t qualified_count, qualified_capacity, ordinary_first;
+	size_t lifetimes, lifetime_capacity, projections, projection_capacity;
 	size_t first_update, updates, compensations, remaining_undo;
-	bool committed, compensated, prepared;
+	bool committed, compensated, prepared, historical;
 	struct ntfs_write_batch_recovery_publication *publication;
 	uint8_t *allocation, *frames;
 	size_t count, capacity, allocation_bytes, live, abort_end;
@@ -74,6 +97,7 @@ struct ntfs_batch_recovery_workspace {
 	struct ntfs_logfile_checkpoint_capture capture;
 	struct ntfs_logfile_checkpoint_capture_report checkpoint;
 	struct ntfs_validation_report validation;
+	struct ntfs_write_replay_workspace replay;
 	uint8_t record[NTFS_WRITE_BATCH_MAX_PACKET_BYTES];
 	uint8_t checkpoint_packet[NTFS_WRITE_CHECKPOINT_BYTES];
 	uint8_t image[NTFS_WRITE_CLUSTER_BYTES], before[NTFS_WRITE_CLUSTER_BYTES];
@@ -90,10 +114,18 @@ enum ntfs_result ntfs_batch_recovery_bootstrap(
     struct ntfs_write_batch_recovery *, struct ntfs_batch_recovery_workspace *);
 enum ntfs_result ntfs_batch_recovery_capture(struct ntfs_write_batch_recovery *,
     struct ntfs_volume *, struct ntfs_batch_recovery_workspace *);
+enum ntfs_result ntfs_batch_recovery_qualified_validate(struct ntfs_write_batch_recovery *,
+    struct ntfs_volume *, struct ntfs_batch_recovery_workspace *);
 enum ntfs_result ntfs_batch_recovery_tail_bind(struct ntfs_write_batch_recovery *,
     struct ntfs_logfile *, struct ntfs_batch_recovery_workspace *);
 enum ntfs_result ntfs_batch_recovery_restore(
     struct ntfs_write_batch_recovery *, struct ntfs_batch_recovery_workspace *);
+enum ntfs_result ntfs_batch_recovery_restore_history(
+    struct ntfs_write_batch_recovery *, struct ntfs_batch_recovery_workspace *);
+void ntfs_batch_recovery_lifetime_select(
+    struct ntfs_write_batch_recovery *, const struct ntfs_batch_recovery_lifetime *);
+enum ntfs_result ntfs_batch_recovery_history_home_admit(
+    const struct ntfs_write_batch_recovery *, struct ntfs_batch_recovery_home *);
 enum ntfs_result ntfs_batch_recovery_pages(struct ntfs_write_batch_recovery *,
     struct ntfs_write_batch_pages **, struct ntfs_write_batch_pages **);
 enum ntfs_result ntfs_batch_recovery_mapping(const struct ntfs_stream *, uint64_t, uint64_t *);

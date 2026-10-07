@@ -8,7 +8,10 @@ struct recovery_case {
 	struct journal_oracle *oracle;
 	struct ntfs_write_batch_publication *publication;
 	uint8_t *frames, *committed;
+	uint64_t reference, previous_reference;
 	size_t count, commit;
+	size_t state_complete, state_partial;
+	bool state_suffix;
 };
 
 #include "write_batch_recovery_journal.h"
@@ -23,13 +26,20 @@ recovery_source(const char *directory, const char *image, enum ntfs_write_mutati
 	struct ntfs_write_batch_execution *writer = NULL;
 	const struct ntfs_write_batch_publication *step;
 	size_t index;
+	enum ntfs_result result;
 
 	source = calloc(1, sizeof(*source));
 	assert(source != NULL);
 	source->test = prepare_profile(directory, image, kind, profile);
+	source->reference = ntfs_write_mutation_plan_reference(source->test->plan);
 	source->oracle = journal_capture(source->test);
-	assert(ntfs_write_batch_execute_prepare(
-		   &source->test->backend, source->test->program, &writer) == NTFS_OK);
+	result = ntfs_write_batch_execute_prepare(
+	    &source->test->backend, source->test->program, &writer);
+	if (result != NTFS_OK) {
+		fprintf(stderr, "fresh next execution prepare on %s: %s\n", image,
+		    ntfs_result_string(result));
+	}
+	assert(result == NTFS_OK);
 	source->count = ntfs_write_batch_execution_count(writer);
 	source->publication = calloc(source->count, sizeof(*source->publication));
 	source->frames = malloc(source->count * NTFS_WRITE_CLUSTER_BYTES);
@@ -77,6 +87,9 @@ recovery_state(struct recovery_case *source, size_t complete, size_t partial, bo
 	size_t index;
 
 	assert(complete <= source->count && partial <= NTFS_WRITE_CLUSTER_BYTES);
+	source->state_complete = complete;
+	source->state_partial = partial;
+	source->state_suffix = suffix;
 	memcpy(device->visible, source->test->before, device->bytes);
 	for (index = 0; index < complete; index++) {
 		step = &source->publication[index];
@@ -116,6 +129,8 @@ static void
 recovery_metadata(struct recovery_case *source, bool committed)
 {
 	struct test_case *test = source->test;
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_node *node = NULL;
 	const struct ntfs_write_mutation_region *region;
 	size_t index;
 
@@ -136,6 +151,62 @@ recovery_metadata(struct recovery_case *source, bool committed)
 	if (committed) {
 		requested_file_check(test);
 	}
+	if (source->previous_reference != 0) {
+		/* The reused slot names a new object. The deleted identity may never
+		 * resolve to it, including across every recovery reopen. */
+		assert(ntfs_mount(&test->backend.reader, NULL, &volume) == NTFS_OK);
+		assert(ntfs_node_open(volume, source->reference, &node) ==
+		    (committed ? NTFS_OK : NTFS_NOT_FOUND));
+		ntfs_node_close(node);
+		node = NULL;
+		assert(ntfs_node_open(volume, source->previous_reference, &node) ==
+		    (committed ? NTFS_STALE : NTFS_NOT_FOUND));
+		assert(node == NULL && ntfs_unmount(volume) == NTFS_OK);
+	}
+}
+
+static void
+recovery_preserved_bytes(struct recovery_case *source, const uint8_t *input)
+{
+	struct test_case *test = source->test;
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *log = NULL;
+	const struct ntfs_write_mutation_region *region;
+	const struct ntfs_run *run;
+	size_t physical, index, bytes;
+	bool managed;
+
+	assert(ntfs_mount(&test->backend.reader, NULL, &volume) == NTFS_OK);
+	assert(ntfs_node_by_number(volume, NTFS_LOGFILE_RECORD, &node) == NTFS_OK);
+	assert(ntfs_stream_open(node, NULL, 0, &log) == NTFS_OK);
+	for (physical = 0; physical < test->device.bytes; physical += NTFS_WRITE_CLUSTER_BYTES) {
+		bytes = test->device.bytes - physical < NTFS_WRITE_CLUSTER_BYTES
+		    ? test->device.bytes - physical
+		    : NTFS_WRITE_CLUSTER_BYTES;
+		managed = false;
+		for (index = 0; index < log->run_count; index++) {
+			run = &log->runs[index];
+			assert(run->lcn != NTFS_HOLE);
+			if (physical / NTFS_WRITE_CLUSTER_BYTES >= run->lcn &&
+			    physical / NTFS_WRITE_CLUSTER_BYTES - run->lcn < run->length) {
+				managed = true;
+				break;
+			}
+		}
+		for (index = 0; !managed && index < test->regions; index++) {
+			region = &test->region[index];
+			managed = region->kind != NTFS_WRITE_MUTATION_DATA &&
+			    region->physical == physical;
+		}
+		if (!managed) {
+			assert(
+			    memcmp(input + physical, test->device.visible + physical, bytes) == 0);
+		}
+	}
+	ntfs_stream_close(log);
+	ntfs_node_close(node);
+	assert(ntfs_unmount(volume) == NTFS_OK);
 }
 
 static void
@@ -162,6 +233,9 @@ recovery_check(struct recovery_case *source, bool committed)
 
 		fprintf(stderr, "fresh recovery prepare: %s; expected %s\n",
 		    ntfs_result_string(result), committed ? "committed" : "old");
+		fprintf(stderr, "writer prefix: %zu/%zu publications; partial %zu %s; commit %zu\n",
+		    source->state_complete, source->count, source->state_partial,
+		    source->state_suffix ? "suffix" : "prefix", source->commit);
 		count = snprintf(path, sizeof(path), "%s/refused.img", recovery_output);
 		assert(count > 0 && (size_t)count < sizeof(path));
 		file = fopen(path, "wbx");
@@ -183,6 +257,7 @@ recovery_check(struct recovery_case *source, bool committed)
 	assert(test->device.live == 0);
 	recovery_metadata(source, committed);
 	recovery_journal_check(source, committed);
+	recovery_preserved_bytes(source, input);
 	assert(memcmp(test->device.visible, test->device.durable, test->device.bytes) == 0);
 	free(input);
 }
@@ -461,5 +536,290 @@ batch_recovery_callback_tests(const char *directory, const char *output)
 	    directory, NTFS_WRITE_GROWING_RANGE, TEST_DEFAULT, "source.img", false);
 	recovery_callback_faults(
 	    directory, NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH, "large-source.img", false);
+	free(recovery_output);
+}
+
+static void
+recovery_qualified_refusals(const char *directory)
+{
+	static const struct {
+		const char *image;
+		enum ntfs_result expected;
+	} cases[] = {{"prepared-no-home.img", NTFS_BUSY}, {"committed-no-home.img", NTFS_BUSY},
+	    {"followup-wrong-previous-file.img", NTFS_CORRUPT},
+	    {"qualified-copy-torn-home.img", NTFS_CORRUPT}};
+	struct test_case *test;
+	struct ntfs_write_batch_recovery *owner;
+	size_t index;
+	enum ntfs_result result;
+
+	for (index = 0; index < sizeof(cases) / sizeof(cases[0]); index++) {
+		test = prepare_profile(
+		    directory, cases[index].image, NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
+		ntfs_write_program_close(test->program);
+		ntfs_write_mutation_plan_close(test->plan);
+		test->program = NULL;
+		test->plan = NULL;
+		assert(test->device.live == 0);
+		owner = (void *)(uintptr_t)1;
+		result = ntfs_write_batch_recover_prepare(&test->backend, &owner);
+		if (result != cases[index].expected) {
+			fprintf(stderr, "qualified predecessor refusal %s: actual=%s expected=%s\n",
+			    cases[index].image, ntfs_result_string(result),
+			    ntfs_result_string(cases[index].expected));
+		}
+		assert(result == cases[index].expected && owner == NULL && test->device.live == 0 &&
+		    test->device.writes == 0 && test->device.barriers == 0 &&
+		    memcmp(test->before, test->device.visible, test->device.bytes) == 0 &&
+		    memcmp(test->before, test->device.durable, test->device.bytes) == 0);
+		finish(test);
+	}
+	puts("PASS: pending/unsettled/broken qualified predecessors and an unproved circular "
+	     "home refuse without writes, leaks or an owner");
+}
+
+static void
+batch_recovery_history_tests(const char *directory, const char *output)
+{
+	static const struct {
+		const char *name;
+		size_t lifetimes;
+	} images[] = {{"committed-clean-original-root.img", 1},
+	    {"followup-clean-original-root.img", 2}, {"compensated-clean-original-root.img", 1}};
+
+	static const enum ntfs_write_mutation_kind kinds[] = {NTFS_WRITE_CREATE_FILE,
+	    NTFS_WRITE_RESIZE_FILE, NTFS_WRITE_RENAME, NTFS_WRITE_REMOVE_FILE};
+	struct recovery_case *source;
+	size_t image, kind, index, states = 0;
+
+	recovery_output_begin(output);
+	recovery_qualified_refusals(directory);
+	for (image = 0; image < sizeof(images) / sizeof(images[0]); image++) {
+		for (kind = 0; kind < sizeof(kinds) / sizeof(kinds[0]); kind++) {
+			source = recovery_source(directory, images[image].name, kinds[kind],
+			    kinds[kind] == NTFS_WRITE_RESIZE_FILE ? TEST_SHRINK : TEST_DEFAULT);
+			for (index = 0; index <= source->count; index++) {
+				recovery_state(source, index, 0, false);
+				recovery_check(source, index > source->commit);
+				states++;
+				/* A fresh second owner must retain all preceding lifetimes
+				 * and perform no additional rewrite. */
+				source->test->device.writes = source->test->device.barriers = 0;
+				recovery_check(source, index > source->commit);
+				assert(source->test->device.writes == 0);
+			}
+			printf("PASS: %zu fresh mixed-history states after %zu qualified "
+			       "lifetimes for mutation %u\n",
+			    source->count + 1, images[image].lifetimes, kinds[kind]);
+			recovery_source_close(source);
+		}
+	}
+	printf("PASS: %zu mixed-history interruption states and zero-rewrite second "
+	       "reopens from independently authored qualified predecessors\n",
+	    states);
+	free(recovery_output);
+}
+
+struct recovery_sequence_step {
+	enum ntfs_write_mutation_kind kind;
+	enum test_profile profile;
+};
+
+static void
+recovery_sequence_case(const char *directory, unsigned ordinal, const char *image_name,
+    const struct recovery_sequence_step *steps, size_t count, bool generation_reuse)
+{
+	struct recovery_case *source;
+	const char *input_directory = directory, *input_name = image_name;
+	char path[TEST_PATH_BYTES], name[TEST_PATH_BYTES], predecessor_name[TEST_PATH_BYTES];
+	FILE *file;
+	uint64_t first_reference = 0;
+	uint16_t generation;
+	size_t step, publication, partial, direction, states = 0;
+	int length;
+
+	for (step = 0; step < count; step++) {
+		fprintf(stderr, "sequence %u lifetime %zu kind %u/profile %u\n", ordinal, step + 1,
+		    steps[step].kind, steps[step].profile);
+		source = recovery_source(
+		    input_directory, input_name, steps[step].kind, steps[step].profile);
+		if (generation_reuse && steps[step].kind == NTFS_WRITE_CREATE_FILE) {
+			if (first_reference == 0) {
+				first_reference = source->reference;
+			} else {
+				generation =
+				    (uint16_t)(first_reference >> NTFS_REFERENCE_SEQUENCE_SHIFT);
+				generation = (uint16_t)(generation + 1u);
+				assert((source->reference & NTFS_REFERENCE_RECORD_MASK) ==
+					(first_reference & NTFS_REFERENCE_RECORD_MASK) &&
+				    source->reference >> NTFS_REFERENCE_SEQUENCE_SHIFT ==
+					(generation == 0 ? 1 : generation));
+				source->previous_reference = first_reference;
+			}
+		}
+		for (publication = 0; publication <= source->count; publication++) {
+			for (partial = 0; partial < NTFS_WRITE_CLUSTER_BYTES;
+			    partial += NTFS_WRITE_SECTOR_BYTES) {
+				if (partial != 0 &&
+				    (!generation_reuse || step + 1 != count ||
+					publication == source->count)) {
+					break;
+				}
+				for (direction = 0; direction < (partial == 0 ? 1u : 2u);
+				    direction++) {
+					recovery_state(
+					    source, publication, partial, direction != 0);
+					recovery_check(source, publication > source->commit);
+					states++;
+					source->test->device.writes =
+					    source->test->device.barriers = 0;
+					recovery_check(source, publication > source->commit);
+					assert(source->test->device.writes == 0);
+				}
+			}
+		}
+		length = snprintf(name, sizeof(name), "sequence-%u-%zu.img", ordinal, step);
+		assert(length > 0 && (size_t)length < sizeof(name));
+		length = snprintf(path, sizeof(path), "%s/%s", recovery_output, name);
+		assert(length > 0 && (size_t)length < sizeof(path));
+		/* Execute this operation through the actual ordinary-file backend,
+		 * close it, and use only that reopened file as the next predecessor. */
+		posix_case(input_directory, recovery_output, name, input_name, steps[step].kind,
+		    steps[step].profile);
+		file = fopen(path, "rb");
+		assert(file != NULL &&
+		    fread(source->test->device.visible, 1, source->test->device.bytes, file) ==
+			source->test->device.bytes &&
+		    fgetc(file) == EOF && fclose(file) == 0);
+		assert(memcmp(source->test->device.visible, source->committed,
+			   source->test->device.bytes) == 0);
+		recovery_source_close(source);
+		input_directory = recovery_output;
+		memcpy(predecessor_name, name, strlen(name) + 1);
+		input_name = predecessor_name;
+	}
+	printf("PASS: sequence %u: %zu ordinary lifetimes/%zu interruption states, "
+	       "all unrelated bytes preserved and zero-rewrite second reopens\n",
+	    ordinal, count, states);
+}
+
+static void
+recovery_reopen_cases(const char *directory)
+{
+	static const struct recovery_sequence_step steps[] = {
+	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT}, {NTFS_WRITE_RENAME, TEST_RENAMED_FILE}};
+	static const char *images[] = {"compensated-source.img", "opened-only-source.img",
+	    "twice-opened-source.img", "compensated-wrapped-source.img"};
+	struct recovery_case *source;
+	const struct ntfs_write_batch_publication *publication;
+	struct ntfs_disk_log_record *record;
+	struct ntfs_logfile_update update;
+	uint8_t *logical;
+	char path[TEST_PATH_BYTES];
+	FILE *file;
+	size_t index, complete, count;
+	int length;
+
+	logical = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	assert(logical != NULL);
+	for (index = 0; index < sizeof(images) / sizeof(images[0]); index++) {
+		source = recovery_source(index == 2 ? recovery_output : directory,
+		    index == 2	     ? images[1]
+			: index == 3 ? "large-reuse-wrapped.img"
+				     : "large-source.img",
+		    NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
+		complete = source->commit;
+		if (index == 1 || index == 2) {
+			for (count = 0; count < source->commit; count++) {
+				publication = &source->publication[count];
+				if (publication->stage != NTFS_WRITE_EXECUTION_PREPARE_HOME) {
+					continue;
+				}
+				memcpy(logical, publication->image, NTFS_WRITE_CLUSTER_BYTES);
+				assert(ntfs_fixup(logical, NTFS_WRITE_CLUSTER_BYTES, "RCRD") ==
+				    NTFS_OK);
+				record =
+				    (void *)(logical + source->oracle->restart.page_data_offset);
+				assert(
+				    ntfs_logfile_update_decode((uint8_t *)record + sizeof(*record),
+					ntfs_u32(record->data_bytes), &update) == NTFS_OK);
+				assert(update.redo_operation ==
+				    NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE);
+				complete = count + 1;
+				break;
+			}
+			assert(count < source->commit);
+		}
+		recovery_state(source, complete, 0, false);
+		recovery_check(source, false);
+		source->test->device.writes = source->test->device.barriers = 0;
+		recovery_check(source, false);
+		assert(source->test->device.writes == 0);
+		length = snprintf(path, sizeof(path), "%s/%s", recovery_output, images[index]);
+		assert(length > 0 && (size_t)length < sizeof(path));
+		file = fopen(path, "wbx");
+		assert(file != NULL &&
+		    fwrite(source->test->device.visible, 1, source->test->device.bytes, file) ==
+			source->test->device.bytes &&
+		    fclose(file) == 0);
+		recovery_source_close(source);
+		recovery_sequence_case(recovery_output, (unsigned)(5 + index), images[index], steps,
+		    sizeof(steps) / sizeof(steps[0]), false);
+		if (index == 0) {
+			recovery_compensated_generation_refusal(
+			    recovery_output, "sequence-5-0.img");
+		}
+	}
+	free(logical);
+	puts("PASS: actual operations continue after fresh compensated and one/two "
+	     "opened-attribute-only recovered prefixes, including a free wrapped generation");
+}
+
+static void
+batch_recovery_reopen_tests(const char *directory, const char *output)
+{
+	recovery_output_begin(output);
+	recovery_reopen_cases(directory);
+	free(recovery_output);
+}
+
+static void
+batch_recovery_sequence_tests(const char *directory, const char *output, bool reuse_only)
+{
+	static const struct recovery_sequence_step namespace_steps[] = {
+	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT}, {NTFS_WRITE_GROWING_RANGE, TEST_DEFAULT},
+	    {NTFS_WRITE_RESIZE_FILE, TEST_SHRINK}, {NTFS_WRITE_RENAME, TEST_RENAMED_FILE},
+	    {NTFS_WRITE_REMOVE_FILE, TEST_RENAMED_FILE},
+	    {NTFS_WRITE_REMOVE_FILE, TEST_CREATED_FILE}};
+	static const struct recovery_sequence_step directory_steps[] = {
+	    {NTFS_WRITE_CREATE_DIRECTORY, TEST_DEFAULT}, {NTFS_WRITE_RENAME, TEST_RENAMED_FILE},
+	    {NTFS_WRITE_REMOVE_DIRECTORY, TEST_DEFAULT}};
+	static const struct recovery_sequence_step reuse_steps[] = {
+	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT}, {NTFS_WRITE_REMOVE_FILE, TEST_CREATED_FILE},
+	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT}};
+	static const struct recovery_sequence_step distinct_steps[] = {
+	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT}, {NTFS_WRITE_CREATE_FILE, TEST_RENAMED_FILE},
+	    {NTFS_WRITE_REMOVE_FILE, TEST_CREATED_FILE}};
+
+	recovery_output_begin(output);
+	if (!reuse_only) {
+		recovery_sequence_case(directory, 0, "large-source.img", namespace_steps,
+		    sizeof(namespace_steps) / sizeof(namespace_steps[0]), false);
+		recovery_sequence_case(directory, 1, "large-source.img", directory_steps,
+		    sizeof(directory_steps) / sizeof(directory_steps[0]), false);
+		recovery_sequence_case(directory, 2, "large-source.img", distinct_steps,
+		    sizeof(distinct_steps) / sizeof(distinct_steps[0]), false);
+	}
+	recovery_sequence_case(directory, 3, "large-source.img", reuse_steps,
+	    sizeof(reuse_steps) / sizeof(reuse_steps[0]), true);
+	recovery_sequence_case(directory, 4, "large-reuse-wrapped.img", reuse_steps,
+	    sizeof(reuse_steps) / sizeof(reuse_steps[0]), true);
+	if (!reuse_only) {
+		recovery_callback_faults(recovery_output, NTFS_WRITE_CREATE_FILE, TEST_DEFAULT,
+		    "sequence-3-1.img", true);
+		recovery_posix_case(
+		    recovery_output, 3, "sequence-3-1.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
+		recovery_reopen_cases(directory);
+	}
 	free(recovery_output);
 }

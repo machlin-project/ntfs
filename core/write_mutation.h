@@ -53,9 +53,10 @@ struct ntfs_write_mutation_target {
 	bool mirror;
 };
 
-/* Original stream ownership, independent of projected allocation and signatures
- * in free storage. FILE bits name framed predecessors in consecutive 1-KiB
- * slots; an INDX predecessor requires its original mapping and index bitmap. */
+/* Original object ownership, independent of projected allocation and signatures
+ * in free storage. FILE bits name framed, originally allocated predecessors in
+ * consecutive 1-KiB slots; an INDX predecessor requires its original mapping
+ * and index bitmap. Framed free FILE storage is not an old object. */
 struct ntfs_write_mutation_predecessor {
 	uint8_t file_slots;
 	bool index_allocated;

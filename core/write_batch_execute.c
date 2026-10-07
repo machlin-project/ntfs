@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
 #include "write_batch_execute.h"
-#include "write_history.h"
+#include "write_batch_history.h"
 #include <ntfs/validate.h>
 #include <ntfs/record.h>
 
@@ -16,8 +16,7 @@ struct ntfs_write_batch_execution {
 };
 
 struct batch_execute_workspace {
-	struct ntfs_write_history_workspace history_work;
-	struct ntfs_write_history history;
+	struct ntfs_write_batch_history history;
 	struct ntfs_write_journal_workspace guard;
 	struct ntfs_validation_report validation;
 	uint8_t before[NTFS_WRITE_CLUSTER_BYTES], image[NTFS_WRITE_CLUSTER_BYTES];
@@ -507,10 +506,7 @@ prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 		result = NTFS_UNSUPPORTED;
 		goto done;
 	}
-	result = ntfs_write_history_capture(volume, &work->history_work, &work->history);
-	if (result == NTFS_OK) {
-		result = ntfs_write_history_settled(volume, &work->history);
-	}
+	result = ntfs_write_batch_history_prepare(&owner->reader, &work->history);
 	if (result != NTFS_OK) {
 		goto done;
 	}

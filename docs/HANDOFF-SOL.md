@@ -6,6 +6,38 @@ This is an independent proprietary FSKit product; no kernel/LXNU adapter or publ
 license is included. The user's active scope is general NTFS writing. The bounded
 checkpoint below is a tested step, not completion of that scope.
 
+The current complete-operation core boundary passes 891 native-source C operations,
+234 checkpoints and six independently reviewed Windows pressure/reuse states.
+MFT growth, multiblock directories, reserved-slot preservation, 16 sustained reuse
+cycles and 30 journal wraps have evidence. Windows checks 1,068 namespace/metadata
+expectations, clean state, read-only chkdsk and six matching original healthy events;
+all detached images are retained. General FSKit callbacks are implemented and the
+signed app is installed; all 81 native component groups pass. After the initial
+unchanged-image `mkdir` refusal, the creation correction passes actual creation,
+growth, truncate/regrow and shared mmap. The first cross-parent directory move
+fails locally because its existing Windows ancestor has a valid Win32/DOS pair.
+The exact ordinarily unmounted failure image is frozen; source-identical
+preparation/debugger evidence identifies the unique-filename lookup. Test-first
+paired-ancestry coverage, all 201 sanitized suites, dual-architecture strict
+checks and 64 host FSKit groups pass. Exact-image raw/owner preparation succeeds
+without transfers. The next installed scenario passes movement, held descendants,
+replacement and removal, then stops on `ENOMEM` after fourteen record-reuse cycles.
+The ordinarily unmounted failure image is completely valid. A source-identical
+debugger identifies the 65,536 cumulative recovery-allocation call limit in a
+44-lifetime history, with no backend allocation refusals. A test-first 100-cycle
+correction passes a 202-suite local boundary and prepares a joint checkpoint/create
+preview without writes on that exact native failure. The stricter quarter-budget
+reserve exposes redundant full validation of unchanged open-only prefixes; its
+correction passes the fresh complete 202-suite local batch. The current personally
+signed universal app/tools package passes independent review and is installed
+in the dedicated VM. Its module is presently disabled after the update; actual
+FSClient enablement requires the ordinary Settings toggle after guest unlock.
+The first immediate registration query and the later ineffective CLI election
+are retained. No fresh image import or native mutation case has run.
+Preserve all attempts and use a fresh source clone for native acceptance.
+No partially executed native namespace is retried.
+Main review is `artifacts/overwrite/windows-native-pressure-network-20261007/main-review.json`.
+
 ## VM ownership and operations
 
 Never kill, terminate or relaunch UTM, change app-wide settings, or operate Debian
@@ -17,8 +49,9 @@ Prefer the existing CLI transport; do not depend on console or credential input.
 Never put credentials in source, shell arguments, environment or retained reports.
 Inspect only task-owned processes and filtered relevant arguments.
 
-The dedicated macOS 27 clone is running, its test image is ordinarily unmounted,
-and the signed installed module is enabled. The preserved macOS 26.5 reading
+The dedicated macOS 27 clone is running, its test images are ordinarily unmounted,
+and the current signed installed module is disabled pending Settings enablement.
+The preserved macOS 26.5 reading
 baseline is unchanged. Windows is running and its original test volume is verified.
 The latest nonboot/nonsystem postimage VHD detached normally; no boot or UTM app
 lifecycle change occurred. Obtain current ownership before relying on this snapshot.
@@ -98,8 +131,18 @@ Do not re-register staging copies or touch unrelated modules.
 
 ## Current evidence and limits
 
-Core: 176 fatal ASan/UBSan suites, selected-Xcode style and both freestanding
-architectures passed. FSKit: 63 host groups with thirteen explicit runtime SKIPs;
+The new general mutation batch passes 200 fatal-ASan/UBSan core suites, all
+134 strict dual-architecture core compilations, four strict changed-test
+compilations, 64 host FSKit groups with thirteen explicit runtime SKIPs and a
+universal Release build. Its personally signed package is prepared; installed
+component/syscall/remount and Windows postimage gates remain pending. The private
+descriptor experiment has 132 exact nonempty generic/creator profiles and five
+semantically equivalent all-Allow profiles; absent-DACL defaults and caller-token
+semantics remain open. See the current lead of [ACCEPTANCE.md](ACCEPTANCE.md).
+
+The preceding resident checkpoint passes 176 fatal ASan/UBSan suites,
+selected-Xcode style and both freestanding architectures. FSKit: 63 host groups
+with thirteen explicit runtime SKIPs;
 80 native groups, zero SKIPs, 871 preceding inputs and twelve resident inputs.
 Failed startup, registration,
 root-attribute authorization and initial harness-diagnostic attempts remain retained.

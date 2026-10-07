@@ -137,6 +137,8 @@ void ntfs_batch_recovery_lifetime_select(
     struct ntfs_write_batch_recovery *, const struct ntfs_batch_recovery_lifetime *);
 enum ntfs_result ntfs_batch_recovery_history_home_admit(
     const struct ntfs_write_batch_recovery *, struct ntfs_batch_recovery_home *);
+enum ntfs_result ntfs_batch_recovery_historical_after_admit(
+    const struct ntfs_write_batch_recovery *);
 enum ntfs_result ntfs_batch_recovery_pages(struct ntfs_write_batch_recovery *,
     struct ntfs_write_batch_pages **, struct ntfs_write_batch_pages **);
 enum ntfs_result ntfs_batch_recovery_mapping(const struct ntfs_stream *, uint64_t, uint64_t *);

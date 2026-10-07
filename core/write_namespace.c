@@ -26,17 +26,30 @@ changed(struct ntfs_mutation_record *record, uint64_t filetime)
 }
 
 static void
-filename(uint8_t *value, const struct ntfs_write_name *name, uint64_t filetime, bool directory)
+creation_time_bytes(uint8_t *created, uint8_t *modified, uint8_t *changed_time, uint8_t *accessed,
+    const struct ntfs_write_creation_times *times, uint64_t filetime)
+{
+	ntfs_put_u64(created,
+	    (times->fields & NTFS_WRITE_CREATION_CREATED) != 0 ? times->created : filetime);
+	ntfs_put_u64(modified,
+	    (times->fields & NTFS_WRITE_CREATION_MODIFIED) != 0 ? times->modified : filetime);
+	ntfs_put_u64(changed_time,
+	    (times->fields & NTFS_WRITE_CREATION_CHANGED) != 0 ? times->changed : filetime);
+	ntfs_put_u64(accessed,
+	    (times->fields & NTFS_WRITE_CREATION_ACCESSED) != 0 ? times->accessed : filetime);
+}
+
+static void
+filename(uint8_t *value, const struct ntfs_write_name *name,
+    const struct ntfs_write_creation_times *times, uint64_t filetime, bool directory)
 {
 	struct ntfs_disk_filename *header = (void *)value;
 	size_t index;
 
 	ntfs_zero(value, sizeof(*header) + name->count * NTFS_UTF16_UNIT_BYTES);
 	ntfs_put_u64(header->parent, name->parent_reference);
-	ntfs_put_u64(header->created, filetime);
-	ntfs_put_u64(header->modified, filetime);
-	ntfs_put_u64(header->changed, filetime);
-	ntfs_put_u64(header->accessed, filetime);
+	creation_time_bytes(
+	    header->created, header->modified, header->changed, header->accessed, times, filetime);
 	ntfs_put_u32(header->attributes, directory ? NTFS_FILE_DIRECTORY : NTFS_FILE_ARCHIVE);
 	header->length = (uint8_t)name->count;
 	/* This edge has no DOS counterpart; use the qualified unpaired namespace. */
@@ -86,10 +99,8 @@ create(struct ntfs_write_mutation_plan *plan, const struct ntfs_write_mutation_r
 	record->changed = true;
 	ntfs_zero(standard_bytes, sizeof(standard_bytes));
 	standard = (void *)standard_bytes;
-	ntfs_put_u64(standard->created, plan->filetime);
-	ntfs_put_u64(standard->modified, plan->filetime);
-	ntfs_put_u64(standard->changed, plan->filetime);
-	ntfs_put_u64(standard->accessed, plan->filetime);
+	creation_time_bytes(standard->created, standard->modified, standard->changed,
+	    standard->accessed, &request->creation_times, plan->filetime);
 	ntfs_put_u32(standard->attributes, directory ? NTFS_FILE_DIRECTORY : NTFS_FILE_ARCHIVE);
 	if (directory && parent->case_sensitive) {
 		((struct ntfs_disk_standard_policy *)(void *)standard->version)->directory_flags =
@@ -97,7 +108,7 @@ create(struct ntfs_write_mutation_plan *plan, const struct ntfs_write_mutation_r
 	}
 	result = ntfs_mutation_resident(
 	    plan, record, NTFS_ATTR_STANDARD, NULL, 0, standard_bytes, sizeof(standard_bytes), 0);
-	filename(name_bytes, &request->source, plan->filetime, directory);
+	filename(name_bytes, &request->source, &request->creation_times, plan->filetime, directory);
 	bytes = sizeof(struct ntfs_disk_filename) + request->source.count * NTFS_UTF16_UNIT_BYTES;
 	if (result == NTFS_OK) {
 		result = ntfs_mutation_resident(
@@ -297,13 +308,72 @@ replace_filename(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_rec
 }
 
 static enum ntfs_result
-check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64_t parent)
+directory_parent(const struct ntfs_mutation_record *record, uint64_t *out)
 {
-	struct ntfs_mutation_record *record;
+	const struct ntfs_disk_record *header = (const void *)record->bytes;
 	struct ntfs_attr_view attribute;
 	const struct ntfs_disk_filename *name;
 	const uint8_t *value;
-	size_t bytes;
+	uint64_t parent = 0, reference;
+	uint32_t position = ntfs_u16(header->attrs_offset), namespaces = 0, namespace_bit;
+	uint16_t count = 0, unit;
+	size_t bytes, index;
+	enum ntfs_result result;
+
+	while ((result = ntfs_attr_at(
+		    record->bytes, ntfs_u32(header->used), &position, &attribute)) == NTFS_OK) {
+		if (attribute.type != NTFS_ATTR_FILENAME) {
+			continue;
+		}
+		if (attribute.disk->nonresident != 0 || attribute.disk->name_length != 0 ||
+		    attribute.flags != 0) {
+			return NTFS_CORRUPT;
+		}
+		result = ntfs_attr_value(&attribute, &value, &bytes);
+		if (result != NTFS_OK || bytes < sizeof(*name)) {
+			return result == NTFS_OK ? NTFS_CORRUPT : result;
+		}
+		name = (const void *)value;
+		reference = ntfs_u64(name->parent);
+		if (name->length == 0 || name->name_namespace > NTFS_NAMESPACE_WIN32_DOS ||
+		    bytes != sizeof(*name) + (size_t)name->length * NTFS_UTF16_UNIT_BYTES ||
+		    reference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0 ||
+		    reference == record->reference || (count != 0 && parent != reference)) {
+			return NTFS_CORRUPT;
+		}
+		namespace_bit = 1u << name->name_namespace;
+		if ((namespaces & namespace_bit) != 0) {
+			return NTFS_CORRUPT;
+		}
+		for (index = 0; index < name->length; index++) {
+			unit = ntfs_u16(value + sizeof(*name) + index * NTFS_UTF16_UNIT_BYTES);
+			if (unit == 0 || unit == '/') {
+				return NTFS_CORRUPT;
+			}
+		}
+		parent = reference;
+		namespaces |= namespace_bit;
+		count++;
+	}
+	if (result != NTFS_END) {
+		return result;
+	}
+	/* Read the shared edge of a native alias pair without mutating either name. */
+	if (count != ntfs_u16(header->links) ||
+	    (namespaces != (1u << NTFS_NAMESPACE_POSIX) &&
+		namespaces != (1u << NTFS_NAMESPACE_WIN32) &&
+		namespaces != (1u << NTFS_NAMESPACE_WIN32_DOS) &&
+		namespaces != ((1u << NTFS_NAMESPACE_WIN32) | (1u << NTFS_NAMESPACE_DOS)))) {
+		return NTFS_CORRUPT;
+	}
+	*out = parent;
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64_t parent)
+{
+	struct ntfs_mutation_record *record;
 	uint32_t depth;
 	enum ntfs_result result;
 
@@ -322,17 +392,10 @@ check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = ntfs_attr_find(record->bytes, sizeof(record->bytes), NTFS_ATTR_FILENAME,
-		    NULL, 0, UINT16_MAX, &attribute);
+		result = directory_parent(record, &parent);
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = ntfs_attr_value(&attribute, &value, &bytes);
-		if (result != NTFS_OK || bytes < sizeof(*name)) {
-			return result == NTFS_OK ? NTFS_CORRUPT : result;
-		}
-		name = (const void *)value;
-		parent = ntfs_u64(name->parent);
 	}
 	return NTFS_RANGE;
 }

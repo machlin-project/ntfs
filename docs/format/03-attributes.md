@@ -33,6 +33,41 @@ Attribute records use eight-byte alignment. A contained attribute's declared
 length must fit the FILE's used region and leave room for its selected form.
 Names, values and mapping pairs need separate complete bounds checks.
 
+## Creation times and filename caches
+
+Microsoft defines [FILETIME](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-filetime)
+as a 64-bit count of 100-nanosecond intervals since 1601-01-01 UTC. The four
+ordinary object fields are `created`, `modified`, `changed` and `accessed` in
+`ntfs_disk_standard`. `ntfs_disk_filename` carries corresponding cached fields,
+alongside the parent reference and name; the directory index stores that filename
+value. These are distinct storage locations, not four additional object clocks.
+
+![Creation request times, SI, filename/index caches and parent update](diagrams/creation-times.svg)
+
+[Diagram source](diagrams/creation-times.mmd)
+
+Our creation request selects each supplied field independently. An omitted field
+uses the operation time; the same resolved values enter the new SI and both
+filename representations. Updating the parent namespace changes the parent at
+the operation time, even when the child requests an older creation timestamp.
+The complete new FILE and directory publication participate in the same prepared
+journal operation. This policy describes our creation implementation; native NTFS
+may refresh filename caches differently on later operations.
+
+The platform conversion accepts the 1601 epoch through the selected signed
+FILETIME ceiling, checks normalized nanoseconds and truncates their fraction to
+100-ns ticks. Dates before 1970 remain representable. These storage units do not
+claim that automatic Windows access-time updates occur at 100-ns intervals.
+Independent local tests exercise four different times, each partial selection,
+epoch boundaries, newly reopened SI/filename bytes and pre-I/O refusal. Installed
+creation remains a separate acceptance gate.
+
+Implementation: [write_namespace.c](../../core/write_namespace.c),
+[write_mutation.h](../../core/write_mutation.h) and
+[NTFSVolume.m](../../adapters/fskit/NTFSVolume.m).
+Tests: [write_mutation_owner.c](../../tests/write_mutation_owner.c) and
+[fskit_image_volume.m](../../tests/fskit_image_volume.m).
+
 ## Important type codes
 
 | Type | Name | Role |

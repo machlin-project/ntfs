@@ -306,6 +306,13 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 		    position - sizeof(struct ntfs_disk_index_root) -
 			sizeof(struct ntfs_disk_index_header),
 		    true);
+		/* Reclaim the private inline root before adding external attributes.
+		 * Only the complete final record is sealed or published. */
+		result = ntfs_mutation_resident(plan, record, NTFS_ATTR_INDEX_ROOT,
+		    ntfs_mutation_index_name, 4, root, position, 0);
+		if (result != NTFS_OK) {
+			goto done;
+		}
 		empty.resident = true;
 		result = ntfs_mutation_resize_runs(
 		    plan, old == NULL ? &empty : old, tree.count, &runs, &count);
@@ -390,7 +397,7 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 			}
 		}
 	}
-	if (result == NTFS_OK) {
+	if (result == NTFS_OK && inline_root) {
 		result = ntfs_mutation_resident(plan, record, NTFS_ATTR_INDEX_ROOT,
 		    ntfs_mutation_index_name, 4, root, position, 0);
 	}

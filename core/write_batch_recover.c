@@ -234,11 +234,31 @@ ntfs_write_batch_history_prepare(
 		result = NTFS_BUSY;
 	}
 	if (result == NTFS_OK) {
-		*out = (struct ntfs_write_batch_history){
-		    owner->selected, owner->origin, owner->client, owner->history};
+		*out = (struct ntfs_write_batch_history){.selected = owner->selected,
+		    .origin = owner->origin,
+		    .client = owner->client,
+		    .history = owner->history,
+		    .resources = {owner->reads, owner->read_bytes, owner->allocations,
+			owner->allocated_bytes}};
 	}
 	ntfs_write_batch_recovery_close(owner);
 	return result;
+}
+
+bool
+ntfs_write_batch_history_checkpoint_needed(const struct ntfs_write_batch_history *history)
+{
+	const struct ntfs_write_batch_resources *usage = &history->resources;
+
+	return history->history.completed_end_lsn != history->client.restart_lsn &&
+	    (usage->read_calls >= NTFS_DEFAULT_OPERATION_READ_CALLS /
+			NTFS_WRITE_HISTORY_RECOVERY_RESERVE_DIVISOR ||
+		usage->read_bytes >= NTFS_DEFAULT_OPERATION_READ_BYTES /
+			NTFS_WRITE_HISTORY_RECOVERY_RESERVE_DIVISOR ||
+		usage->allocation_calls >= NTFS_DEFAULT_OPERATION_ALLOCATION_CALLS /
+			NTFS_WRITE_HISTORY_RECOVERY_RESERVE_DIVISOR ||
+		usage->allocation_bytes >= NTFS_DEFAULT_OPERATION_ALLOCATION_BYTES /
+			NTFS_WRITE_HISTORY_RECOVERY_RESERVE_DIVISOR);
 }
 
 static uint8_t *

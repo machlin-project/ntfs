@@ -4,6 +4,9 @@
 #include "write_mutation.h"
 
 enum {
+	/* Ordinary base-record allocation leaves the extension/recovery reserve
+	 * available. Existing object admission still begins at record 16. */
+	NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD = 24,
 	NTFS_MUTATION_INITIAL_REGIONS = 16,
 	NTFS_MUTATION_MAX_REGIONS = 4096,
 	NTFS_MUTATION_INITIAL_RECORDS = 8,

@@ -266,11 +266,11 @@
 				   toFile:item
 				 atOffset:offset
 				 fileTime:fileTime
-			     prepareReply:^id(FSItemAttributes *attributes, size_t length) {
-			       return [[FSWriteFileResult alloc]
-				   initWithBytesWritten:length
-					 itemAttributes:attributes
-					      freeSpace:FSFreeSpace.noUpdate];
+			     prepareReply:^id(FSItemAttributes *attributes, size_t length,
+				 FSFreeSpace *freeSpace) {
+			       return [[FSWriteFileResult alloc] initWithBytesWritten:length
+								       itemAttributes:attributes
+									    freeSpace:freeSpace];
 			     }
 				    error:&error];
 	reply(result, ntfs_native_result_error(result, error));
@@ -283,12 +283,54 @@
 		context:(FSContext *)context
 	   replyHandler:(void (^)(FSCreateItemResult *, NSError *))reply
 {
-	(void)name;
-	(void)type;
-	(void)directory;
-	(void)attributes;
-	(void)context;
-	reply(nil, ntfs_error(NTFS_READ_ONLY));
+	NSError *error = [self imageContextError:context operation:__func__];
+	FSCreateItemResult *result = nil;
+	uint64_t fileTime;
+	FSItemAttribute supplied = 0, bit;
+	enum ntfs_result status;
+
+	if (!self.nativeImageEditing) {
+		reply(nil, ntfs_error(NTFS_READ_ONLY));
+		return;
+	}
+	if (error != nil) {
+		reply(nil, error);
+		return;
+	}
+	status = [self currentImageFileTime:&fileTime];
+	if (status != NTFS_OK) {
+		reply(nil, ntfs_native_result_error(nil, ntfs_error(status)));
+		return;
+	}
+	for (bit = FSItemAttributeType; bit <= FSItemAttributeInhibitKernelOffloadedIO; bit <<= 1) {
+		if ([attributes isValid:bit]) {
+			supplied |= bit;
+		}
+	}
+	result = [self
+	    createImageItemNamed:name
+			    type:type
+		     inDirectory:directory
+		      attributes:attributes
+			fileTime:fileTime
+		    prepareReply:^id(FSItem *item, FSFileName *stored, FSItemAttributes *attrs,
+			FSItemAttributes *parent, FSItemAttributes *destination,
+			FSItemAttributes *over, FSFreeSpace *freeSpace) {
+		      (void)destination;
+		      (void)over;
+		      return [[FSCreateItemResult alloc] initWithNewItem:item
+							     newItemName:stored
+						       newItemAttributes:attrs
+						     directoryAttributes:parent
+							       freeSpace:freeSpace];
+		    }
+			   error:&error];
+	os_log_info(OS_LOG_DEFAULT,
+	    "NTFS image create reply: type=%{public}ld supplied=0x%{public}lx "
+	    "consumed=0x%{public}lx result=%{public}d error=%{public}ld",
+	    (long)type, (unsigned long)supplied, (unsigned long)attributes.consumedAttributes,
+	    result != nil, (long)error.code);
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)createSymbolicLinkNamed:(FSFileName *)name
@@ -328,14 +370,45 @@
 	   context:(FSContext *)context
       replyHandler:(void (^)(FSRenameItemResult *, NSError *))reply
 {
-	(void)item;
-	(void)sourceDirectory;
-	(void)sourceName;
-	(void)name;
-	(void)directory;
-	(void)overItem;
-	(void)context;
-	reply(nil, ntfs_error(NTFS_READ_ONLY));
+	NSError *error = [self imageContextError:context operation:__func__];
+	FSRenameItemResult *result = nil;
+	uint64_t fileTime;
+	enum ntfs_result status;
+
+	if (!self.nativeImageEditing) {
+		reply(nil, ntfs_error(NTFS_READ_ONLY));
+		return;
+	}
+	if (error != nil) {
+		reply(nil, error);
+		return;
+	}
+	status = [self currentImageFileTime:&fileTime];
+	if (status != NTFS_OK) {
+		reply(nil, ntfs_native_result_error(nil, ntfs_error(status)));
+		return;
+	}
+	result =
+	    [self renameImageItem:item
+		      inDirectory:sourceDirectory
+			    named:sourceName
+			toNewName:name
+		      inDirectory:directory
+			 overItem:overItem
+			 fileTime:fileTime
+		     prepareReply:^id(FSItem *renamed, FSFileName *stored, FSItemAttributes *attrs,
+			 FSItemAttributes *source, FSItemAttributes *destination,
+			 FSItemAttributes *over, FSFreeSpace *freeSpace) {
+		       (void)renamed;
+		       return [[FSRenameItemResult alloc] initWithNewName:stored
+						    renamedItemAttributes:attrs
+						sourceDirectoryAttributes:source
+					   destinationDirectoryAttributes:destination
+						       overItemAttributes:over
+								freeSpace:freeSpace];
+		     }
+			    error:&error];
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)removeItem:(FSItem *)item
@@ -344,11 +417,42 @@
 	   context:(FSContext *)context
       replyHandler:(void (^)(FSRemoveItemResult *, NSError *))reply
 {
-	(void)item;
-	(void)name;
-	(void)directory;
-	(void)context;
-	reply(nil, ntfs_error(NTFS_READ_ONLY));
+	NSError *error = [self imageContextError:context operation:__func__];
+	FSRemoveItemResult *result = nil;
+	uint64_t fileTime;
+	enum ntfs_result status;
+
+	if (!self.nativeImageEditing) {
+		reply(nil, ntfs_error(NTFS_READ_ONLY));
+		return;
+	}
+	if (error != nil) {
+		reply(nil, error);
+		return;
+	}
+	status = [self currentImageFileTime:&fileTime];
+	if (status != NTFS_OK) {
+		reply(nil, ntfs_native_result_error(nil, ntfs_error(status)));
+		return;
+	}
+	result =
+	    [self removeImageItem:item
+			    named:name
+		    fromDirectory:directory
+			 fileTime:fileTime
+		     prepareReply:^id(FSItem *removed, FSFileName *stored, FSItemAttributes *attrs,
+			 FSItemAttributes *parent, FSItemAttributes *destination,
+			 FSItemAttributes *over, FSFreeSpace *freeSpace) {
+		       (void)removed;
+		       (void)stored;
+		       (void)destination;
+		       (void)over;
+		       return [[FSRemoveItemResult alloc] initWithItemAttributes:attrs
+							     directoryAttributes:parent
+								       freeSpace:freeSpace];
+		     }
+			    error:&error];
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)setAttributes:(FSItemSetAttributesRequest *)attributes
@@ -356,10 +460,41 @@
 	      context:(FSContext *)context
 	 replyHandler:(void (^)(FSSetAttributesResult *, NSError *))reply
 {
-	(void)attributes;
-	(void)item;
-	(void)context;
-	reply(nil, ntfs_error(NTFS_READ_ONLY));
+	NSError *error = [self imageContextError:context operation:__func__];
+	FSSetAttributesResult *result = nil;
+	uint64_t fileTime;
+	enum ntfs_result status;
+
+	if (!self.nativeImageEditing) {
+		reply(nil, ntfs_error(NTFS_READ_ONLY));
+		return;
+	}
+	if (error != nil) {
+		reply(nil, error);
+		return;
+	}
+	status = [self currentImageFileTime:&fileTime];
+	if (status != NTFS_OK) {
+		reply(nil, ntfs_native_result_error(nil, ntfs_error(status)));
+		return;
+	}
+	result = [self
+	    setImageAttributes:attributes
+			onItem:item
+		      fileTime:fileTime
+		  prepareReply:^id(FSItem *changed, FSFileName *stored, FSItemAttributes *attrs,
+		      FSItemAttributes *source, FSItemAttributes *destination,
+		      FSItemAttributes *over, FSFreeSpace *freeSpace) {
+		    (void)changed;
+		    (void)stored;
+		    (void)source;
+		    (void)destination;
+		    (void)over;
+		    return [[FSSetAttributesResult alloc] initWithAttributes:attrs
+								   freeSpace:freeSpace];
+		  }
+			 error:&error];
+	reply(result, ntfs_native_result_error(result, error));
 }
 
 - (void)readSymbolicLink:(FSItem *)item

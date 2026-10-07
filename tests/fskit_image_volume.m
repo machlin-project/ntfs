@@ -2,6 +2,10 @@
 #import "fskit_image_volume.h"
 #import "NTFSImageVolume.h"
 #import "NTFSFileSystem.h"
+#import "fskit_resource.h"
+#include <ntfs/validate.h>
+#include <ntfs/security.h>
+#include "fixture.h"
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
@@ -16,7 +20,15 @@ enum {
 	TEST_IMAGE_FILE_NANOSECONDS = 661343100,
 	TEST_IMAGE_READ_SAMPLE = 64,
 	TEST_IMAGE_SHORT_DIVISOR = 2,
-	TEST_IMAGE_DRAIN_WAIT_SECONDS = 5
+	TEST_IMAGE_DRAIN_WAIT_SECONDS = 5,
+	TEST_IMAGE_MUTATION_WRITE_BYTES = 8193,
+	TEST_IMAGE_MUTATION_GAP_BYTES = 257,
+	TEST_IMAGE_MUTATION_SHRINK_BYTES = 19,
+	TEST_IMAGE_MUTATION_REUSE_CYCLES = 16,
+	TEST_IMAGE_FIRST_USER_RECORD = 16,
+	TEST_IMAGE_ORACLE_DEPTH = 16,
+	TEST_IMAGE_ORACLE_ITEMS = 1024,
+	TEST_IMAGE_ORACLE_STREAMS = 16
 };
 
 typedef NS_ENUM(NSUInteger, ImageVolumeCase) {
@@ -45,6 +57,199 @@ typedef NS_ENUM(NSUInteger, ImageVolumeCase) {
 }
 
 @end
+
+static void
+image_stream_oracle(struct ntfs_node *actual, struct ntfs_node *expected)
+{
+	struct ntfs_stream_catalog *catalog[2];
+	struct ntfs_stream *stream[2];
+	struct ntfs_stream_name names[2];
+	uint8_t bytes[2][TEST_CLUSTER_BYTES];
+	uint64_t offset, size;
+	size_t amount, copied[2];
+	uint32_t index, count;
+
+	assert(ntfs_stream_catalog_open(actual, TEST_IMAGE_ORACLE_STREAMS, &catalog[0]) == NTFS_OK);
+	assert(
+	    ntfs_stream_catalog_open(expected, TEST_IMAGE_ORACLE_STREAMS, &catalog[1]) == NTFS_OK);
+	count = ntfs_stream_catalog_count(catalog[0]);
+	assert(count == ntfs_stream_catalog_count(catalog[1]));
+	for (index = 0; index < count; index++) {
+		assert(ntfs_stream_catalog_entry(catalog[0], index, &names[0]) == NTFS_OK);
+		assert(ntfs_stream_catalog_entry(catalog[1], index, &names[1]) == NTFS_OK);
+		assert(names[0].length == names[1].length &&
+		    memcmp(names[0].units, names[1].units,
+			(size_t)names[0].length * sizeof(*names[0].units)) == 0);
+		assert(ntfs_stream_open(actual, names[0].units, names[0].length, &stream[0]) ==
+		    NTFS_OK);
+		assert(ntfs_stream_open(expected, names[1].units, names[1].length, &stream[1]) ==
+		    NTFS_OK);
+		size = ntfs_stream_size(stream[0]);
+		assert(size == ntfs_stream_size(stream[1]));
+		for (offset = 0; offset < size; offset += amount) {
+			amount = size - offset > sizeof(bytes[0]) ? sizeof(bytes[0])
+								  : (size_t)(size - offset);
+			assert(ntfs_stream_read(stream[0], offset, bytes[0], amount, &copied[0]) ==
+				NTFS_OK &&
+			    copied[0] == amount);
+			assert(ntfs_stream_read(stream[1], offset, bytes[1], amount, &copied[1]) ==
+				NTFS_OK &&
+			    copied[1] == amount);
+			assert(memcmp(bytes[0], bytes[1], amount) == 0);
+		}
+		ntfs_stream_close(stream[0]);
+		ntfs_stream_close(stream[1]);
+	}
+	ntfs_stream_catalog_close(catalog[0]);
+	ntfs_stream_catalog_close(catalog[1]);
+}
+
+static void
+image_node_oracle(struct ntfs_node *actual, struct ntfs_node *expected,
+    struct ntfs_volume *actualVolume, struct ntfs_volume *expectedVolume, unsigned depth,
+    unsigned *items, const struct ntfs_stat *changed)
+{
+	struct ntfs_stat stat[2] = {0};
+	struct ntfs_link_counts links[2] = {0};
+	struct ntfs_security *security[2];
+	struct ntfs_directory *directory[2];
+	struct ntfs_dirent entry[2];
+	struct ntfs_node *child[2];
+	NSMutableData *descriptor[2];
+	size_t bytes, copied;
+	uint64_t expectedEntrySize;
+	uint32_t expectedEntryAttributes;
+	enum ntfs_result result[2];
+
+	assert(depth < TEST_IMAGE_ORACLE_DEPTH && (*items)++ < TEST_IMAGE_ORACLE_ITEMS);
+	assert(ntfs_node_stat(actual, &stat[0]) == NTFS_OK);
+	assert(ntfs_node_stat(expected, &stat[1]) == NTFS_OK);
+	assert(stat[0].reference == stat[1].reference && stat[0].size == stat[1].size &&
+	    stat[0].allocated_size == stat[1].allocated_size &&
+	    stat[0].file_attributes == stat[1].file_attributes &&
+	    stat[0].security_id == stat[1].security_id && stat[0].links == stat[1].links &&
+	    stat[0].directory == stat[1].directory && stat[0].reparse == stat[1].reparse &&
+	    stat[0].case_sensitive == stat[1].case_sensitive);
+	assert(stat[0].created.seconds == stat[1].created.seconds &&
+	    stat[0].created.nanoseconds == stat[1].created.nanoseconds &&
+	    stat[0].modified.seconds == stat[1].modified.seconds &&
+	    stat[0].modified.nanoseconds == stat[1].modified.nanoseconds &&
+	    stat[0].changed.seconds == stat[1].changed.seconds &&
+	    stat[0].changed.nanoseconds == stat[1].changed.nanoseconds &&
+	    stat[0].accessed.seconds == stat[1].accessed.seconds &&
+	    stat[0].accessed.nanoseconds == stat[1].accessed.nanoseconds);
+	assert(ntfs_node_link_counts(actual, &links[0]) == NTFS_OK);
+	assert(ntfs_node_link_counts(expected, &links[1]) == NTFS_OK);
+	assert(links[0].physical_names == links[1].physical_names &&
+	    links[0].primary_names == links[1].primary_names &&
+	    links[0].dos_aliases == links[1].dos_aliases);
+	assert(ntfs_security_open(actual, &security[0]) == NTFS_OK);
+	assert(ntfs_security_open(expected, &security[1]) == NTFS_OK);
+	bytes = ntfs_security_size(security[0]);
+	assert(bytes == ntfs_security_size(security[1]));
+	descriptor[0] = [NSMutableData dataWithLength:bytes];
+	descriptor[1] = [NSMutableData dataWithLength:bytes];
+	assert(descriptor[0] != nil && descriptor[1] != nil);
+	assert(ntfs_security_copy(security[0], descriptor[0].mutableBytes, bytes, &copied) ==
+		NTFS_OK &&
+	    copied == bytes);
+	assert(ntfs_security_copy(security[1], descriptor[1].mutableBytes, bytes, &copied) ==
+		NTFS_OK &&
+	    copied == bytes);
+	assert([descriptor[0] isEqualToData:descriptor[1]]);
+	ntfs_security_close(security[0]);
+	ntfs_security_close(security[1]);
+	image_stream_oracle(actual, expected);
+	if (!stat[0].directory) {
+		return;
+	}
+	assert(ntfs_directory_open(actual, &directory[0]) == NTFS_OK);
+	assert(ntfs_directory_open(expected, &directory[1]) == NTFS_OK);
+	for (;;) {
+		result[0] = ntfs_directory_next(directory[0], &entry[0]);
+		result[1] = ntfs_directory_next(directory[1], &entry[1]);
+		assert(result[0] == result[1]);
+		if (result[0] == NTFS_END) {
+			break;
+		}
+		expectedEntrySize = entry[1].size;
+		expectedEntryAttributes = entry[1].file_attributes;
+		if (entry[1].reference == changed->reference) {
+			/* General mutation refreshes FILE_NAME/index cached size and archive
+			 * attributes from final file metadata. The older bounded golden leaves
+			 * those caches untouched; its independently authored SI/data remain the
+			 * oracle for the complete file's visible values. */
+			expectedEntrySize = changed->size;
+			expectedEntryAttributes = changed->file_attributes;
+		}
+		assert(result[0] == NTFS_OK && entry[0].reference == entry[1].reference &&
+		    entry[0].parent_reference == entry[1].parent_reference &&
+		    entry[0].size == expectedEntrySize &&
+		    entry[0].file_attributes == expectedEntryAttributes &&
+		    entry[0].name_namespace == entry[1].name_namespace &&
+		    entry[0].name_length == entry[1].name_length &&
+		    memcmp(entry[0].name, entry[1].name,
+			entry[0].name_length * sizeof(*entry[0].name)) == 0);
+		/* The expected initialized-range image has a different qualified journal.
+		 * Compare every original user object and stream, leaving system content to
+		 * complete metadata/allocation validation and the journal's C tests. */
+		if ((entry[0].reference & NTFS_REFERENCE_RECORD_MASK) <
+		    TEST_IMAGE_FIRST_USER_RECORD) {
+			continue;
+		}
+		assert(ntfs_node_open(actualVolume, entry[0].reference, &child[0]) == NTFS_OK);
+		assert(ntfs_node_open(expectedVolume, entry[1].reference, &child[1]) == NTFS_OK);
+		image_node_oracle(
+		    child[0], child[1], actualVolume, expectedVolume, depth + 1, items, changed);
+		ntfs_node_close(child[0]);
+		ntfs_node_close(child[1]);
+	}
+	ntfs_directory_close(directory[0]);
+	ntfs_directory_close(directory[1]);
+}
+
+static void
+image_general_write_oracle(NSString *path, NSData *expected)
+{
+	TestReader *reader[2] = {[[TestReader alloc] init], [[TestReader alloc] init]};
+	NTFSResource *resource[2];
+	struct ntfs_environment environment[2];
+	struct ntfs_validation_report report;
+	struct ntfs_volume *volume[2];
+	struct ntfs_node *root[2];
+	struct ntfs_node *changedNode;
+	struct ntfs_stat changed;
+	const uint16_t changedName[] = {
+	    'f', 'r', 'a', 'g', 'm', 'e', 'n', 't', 'e', 'd', '.', 'b', 'i', 'n'};
+	uint64_t freeClusters[2];
+	unsigned items = 0, index;
+
+	assert([NSData dataWithContentsOfFile:path].length == expected.length);
+	/* This test reader advertises 4-KiB physical I/O. Pad its immutable copy
+	 * for the source's final backup-boot sector; no disk byte is moved. */
+	[reader[0] setAlignedImage:[NSData dataWithContentsOfFile:path]];
+	[reader[1] setAlignedImage:expected];
+	for (index = 0; index < 2; index++) {
+		resource[index] = [[NTFSResource alloc] initWithReader:reader[index]];
+		environment[index] = [resource[index] environment];
+		assert(ntfs_validate(&environment[index], NULL, NULL, &report) == NTFS_OK &&
+		    report.complete);
+		assert(ntfs_mount(&environment[index], NULL, &volume[index]) == NTFS_OK);
+		assert(ntfs_count_free_clusters(volume[index], &freeClusters[index]) == NTFS_OK);
+		assert(ntfs_root(volume[index], &root[index]) == NTFS_OK);
+	}
+	assert(freeClusters[0] == freeClusters[1]);
+	assert(ntfs_lookup(root[1], changedName, sizeof(changedName) / sizeof(*changedName),
+		   &changedNode) == NTFS_OK);
+	assert(ntfs_node_stat(changedNode, &changed) == NTFS_OK);
+	ntfs_node_close(changedNode);
+	image_node_oracle(root[0], root[1], volume[0], volume[1], 0, &items, &changed);
+	assert(items > 1);
+	for (index = 0; index < 2; index++) {
+		ntfs_node_close(root[index]);
+		assert(ntfs_unmount(volume[index]) == NTFS_OK);
+	}
+}
 
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 /* Numeric component subjects test operation boundaries. They do not establish
@@ -326,6 +531,7 @@ image_controller_case(NSString *path, NSData *source, NSData *payload, NSData *e
 	NSArray<NSString *> *selection = @[ @"-o", @"rw,ntfs-access=image-edit" ];
 	NTFSVolume *volume;
 	FSItem *root, *file;
+	NSData *committedImage;
 	NSError *error = nil;
 	NSUInteger starts, stops;
 	uid_t owner;
@@ -456,9 +662,10 @@ image_controller_case(NSString *path, NSData *source, NSData *payload, NSData *e
 		       DISPATCH_TIME_NOW, TEST_IMAGE_DRAIN_WAIT_SECONDS * NSEC_PER_SEC)) == 0);
 	assert(unloaded && volume.lifecycle == NTFSVolumeInvalidated &&
 	    !filesystem.lastTransport.isClaimed && filesystem.lastTransport.nativeWrites > 0 &&
-	    filesystem.lastTransport.nativeBarriers == TEST_IMAGE_WRITE_BARRIERS + 1 &&
-	    probeScopeStarts == starts && probeScopeStops == stops);
-	assert([[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
+	    filesystem.lastTransport.nativeBarriers > 1 && probeScopeStarts == starts &&
+	    probeScopeStops == stops);
+	image_general_write_oracle(path, expected);
+	committedImage = [NSData dataWithContentsOfFile:path];
 	filesystem.lastTransport = nil;
 	assert(probeScopeStops == stops + 1);
 	volume = controller_load(filesystem, resource, selection, 0);
@@ -468,7 +675,7 @@ image_controller_case(NSString *path, NSData *source, NSData *payload, NSData *e
 	controller_unload(filesystem, resource, 0);
 	filesystem.lastTransport = nil;
 	assert(probeScopeStarts == probeScopeStops + 1 &&
-	    [[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
+	    [[NSData dataWithContentsOfFile:path] isEqualToData:committedImage]);
 	assert([NSFileManager.defaultManager removeItemAtPath:path error:&error]);
 	puts("PASS: modern image controller recovered ownership, exact URL unload, "
 	     "reentrant mutation drain, durable bytes and fresh reopen");
@@ -810,7 +1017,7 @@ image_access_reply_case(
 				   realUserID:owner
 			      effectiveUserID:owner
 				      allowed:&allowed] == nil &&
-	    !allowed);
+	    allowed);
 	assert([volume checkImageAccessToItem:root
 			      requestedAccess:FSAccessSearch | FSAccessListDirectory
 				   realUserID:owner
@@ -822,12 +1029,19 @@ image_access_reply_case(
 				   realUserID:owner
 			      effectiveUserID:owner
 				      allowed:&allowed] == nil &&
+	    allowed);
+	assert([volume checkImageAccessToItem:file
+			      requestedAccess:FSAccessWriteSecurity
+				   realUserID:owner
+			      effectiveUserID:owner
+				      allowed:&allowed] == nil &&
 	    !allowed);
 	value = [volume writeImageContents:payload
 				    toFile:file
 				  atOffset:TEST_IMAGE_FILE_OFFSET
 				  fileTime:TEST_IMAGE_FILE_TIME
-			      prepareReply:^id(FSItemAttributes *attrs, size_t length) {
+			      prepareReply:^id(FSItemAttributes *attrs, size_t length,
+				  id __attribute__((unused)) freeSpace) {
 				(void)attrs;
 				(void)length;
 				builderCalled = YES;
@@ -861,7 +1075,8 @@ image_access_reply_case(
 				    toFile:file
 				  atOffset:TEST_IMAGE_FILE_OFFSET
 				  fileTime:TEST_IMAGE_FILE_TIME
-			      prepareReply:^id(FSItemAttributes *attrs, size_t length) {
+			      prepareReply:^id(FSItemAttributes *attrs, size_t length,
+				  id __attribute__((unused)) freeSpace) {
 				builderCalled = YES;
 				assert(length == payload.length &&
 				    attrs.modifyTime.tv_sec == TEST_IMAGE_FILE_SECONDS &&
@@ -874,13 +1089,14 @@ image_access_reply_case(
 	    [[NSData dataWithContentsOfFile:path] isEqualToData:source]);
 	prepared = [[ImageWriteReply alloc] init];
 	if (lateAllocationFailure) {
-		transport.denyAfterBarrier = barriers + TEST_IMAGE_WRITE_BARRIERS;
+		transport.denyAfterBarrier = barriers + 1;
 	}
 	returned = [volume writeImageContents:payload
 				       toFile:file
 				     atOffset:TEST_IMAGE_FILE_OFFSET
 				     fileTime:TEST_IMAGE_FILE_TIME
-				 prepareReply:^id(FSItemAttributes *attrs, size_t length) {
+				 prepareReply:^id(FSItemAttributes *attrs, size_t length,
+				     id __attribute__((unused)) freeSpace) {
 				   size_t completed = SIZE_MAX;
 
 				   assert([volume overwriteImageItem:file
@@ -900,9 +1116,8 @@ image_access_reply_case(
 	    returned.attributes.modifyTime.tv_sec == TEST_IMAGE_FILE_SECONDS &&
 	    returned.attributes.modifyTime.tv_nsec == TEST_IMAGE_FILE_NANOSECONDS &&
 	    returned.attributes.changeTime.tv_sec == TEST_IMAGE_FILE_SECONDS);
-	assert(transport.nativeWrites > writes &&
-	    transport.nativeBarriers == barriers + TEST_IMAGE_WRITE_BARRIERS &&
-	    [[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
+	assert(transport.nativeWrites > writes && transport.nativeBarriers > barriers);
+	image_general_write_oracle(path, expected);
 	assert([volume closeImageItem:file keepingModes:FSVolumeOpenModesRead] == nil);
 	assert([volume closeImageItem:file
 			 keepingModes:FSVolumeOpenModesRead | FSVolumeOpenModesWrite]
@@ -1125,4 +1340,447 @@ ntfs_test_fskit_resident_image_volume(NSString *fixtures)
 		    profile.UTF8String);
 	}
 	assert([NSFileManager.defaultManager removeItemAtPath:directory error:&error]);
+}
+
+@interface ImageMutationReply : NSObject
+@property(strong) FSItem *item;
+@property(strong) FSFileName *name;
+@property(strong) FSItemAttributes *attributes, *sourceDirectory, *destinationDirectory, *overItem;
+@end
+
+@implementation ImageMutationReply
+@end
+
+static id
+mutation_reply(FSItem *item, FSFileName *name, FSItemAttributes *attributes,
+    FSItemAttributes *source, FSItemAttributes *destination, FSItemAttributes *over,
+    id __attribute__((unused)) freeSpace)
+{
+	ImageMutationReply *result = [[ImageMutationReply alloc] init];
+
+	result.item = item;
+	result.name = name;
+	result.attributes = attributes;
+	result.sourceDirectory = source;
+	result.destinationDirectory = destination;
+	result.overItem = over;
+	return result;
+}
+
+static FSItem *
+create_image_component(NTFSVolume *volume, FSItem *parent, NSString *name, FSItemType type)
+{
+	ImageMutationReply *result;
+	FSItemSetAttributesRequest *attributes = [[FSItemSetAttributesRequest alloc] init];
+	NSError *error = nil;
+
+	attributes.mode = type == FSItemTypeDirectory ? S_IRWXU : S_IRUSR | S_IWUSR;
+	attributes.uid = volume.nativeUserID;
+	attributes.gid = volume.nativeGroupID;
+	attributes.flags = 0;
+	result = [volume
+	    createImageItemNamed:[FSFileName nameWithString:name]
+			    type:type
+		     inDirectory:parent
+		      attributes:attributes
+			fileTime:TEST_IMAGE_FILE_TIME
+		    prepareReply:^id(FSItem *item, FSFileName *stored, FSItemAttributes *attrs,
+			FSItemAttributes *src, FSItemAttributes *dst, FSItemAttributes *over,
+			id __attribute__((unused)) freeSpace) {
+		      return mutation_reply(item, stored, attrs, src, dst, over, freeSpace);
+		    }
+			   error:&error];
+	assert(result != nil && result.item != nil && error == nil &&
+	    result.attributes.type == type && result.attributes.size == 0 &&
+	    result.attributes.linkCount == 1 &&
+	    result.sourceDirectory.type == FSItemTypeDirectory &&
+	    result.attributes.mode == attributes.mode &&
+	    (attributes.consumedAttributes &
+		(FSItemAttributeMode | FSItemAttributeUID | FSItemAttributeGID |
+		    FSItemAttributeFlags)) ==
+		(FSItemAttributeMode | FSItemAttributeUID | FSItemAttributeGID |
+		    FSItemAttributeFlags));
+	return result.item;
+}
+
+static FSItemSetAttributesRequest *
+creation_attributes(NTFSVolume *volume, FSItemType type)
+{
+	FSItemSetAttributesRequest *attributes = [[FSItemSetAttributesRequest alloc] init];
+
+	attributes.type = type;
+	attributes.mode = type == FSItemTypeDirectory ? S_IRWXU : S_IRUSR | S_IWUSR;
+	attributes.uid = volume.nativeUserID;
+	attributes.gid = volume.nativeGroupID;
+	attributes.flags = 0;
+	attributes.size = 0;
+	attributes.birthTime = (struct timespec){-1, 123456789};
+	attributes.modifyTime = (struct timespec){0, 100};
+	attributes.changeTime =
+	    (struct timespec){TEST_IMAGE_FILE_SECONDS, TEST_IMAGE_FILE_NANOSECONDS};
+	attributes.accessTime = (struct timespec){-11644473600, 0};
+	return attributes;
+}
+
+static void
+image_creation_attribute_contract(
+    NTFSVolume *volume, FSItem *root, ImageVolumeTransport *transport, NSString *path)
+{
+	FSItemAttribute expected = FSItemAttributeType | FSItemAttributeMode | FSItemAttributeUID |
+	    FSItemAttributeGID | FSItemAttributeFlags | FSItemAttributeSize |
+	    FSItemAttributeBirthTime | FSItemAttributeModifyTime | FSItemAttributeChangeTime |
+	    FSItemAttributeAccessTime;
+	NTFSImageMutationReply build = ^id(FSItem *item, FSFileName *name, FSItemAttributes *attrs,
+	    FSItemAttributes *src, FSItemAttributes *dst, FSItemAttributes *over,
+	    id __attribute__((unused)) freeSpace) {
+	  return mutation_reply(item, name, attrs, src, dst, over, freeSpace);
+	};
+	FSItemSetAttributesRequest *attributes;
+	FSItemAttributes *actual;
+	ImageMutationReply *result;
+	FSFileName *name;
+	FSItemType type;
+	NSError *error = nil;
+	NSData *before = [NSData dataWithContentsOfFile:path];
+	NSUInteger index, kind, writes = transport.nativeWrites,
+				barriers = transport.nativeBarriers;
+
+	for (index = 0; index < 12; index++) {
+		attributes = creation_attributes(volume, FSItemTypeFile);
+		switch (index) {
+		case 0:
+			attributes.mode |= S_IRGRP;
+			break;
+		case 1:
+			attributes.uid++;
+			break;
+		case 2:
+			attributes.gid++;
+			break;
+		case 3:
+			attributes.flags = UF_IMMUTABLE;
+			break;
+		case 4:
+			attributes.size = 1;
+			break;
+		case 5:
+			attributes.type = FSItemTypeDirectory;
+			break;
+		case 6:
+			attributes.birthTime = (struct timespec){-11644473601, 0};
+			break;
+		case 7:
+			attributes.modifyTime = (struct timespec){0, -1};
+			break;
+		case 8:
+			attributes.changeTime = (struct timespec){0, NSEC_PER_SEC};
+			break;
+		case 9:
+			attributes.accessTime = (struct timespec){INT64_MAX, 0};
+			break;
+		case 10:
+			attributes.allocSize = 0;
+			break;
+		default:
+			attributes.backupTime = (struct timespec){0, 0};
+			break;
+		}
+		result =
+		    [volume createImageItemNamed:[FSFileName nameWithString:@"attribute-refusal"]
+					    type:FSItemTypeFile
+				     inDirectory:root
+				      attributes:attributes
+					fileTime:TEST_IMAGE_FILE_TIME
+				    prepareReply:build
+					   error:&error];
+		assert(result == nil && error != nil && attributes.consumedAttributes == 0 &&
+		    transport.nativeWrites == writes && transport.nativeBarriers == barriers &&
+		    [[NSData dataWithContentsOfFile:path] isEqualToData:before]);
+	}
+	attributes = creation_attributes(volume, FSItemTypeFile);
+	result = [volume
+	    createImageItemNamed:[FSFileName nameWithString:@"attribute-abandon"]
+			    type:FSItemTypeFile
+		     inDirectory:root
+		      attributes:attributes
+			fileTime:TEST_IMAGE_FILE_TIME
+		    prepareReply:^id(FSItem *item, FSFileName *name, FSItemAttributes *attrs,
+			FSItemAttributes *src, FSItemAttributes *dst, FSItemAttributes *over,
+			id __attribute__((unused)) freeSpace) {
+		      (void)item;
+		      (void)name;
+		      (void)src;
+		      (void)dst;
+		      (void)over;
+		      assert(attrs.birthTime.tv_sec == -1 && attrs.birthTime.tv_nsec == 123456700 &&
+			  attributes.consumedAttributes == 0);
+		      return nil;
+		    }
+			   error:&error];
+	assert(result == nil && error.code == ENOMEM && attributes.consumedAttributes == 0 &&
+	    transport.nativeWrites == writes && transport.nativeBarriers == barriers &&
+	    [[NSData dataWithContentsOfFile:path] isEqualToData:before]);
+	for (kind = 0; kind < 2; kind++) {
+		type = kind == 0 ? FSItemTypeFile : FSItemTypeDirectory;
+		name = [FSFileName
+		    nameWithString:kind == 0 ? @"attribute-file" : @"attribute-directory"];
+		attributes = creation_attributes(volume, type);
+		result = [volume createImageItemNamed:name
+						 type:type
+					  inDirectory:root
+					   attributes:attributes
+					     fileTime:TEST_IMAGE_FILE_TIME
+					 prepareReply:build
+						error:&error];
+		assert(result != nil && error == nil && attributes.consumedAttributes == expected);
+		actual = [volume attributes:result.item error:&error];
+		assert(actual != nil && error == nil && actual.mode == attributes.mode &&
+		    actual.uid == attributes.uid && actual.gid == attributes.gid &&
+		    actual.flags == 0 && [actual isValid:FSItemAttributeFlags] &&
+		    actual.size == 0 && actual.birthTime.tv_sec == -1 &&
+		    actual.birthTime.tv_nsec == 123456700 && actual.modifyTime.tv_sec == 0 &&
+		    actual.modifyTime.tv_nsec == 100 &&
+		    actual.changeTime.tv_sec == TEST_IMAGE_FILE_SECONDS &&
+		    actual.changeTime.tv_nsec == TEST_IMAGE_FILE_NANOSECONDS &&
+		    actual.accessTime.tv_sec == -11644473600 && actual.accessTime.tv_nsec == 0);
+		assert(result.sourceDirectory.changeTime.tv_sec == TEST_IMAGE_FILE_SECONDS &&
+		    result.sourceDirectory.changeTime.tv_nsec == TEST_IMAGE_FILE_NANOSECONDS);
+		result = [volume removeImageItem:result.item
+					   named:name
+				   fromDirectory:root
+					fileTime:TEST_IMAGE_FILE_TIME
+				    prepareReply:build
+					   error:&error];
+		assert(result != nil && error == nil);
+	}
+}
+
+void
+ntfs_test_fskit_image_mutation(NSString *fixtures)
+{
+	NSString *directory = [NSTemporaryDirectory()
+	    stringByAppendingPathComponent:[@"machlin-ntfs-image-mutation-"
+					       stringByAppendingString:NSUUID.UUID.UUIDString]];
+	NSString *path = [directory stringByAppendingPathComponent:@"owned.img"];
+	NSData *source =
+	    [NSData dataWithContentsOfFile:[fixtures stringByAppendingPathComponent:@"source.img"]];
+	NSMutableData *payload = [NSMutableData dataWithLength:TEST_IMAGE_MUTATION_WRITE_BYTES];
+	NSMutableData *wanted =
+	    [NSMutableData dataWithLength:TEST_IMAGE_MUTATION_GAP_BYTES + payload.length];
+	NSMutableData *actual;
+	ImageVolumePathResource *peer;
+	ImageVolumeTransport *transport;
+	NTFSVolume *volume;
+	FSItem *root, *left, *right, *nested, *deep, *file, *victim, *temporary;
+	FSItemAttributes *before, *after;
+	FSItemSetAttributesRequest *attributes;
+	ImageMutationReply *result;
+	ImageWriteReply *written;
+	NSError *error = nil;
+	NTFSImageMutationReply build = ^id(FSItem *item, FSFileName *name,
+	    FSItemAttributes *itemAttrs, FSItemAttributes *src, FSItemAttributes *dst,
+	    FSItemAttributes *over, id __attribute__((unused)) freeSpace) {
+	  return mutation_reply(item, name, itemAttrs, src, dst, over, freeSpace);
+	};
+	uint8_t *bytes = payload.mutableBytes;
+	NSUInteger index, writes, barriers;
+	uid_t owner;
+	size_t completed;
+	enum ntfs_result status;
+
+	assert(source != nil &&
+	    [NSFileManager.defaultManager createDirectoryAtPath:directory
+				    withIntermediateDirectories:NO
+						     attributes:nil
+							  error:&error]);
+	assert([NSFileManager.defaultManager createFileAtPath:path
+						     contents:source
+						   attributes:@{
+							   NSFilePosixPermissions : @0600
+						   }]);
+	peer = [[ImageVolumePathResource alloc] initWithURL:[NSURL fileURLWithPath:path]
+						   writable:YES];
+	transport = [[ImageVolumeTransport alloc] initWithResource:peer error:&error];
+	assert(transport != nil && error == nil);
+	owner = transport.fileOwnerUserID;
+	volume = ntfs_image_editing_volume_create(transport, &error);
+	assert(volume != nil && error == nil);
+	root = [volume activateWithOptions:nil error:&error];
+	assert(root != nil && error == nil);
+	writes = transport.nativeWrites;
+	barriers = transport.nativeBarriers;
+	result = [volume
+	    createImageItemNamed:[FSFileName nameWithString:@"abandoned"]
+			    type:FSItemTypeFile
+		     inDirectory:root
+		      attributes:nil
+			fileTime:TEST_IMAGE_FILE_TIME
+		    prepareReply:^id(FSItem *item, FSFileName *name, FSItemAttributes *attrs,
+			FSItemAttributes *src, FSItemAttributes *dst, FSItemAttributes *over,
+			id __attribute__((unused)) freeSpace) {
+		      assert(item != nil && name != nil && attrs.size == 0 && src != nil &&
+			  dst == nil && over == nil);
+		      return nil;
+		    }
+			   error:&error];
+	assert(result == nil && error.code == ENOMEM && transport.nativeWrites == writes &&
+	    transport.nativeBarriers == barriers &&
+	    [[NSData dataWithContentsOfFile:path] isEqualToData:source]);
+	image_creation_attribute_contract(volume, root, transport, path);
+	left = create_image_component(volume, root, @"left", FSItemTypeDirectory);
+	right = create_image_component(volume, root, @"right", FSItemTypeDirectory);
+	nested = create_image_component(volume, left, @"nested", FSItemTypeDirectory);
+	deep = create_image_component(volume, nested, @"deep", FSItemTypeDirectory);
+	file = create_image_component(volume, deep, @"data.bin", FSItemTypeFile);
+	before = [volume attributes:file error:&error];
+	assert(before != nil && error == nil);
+	assert([volume openImageItem:file
+			   withModes:FSVolumeOpenModesRead | FSVolumeOpenModesWrite
+			  realUserID:owner
+		     effectiveUserID:owner] == nil);
+	for (index = 0; index < payload.length; index++) {
+		bytes[index] = (uint8_t)(index * 17u + 3u);
+	}
+	memcpy((uint8_t *)wanted.mutableBytes + TEST_IMAGE_MUTATION_GAP_BYTES, payload.bytes,
+	    payload.length);
+	transport.denyAfterBarrier = transport.nativeBarriers + 1;
+	written = [volume writeImageContents:payload
+				      toFile:file
+				    atOffset:TEST_IMAGE_MUTATION_GAP_BYTES
+				    fileTime:TEST_IMAGE_FILE_TIME
+				prepareReply:^id(FSItemAttributes *attrs, size_t count,
+				    id __attribute__((unused)) freeSpace) {
+				  ImageWriteReply *reply = [[ImageWriteReply alloc] init];
+
+				  assert(attrs.size == wanted.length &&
+				      attrs.fileID == before.fileID && count == payload.length);
+				  reply.attributes = attrs;
+				  reply.bytes = count;
+				  return reply;
+				}
+				       error:&error];
+	assert(written != nil && error == nil && written.bytes == payload.length &&
+	    transport.denyAllocations);
+	assert([volume attributes:file error:&error] == nil && error.code == ENOMEM);
+	transport.denyAllocations = NO;
+	transport.denyAfterBarrier = 0;
+	actual = [NSMutableData dataWithLength:wanted.length];
+	status = [volume readItem:file
+			   offset:0
+			    bytes:actual.mutableBytes
+			   length:actual.length
+			completed:&completed];
+	assert(status == NTFS_OK && completed == actual.length && [actual isEqualToData:wanted]);
+	attributes = [[FSItemSetAttributesRequest alloc] init];
+	attributes.size = TEST_IMAGE_MUTATION_SHRINK_BYTES;
+	result = [volume setImageAttributes:attributes
+				     onItem:file
+				   fileTime:TEST_IMAGE_FILE_TIME
+			       prepareReply:build
+				      error:&error];
+	assert(result != nil && error == nil &&
+	    result.attributes.size == TEST_IMAGE_MUTATION_SHRINK_BYTES &&
+	    [attributes wasAttributeConsumed:FSItemAttributeSize]);
+	attributes = [[FSItemSetAttributesRequest alloc] init];
+	attributes.size = wanted.length;
+	result = [volume setImageAttributes:attributes
+				     onItem:file
+				   fileTime:TEST_IMAGE_FILE_TIME
+			       prepareReply:build
+				      error:&error];
+	assert(result != nil && error == nil && result.attributes.size == wanted.length);
+	memset(wanted.mutableBytes, 0, wanted.length);
+	status = [volume readItem:file
+			   offset:0
+			    bytes:actual.mutableBytes
+			   length:actual.length
+			completed:&completed];
+	assert(status == NTFS_OK && completed == actual.length && [actual isEqualToData:wanted]);
+	writes = transport.nativeWrites;
+	barriers = transport.nativeBarriers;
+	assert([volume removeImageItem:file
+				 named:[FSFileName nameWithString:@"data.bin"]
+			 fromDirectory:deep
+			      fileTime:TEST_IMAGE_FILE_TIME
+			  prepareReply:build
+				 error:&error] == nil &&
+	    error.code == ENOTSUP && transport.nativeWrites == writes &&
+	    transport.nativeBarriers == barriers);
+	assert([volume closeImageItem:file keepingModes:0] == nil);
+	result = [volume renameImageItem:nested
+			     inDirectory:left
+				   named:[FSFileName nameWithString:@"nested"]
+			       toNewName:[FSFileName nameWithString:@"moved"]
+			     inDirectory:right
+				overItem:nil
+				fileTime:TEST_IMAGE_FILE_TIME
+			    prepareReply:build
+				   error:&error];
+	assert(result != nil && error == nil && result.destinationDirectory != nil);
+	assert(lookup_item(volume, right, @"moved") == nested &&
+	    lookup_item(volume, nested, @"deep") == deep &&
+	    lookup_item(volume, deep, @"data.bin") == file);
+	victim = create_image_component(volume, right, @"replaced.bin", FSItemTypeFile);
+	result = [volume renameImageItem:file
+			     inDirectory:deep
+				   named:[FSFileName nameWithString:@"data.bin"]
+			       toNewName:[FSFileName nameWithString:@"replaced.bin"]
+			     inDirectory:right
+				overItem:victim
+				fileTime:TEST_IMAGE_FILE_TIME
+			    prepareReply:build
+				   error:&error];
+	assert(result != nil && error == nil && result.attributes.fileID == before.fileID &&
+	    result.overItem.linkCount == 0 && lookup_item(volume, right, @"replaced.bin") == file);
+	assert([volume attributes:victim error:&error] == nil && error.code == ESTALE);
+	writes = transport.nativeWrites;
+	barriers = transport.nativeBarriers;
+	assert([volume removeImageItem:nested
+				 named:[FSFileName nameWithString:@"moved"]
+			 fromDirectory:right
+			      fileTime:TEST_IMAGE_FILE_TIME
+			  prepareReply:build
+				 error:&error] == nil &&
+	    error.code == ENOTEMPTY && transport.nativeWrites == writes &&
+	    transport.nativeBarriers == barriers);
+	result = [volume removeImageItem:file
+				   named:[FSFileName nameWithString:@"replaced.bin"]
+			   fromDirectory:right
+				fileTime:TEST_IMAGE_FILE_TIME
+			    prepareReply:build
+				   error:&error];
+	assert(result != nil && error == nil && result.attributes.linkCount == 0);
+	result = [volume removeImageItem:deep
+				   named:[FSFileName nameWithString:@"deep"]
+			   fromDirectory:nested
+				fileTime:TEST_IMAGE_FILE_TIME
+			    prepareReply:build
+				   error:&error];
+	assert(result != nil && error == nil);
+	result = [volume removeImageItem:nested
+				   named:[FSFileName nameWithString:@"moved"]
+			   fromDirectory:right
+				fileTime:TEST_IMAGE_FILE_TIME
+			    prepareReply:build
+				   error:&error];
+	assert(result != nil && error == nil);
+	for (index = 0; index < TEST_IMAGE_MUTATION_REUSE_CYCLES; index++) {
+		temporary = create_image_component(volume, root, @"reuse.bin", FSItemTypeFile);
+		after = [volume attributes:temporary error:&error];
+		assert(after != nil && error == nil && after.fileID != before.fileID);
+		result = [volume removeImageItem:temporary
+					   named:[FSFileName nameWithString:@"reuse.bin"]
+				   fromDirectory:root
+					fileTime:TEST_IMAGE_FILE_TIME
+				    prepareReply:build
+					   error:&error];
+		assert(result != nil && error == nil && result.attributes.linkCount == 0);
+	}
+	[volume invalidate];
+	assert(!transport.isClaimed && volume.lifecycle == NTFSVolumeInvalidated);
+	assert([NSFileManager.defaultManager removeItemAtPath:directory error:&error]);
+	puts("PASS: image create/mkdir/growing write/resize/rename/replace/unlink/rmdir, held "
+	     "descendant "
+	     "ancestry, generation reuse, no-write reply failure and allocation-free durable "
+	     "publication");
 }

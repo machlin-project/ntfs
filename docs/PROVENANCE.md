@@ -8,6 +8,20 @@ and independent tests. Consulted NTFS-3G layout comments remain attributed below
 the reference does not claim source-isolated clean-room work. Mermaid is used
 only as a diagram-rendering tool, not as a filesystem implementation dependency.
 
+The general mutation owner, preallocated FSKit replies, held-descendant path
+publication and mounted syscall scenario are original repository work. The
+generic-rights/creator inheritance correction follows Microsoft's
+[ACE inheritance rules](https://learn.microsoft.com/en-us/windows/win32/secauthz/ace-inheritance-rules)
+and [MS-DTYP inheritance algorithm](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/0f0c6ffc-f57d-47f8-a6c8-63889e874e24),
+cross-checked by an original in-memory Windows
+[CreatePrivateObjectSecurityEx](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-createprivateobjectsecurityex)
+oracle. The private experiment explicitly selects parent owner/group and a file
+generic mapping; it does not import Windows implementation code or qualify
+caller-token defaults, SACL inheritance or no-inherited-ACE default selection.
+Literal expected descriptors and independent mounted payload bytes are authored
+in this repository. Native redundant-Allow coalescence is recorded as a bounded
+observation, distinct from exact byte agreement.
+
 The bounded initialized-data writer, native timestamp/archive transaction,
 tail-copy publication, redo/compensation executor and FSKit image integration are
 original repository implementations. Format facts use the original field research
@@ -73,6 +87,12 @@ the refused combination of `ADDING` and Initialize FILE undo. The original C
 correction and tests express that interoperability contract without importing
 driver code or a generic native validation implementation. Static reviews and
 all Microsoft binary material remain ignored diagnostic artifacts.
+The names and bit values of `ADDING` and `DELETING` are also published in the
+pinned NTFS-3G [log header](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/logfile.h).
+These declarations and the separate utility's replay behavior are distinguished
+from the exact Windows packet-admission predicates. NTFS-3G's documented absence
+of logging its own writes means it is not a replacement acceptance oracle for
+this repository's new native WAL output.
 The same read-only validation observation also establishes that selected empty
 Noop compensation needs `DELETING` for redo admission. Original program/recovery
 changes and independent chain/flag regressions express that bounded contract;

@@ -1,15 +1,76 @@
 # Writable ownership and recovery contract
 
-The unchanged-size resident continuation now has a private DATA redo/undo packet
-after the standard-information update, with two ordered compensation packets
-for a loser. It changes no attribute length or namespace/storage allocation.
-Full independent FILE/page/image oracles and all 176 sanitized suites pass.
-All 91 actual writer states and all 264 interrupted-recovery states pass
-offline/native Windows recovery and original event review. Installed resident
-syscalls, fresh saved-URL remount and the exact FSKit Windows postimage now pass,
-including original healthy-event review. All 80 native FSKit component groups
-pass with zero SKIPs; installed acceptance is separately established.
-See the current continuation in [ACCEPTANCE.md](ACCEPTANCE.md).
+The complete ordinary-operation writer now passes the bounded 28-state native
+operation/recovery gate and the larger six-state native growth/pressure/reuse
+gate. Its connected actual-C sequence performs 891 operations and 234 checkpoints,
+with 30 journal ring wraps and exact complete-image oracles. All 198 sanitized
+suites pass at that boundary. Installed FSKit initialized-range and resident-range
+writing retain their separate accepted owner, cache and fresh-remount contracts.
+The general C owner and FSKit mutation callbacks now pass the connected local
+202-suite core and 64-group host component boundary. Installed general mutation,
+complete native creation inheritance and the broader growth interruption matrix
+remain pending. See [ACCEPTANCE.md](ACCEPTANCE.md).
+
+## General owner and native reply preparation
+
+The private [ordinary mutation owner](../core/write_mutation_owner.c) claims its
+backend before acquiring fresh journal-derived recovery. Admission checks the
+fully reconstructed immutable overlay, including torn MFT bootstrap, complete
+metadata/allocation validity and the unchanged hibernation/change-journal guards.
+All immutable children close before recovery execution. The bounded overwrite
+owner and general owner share exclusion and poison state but reject one another's
+operation APIs.
+
+Each request becomes one pending prepared child. It owns names and write bytes,
+prepares both a needed checkpoint and the requested mutation, and reserves their
+joint transfer/barrier budget before either can write. The preview contains only
+final value metadata, sequence-bearing identities and final free-cluster count.
+The planner and all core views close before prepare returns. Execute is one-shot
+and performs no reads or allocations; abandoning a child changes no disk bytes.
+Closing the parent blocks child execution while preserving its backend claim
+until the child closes. Uncertain persistence or transfer permanently poisons
+that owner. [Owner tests](../tests/write_mutation_owner.c) exercise these contracts
+and fresh recovery after an actual partial first-sector transfer.
+
+The [FSKit volume](../adapters/fskit/NTFSVolume.m) closes every old immutable lease,
+prepares the C child, and allocates its complete native reply, final attributes,
+free-space reply and descendant path changes before execution. A failed reply
+allocation leaves the image unchanged. Publication updates stable FSItems using
+only prepared values; a retired generation cannot alias a newly reused record.
+Held descendant directories retain their identities through a parent move.
+Lifecycle invalidation and open-right changes during reply construction are
+checked before the first write.
+
+The modern callbacks now route ordinary create/mkdir, write beyond EOF,
+shrink/zero extension, rename/replacement and remove/rmdir through this owner.
+Only successful Size changes consume a native size request. Creation now admits
+Type, zero Size/Flags, matching native owner/group and the fixed 0600/0700 image
+presentation, plus four independently supplied timestamps. Selected times are
+validated before I/O and stored together in the new SI and filename/index cache;
+omitted times and the parent change use the operation time. Conversion checks
+the 1601 epoch and signed FILETIME ceiling and truncates to NTFS's 100-ns unit.
+Creation consumes supplied fields only after durable execution succeeds; no
+Windows descriptor is rewritten to satisfy a native mode or ID request. Changed
+ownership, other modes/flags and unsupported attributes refuse before writes.
+The creation contracts pass local tests and actual installed creation with the
+observed Mode, UID, GID, Flags and BirthTime request. The mounted general scenario
+passes its data/mmap prefix, then exposes an ancestry bug at directory movement.
+The corrected [ancestry iterator](format/06-directories.md#directory-ancestry-through-native-aliases)
+reads one shared parent from an existing Win32/DOS pair without altering its
+names; its complete malformed-parent and descendant-cycle regressions pass.
+The next installed batch passes movement, held descendant identity, closed-victim
+replacement and removal, then reaches a cumulative recovery allocation quota
+after fourteen record-reuse cycles. The exact failed history remains preserved.
+Its test-first correction passes 100 local create/remove cycles and prepares a
+checkpoint/create preview without writes on that image. The current quarter-budget
+joint-request reserve and unchanged open-only proof reuse pass a fresh complete
+local gate and independently reviewed signed package. The package is installed;
+actual module enablement remains pending in the locked guest.
+Full installed completion and Windows postimage review remain pending.
+Open unlink and replacement of an opened victim explicitly
+refuse until deferred retirement and recovery have an owning contract. Block
+resources, sparse/compressed/named-stream writes, hard-link/symlink creation,
+xattr/ACL mutation and general metadata setters remain outside this route.
 
 ## Ordinary mutation implementation batch
 
@@ -32,10 +93,19 @@ attribute-open-only prefixes can precede another operation without a fabricated
 completion marker. The selected ordinary composition now passes independent
 native Windows review of 28 distinct operation/recovery states. The one stopped
 INDX fault is attributed to exact original sector bytes and event fields; only
-the seven unattempted candidates execute afterward. Native creation inheritance,
-MFT pressure and sustained ring reuse still precede write-owner and general
-FSKit admission; see the current
+the seven unattempted candidates execute afterward. The larger native MFT/directory
+pressure and sustained ring-reuse gate now passes independently. Native creation
+inheritance, growth interruption and complete owner/FSKit admission remain
+separate; see the current
 [batch evidence](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
+
+New ordinary base-record allocation now begins at 24, preserving slots 16–23
+for extension/recovery use. Existing-object reading and admission retain their
+floor of 16. The independent reservation regression first fails on the previous
+allocator, then passes with exact free-record/bitmap preservation through MFT
+growth, full-space refusal, deletion and generation reuse. This local reservation
+evidence is joined by the larger native pressure/reuse gate; see the
+[format contract](format/08-system-files.md#ordinary-allocation-and-the-extension-reserve).
 
 One exclusive C owner must prepare all affected FILE/INDX images, mapping pairs,
 volume/MFT/index bitmaps and native redo/undo before mutation. New immutable views

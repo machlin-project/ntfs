@@ -1,0 +1,16 @@
+flowchart LR
+    birth["MFT growth initializes FILE slots<br/>Free sibling: flags = 0, generation G"]
+    retirement["Earlier retirement<br/>Live generation G−1 becomes free G"]
+    later["Later create consumes the free slot<br/>Full FILE reference carries generation G"]
+    proof["Backward history proof<br/>Complete logged free image · matching G<br/>Exact MFT mapping · allocation bit clear"]
+    projected["Private historical after view<br/>Reconstruct the proved free FILE state"]
+    unknown["Earlier physical bytes remain unknown<br/>No historical placeholder is published"]
+    birth --> later
+    retirement --> later
+    later --> proof --> projected --> unknown
+    classDef observed fill:#e7f3ec,stroke:#497c5a,color:#163823
+    classDef private fill:#e7eef8,stroke:#52759f,color:#183352
+    classDef unknown fill:#fff1dc,stroke:#ac7933,color:#57390e
+    class birth,retirement,later observed
+    class proof,projected private
+    class unknown unknown

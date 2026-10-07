@@ -275,6 +275,8 @@ native_failures(NSString *path, NSData *source)
 								   error:&error];
 			assert(transport.competitor != nil && error == nil);
 		}
+		/* An attempted write must replace the sentinel with its exact prefix. */
+		completed = SIZE_MAX;
 		if (mode != 1) {
 			assert(
 			    environment.write(environment.reader.context, TEST_WRITE_OFFSET, patch,

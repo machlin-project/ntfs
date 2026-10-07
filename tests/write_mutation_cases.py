@@ -32,6 +32,13 @@ FULL_ACCESS = 0x001f01ff
 READ_ACCESS = 0x001200a9
 LIST_ACCESS = 0x001200a9
 WRITE_ACCESS = 0x00000002
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+GENERIC_EXECUTE = 0x20000000
+GENERIC_ALL = 0x10000000
+FILE_GENERIC_READ = 0x00120089
+FILE_GENERIC_WRITE = 0x00120116
+FILE_GENERIC_EXECUTE = 0x001200a0
 DESCRIPTOR = struct.Struct('<BBHIIII')
 ACL = struct.Struct('<BBHHH')
 ACE = struct.Struct('<BBHI')
@@ -44,11 +51,211 @@ INDEX_BLOCK_FIELDS = ('magic', 'usa_offset', 'usa_count', 'lsn', 'vcn')
 UNUSED_STORAGE_PROFILES = ('file-stale', 'file-torn', 'index-stale', 'index-torn',
                            'index-unused-slot', 'mft-tail-stale', 'mft-tail-torn')
 EXPANDED_JOURNAL_BYTES = 1024 * 1024
+HISTORY_JOURNAL_BYTES = 4 * 1024 * 1024
 FIRST_USER_RECORD = 16
+FIRST_ALLOCATABLE_RECORD = 24
+RESERVED_STORAGE_PATTERN = 0x5c
 MAX_FILE_SEQUENCE = (1 << 16) - 1
 BITMAP_ALLOCATION_CLUSTERS = 2
 BITMAP_UNUSED_PATTERN = 0xa6
 BITMAP_STORAGE_PROFILES = ('mft', 'volume', 'both')
+ANCESTOR_PROFILES = ('win32-dos', 'dos-win32', 'posix', 'win32', 'win32-dos-combined')
+ANCESTOR_BAD_PROFILES = ('different-parent', 'zero-sequence', 'dos-only',
+                         'duplicate-primary', 'unknown-namespace', 'self-parent',
+                         'length-mismatch', 'physical-count', 'attribute-flags',
+                         'named-attribute', 'missing-filename')
+
+
+def directory_ancestor_images(directory, original, descriptor):
+    """Author a complete directory graph with paired and single ancestor names."""
+    import fixtures as f
+    import filename_storage as storage
+    import secure_fixtures as s
+
+    first = f.MFT_LCN * f.CLUSTER + f.MFT_RECORD * f.RECORD
+    _, mft_attributes = storage.record_parts(original[first:first + f.RECORD])
+    original_bitmap = storage.resident_value(next(a for a in mft_attributes
+        if storage.attr_header(a)['type'] == f.BITMAP))
+    stream, _ = storage.mapping(next(a for a in mft_attributes
+        if storage.attr_header(a)['type'] == f.DATA))
+    graph_records = 6
+    ancestor_number = next(number for number in range(FIRST_ALLOCATABLE_RECORD,
+        min(stream['initialized'] // f.RECORD, len(original_bitmap) * f.BYTE_BITS) - graph_records + 1)
+        if all(not original_bitmap[slot // f.BYTE_BITS] & (1 << (slot % f.BYTE_BITS))
+               for slot in range(number, number + graph_records)))
+    numbers = dict(ancestor=ancestor_number, left=ancestor_number + 1,
+                   right=ancestor_number + 2, nested=ancestor_number + 3,
+                   deep=ancestor_number + 4, file=ancestor_number + 5)
+    long_name, short_name = 'AncestorDirectory', 'ANCEST~1'
+    ancestor_ref = f.file_reference(numbers['ancestor'])
+
+    def parts(image, number):
+        first = f.MFT_LCN * f.CLUSTER + number * f.RECORD
+        return storage.record_parts(image[first:first + f.RECORD])
+
+    def filename(name, parent, namespace, instance):
+        return f.resident(f.FILENAME, f.key(name, parent=parent,
+            namespace=namespace, attributes=f.FILE_ATTRIBUTE_DIRECTORY), instance)
+
+    for profile in ANCESTOR_PROFILES:
+        image = bytearray(original)
+        if profile == 'win32-dos':
+            names = ((long_name, f.NAMESPACE_WIN32), (short_name, f.NAMESPACE_DOS))
+        elif profile == 'dos-win32':
+            names = ((short_name, f.NAMESPACE_DOS), (long_name, f.NAMESPACE_WIN32))
+        else:
+            namespace = {'posix': f.NAMESPACE_POSIX, 'win32': f.NAMESPACE_WIN32,
+                         'win32-dos-combined': f.NAMESPACE_WIN32_DOS}[profile]
+            names = ((long_name, namespace),)
+        for kind, number in numbers.items():
+            directory_type = kind != 'file'
+            parent = {'ancestor': f.ROOT_REF, 'left': ancestor_ref, 'right': ancestor_ref,
+                      'nested': f.file_reference(numbers['left']),
+                      'deep': f.file_reference(numbers['nested']),
+                      'file': f.file_reference(numbers['deep'])}[kind]
+            children = {'ancestor': (('left', 'left'), ('right', 'right')),
+                        'left': (('nested', 'nested'),), 'right': (),
+                        'nested': (('deep', 'deep'),), 'deep': (('data.bin', 'file'),),
+                        'file': ()}[kind]
+            attributes = [f.standard(f.FILE_ATTRIBUTE_DIRECTORY if directory_type else 0,
+                                     security_id=0),
+                          f.resident(SECURITY_DESCRIPTOR_TYPE, descriptor, 1)]
+            own_names = names if kind == 'ancestor' else ((
+                'data.bin' if kind == 'file' else kind, f.NAMESPACE_POSIX),)
+            for index, (name, namespace) in enumerate(own_names):
+                value = f.key(name, size=0 if directory_type else len(b'child witness'),
+                              parent=parent, namespace=namespace,
+                              attributes=f.FILE_ATTRIBUTE_DIRECTORY if directory_type else 0)
+                attributes.append(f.resident(f.FILENAME, value, index + 2))
+            if directory_type:
+                entries = b''.join(f.entry(name, numbers[child],
+                    size=len(b'child witness') if child == 'file' else 0,
+                    parent=f.file_reference(number), namespace=f.NAMESPACE_POSIX,
+                    attributes=0 if child == 'file' else f.FILE_ATTRIBUTE_DIRECTORY)
+                    for name, child in children) + f.entry()
+                value = (f.INDEX_ROOT_HEADER.pack(f.FILENAME, f.COLLATION_FILENAME, f.CLUSTER, 1) +
+                    f.INDEX_HEADER.pack(f.INDEX_HEADER.size,
+                        f.INDEX_HEADER.size + len(entries), f.INDEX_HEADER.size + len(entries), 0) + entries)
+                attributes.append(f.resident(f.INDEX_ROOT, value, len(attributes), '$I30'))
+            else:
+                attributes.append(f.resident(f.DATA, b'child witness', len(attributes)))
+            attributes.sort(key=lambda a: (storage.attr_header(a)['type'],
+                            storage.attr_name(a), storage.attr_header(a)['instance']))
+            f.put_record(image, number, f.file_record(number, attributes,
+                directory=directory_type, links=len(own_names)))
+        # The original one-block root retains every existing authored entry.
+        root_header, root_attributes = parts(image, f.ROOT_RECORD)
+        allocation = next(a for a in root_attributes if storage.attr_header(a)['type'] == f.INDEX_ALLOC)
+        _, runs = storage.mapping(allocation)
+        assert runs == [(1, f.INDEX_LCN)]
+        block = image[f.INDEX_LCN * f.CLUSTER:(f.INDEX_LCN + 1) * f.CLUSTER]
+        header_offset = INDEX_BLOCK_PREFIX.size
+        entries_offset, used, _, flags = f.INDEX_HEADER.unpack_from(block, header_offset)
+        assert flags == 0
+        entries, position = [], header_offset + entries_offset
+        while position < header_offset + used:
+            _, length, key_bytes, flags = f.INDEX_ENTRY.unpack_from(block, position)
+            if flags & f.END:
+                assert flags == f.END and key_bytes == 0
+                break
+            entries.append(bytes(block[position:position + length]))
+            position += length
+        entries.extend(f.entry(name, numbers['ancestor'], namespace=namespace,
+                              attributes=f.FILE_ATTRIBUTE_DIRECTORY) for name, namespace in names)
+        def collation(entry):
+            key_bytes = f.INDEX_ENTRY.unpack_from(entry)[2]
+            value = entry[f.INDEX_ENTRY.size:f.INDEX_ENTRY.size + key_bytes]
+            raw = value[f.FILENAME_HEADER.size:]
+            units = struct.unpack('<' + 'H' * (len(raw) // f.U16_BYTES), raw)
+            return tuple(unit - ord('a') + ord('A') if ord('a') <= unit <= ord('z') else unit
+                         for unit in units), units
+        entries.sort(key=collation)
+        f.put_data(image, f.INDEX_LCN, f.index_block(0, entries))
+        header, attributes = parts(image, f.MFT_RECORD)
+        slot = next(index for index, a in enumerate(attributes) if storage.attr_header(a)['type'] == f.BITMAP)
+        bitmap = bytearray(storage.resident_value(attributes[slot]))
+        for number in numbers.values():
+            assert not bitmap[number // f.BYTE_BITS] & (1 << (number % f.BYTE_BITS))
+            bitmap[number // f.BYTE_BITS] |= 1 << (number % f.BYTE_BITS)
+        attributes[slot] = f.resident(f.BITMAP, bitmap, storage.attr_header(attributes[slot])['instance'])
+        mft = storage.encoded_record(f.MFT_RECORD, attributes, header)
+        f.put_record(image, f.MFT_RECORD, mft)
+        f.put_data(image, f.MIRROR_LCN, mft)
+        (directory / ('ancestor-' + profile + '.img')).write_bytes(image)
+        if profile != 'win32-dos':
+            continue
+        header, attributes = parts(image, numbers['ancestor'])
+        base = [a for a in attributes if storage.attr_header(a)['type'] != f.FILENAME]
+        for bad in ANCESTOR_BAD_PROFILES:
+            primary = filename(long_name, f.ROOT_REF, f.NAMESPACE_WIN32, 2)
+            alias_parent = (f.file_reference(numbers['left']) if bad == 'different-parent'
+                            else f.ROOT_RECORD if bad == 'zero-sequence' else f.ROOT_REF)
+            alias = filename(short_name, alias_parent, f.NAMESPACE_DOS, 3)
+            names = [primary, alias]
+            if bad == 'dos-only':
+                names = [alias]
+            elif bad == 'duplicate-primary':
+                names = [primary, filename(short_name, f.ROOT_REF, f.NAMESPACE_POSIX, 3)]
+            elif bad == 'unknown-namespace':
+                names[1] = filename(short_name, f.ROOT_REF, f.NAMESPACE_WIN32_DOS + 1, 3)
+            elif bad == 'self-parent':
+                names = [filename(long_name, ancestor_ref, f.NAMESPACE_WIN32, 2),
+                         filename(short_name, ancestor_ref, f.NAMESPACE_DOS, 3)]
+            elif bad == 'length-mismatch':
+                value = bytearray(f.key(short_name, parent=f.ROOT_REF, namespace=f.NAMESPACE_DOS))
+                fields = dict(zip(storage.FILENAME_FIELDS, f.FILENAME_HEADER.unpack_from(value)))
+                fields['length'] += 1
+                f.FILENAME_HEADER.pack_into(value, 0, *(fields[field] for field in storage.FILENAME_FIELDS))
+                names[1] = f.resident(f.FILENAME, value, 3)
+            elif bad == 'attribute-flags':
+                value = bytearray(alias)
+                fields = storage.attr_header(value)
+                fields['flags'] = f.COMPRESSED
+                f.ATTR_HEADER.pack_into(value, 0, *(fields[field] for field in s.ATTR_HEADER_FIELDS))
+                names[1] = bytes(value)
+            elif bad == 'named-attribute':
+                names[1] = f.resident(f.FILENAME, storage.resident_value(alias), 3, 'invalid')
+            elif bad == 'missing-filename':
+                names = []
+            values = sorted([*base, *names], key=lambda a: (
+                storage.attr_header(a)['type'], storage.attr_name(a), storage.attr_header(a)['instance']))
+            encoded = storage.encoded_record(numbers['ancestor'], values, header,
+                links=1 if bad == 'physical-count' else max(1, len(names)))
+            (directory / ('ancestor-invalid-' + bad + '.record')).write_bytes(encoded)
+    (directory / 'ancestor-child.bin').write_bytes(b'child witness')
+    (directory / 'ancestor-manifest.json').write_text(json.dumps(dict(
+        validProfiles=list(ANCESTOR_PROFILES), refusedProfiles=list(ANCESTOR_BAD_PROFILES),
+        numbers=numbers, longName=long_name, shortName=short_name), indent=2) + '\n')
+
+
+def allocation_reservation_image(directory, original):
+    """Keep eight free extension slots opaque while ordinary allocation grows."""
+    import fixtures as f
+    import filename_storage as storage
+    import secure_fixtures as security
+
+    image = bytearray(original)
+    first = f.MFT_LCN * f.CLUSTER + f.MFT_RECORD * f.RECORD
+    _, attributes = storage.record_parts(image[first:first + f.RECORD])
+    bitmap = storage.resident_value(next(attribute for attribute in attributes
+        if storage.attr_header(attribute)['type'] == f.BITMAP))
+    for number in range(FIRST_USER_RECORD, FIRST_ALLOCATABLE_RECORD):
+        assert not bitmap[number // f.BYTE_BITS] & (1 << (number % f.BYTE_BITS))
+        value = bytearray([RESERVED_STORAGE_PATTERN + number - FIRST_USER_RECORD]) * f.RECORD
+        # The free inventory does not interpret these bytes. Include a FILE
+        # signature with invalid protection but a clear in-use flag.
+        if number % 2:
+            MST_HEADER.pack_into(value, 0, b'FILE', 0, 0)
+            header = dict(zip(security.FILE_HEADER_FIELDS, f.FILE_HEADER.unpack_from(value)))
+            header['flags'] = 0
+            f.FILE_HEADER.pack_into(value, 0, *(header[name] for name in security.FILE_HEADER_FIELDS))
+        else:
+            value[:MST_HEADER.size] = bytes(MST_HEADER.size)
+        f.put_record(image, number, value)
+    first = f.MFT_LCN * f.CLUSTER + FIRST_USER_RECORD * f.RECORD
+    end = f.MFT_LCN * f.CLUSTER + FIRST_ALLOCATABLE_RECORD * f.RECORD
+    (directory / 'allocation-reservation.img').write_bytes(image)
+    (directory / 'allocation-reservation.bin').write_bytes(image[first:end])
 
 
 def wrapped_free_file_image(original):
@@ -62,17 +269,17 @@ def wrapped_free_file_image(original):
     _, attributes = storage.record_parts(image[first:first + f.RECORD])
     bitmap = storage.resident_value(next(attribute for attribute in attributes
         if storage.attr_header(attribute)['type'] == f.BITMAP))
-    assert not bitmap[FIRST_USER_RECORD // f.BYTE_BITS] & (1 << (FIRST_USER_RECORD % f.BYTE_BITS))
+    number = next(number for number in range(FIRST_ALLOCATABLE_RECORD, f.MFT_COUNT)
+                  if not bitmap[number // f.BYTE_BITS] & (1 << (number % f.BYTE_BITS)))
     first = f.MFT_LCN * f.CLUSTER + v.FRAGMENTED_RECORD * f.RECORD
     header, attributes = storage.record_parts(image[first:first + f.RECORD])
     header['sequence'] = MAX_FILE_SEQUENCE
     header['flags'] = 0
-    f.put_record(image, FIRST_USER_RECORD,
-        storage.encoded_record(FIRST_USER_RECORD, attributes, header))
+    f.put_record(image, number, storage.encoded_record(number, attributes, header))
     return image
 
 
-def expanded_journal_image(original):
+def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
     """Independently enlarge the authored quiet journal, preserving its two roots.
 
     Changing file size changes LSN offset width. Rebind each meaningful stored
@@ -95,7 +302,7 @@ def expanded_journal_image(original):
     attribute = attributes[slot]
     stream, runs = storage.mapping(attribute)
     assert len(runs) == 1 and stream['initialized'] == stream['size']
-    assert stream['size'] < EXPANDED_JOURNAL_BYTES
+    assert stream['size'] < journal_bytes
     clusters, lcn = runs[0]
     log_first = lcn * f.CLUSTER
     old = bytes(image[log_first:log_first + stream['size']])
@@ -108,7 +315,7 @@ def expanded_journal_image(original):
             client_first + w.CLIENT.offsets[name])[0]
             for name in ('oldest_lsn', 'restart_lsn')}
     old_offset_bits = w.LSN_BITS - area['sequence_bits']
-    new_sequence_bits = w.LSN_BITS + w.OFFSET_SHIFT - EXPANDED_JOURNAL_BYTES.bit_length()
+    new_sequence_bits = w.LSN_BITS + w.OFFSET_SHIFT - journal_bytes.bit_length()
 
     def old_offset(lsn):
         return (lsn & ((1 << old_offset_bits) - 1)) << w.OFFSET_SHIFT
@@ -118,7 +325,7 @@ def expanded_journal_image(original):
             return 0
         offset = old_offset(lsn)
         assert offset < len(old)
-        return w.lsn_at(offset, EXPANDED_JOURNAL_BYTES,
+        return w.lsn_at(offset, journal_bytes,
                         sequence=lsn >> old_offset_bits, sequence_bits=new_sequence_bits)
 
     home = old_offset(roots['oldest_lsn']) // w.PAGE_BYTES * w.PAGE_BYTES
@@ -144,7 +351,7 @@ def expanded_journal_image(original):
             struct.pack_into('<Q', quiet, retained_first, rebound(retained))
         else:
             assert fields['type'] == w.UPDATE_TYPE
-    journal = bytearray(EXPANDED_JOURNAL_BYTES)
+    journal = bytearray(journal_bytes)
     journal[home:home + w.PAGE_BYTES] = protect_page(quiet, w.PAGE, sequence)
     for page in range(w.RESTART_PAGES):
         restart, rh, sequence = restore_page(old[page * w.PAGE_BYTES:(page + 1) * w.PAGE_BYTES],
@@ -153,12 +360,12 @@ def expanded_journal_image(original):
         client_first = area_first + area['clients_offset']
         w.RESTART_AREA.put(restart, 'current_lsn', rebound(area['current_lsn']), area_first)
         w.RESTART_AREA.put(restart, 'sequence_bits', new_sequence_bits, area_first)
-        w.RESTART_AREA.put(restart, 'file_bytes', EXPANDED_JOURNAL_BYTES, area_first)
+        w.RESTART_AREA.put(restart, 'file_bytes', journal_bytes, area_first)
         for name, lsn in roots.items():
             w.CLIENT.put(restart, name, rebound(lsn), client_first)
         journal[page * w.PAGE_BYTES:(page + 1) * w.PAGE_BYTES] = protect_page(restart, w.RESTART_HEADER, sequence)
     attributes[slot] = f.nonresident(f.DATA,
-        [(EXPANDED_JOURNAL_BYTES // f.CLUSTER, lcn)], EXPANDED_JOURNAL_BYTES,
+        [(journal_bytes // f.CLUSTER, lcn)], journal_bytes,
         storage.attr_header(attribute)['instance'])
     f.put_record(image, v.LOGFILE_RECORD,
                  storage.encoded_record(v.LOGFILE_RECORD, attributes, header))
@@ -168,7 +375,7 @@ def expanded_journal_image(original):
                 if storage.attr_header(attribute)['type'] == f.DATA)
     attribute = attributes[slot]
     bitmap = bytearray(resident_value(attribute))
-    for cluster in range(lcn + clusters, lcn + EXPANDED_JOURNAL_BYTES // f.CLUSTER):
+    for cluster in range(lcn + clusters, lcn + journal_bytes // f.CLUSTER):
         assert not bitmap[cluster // f.BYTE_BITS] & (1 << (cluster % f.BYTE_BITS))
         bitmap[cluster // f.BYTE_BITS] |= 1 << (cluster % f.BYTE_BITS)
     attributes[slot] = f.resident(f.DATA, bitmap, storage.attr_header(attribute)['instance'])
@@ -230,6 +437,73 @@ def security_cases():
             'directory-security.bin': descriptor(directory, True),
             'file-security.bin': descriptor(direct_file, True),
             'child-file-security.bin': descriptor(child_file, True)}
+
+
+def directory_spill_security():
+    """A one-entry inline root fits; temporary external attributes do not."""
+    system, users, administrator = sid(5, 18), sid(5, 32, 545), sid(5, 32, 544)
+    creator_owner = sid(3, 0)
+    propagation = OBJECT_INHERIT | CONTAINER_INHERIT
+    parent = [(ALLOW, propagation, FULL_ACCESS, system),
+              (ALLOW, propagation, FULL_ACCESS, administrator),
+              (ALLOW, propagation, READ_ACCESS, users),
+              (ALLOW, propagation, FULL_ACCESS, creator_owner)]
+    directory = [(kind, flags | ACE_INHERITED, mask, trustee)
+                 for kind, flags, mask, trustee in parent[:-1]] + [
+                     (ALLOW, ACE_INHERITED, FULL_ACCESS, administrator),
+                     (ALLOW, propagation | INHERIT_ONLY | ACE_INHERITED,
+                      FULL_ACCESS, creator_owner)]
+    child = [(kind, ACE_INHERITED, mask, trustee)
+             for kind, _, mask, trustee in parent[:-1]] + [
+                 (ALLOW, ACE_INHERITED, FULL_ACCESS, administrator)]
+    return {'inline-spill-parent.bin': descriptor(parent),
+            'inline-spill-directory.bin': descriptor(directory, True),
+            'inline-spill-file.bin': descriptor(child, True)}
+
+
+def generic_security_cases():
+    """Literal type-specific results qualified by native private-object APIs."""
+    users, authenticated = sid(5, 32, 545), sid(5, 11)
+    administrator, system = sid(5, 32, 544), sid(5, 18)
+    creator_owner, creator_group = sid(3, 0), sid(3, 1)
+    propagation = OBJECT_INHERIT | CONTAINER_INHERIT
+    parent = [(ALLOW, propagation, GENERIC_READ, users),
+              (ALLOW, CONTAINER_INHERIT, GENERIC_WRITE, creator_owner),
+              (ALLOW, propagation, GENERIC_ALL, creator_group),
+              (ALLOW, OBJECT_INHERIT, GENERIC_EXECUTE, authenticated)]
+    directory = [(ALLOW, ACE_INHERITED, FILE_GENERIC_READ, users),
+                 (ALLOW, propagation | INHERIT_ONLY | ACE_INHERITED,
+                  GENERIC_READ, users),
+                 (ALLOW, ACE_INHERITED, FILE_GENERIC_WRITE, administrator),
+                 (ALLOW, CONTAINER_INHERIT | INHERIT_ONLY | ACE_INHERITED,
+                  GENERIC_WRITE, creator_owner),
+                 (ALLOW, ACE_INHERITED, FULL_ACCESS, system),
+                 (ALLOW, propagation | INHERIT_ONLY | ACE_INHERITED,
+                  GENERIC_ALL, creator_group),
+                 (ALLOW, OBJECT_INHERIT | INHERIT_ONLY | ACE_INHERITED,
+                  GENERIC_EXECUTE, authenticated)]
+    file = [(ALLOW, ACE_INHERITED, FILE_GENERIC_READ, users),
+            (ALLOW, ACE_INHERITED, FULL_ACCESS, system),
+            (ALLOW, ACE_INHERITED, FILE_GENERIC_EXECUTE, authenticated)]
+    return {'generic-parent-security.bin': descriptor(parent),
+            'generic-directory-security.bin': descriptor(directory, True),
+            'generic-file-security.bin': descriptor(file, True)}
+
+
+def directory_spill_image(directory, original, parent):
+    import fixtures as f
+    import filename_storage as storage
+
+    image = bytearray(original)
+    first = f.MFT_LCN * f.CLUSTER + f.ROOT_RECORD * f.RECORD
+    header, attributes = storage.record_parts(image[first:first + f.RECORD])
+    index = next(index for index, attribute in enumerate(attributes)
+                 if storage.attr_header(attribute)['type'] == SECURITY_DESCRIPTOR_TYPE)
+    attributes[index] = f.resident(SECURITY_DESCRIPTOR_TYPE, parent,
+                                   storage.attr_header(attributes[index])['instance'])
+    f.put_record(image, f.ROOT_RECORD, storage.encoded_record(f.ROOT_RECORD, attributes, header))
+    (directory / 'directory-inline-spill.img').write_bytes(image)
+
 
 def unused_storage_images(directory, original):
     """Keep free bytes opaque even when they imitate another owner's metadata."""
@@ -439,6 +713,8 @@ def author(directory, source=None):
               'shrunk.bin': shrunk, 'regrown.bin': regrown,
               'replacement.bin': replacement, 'empty.bin': b''}
     bodies.update(security_cases())
+    bodies.update(directory_spill_security())
+    bodies.update(generic_security_cases())
     names = [f'child-{index:04d}-' + 'n' * (NAME_UNITS - len(f'child-{index:04d}-'))
              for index in range(CHILDREN)]
     assert len(set(names)) == CHILDREN and all(len(name) == NAME_UNITS for name in names)
@@ -459,11 +735,22 @@ def author(directory, source=None):
         f.put_record(image, f.ROOT_RECORD,
                      storage.encoded_record(f.ROOT_RECORD, attributes, header))
         (directory / 'source.img').write_bytes(image)
+        (directory / 'history-source.img').write_bytes(
+            expanded_journal_image(image, HISTORY_JOURNAL_BYTES))
+        directory_ancestor_images(directory, image, bodies['parent-security.bin'])
+        generic = bytearray(image)
+        attributes[index] = f.resident(SECURITY_DESCRIPTOR_TYPE,
+                                      bodies['generic-parent-security.bin'], instance)
+        f.put_record(generic, f.ROOT_RECORD,
+                     storage.encoded_record(f.ROOT_RECORD, attributes, header))
+        (directory / 'generic-security.img').write_bytes(generic)
         unused_storage_images(directory, image)
         for name in ('source', *(f'unused-{profile}' for profile in UNUSED_STORAGE_PROFILES)):
             original = (directory / f'{name}.img').read_bytes()
             (directory / f'large-{name}.img').write_bytes(expanded_journal_image(original))
         large = (directory / 'large-source.img').read_bytes()
+        allocation_reservation_image(directory, large)
+        directory_spill_image(directory, large, bodies['inline-spill-parent.bin'])
         (directory / 'large-reuse-wrapped.img').write_bytes(wrapped_free_file_image(large))
         bitmap_storage_images(directory, large)
     manifest = dict(writeOffset=WRITE_OFFSET, payloadBytes=PAYLOAD_BYTES,
@@ -472,6 +759,7 @@ def author(directory, source=None):
                     childNameUnits=NAME_UNITS, reuseOperations=REUSE_OPERATIONS,
                     unusedStorageProfiles=list(UNUSED_STORAGE_PROFILES),
                     bitmapStorageProfiles=list(BITMAP_STORAGE_PROFILES),
+                    directoryAncestorProfiles=list(ANCESTOR_PROFILES),
                     bytes={name: dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
                            for name, data in bodies.items()},
                     requiredScenarios=['resident-growth-and-storage-conversion',

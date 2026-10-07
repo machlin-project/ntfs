@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
 #include "write_owner.h"
+#include "write_owner_internal.h"
 #include "write_recover.h"
 #include "write_transaction.h"
 #include "write_overlay.h"
@@ -14,15 +15,6 @@ enum {
 	OVERWRITE_BOOTSTRAP_RECORD = 0,
 	OVERWRITE_RESTART_RECORD = 1,
 	OVERWRITE_PATH_SEPARATOR = '/'
-};
-
-struct ntfs_overwrite {
-	struct ntfs_overwrite_environment backend;
-	struct ntfs_environment reader;
-	struct ntfs_info info;
-	size_t live_bytes;
-	uint64_t read_calls, read_bytes;
-	bool claimed, poisoned;
 };
 
 struct overwrite_span {
@@ -39,7 +31,6 @@ struct overwrite_journal_workspace {
 	struct ntfs_recovery_record record;
 };
 
-static enum ntfs_result reject_change_journal(struct ntfs_volume *);
 static enum ntfs_result transaction_write(void *, uint64_t, const void *, size_t, size_t *);
 static enum ntfs_result transaction_persist(void *);
 
@@ -86,6 +77,54 @@ overwrite_read(void *context, uint64_t offset, void *buffer, size_t bytes)
 	owner->read_calls++;
 	owner->read_bytes += bytes;
 	return owner->backend.reader.read(owner->backend.reader.context, offset, buffer, bytes);
+}
+
+enum ntfs_result
+ntfs_write_owner_claim(
+    const struct ntfs_overwrite_environment *environment, struct ntfs_overwrite **out)
+{
+	struct ntfs_overwrite *owner;
+	enum ntfs_result result;
+
+	if (environment == NULL || out == NULL ||
+	    !ntfs_pointer_ranges_separate(environment, sizeof(*environment), out, sizeof(*out))) {
+		return NTFS_INVALID;
+	}
+	*out = NULL;
+	if (environment->api_version != NTFS_OVERWRITE_API_VERSION ||
+	    environment->reader.api_version != NTFS_API_VERSION ||
+	    environment->reader.allocate == NULL || environment->reader.release == NULL ||
+	    environment->reader.read == NULL || environment->claim == NULL ||
+	    environment->unclaim == NULL || environment->write == NULL ||
+	    environment->persist == NULL || environment->alignment < NTFS_MST_STRIDE ||
+	    environment->alignment > NTFS_OVERWRITE_MAX_ALIGNMENT ||
+	    (environment->alignment & (environment->alignment - 1u)) != 0) {
+		return NTFS_INVALID;
+	}
+	owner = environment->reader.allocate(environment->reader.context, sizeof(*owner));
+	if (owner == NULL) {
+		return NTFS_NO_MEMORY;
+	}
+	ntfs_zero(owner, sizeof(*owner));
+	owner->backend = *environment;
+	owner->live_bytes = sizeof(*owner);
+	owner->reader = (struct ntfs_environment){NTFS_API_VERSION, owner,
+	    environment->reader.size_bytes, overwrite_read, overwrite_allocate, overwrite_release};
+	result = environment->claim(environment->reader.context);
+	if (result != NTFS_OK) {
+		ntfs_overwrite_close(owner);
+		return result;
+	}
+	owner->claimed = true;
+	*out = owner;
+	return NTFS_OK;
+}
+
+void
+ntfs_write_owner_begin(struct ntfs_overwrite *owner)
+{
+	owner->read_calls = 0;
+	owner->read_bytes = 0;
 }
 
 static enum ntfs_result
@@ -205,8 +244,8 @@ done:
 	return result;
 }
 
-static enum ntfs_result
-reject_hibernation(struct ntfs_volume *volume)
+enum ntfs_result
+ntfs_write_owner_check_hibernation(struct ntfs_volume *volume)
 {
 	static const uint16_t name[] = {'h', 'i', 'b', 'e', 'r', 'f', 'i', 'l', '.', 's', 'y', 's'};
 	struct ntfs_node *root = NULL, *hibernation = NULL;
@@ -250,31 +289,11 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 	}
 	*out = NULL;
 	ntfs_zero(admission, sizeof(*admission));
-	if (environment->api_version != NTFS_OVERWRITE_API_VERSION ||
-	    environment->reader.api_version != NTFS_API_VERSION ||
-	    environment->reader.allocate == NULL || environment->reader.release == NULL ||
-	    environment->reader.read == NULL || environment->claim == NULL ||
-	    environment->unclaim == NULL || environment->write == NULL ||
-	    environment->persist == NULL || environment->alignment < NTFS_MST_STRIDE ||
-	    environment->alignment > NTFS_OVERWRITE_MAX_ALIGNMENT ||
-	    (environment->alignment & (environment->alignment - 1u)) != 0) {
-		return NTFS_INVALID;
+	result = ntfs_write_owner_claim(environment, &owner);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	allocation_bytes = sizeof(*work) + environment->alignment - 1u;
-	owner = environment->reader.allocate(environment->reader.context, sizeof(*owner));
-	if (owner == NULL) {
-		return NTFS_NO_MEMORY;
-	}
-	ntfs_zero(owner, sizeof(*owner));
-	owner->backend = *environment;
-	owner->live_bytes = sizeof(*owner);
-	owner->reader = (struct ntfs_environment){NTFS_API_VERSION, owner,
-	    environment->reader.size_bytes, overwrite_read, overwrite_allocate, overwrite_release};
-	result = environment->claim(environment->reader.context);
-	if (result != NTFS_OK) {
-		goto done;
-	}
-	owner->claimed = true;
 	admission->claimed = true;
 	ntfs_default_limits(&limits);
 	limits.record_cache_entries = 0;
@@ -295,11 +314,11 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 		result = NTFS_UNSUPPORTED;
 		goto done;
 	}
-	result = reject_hibernation(volume);
+	result = ntfs_write_owner_check_hibernation(volume);
 	if (result == NTFS_OK && recovery == NULL) {
 		result = quiet_journal(owner, volume, admission);
 	} else if (result == NTFS_OK) {
-		result = reject_change_journal(volume);
+		result = ntfs_write_owner_check_change_journal(volume);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -383,6 +402,10 @@ ntfs_overwrite_close(struct ntfs_overwrite *owner)
 	if (owner == NULL) {
 		return;
 	}
+	if (owner->mutation != NULL) {
+		owner->closing = true;
+		return;
+	}
 	backend = owner->backend;
 	if (owner->claimed) {
 		backend.unclaim(backend.reader.context);
@@ -414,6 +437,12 @@ ntfs_overwrite_resolve(
 	}
 	if (owner->poisoned) {
 		return NTFS_IO;
+	}
+	if (owner->closing) {
+		return NTFS_STALE;
+	}
+	if (owner->mutation != NULL) {
+		return NTFS_BUSY;
 	}
 	owner->read_calls = 0;
 	owner->read_bytes = 0;
@@ -565,6 +594,9 @@ ntfs_overwrite_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t 
 		report->poisoned = true;
 		return NTFS_IO;
 	}
+	if (owner->mutations) {
+		return NTFS_UNSUPPORTED;
+	}
 	if (bytes > NTFS_OVERWRITE_MAX_BYTES || bytes > UINT64_MAX - offset ||
 	    offset + bytes > UINT64_MAX - owner->backend.alignment) {
 		return NTFS_RANGE;
@@ -630,8 +662,8 @@ done:
 	return result;
 }
 
-static enum ntfs_result
-reject_change_journal(struct ntfs_volume *volume)
+enum ntfs_result
+ntfs_write_owner_check_change_journal(struct ntfs_volume *volume)
 {
 	static const uint16_t extend_name[] = {'$', 'E', 'x', 't', 'e', 'n', 'd'};
 	static const uint16_t journal_name[] = {'$', 'U', 's', 'n', 'J', 'r', 'n', 'l'};
@@ -689,6 +721,17 @@ transaction_persist(void *context)
 	return owner->backend.persist(owner->backend.reader.context);
 }
 
+struct ntfs_overwrite_environment
+ntfs_write_owner_backend(struct ntfs_overwrite *owner)
+{
+	struct ntfs_overwrite_environment backend = owner->backend;
+
+	backend.reader = owner->reader;
+	backend.write = transaction_write;
+	backend.persist = transaction_persist;
+	return backend;
+}
+
 enum ntfs_result
 ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t offset,
     const void *data, size_t bytes, uint64_t filetime, struct ntfs_write_range_report *report)
@@ -720,6 +763,9 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 	if (owner->poisoned) {
 		report->execution.poisoned = true;
 		return NTFS_IO;
+	}
+	if (owner->mutations) {
+		return NTFS_UNSUPPORTED;
 	}
 	if (filetime > INT64_MAX) {
 		return NTFS_INVALID;
@@ -766,10 +812,10 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 		result = ntfs_mount(&owner->reader, NULL, &volume);
 	}
 	if (result == NTFS_OK) {
-		result = reject_hibernation(volume);
+		result = ntfs_write_owner_check_hibernation(volume);
 	}
 	if (result == NTFS_OK) {
-		result = reject_change_journal(volume);
+		result = ntfs_write_owner_check_change_journal(volume);
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_node_open(volume, reference, &node);

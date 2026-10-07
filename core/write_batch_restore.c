@@ -406,7 +406,7 @@ recovery_files_protect(struct ntfs_write_batch_recovery *owner,
 		old = (home->old_slots & (1u << slot)) != 0;
 		if ((home->historical_free_slots & (1u << slot)) != 0) {
 			/* The later initializer discarded free bytes. This privately
-			 * reconstructed retirement has its own generation/bitmap proof;
+			 * reconstructed free state has its own generation/bitmap proof;
 			 * it is never a physical recovery publication. */
 			result = ntfs_record_protect(home->after + offset, NTFS_WRITE_RECORD_BYTES,
 			    work->image, sizeof(work->image));
@@ -732,6 +732,9 @@ recovery_views_validate(
 
 	ntfs_default_limits(&limits);
 	limits.record_cache_entries = 0;
+	if (owner->historical && owner->updates == 0 && owner->homes != 0) {
+		return NTFS_CORRUPT;
+	}
 	for (view = 0; view < 2; view++) {
 		after = view != 0;
 		owner->view = after ? NTFS_BATCH_RECOVERY_AFTER : NTFS_BATCH_RECOVERY_BEFORE;
@@ -785,6 +788,16 @@ recovery_views_validate(
 				goto done;
 			}
 		}
+		if (after && owner->historical && owner->committed) {
+			/* The later lifetime's before view already validated this complete
+			 * state. Reuse that verdict only after exact after/source equality;
+			 * proven retired FILE slots are excluded from the comparison only
+			 * after their clear MFT bits and mappings passed above. */
+			result = ntfs_batch_recovery_historical_after_admit(owner);
+			if (result != NTFS_OK) {
+				goto done;
+			}
+		}
 		ntfs_stream_close(log);
 		log = NULL;
 		ntfs_node_close(node);
@@ -794,7 +807,10 @@ recovery_views_validate(
 		if (result != NTFS_OK) {
 			goto done;
 		}
-		if (!after || owner->committed) {
+		/* An earlier open-only prefix changes no home. Its before view is the
+		 * already validated later state; all opened owners still bind above. */
+		if ((!after && (!owner->historical || owner->updates != 0)) ||
+		    (owner->committed && !owner->historical)) {
 			result = ntfs_validate(&owner->reader, &limits, NULL, &work->validation);
 			if (result == NTFS_OK && !work->validation.complete) {
 				result = NTFS_CORRUPT;

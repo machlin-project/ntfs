@@ -16,6 +16,55 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+## Connected general mutation batch
+
+The general C owner, FSKit callbacks and independent descriptor correction now
+pass a connected local boundary: 201 fatal-ASan/UBSan suites, 134 strict core
+compilations, four changed-test compilations, 64 host FSKit groups and a corrected
+universal Release build. Retain the earlier compiler failures and successful
+prefixes; platform-only fixes do not justify repeating all C suites. Native
+component execution now passes all 81 groups in the installed-test VM. The first
+actual mounted `mkdir` initially refuses with `ENOTSUP` before any image change.
+The subsequent creation correction accepts the captured native attribute family;
+actual creation, growth, truncate/regrow and mmap pass. Its first cross-parent
+move exposes a valid Win32/DOS ancestor pair rejected by the local unique-name
+lookup. Preserve that exact inactive failure image. The paired-ancestry correction
+has failing-before/fixed C coverage, passes the full local boundary and prepares
+the complete owner preview on the exact failure image without transfers. The next
+installed batch passes movement, replacement and removal, then stops on cumulative
+recovery allocation pressure after fourteen generation-reuse cycles. Preserve that
+second exact failed image too. The test-first 100-cycle correction passes a
+202-suite local boundary and a zero-write checkpoint/create preview on the native
+failure. The current quarter-budget joint-request reserve and unchanged open-only
+prefix validation pass the fresh complete 202-suite, strict-core, host-component
+and universal Release batch. Its personally signed package is independently
+reviewed. It is installed, but the OS module remains disabled pending ordinary
+Settings enablement in the unlocked guest. No fresh image import or corrected
+native scenario has run. The separate behavior-preserving FSKit extraction can
+close its local checks before one combined current-build installed scenario and
+Windows postimage review; the preceding failures remain preserved.
+
+The standalone [mounted checker](../tests/mounted_mutation.c) runs only as the
+non-root image owner on the explicit writable `machlinntfs` mount. Generate its
+independent payload/final files with
+[mounted_mutation_cases.py](../tests/mounted_mutation_cases.py), then use its
+`write` mode once and `check` mode after an ordinary unmount/fresh saved-URL mount.
+It retains a fixed test namespace and prints observed identities and times for
+independent postimage checks. Never retry a partially executed namespace; inspect
+and preserve the failed backing first. Use a fresh source clone for a corrected
+scenario, retaining the failed image and first invocation.
+
+Keep VM control with Sol until signed installation, enabled installed module,
+exact tool/fixture bytes and inactive image import pass main review. Hand the VM
+to Luna explicitly for the one prepared component/syscall/remount batch. All VM
+commands use the absolute lab working directory. No console input or UTM/VM
+lifecycle operation is part of this batch.
+
+The shared directory is guest-read-only. Export only an ordinarily unmounted,
+descriptor-free postimage through binary CLI stdout, bound its decompressed size,
+preserve sparse zero regions and verify the whole-image hash before freezing it.
+Do not route binary output through a text-decoding command helper.
+
 ## Writer control flow and Release checks
 
 Check a fallible producer's result before consuming its output. When a function
@@ -39,6 +88,15 @@ ownership are reviewed separately from new journal/recovery semantics; see
 [the refactoring plan](REFACTORING.md).
 
 ## Private ordinary-operation image CLI
+
+The current large batch retains 891 actual native-source operations, 234 successful
+checkpoints and six complete image states. One Windows invocation passes the
+growth/pressure/reuse gate with independently reviewed native metadata, chkdsk
+and original healthy events. Preserve these results and preceding failures;
+do not repeat completed operations to repackage or collect delayed evidence.
+General owner/FSKit integration now passes the local boundary above; its installed
+tests remain the next batch.
+See [the current acceptance](ACCEPTANCE.md#native-mftdirectory-pressure-and-sustained-journal-reuse).
 
 The manual `ntfs-write-operation-image-tests` executable uses the experimental
 complete-operation owner on a private ordinary image. It resolves ASCII acceptance

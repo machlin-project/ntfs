@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import threading
 import zlib
 
@@ -22,6 +23,188 @@ MAX_BATCH_IMAGES = 12
 GZIP_HEADER_FLAG = 16
 CASE_PATTERN = re.compile(r'[A-Za-z0-9-]{1,80}')
 HASH_PATTERN = re.compile(r'[a-f0-9]{64}')
+
+
+class ImageFixtureServer:
+    """Serve exact immutable candidate VHDs to one reviewed VM peer once.
+
+    The consumer checks complete bytes and SHA-256 before any native attachment.
+    Routes never select arbitrary paths, and range requests or implicit retries
+    cannot substitute partial media for a complete reviewed fixture.
+    """
+    def __init__(self, directory, bind_address, peer_address, images, max_bytes):
+        self.directory = Path(directory)
+        assert self.directory.is_dir() and not self.directory.is_symlink()
+        assert 1 <= len(images) <= MAX_BATCH_IMAGES and max_bytes > 0
+        self.images = {}
+        for case, row in images.items():
+            assert CASE_PATTERN.fullmatch(case) and HASH_PATTERN.fullmatch(row['sha256'])
+            path = Path(row['path'])
+            info = path.lstat()
+            assert stat.S_ISREG(info.st_mode) and info.st_mode & 0o777 == 0o444
+            assert 0 < info.st_size == row['bytes'] <= max_bytes
+            with path.open('rb') as source:
+                assert hashlib.file_digest(source, 'sha256').hexdigest() == row['sha256']
+            self.images[case] = dict(row, path=path)
+        self.peer_address = peer_address
+        self.receipts, self.errors, self.attempted = {}, [], set()
+        self.lock = threading.Lock()
+        server = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *arguments):
+                pass
+
+            def refuse(self, status):
+                self.send_response(status)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                self.close_connection = True
+
+            def do_GET(self):
+                case = self.path.removeprefix('/images/')
+                if (self.client_address[0] != server.peer_address or
+                    self.path != '/images/' + case or case not in server.images or
+                    self.headers.get('Range') is not None or
+                    self.headers.get('Transfer-Encoding') is not None or
+                    self.headers.get('Content-Length') not in (None, '0')):
+                    self.refuse(403)
+                    return
+                with server.lock:
+                    if case in server.attempted:
+                        self.refuse(409)
+                        return
+                    server.attempted.add(case)
+                row = server.images[case]
+                digest = hashlib.sha256()
+                completed = 0
+                try:
+                    self.connection.settimeout(TRANSFER_TIMEOUT_SECONDS)
+                    with os.fdopen(os.open(row['path'], os.O_RDONLY | os.O_NOFOLLOW), 'rb') as source:
+                        info = os.fstat(source.fileno())
+                        if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o777 != 0o444 or
+                            info.st_size != row['bytes']):
+                            raise RuntimeError('Reviewed fixture storage changed')
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/octet-stream')
+                        self.send_header('Content-Length', str(row['bytes']))
+                        self.send_header('X-Fixture-SHA256', row['sha256'])
+                        self.send_header('Cache-Control', 'no-store')
+                        self.end_headers()
+                        while completed < row['bytes']:
+                            value = source.read(min(TRANSFER_CHUNK_BYTES, row['bytes'] - completed))
+                            if not value:
+                                raise RuntimeError('Reviewed fixture ended before its declared length')
+                            self.wfile.write(value)
+                            digest.update(value)
+                            completed += len(value)
+                        if source.read(1) or digest.hexdigest() != row['sha256']:
+                            raise RuntimeError('Served fixture differs from its reviewed complete bytes')
+                    receipt = dict(case=case, bytes=completed, sha256=digest.hexdigest(),
+                        path=str(row['path']), complete=True, consumerVerificationRequired=True)
+                    with server.lock:
+                        server.receipts[case] = receipt
+                    (server.directory / (case + '.fixture-transfer.json')).write_text(
+                        json.dumps(receipt, indent=2) + '\n')
+                except BaseException as error:
+                    record = dict(case=case, bytes=completed, error=repr(error), automaticRetry=False)
+                    with server.lock:
+                        server.errors.append(record)
+                    (server.directory / (case + '.fixture-error.json')).write_text(
+                        json.dumps(record, indent=2) + '\n')
+                finally:
+                    self.close_connection = True
+
+        self.server = ThreadingHTTPServer((bind_address, 0), Handler)
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    @property
+    def address(self):
+        host, port = self.server.server_address
+        return f'http://{host}:{port}'
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *arguments):
+        self.server.shutdown()
+        self.thread.join(timeout=TRANSFER_TIMEOUT_SECONDS + 1)
+        self.server.server_close()
+
+
+def download_body(guest_manifest, guest_directory, endpoint):
+    """Prepare hash-bound disposable inputs without attaching any volume."""
+    assert "'" not in guest_manifest + guest_directory + endpoint
+    return r'''
+$manifest = '__MANIFEST__'
+$directory = '__DIRECTORY__'
+$endpoint = '__ENDPOINT__'
+if ($directory -notmatch '^C:\\Windows\\Temp\\MachlinNTFSImageRecovery-[A-Za-z0-9-]{1,48}$' -or
+    (Get-Item -LiteralPath $manifest).Length -gt 1048576) { throw 'Unexpected fixture download profile.' }
+$folder = Get-Item -LiteralPath $directory
+if (-not $folder.PSIsContainer -or ($folder.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw 'A plain private fixture directory is required.'
+}
+$input = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+$images = @($input.images)
+if ($images.Count -lt 1 -or $images.Count -gt 12) { throw 'Fixture download count exceeds its bound.' }
+$names = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($image in $images) {
+    if ($image.case -notmatch '^[A-Za-z0-9-]{1,80}$' -or -not $names.Add($image.case) -or
+        $image.sha256 -notmatch '^[a-f0-9]{64}$' -or $image.bytes -lt 1 -or
+        $image.bytes -gt 134217728 -or
+        (Test-Path -LiteralPath (Join-Path $directory ('input-' + $image.case + '.vhd')))) {
+        throw 'Fixture download identity, size or existing destination disagrees.'
+    }
+}
+$r.downloads = @()
+foreach ($image in $images) {
+    $path = Join-Path $directory ('input-' + $image.case + '.vhd')
+    $request = [Net.HttpWebRequest]::Create($endpoint + '/images/' + $image.case)
+    $request.Method = 'GET'
+    $request.Proxy = $null
+    $request.AllowAutoRedirect = $false
+    $request.KeepAlive = $false
+    $request.Timeout = 120000
+    $request.ReadWriteTimeout = 120000
+    $response = $null
+    $source = $null
+    $file = $null
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $response = $request.GetResponse()
+        if ($response.StatusCode -ne [Net.HttpStatusCode]::OK -or
+            $response.ContentLength -ne $image.bytes -or
+            $response.Headers['X-Fixture-SHA256'] -ne $image.sha256) {
+            throw 'Fixture response differs from the reviewed complete image.'
+        }
+        $source = $response.GetResponseStream()
+        $file = [IO.FileStream]::new($path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+        $buffer = New-Object byte[] 1048576
+        $completed = [long]0
+        while (($count = $source.Read($buffer,0,$buffer.Length)) -gt 0) {
+            if ($count -gt $image.bytes - $completed) { throw 'Fixture exceeds its complete-byte bound.' }
+            $file.Write($buffer,0,$count)
+            [void]$sha.TransformBlock($buffer,0,$count,$buffer,0)
+            $completed += $count
+        }
+        [void]$sha.TransformFinalBlock([byte[]]@(),0,0)
+        $digest = ([BitConverter]::ToString($sha.Hash)).Replace('-','').ToLowerInvariant()
+        if ($completed -ne $image.bytes -or $digest -ne $image.sha256) {
+            throw 'Fixture complete-byte hash verification failed; preserve the partial input.'
+        }
+        $file.Flush($true)
+        $r.downloads += [ordered]@{case=$image.case;bytes=$completed;sha256=$digest;verified=$true;attached=$false}
+    } finally {
+        if ($null -ne $file) { $file.Dispose() }
+        if ($null -ne $source) { $source.Dispose() }
+        if ($null -ne $response) { $response.Dispose() }
+        $sha.Dispose()
+    }
+}
+'''.replace('__MANIFEST__', guest_manifest).replace('__DIRECTORY__', guest_directory).replace('__ENDPOINT__', endpoint)
 
 
 class ImageArchiveReceiver:

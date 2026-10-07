@@ -82,6 +82,25 @@ discover a missing allocation or read after its first write has not met this
 contract. Old caches and nodes cannot survive into a mutable epoch and then be
 silently treated as fresh objects.
 
+The connected general owner now carries this boundary into FSKit. A prepared
+child owns its immutable request, the complete mutation and any prerequisite
+checkpoint, their joint execution credits, final object metadata and free-space
+count. Native replies and stable-item/path changes are allocated before execute;
+old core views have already closed. Parent close defers backend-claim release
+until its pending child closes, while forbidding that child's execution. These
+are locally verified owner/lifecycle contracts, separate from installed mount
+acceptance. See [the general owner contract](../WRITES.md#general-owner-and-native-reply-preparation).
+
+Creation now prepares independently requested object times together with the
+new SI, filename and directory key. Invalid selected timestamps and unsupported
+native presentation requests refuse before image I/O. Native FSKit marks fields
+consumed only after successful execution; an abandoned native reply leaves both
+disk bytes and consumption unchanged. The first preceding installed `mkdir`
+refused without changing any disk byte, despite 81 passing native component
+groups. Its exact incoming attribute mask was not retained; the current contract
+correction and actual syscall acceptance remain distinct evidence. See
+[the timestamp relationships](03-attributes.md#creation-times-and-filename-caches).
+
 ## Qualified ordinary overwrite sequence
 
 The current native family binds `$MFT::$DATA` through OpenNonresidentAttribute,
@@ -363,8 +382,8 @@ exact raw bytes, including their existing USA protection.
 
 [History restoration](../../core/write_batch_restore_history.c) walks earlier
 closed ordinary groups backwards through a private physical-cluster projection.
-Each group reconstructs and validates its complete before/after metadata, original
-allocation and logical mappings. The root owner supplies all actual I/O and
+Each group reconstructs its complete before/after metadata, original allocation
+and logical mappings. The root owner supplies all actual I/O and
 aggregate memory/read governors; private child views borrow the complete retained
 packet history. No endpoint is shortened, packet discarded or old transaction
 replayed into physical media. Earlier committed FILE/INDX/bitmap homes must agree
@@ -395,13 +414,66 @@ legacy transfer slot may be reused. A sole retained copy over an unproved/torn
 qualified home is refused; ordinary page reconstruction cannot silently replace
 that provenance.
 
-Both projected views must pass ordinary mount admission before publication; full
-metadata validation always checks the original view and additionally the committed
-after view. An unfinished transaction's after view supplies mapping proofs, without
-claiming that an incomplete metadata prefix is a valid finished namespace. A winner
+Both projected views must pass ordinary mount admission before publication. Full
+metadata validation checks the latest lifetime's before state and its committed
+after state, plus each earlier distinct before state. An earlier committed after
+state can reuse the already validated later before state only after
+[whole-home equality](../../core/write_batch_restore_history.c) proves every
+protected FILE, INDX and bitmap byte, including unchanged neighboring FILE slots.
+The only excluded slices are privately reconstructed free FILE slots whose logged
+generation, exact mapping and clear MFT allocation bit are separately proved.
+Unknown earlier physical bytes remain unknown. An open-only historical prefix has
+no metadata homes, so its before state is also that already validated state;
+both mounts and every sequence-bearing opened owner still bind. A prefix claiming
+zero updates while retaining metadata homes is corrupt.
+
+An unfinished transaction's after view supplies mapping proofs, without claiming
+that an incomplete metadata prefix is a valid finished namespace. A winner
 may reconstruct a torn logged FILE/INDX predecessor only when its identity/header
 and original/committed provenance agree. A complete unrelated predecessor refuses.
 All immutable children close before the prepared owner is returned.
+
+### Recovery budgets and joint checkpoint preparation
+
+Retained history has both physical journal capacity and a bounded cost of proving
+its states. Allocation-call and allocated-byte budgets are cumulative: releasing
+temporary storage reduces live memory, but does not refund work already admitted.
+The same distinction applies to read calls and read bytes. Private historical
+children charge the root recovery owner; a fresh child cannot reset its credits.
+These are implementation admission limits, not NTFS format fields.
+
+An exact installed failure retains 44 ordinary lifetimes and 356 packets. The
+source-identical debugger observes the root allocation-call limit of 65,536,
+approximately 55.7 MiB cumulatively allocated and less than 1.2 MiB backend peak
+live storage. The complete image validates and the backend refuses no allocation.
+This native observation identifies excess cumulative recovery work, separately
+from physical memory or free journal pages. Generated reports bind the original
+image, invocation and source-identical diagnostic binary.
+
+[Settled-history acquisition](../../core/write_batch_recover.c) publishes the four
+resource counters only after its complete proof succeeds. Before appending another
+lifetime, [ordinary execution preparation](../../core/write_batch_execute.c)
+requests a checkpoint when any counter reaches a quarter of its default recovery
+budget. The named private
+[reserve divisor](../../core/write_batch_history.h) leaves room for acquiring the
+old history twice in one request, the projected operation and future recovery.
+The general owner treats this `NTFS_NO_SPACE` admission result like physical ring
+pressure: it prepares the checkpoint and mutation together, including their joint
+transfer/barrier reservation, before either can write. Budgets remain unchanged;
+an oversized preparation can still refuse without modifying media.
+
+![Historical proof reuse and early checkpoint admission](diagrams/recovery-budgets.svg)
+
+[Owner regressions](../../tests/write_mutation_owner.c) use a 4-MiB journal and
+48 independent predecessor objects, then perform 100 create/remove cycles with
+fresh reopen checks, stale-generation refusals and whole-image comparisons.
+The first resource checkpoint must occur with more than 64 physical journal pages
+still free; read/allocation failures in joint preparation must leave every byte
+unchanged. [Historical equality tests](../../tests/write_batch_recovery.h) corrupt
+each included FILE slice, INDX and bitmap data independently and reject invalid
+free-slot exclusions. The existing exact journal-space tests retain their measured
+forward, inverse and checkpoint page requirement; cheaper proof of an unchanged
+open-only prefix must not reduce that physical admission contract.
 
 ### Loser, winner and interrupted recovery
 

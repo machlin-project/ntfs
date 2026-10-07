@@ -626,6 +626,189 @@ struct recovery_sequence_step {
 };
 
 static void
+recovery_free_initialization_guards(void)
+{
+	struct ntfs_write_batch_recovery *owner, *history;
+	struct ntfs_batch_recovery_home *home;
+	struct ntfs_batch_recovery_projection *projection;
+	struct ntfs_disk_record *record;
+	uint8_t slot = 1u << 1;
+	uint16_t sequence = 7;
+
+	owner = calloc(1, sizeof(*owner));
+	history = calloc(1, sizeof(*history));
+	home = calloc(1, sizeof(*home));
+	projection = calloc(1, sizeof(*projection));
+	assert(owner != NULL && history != NULL && home != NULL && projection != NULL);
+	owner->historical = owner->committed = true;
+	owner->history_owner = history;
+	history->projection = projection;
+	history->projections = 1;
+	projection->physical = home->physical = TEST_WRITE_OFFSET * NTFS_WRITE_CLUSTER_BYTES;
+	projection->unknown_slots = slot;
+	projection->next_sequence[1] = sequence;
+	home->kind = NTFS_WRITE_MUTATION_FILE;
+	home->slots = home->new_slots = slot;
+	record = (void *)(home->after + NTFS_WRITE_RECORD_BYTES);
+	ntfs_put_u16(record->sequence, sequence);
+	assert(ntfs_batch_recovery_history_home_admit(owner, home) == NTFS_OK &&
+	    home->historical_free_slots == slot);
+	home->historical_free_slots = 0;
+	ntfs_put_u16(record->sequence, (uint16_t)(sequence + 1u));
+	assert(ntfs_batch_recovery_history_home_admit(owner, home) == NTFS_STALE &&
+	    home->historical_free_slots == 0);
+	ntfs_put_u16(record->sequence, sequence);
+	ntfs_put_u16(record->flags, NTFS_RECORD_IN_USE);
+	assert(ntfs_batch_recovery_history_home_admit(owner, home) == NTFS_STALE &&
+	    home->historical_free_slots == 0);
+	ntfs_put_u16(record->flags, 0);
+	projection->unowned_cluster = true;
+	assert(ntfs_batch_recovery_history_home_admit(owner, home) == NTFS_UNSUPPORTED &&
+	    home->historical_free_slots == 0);
+	projection->unowned_cluster = false;
+	owner->committed = false;
+	assert(ntfs_batch_recovery_history_home_admit(owner, home) == NTFS_UNSUPPORTED &&
+	    home->historical_free_slots == 0);
+	free(projection);
+	free(home);
+	free(history);
+	free(owner);
+	puts("PASS: a retained free initialization binds its generation; live, mismatched, "
+	     "unowned and uncommitted states refuse");
+}
+
+static void
+recovery_historical_after_guards(void)
+{
+	struct ntfs_write_batch_recovery *owner;
+	struct ntfs_batch_recovery_home *home;
+	size_t slot;
+
+	owner = calloc(1, sizeof(*owner));
+	home = calloc(1, sizeof(*home));
+	assert(owner != NULL && home != NULL);
+	owner->home = home;
+	owner->homes = 1;
+	owner->historical = owner->committed = true;
+	home->kind = NTFS_WRITE_MUTATION_FILE;
+	home->slots = 1;
+	memset(home->source, TEST_PATTERN, sizeof(home->source));
+	memcpy(home->after, home->source, sizeof(home->after));
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_OK);
+	for (slot = 0; slot < TEST_FILE_SLOTS; slot++) {
+		home->after[slot * NTFS_WRITE_RECORD_BYTES] ^= TEST_PATTERN;
+		assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_STALE);
+		home->after[slot * NTFS_WRITE_RECORD_BYTES] ^= TEST_PATTERN;
+	}
+	home->after[0] ^= TEST_PATTERN;
+	home->historical_free_slots = 1;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_OK);
+	home->slots = 0;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_CORRUPT);
+	home->slots = 1;
+	home->kind = NTFS_WRITE_MUTATION_INDEX;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_CORRUPT);
+	home->historical_free_slots = 0;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_STALE);
+	home->after[0] ^= TEST_PATTERN;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_OK);
+	home->kind = NTFS_WRITE_MUTATION_BITMAP;
+	home->after[NTFS_WRITE_CLUSTER_BYTES - 1] ^= TEST_PATTERN;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_STALE);
+	home->after[NTFS_WRITE_CLUSTER_BYTES - 1] ^= TEST_PATTERN;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_OK);
+	owner->committed = false;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_INVALID);
+	owner->committed = true;
+	owner->historical = false;
+	assert(ntfs_batch_recovery_historical_after_admit(owner) == NTFS_INVALID);
+	free(home);
+	free(owner);
+	puts("PASS: historical after reuse requires whole-home equality, including unchanged "
+	     "FILE siblings, INDX and bitmap bytes; only proved free slots are excluded");
+}
+
+static void
+batch_recovery_growth_tests(const char *directory, const char *output)
+{
+	static const enum test_profile profiles[] = {
+	    TEST_MFT_GROWTH, TEST_DEFAULT, TEST_RENAMED_FILE};
+	struct recovery_case *source;
+	const struct ntfs_write_batch_publication *publication;
+	struct ntfs_write_batch_recovery *owner;
+	struct ntfs_volume *volume = NULL;
+	const char *input_directory = directory, *input_name = "large-source.img";
+	char name[TEST_PATH_BYTES], predecessor_name[TEST_PATH_BYTES], path[TEST_PATH_BYTES];
+	FILE *file;
+	uint64_t references[sizeof(profiles) / sizeof(profiles[0])];
+	uint64_t grown_initialized = 0;
+	size_t step, index;
+	int length;
+
+	recovery_output_begin(output);
+	for (step = 0; step < sizeof(profiles) / sizeof(profiles[0]); step++) {
+		source = recovery_source(
+		    input_directory, input_name, NTFS_WRITE_CREATE_FILE, profiles[step]);
+		references[step] = source->reference;
+		if (step != 0) {
+			assert(references[step] == references[0] + step);
+		}
+		recovery_state(source, source->count, 0, false);
+		recovery_check(source, true);
+		assert(source->test->device.writes == 0 && source->test->device.barriers == 1);
+		assert(ntfs_mount(&source->test->backend.reader, NULL, &volume) == NTFS_OK);
+		if (step == 0) {
+			grown_initialized = volume->mft->initialized;
+		} else {
+			assert(volume->mft->initialized == grown_initialized);
+		}
+		assert(ntfs_unmount(volume) == NTFS_OK && source->test->device.live == 0);
+		volume = NULL;
+		/* Each next source is a complete reopened ordinary image. No direct
+		 * projected seeding or checkpoint hides the retained initialization. */
+		length = snprintf(name, sizeof(name), "growth-successor-%zu.img", step);
+		assert(length > 0 && (size_t)length < sizeof(name));
+		posix_case(input_directory, recovery_output, name, input_name,
+		    NTFS_WRITE_CREATE_FILE, profiles[step]);
+		length = snprintf(path, sizeof(path), "%s/%s", recovery_output, name);
+		assert(length > 0 && (size_t)length < sizeof(path));
+		file = fopen(path, "rb");
+		assert(file != NULL &&
+		    fread(source->test->device.visible, 1, source->test->device.bytes, file) ==
+			source->test->device.bytes &&
+		    fgetc(file) == EOF && fclose(file) == 0);
+		assert(memcmp(source->test->device.visible, source->committed,
+			   source->test->device.bytes) == 0);
+		if (step != 0) {
+			/* The retained growth's free FILE is meaningful even if a later
+			 * initializer tears or its commit is delivered before its home. */
+			for (index = source->commit; index < source->count; index++) {
+				publication = &source->publication[index];
+				if (publication->stage != NTFS_WRITE_EXECUTION_METADATA_HOME) {
+					continue;
+				}
+				recovery_state(source, index, NTFS_WRITE_SECTOR_BYTES, false);
+				recovery_check(source, true);
+			}
+		}
+		owner = NULL;
+		recovery_state(source, source->count, 0, false);
+		assert(
+		    ntfs_write_batch_recover_prepare(&source->test->backend, &owner) == NTFS_OK &&
+		    ntfs_write_batch_recovery_count(owner) == 0);
+		ntfs_write_batch_recovery_close(owner);
+		recovery_source_close(source);
+		input_directory = recovery_output;
+		memcpy(predecessor_name, name, strlen(name) + 1);
+		input_name = predecessor_name;
+	}
+	recovery_free_initialization_guards();
+	free(recovery_output);
+	puts("PASS: retained MFT growth admits two free sibling initializations, torn "
+	     "metadata recovery and zero-rewrite reopens without an intervening checkpoint");
+}
+
+static void
 recovery_sequence_case(const char *directory, unsigned ordinal, const char *image_name,
     const struct recovery_sequence_step *steps, size_t count, bool generation_reuse)
 {
@@ -801,6 +984,10 @@ batch_recovery_sequence_tests(const char *directory, const char *output, bool re
 	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT}, {NTFS_WRITE_CREATE_FILE, TEST_RENAMED_FILE},
 	    {NTFS_WRITE_REMOVE_FILE, TEST_CREATED_FILE}};
 
+	recovery_historical_after_guards();
+	if (!reuse_only) {
+		batch_recovery_growth_tests(directory, output);
+	}
 	recovery_output_begin(output);
 	if (!reuse_only) {
 		recovery_sequence_case(directory, 0, "large-source.img", namespace_steps,

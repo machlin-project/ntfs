@@ -125,8 +125,8 @@ resource_budgets(NSData *image)
 
 	reader.image = image;
 	resource = [[NTFSResource alloc] initWithReader:reader];
-	assert(resource != nil &&
-	    posix_memalign((void **)&allocation, TEST_PHYSICAL_BLOCK_BYTES, capacity) == 0);
+	assert(resource != nil);
+	assert(posix_memalign((void **)&allocation, TEST_PHYSICAL_BLOCK_BYTES, capacity) == 0);
 	bytes = allocation + TEST_PHYSICAL_BLOCK_BYTES;
 	memset(allocation, TEST_GUARD, capacity);
 	ntfs_operation_default_limits(&limits);

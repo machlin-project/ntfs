@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'scripts'))
-from windows_image_archive import ImageArchiveReceiver
+from windows_image_archive import ImageArchiveReceiver, ImageFixtureServer
 
 IMAGE_BYTES = 65537
 IMAGE = bytes((index * 29 + 7) % 256 for index in range(IMAGE_BYTES))
@@ -96,6 +96,79 @@ class Archive(unittest.TestCase):
             with ImageArchiveReceiver(root, '127.0.0.1', '192.0.2.1', {'fixture': IMAGE_HASH}, IMAGE_BYTES) as receiver:
                 self.assertEqual(self.transfer(receiver, '/images/fixture', b'x')[0], 403)
                 self.assertFalse(list(root.iterdir()))
+
+
+class Fixture(unittest.TestCase):
+    def fixture(self, root):
+        path = root / 'source.vhd'
+        path.write_bytes(IMAGE)
+        path.chmod(0o444)
+        return {'fixture': dict(path=path, bytes=IMAGE_BYTES, sha256=IMAGE_HASH)}
+
+    def get(self, server, route, headers=None):
+        host, port = server.server.server_address
+        connection = http.client.HTTPConnection(host, port, timeout=10)
+        try:
+            connection.request('GET', route, headers=headers or {})
+            response = connection.getresponse()
+            return response.status, response.read(), response.getheader('X-Fixture-SHA256')
+        finally:
+            connection.close()
+
+    def test_complete_frozen_fixture_and_duplicate_refusal(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            images = self.fixture(root)
+            with ImageFixtureServer(root, '127.0.0.1', '127.0.0.1', images, IMAGE_BYTES) as server:
+                status, value, digest = self.get(server, '/images/fixture')
+                self.assertEqual((status, value, digest), (200, IMAGE, IMAGE_HASH))
+                self.assertEqual(self.get(server, '/images/fixture')[0], 409)
+            self.assertFalse(server.errors)
+            self.assertTrue(server.receipts['fixture']['complete'])
+            self.assertTrue(server.receipts['fixture']['consumerVerificationRequired'])
+            self.assertEqual(images['fixture']['path'].read_bytes(), IMAGE)
+
+    def test_routes_ranges_request_bodies_and_peer_refuse_without_attempt(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            images = self.fixture(root)
+            with ImageFixtureServer(root, '127.0.0.1', '127.0.0.1', images, IMAGE_BYTES) as server:
+                for route in ('/images/other', '/images/../source.vhd', '/images/fixture?query', '/images/%66ixture'):
+                    self.assertEqual(self.get(server, route)[0], 403)
+                for headers in ({'Range': 'bytes=0-1'}, {'Transfer-Encoding': 'chunked'}, {'Content-Length': '1'}):
+                    self.assertEqual(self.get(server, '/images/fixture', headers)[0], 403)
+                self.assertFalse(server.attempted)
+                self.assertEqual(self.get(server, '/images/fixture')[1], IMAGE)
+            with ImageFixtureServer(root, '127.0.0.1', '192.0.2.1', images, IMAGE_BYTES) as server:
+                self.assertEqual(self.get(server, '/images/fixture')[0], 403)
+                self.assertFalse(server.attempted)
+
+    def test_mutable_symlink_oversize_wrong_hash_and_length_refuse_before_listening(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            images = self.fixture(root)
+            original = images['fixture']
+            alias = root / 'alias.vhd'
+            alias.symlink_to(original['path'])
+            for change in ({'path': alias}, {'bytes': IMAGE_BYTES + 1}, {'sha256': '0' * 64}):
+                with self.assertRaises(AssertionError):
+                    ImageFixtureServer(root, '127.0.0.1', '127.0.0.1',
+                        {'fixture': dict(original, **change)}, IMAGE_BYTES)
+            original['path'].chmod(0o644)
+            with self.assertRaises(AssertionError):
+                ImageFixtureServer(root, '127.0.0.1', '127.0.0.1', images, IMAGE_BYTES)
+
+    def test_changed_source_hash_never_records_a_successful_receipt(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            images = self.fixture(root)
+            with ImageFixtureServer(root, '127.0.0.1', '127.0.0.1', images, IMAGE_BYTES) as server:
+                images['fixture']['path'].chmod(0o644)
+                images['fixture']['path'].write_bytes(bytes(IMAGE_BYTES))
+                images['fixture']['path'].chmod(0o444)
+                self.assertEqual(self.get(server, '/images/fixture')[1], bytes(IMAGE_BYTES))
+            self.assertFalse(server.receipts)
+            self.assertEqual(len(server.errors), 1)
 
 
 if __name__ == '__main__':

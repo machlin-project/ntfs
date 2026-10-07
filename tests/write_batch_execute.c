@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "write_batch_execute.h"
 #include "write_batch_recover.h"
+#include "write_batch_recover_internal.h"
 #include "../adapters/posix/overwrite_image.h"
 #include <ntfs/record.h>
 #include <assert.h>
@@ -1312,6 +1313,8 @@ main(int argc, char **argv)
 			batch_recovery_ownership_tests(argv[1], argv[2]);
 		} else if (strcmp(argv[3], "recovery-history") == 0) {
 			batch_recovery_history_tests(argv[1], argv[2]);
+		} else if (strcmp(argv[3], "recovery-growth") == 0) {
+			batch_recovery_growth_tests(argv[1], argv[2]);
 		} else if (strcmp(argv[3], "recovery-sequence") == 0) {
 			batch_recovery_sequence_tests(argv[1], argv[2], false);
 		} else if (strcmp(argv[3], "recovery-reuse") == 0) {

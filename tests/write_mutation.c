@@ -20,6 +20,11 @@ enum {
 	TEST_CHILDREN = 96,
 	TEST_FRAGMENT_FILES = 96,
 	TEST_REUSE_OPERATIONS = 512,
+	TEST_FIRST_RESERVED_RECORD = 16,
+	TEST_FIRST_ALLOCATABLE_RECORD = 24,
+	TEST_RESERVED_RECORDS = TEST_FIRST_ALLOCATABLE_RECORD - TEST_FIRST_RESERVED_RECORD,
+	TEST_INLINE_SPILL_NAME_UNITS = 180,
+	TEST_INLINE_SPILL_CHILDREN = 24,
 	TEST_PATTERN = 0xd3
 };
 
@@ -1753,6 +1758,158 @@ mixed_operations(const char *source, const char *cases)
 	     "generations");
 }
 
+#if defined(NTFS_TEST_MUTATION_PLAN)
+static uint64_t
+directory_reference(struct test_case *test, uint64_t parent, const char *text)
+{
+	struct ntfs_volume *volume = view(test);
+	struct ntfs_node *directory = NULL, *child = NULL;
+	struct ntfs_stat stat;
+	uint16_t units[TEST_NAME_UNITS];
+	struct ntfs_write_name entry = name(parent, text, units);
+
+	assert(ntfs_node_open(volume, parent, &directory) == NTFS_OK);
+	assert(ntfs_lookup(directory, entry.units, entry.count, &child) == NTFS_OK);
+	assert(ntfs_node_stat(child, &stat) == NTFS_OK && stat.directory);
+	ntfs_node_close(child);
+	ntfs_node_close(directory);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+	return stat.reference;
+}
+
+static void
+directory_ancestry(const char *cases)
+{
+	static const char *const valid[] = {
+	    "win32-dos", "dos-win32", "posix", "win32", "win32-dos-combined"};
+	static const char *const invalid[] = {"different-parent", "zero-sequence", "dos-only",
+	    "duplicate-primary", "unknown-namespace", "self-parent", "length-mismatch",
+	    "physical-count", "attribute-flags", "named-attribute", "missing-filename"};
+	struct test_case *test;
+	const struct ntfs_disk_boot *boot;
+	struct ntfs_write_mutation_request request = {0};
+	struct ntfs_write_mutation_plan *plan = NULL;
+	struct ntfs_volume *volume;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stat stat;
+	uint16_t source_units[TEST_NAME_UNITS], destination_units[TEST_NAME_UNITS];
+	uint8_t *before, *record;
+	uint64_t ancestor, left, right, nested, deep, file, physical;
+	char label[128];
+	size_t profile, bytes, live;
+	int count;
+
+	for (profile = 0; profile < sizeof(valid) / sizeof(*valid); profile++) {
+		count = snprintf(label, sizeof(label), "ancestor-%s.img", valid[profile]);
+		assert(count > 0 && (size_t)count < sizeof(label));
+		test = prepare_image(cases, label);
+		ancestor = directory_reference(test, test->root_reference, "AncestorDirectory");
+		left = directory_reference(test, ancestor, "left");
+		right = directory_reference(test, ancestor, "right");
+		nested = directory_reference(test, left, "nested");
+		deep = directory_reference(test, nested, "deep");
+		volume = view(test);
+		assert(ntfs_node_open(volume, deep, &node) == NTFS_OK);
+		request.source = name(deep, "data.bin", source_units);
+		{
+			struct ntfs_node *child = NULL;
+
+			assert(ntfs_lookup(node, request.source.units, request.source.count,
+				   &child) == NTFS_OK);
+			assert(ntfs_node_stat(child, &stat) == NTFS_OK);
+			file = stat.reference;
+			ntfs_node_close(child);
+		}
+		ntfs_node_close(node);
+		node = NULL;
+		assert(ntfs_unmount(volume) == NTFS_OK);
+		before = malloc(NTFS_WRITE_RECORD_BYTES);
+		assert(before != NULL);
+		boot = (const void *)test->device.visible;
+		physical = ntfs_u64(boot->mft_lcn) * NTFS_WRITE_CLUSTER_BYTES +
+		    (ancestor & NTFS_REFERENCE_RECORD_MASK) * NTFS_WRITE_RECORD_BYTES;
+		memcpy(before, test->device.visible + physical, NTFS_WRITE_RECORD_BYTES);
+		/* A descendant cannot become a destination, regardless of ancestor aliases. */
+		rename_entry(test, left, "nested", deep, "loop", false, NTFS_INVALID);
+		rename_entry(test, left, "nested", right, "moved", false, NTFS_OK);
+		check_name(test, left, "nested", 0, NTFS_NOT_FOUND);
+		check_name(test, right, "moved", nested, NTFS_OK);
+		check_name(test, nested, "deep", deep, NTFS_OK);
+		check_name(test, deep, "data.bin", file, NTFS_OK);
+		check_data(test, file, cases, "ancestor-child.bin");
+		validate(test);
+		assert(
+		    memcmp(before, test->device.visible + physical, NTFS_WRITE_RECORD_BYTES) == 0);
+		rename_entry(test, right, "moved", left, "returned", false, NTFS_OK);
+		check_name(test, left, "returned", nested, NTFS_OK);
+		check_data(test, file, cases, "ancestor-child.bin");
+		validate(test);
+		if (profile < 2) {
+			rename_entry(test, test->root_reference, "AncestorDirectory",
+			    test->root_reference, "changed-pair", false, NTFS_UNSUPPORTED);
+		}
+		assert(
+		    memcmp(before, test->device.visible + physical, NTFS_WRITE_RECORD_BYTES) == 0);
+		free(before);
+		finish(test);
+	}
+	for (profile = 0; profile < sizeof(invalid) / sizeof(*invalid); profile++) {
+		test = prepare_image(cases, "ancestor-win32-dos.img");
+		ancestor = directory_reference(test, test->root_reference, "AncestorDirectory");
+		left = directory_reference(test, ancestor, "left");
+		right = directory_reference(test, ancestor, "right");
+		count =
+		    snprintf(label, sizeof(label), "ancestor-invalid-%s.record", invalid[profile]);
+		assert(count > 0 && (size_t)count < sizeof(label));
+		record = load(cases, label, &bytes);
+		assert(bytes == NTFS_WRITE_RECORD_BYTES);
+		boot = (const void *)test->device.visible;
+		physical = ntfs_u64(boot->mft_lcn) * NTFS_WRITE_CLUSTER_BYTES +
+		    (ancestor & NTFS_REFERENCE_RECORD_MASK) * NTFS_WRITE_RECORD_BYTES;
+		memcpy(test->device.visible + physical, record, bytes);
+		memcpy(test->device.durable, test->device.visible, test->device.bytes);
+		free(record);
+		before = malloc(test->device.bytes);
+		assert(before != NULL);
+		memcpy(before, test->device.visible, test->device.bytes);
+		request.kind = NTFS_WRITE_RENAME;
+		request.source = name(left, "nested", source_units);
+		request.destination = name(right, "moved", destination_units);
+		request.filetime = TEST_FILETIME;
+		live = test->device.live_bytes;
+		assert(ntfs_write_mutation_prepare(&test->backend.reader, &request, &plan) ==
+			NTFS_CORRUPT &&
+		    plan == NULL);
+		assert(test->device.writes == 0 && test->device.barriers == 0 &&
+		    test->device.live_bytes == live &&
+		    memcmp(before, test->device.visible, test->device.bytes) == 0);
+		free(before);
+		finish(test);
+	}
+	puts("PASS: paired/single directory ancestry, cross-parent moves and cycle refusal, "
+	     "unchanged ancestor aliases, malformed-parent refusal before publication");
+}
+#endif
+
+static void
+generic_inheritance(const char *cases)
+{
+	struct test_case *test;
+	uint64_t directory, direct, descendant;
+
+	test = prepare_image(cases, "generic-security.img");
+	directory = create(test, test->root_reference, "generic-directory", true);
+	direct = create(test, test->root_reference, "generic-file", false);
+	descendant = create(test, directory, "generic-descendant", false);
+	check_security(test, directory, cases, "generic-directory-security.bin");
+	check_security(test, direct, cases, "generic-file-security.bin");
+	check_security(test, descendant, cases, "generic-file-security.bin");
+	validate(test);
+	finish(test);
+	puts("PASS: generic rights retain propagation masks and map effective creator owner/group "
+	     "rights for files, directories and descendants");
+}
+
 static void
 index_and_MFT_growth_image(const char *source, const char *cases, const char *image, bool root)
 {
@@ -2367,18 +2524,245 @@ bitmap_storage_preservation(const char *cases)
 	puts("PASS: bitmap bit changes retain original attributes, mappings and allocated tail "
 	     "bytes");
 }
+
+static uint64_t
+free_inventory(struct test_case *test, uint64_t number, uint32_t type, uint64_t first)
+{
+	struct ntfs_volume *volume;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *stream = NULL;
+	uint8_t *bits;
+	uint64_t count, bit, free_count = 0;
+
+	volume = view(test);
+	count = number == NTFS_MFT_RECORD ? volume->mft->initialized / NTFS_WRITE_RECORD_BYTES
+					  : volume->info.cluster_count;
+	assert(ntfs_node_by_number(volume, number, &node) == NTFS_OK);
+	assert(ntfs_attribute_open(node, type, NULL, 0, &stream) == NTFS_OK);
+	assert(stream->size <= SIZE_MAX &&
+	    (count + NTFS_BITS_PER_BYTE - 1) / NTFS_BITS_PER_BYTE <= stream->size);
+	bits = malloc((size_t)stream->size);
+	assert(bits != NULL && ntfs_stream_exact(stream, 0, bits, (size_t)stream->size) == NTFS_OK);
+	for (bit = first; bit < count; bit++) {
+		free_count +=
+		    (bits[bit / NTFS_BITS_PER_BYTE] & (1u << (bit % NTFS_BITS_PER_BYTE))) == 0;
+	}
+	free(bits);
+	ntfs_stream_close(stream);
+	ntfs_node_close(node);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+	return free_count;
+}
+
+static void
+directory_inline_spill(const char *cases)
+{
+	struct test_case *test;
+	struct ntfs_volume *volume;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *allocation = NULL;
+	struct ntfs_write_mutation_request request = {0};
+	struct ntfs_write_mutation_report report;
+	const struct ntfs_disk_record *header;
+	const uint16_t index_name[] = {'$', 'I', '3', '0'};
+	uint64_t directory, references[TEST_INLINE_SPILL_CHILDREN];
+	uint16_t units[TEST_NAME_UNITS];
+	char (*names)[TEST_INLINE_SPILL_NAME_UNITS + 1];
+	size_t index, prefix, minimum_allocation;
+	enum ntfs_result result;
+
+	test = prepare_image(cases, "directory-inline-spill.img");
+	names = calloc(TEST_INLINE_SPILL_CHILDREN, sizeof(*names));
+	assert(names != NULL);
+	directory = create(test, test->root_reference, "r", true);
+	check_security(test, directory, cases, "inline-spill-directory.bin");
+	for (index = 0; index < TEST_INLINE_SPILL_CHILDREN; index++) {
+		prefix = (size_t)snprintf(names[index], sizeof(names[index]), "spill-%zu-", index);
+		assert(prefix > 0 && prefix < TEST_INLINE_SPILL_NAME_UNITS);
+		memset(names[index] + prefix, 'n', TEST_INLINE_SPILL_NAME_UNITS - prefix);
+		names[index][TEST_INLINE_SPILL_NAME_UNITS] = '\0';
+		request.kind = NTFS_WRITE_CREATE_FILE;
+		request.source = name(directory, names[index], units);
+		request.filetime = ++test->time;
+		result = mutate(test, &request, &report);
+		if (result != NTFS_OK) {
+			fprintf(stderr, "inline spill child %zu: %s\n", index,
+			    ntfs_result_string(result));
+		}
+		assert(result == NTFS_OK);
+		references[index] = mutation_reference(&report);
+		check_security(test, references[index], cases, "inline-spill-file.bin");
+		if (index == 0) {
+			volume = view(test);
+			assert(ntfs_node_open(volume, directory, &node) == NTFS_OK);
+			header = (const void *)node->record;
+			minimum_allocation = sizeof(struct ntfs_disk_attr) +
+			    sizeof(struct ntfs_disk_nonresident) +
+			    NTFS_WRITE_MUTATION_TARGET_NAME_UNITS * NTFS_UTF16_UNIT_BYTES;
+			assert(
+			    NTFS_WRITE_RECORD_BYTES - ntfs_u32(header->used) < minimum_allocation);
+			assert(ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION, index_name,
+				   NTFS_WRITE_MUTATION_TARGET_NAME_UNITS,
+				   &allocation) == NTFS_NOT_FOUND &&
+			    allocation == NULL);
+			ntfs_node_close(node);
+			assert(ntfs_unmount(volume) == NTFS_OK);
+		}
+	}
+	volume = view(test);
+	assert(ntfs_node_open(volume, directory, &node) == NTFS_OK);
+	assert(ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION, index_name,
+		   NTFS_WRITE_MUTATION_TARGET_NAME_UNITS, &allocation) == NTFS_OK);
+	assert(allocation->allocated > NTFS_WRITE_CLUSTER_BYTES);
+	ntfs_stream_close(allocation);
+	ntfs_node_close(node);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+	for (index = 0; index < TEST_INLINE_SPILL_CHILDREN; index++) {
+		check_name(test, directory, names[index], references[index], NTFS_OK);
+		check_data(test, references[index], cases, "empty.bin");
+		remove_entry(test, directory, names[index], false, NTFS_OK);
+	}
+	remove_entry(test, test->root_reference, "r", true, NTFS_OK);
+	validate(test);
+	free(names);
+	finish(test);
+	puts("PASS: full inline directory root spills to multiple INDX blocks without temporary "
+	     "FILE-capacity refusal");
+}
+
+static uint64_t
+check_allocation_reservation(struct test_case *test, const uint8_t *expected, size_t bytes)
+{
+	struct ntfs_volume *volume;
+	uint8_t *actual;
+	uint64_t records;
+
+	assert(bytes == TEST_RESERVED_RECORDS * NTFS_WRITE_RECORD_BYTES);
+	actual = malloc(bytes);
+	assert(actual != NULL);
+	volume = view(test);
+	records = volume->mft->initialized / NTFS_WRITE_RECORD_BYTES;
+	assert(ntfs_stream_exact(volume->mft, TEST_FIRST_RESERVED_RECORD * NTFS_WRITE_RECORD_BYTES,
+		   actual, bytes) == NTFS_OK);
+	assert(memcmp(expected, actual, bytes) == 0);
+	free(actual);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+	assert(free_inventory(test, NTFS_MFT_RECORD, NTFS_ATTR_BITMAP, TEST_FIRST_RESERVED_RECORD) -
+		free_inventory(
+		    test, NTFS_MFT_RECORD, NTFS_ATTR_BITMAP, TEST_FIRST_ALLOCATABLE_RECORD) ==
+	    TEST_RESERVED_RECORDS);
+	return records;
+}
+
+static void
+allocation_reservation(const char *cases)
+{
+	struct test_case *test;
+	struct ntfs_write_mutation_request request = {0};
+	struct ntfs_write_mutation_report report;
+	uint8_t *expected, *before;
+	uint16_t units[TEST_NAME_UNITS];
+	uint64_t references[TEST_CHILDREN], directory, initial, available, reference;
+	char text[TEST_NAME_UNITS + 1];
+	size_t bytes, index;
+	enum ntfs_result result;
+
+	test = prepare_image(cases, "allocation-reservation.img");
+	expected = load(cases, "allocation-reservation.bin", &bytes);
+	initial = check_allocation_reservation(test, expected, bytes);
+	for (index = 0; index < TEST_CHILDREN; index++) {
+		assert(snprintf(text, sizeof(text), "reservation-%zu", index) > 0);
+		references[index] = create(test, test->root_reference, text, false);
+		assert((references[index] & NTFS_REFERENCE_RECORD_MASK) >=
+		    TEST_FIRST_ALLOCATABLE_RECORD);
+		check_allocation_reservation(test, expected, bytes);
+	}
+	assert(check_allocation_reservation(test, expected, bytes) > initial);
+	directory = create(test, test->root_reference, "reservation-pressure", true);
+	available =
+	    free_inventory(test, NTFS_MFT_RECORD, NTFS_ATTR_BITMAP, TEST_FIRST_ALLOCATABLE_RECORD);
+	assert(available < NTFS_WRITE_CLUSTER_BYTES / NTFS_WRITE_RECORD_BYTES);
+	resize(test, references[0],
+	    free_inventory(test, NTFS_BITMAP_RECORD, NTFS_ATTRIBUTE_DATA, 0) *
+		NTFS_WRITE_CLUSTER_BYTES);
+	assert(free_inventory(test, NTFS_BITMAP_RECORD, NTFS_ATTRIBUTE_DATA, 0) == 0);
+	for (index = 0; index < available; index++) {
+		assert(snprintf(text, sizeof(text), "r%zu", index) > 0);
+		reference = create(test, directory, text, false);
+		assert((reference & NTFS_REFERENCE_RECORD_MASK) >= TEST_FIRST_ALLOCATABLE_RECORD);
+	}
+	assert(free_inventory(
+		   test, NTFS_MFT_RECORD, NTFS_ATTR_BITMAP, TEST_FIRST_ALLOCATABLE_RECORD) == 0);
+	before = malloc(test->device.bytes);
+	assert(before != NULL);
+	memcpy(before, test->device.visible, test->device.bytes);
+	request.kind = NTFS_WRITE_CREATE_FILE;
+	request.source = name(directory, "full", units);
+	request.filetime = ++test->time;
+	result = mutate(test, &request, &report);
+	assert(result == NTFS_NO_SPACE && !report.execution.poisoned);
+	assert(memcmp(before, test->device.visible, test->device.bytes) == 0);
+	assert(memcmp(before, test->device.durable, test->device.bytes) == 0);
+	check_allocation_reservation(test, expected, bytes);
+	resize(test, references[0], 0);
+	for (index = 0; index < TEST_CHILDREN; index++) {
+		assert(snprintf(text, sizeof(text), "reservation-%zu", index) > 0);
+		remove_entry(test, test->root_reference, text, false, NTFS_OK);
+	}
+	for (index = 0; index < available; index++) {
+		assert(snprintf(text, sizeof(text), "r%zu", index) > 0);
+		remove_entry(test, directory, text, false, NTFS_OK);
+	}
+	remove_entry(test, test->root_reference, "reservation-pressure", true, NTFS_OK);
+	reference = create(test, test->root_reference, "reservation-reuse", false);
+	assert((reference & NTFS_REFERENCE_RECORD_MASK) >= TEST_FIRST_ALLOCATABLE_RECORD);
+	check_stale(test, references[0]);
+	check_allocation_reservation(test, expected, bytes);
+	validate(test);
+	free(before);
+	free(expected);
+	finish(test);
+	puts("PASS: ordinary allocation preserves reserved FILE slots and bitmap bits through "
+	     "MFT growth, ENOSPC, removal and reuse");
+}
 #endif
 
 int
 main(int argc, char **argv)
 {
-	assert(argc == 3);
 #if defined(NTFS_TEST_MUTATION_PLAN)
+	assert(argc == 3 ||
+	    (argc == 4 &&
+		(strcmp(argv[3], "allocation-reservation") == 0 ||
+		    strcmp(argv[3], "directory-inline-spill") == 0 ||
+		    strcmp(argv[3], "security-inheritance") == 0 ||
+		    strcmp(argv[3], "directory-ancestry") == 0)));
+	if (argc == 4 && strcmp(argv[3], "directory-ancestry") == 0) {
+		directory_ancestry(argv[2]);
+		return 0;
+	}
+	if (argc == 4 && strcmp(argv[3], "security-inheritance") == 0) {
+		generic_inheritance(argv[2]);
+		return 0;
+	}
+	if (argc == 4 && strcmp(argv[3], "directory-inline-spill") == 0) {
+		directory_inline_spill(argv[2]);
+		return 0;
+	}
+	allocation_reservation(argv[2]);
+	if (argc == 4) {
+		return 0;
+	}
+	directory_inline_spill(argv[2]);
+	directory_ancestry(argv[2]);
 	bitmap_storage_preservation(argv[2]);
 	unused_storage(argv[2]);
 	owned_index_damage(argv[1]);
+#else
+	assert(argc == 3);
 #endif
 	mixed_operations(argv[1], argv[2]);
+	generic_inheritance(argv[2]);
 	index_and_MFT_growth(argv[1], argv[2]);
 	fragmented_growth(argv[1], argv[2]);
 	full_space(argv[1]);

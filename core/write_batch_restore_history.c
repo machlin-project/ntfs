@@ -35,11 +35,10 @@ ntfs_batch_recovery_history_home_admit(
 		if (projection->physical != home->physical) {
 			continue;
 		}
-		/* A later initialization does not retain old unowned bytes. An exact
-		 * prior retirement can nevertheless prove this FILE generation: its
-		 * full old snapshot, header inverse, original set MFT bit and settled
-		 * clear bit bind the free state consumed by the later initializer.
-		 * Private placeholders never become an alleged physical before image. */
+		/* A later initialization does not retain old unowned bytes. A prior
+		 * retirement or initialization of a free FILE can prove its generation
+		 * through the complete logged image and settled clear MFT bit. These
+		 * private projections never become physical before images. */
 		if (projection->unowned_cluster || projection->unknown_index ||
 		    (projection->unknown_slots != 0 && home->kind != NTFS_WRITE_MUTATION_FILE)) {
 			return NTFS_UNSUPPORTED;
@@ -66,8 +65,9 @@ ntfs_batch_recovery_history_home_admit(
 			}
 			continue;
 		}
-		if (!owner->committed || (home->old_slots & unknown) != unknown ||
-		    (home->new_slots & unknown) != 0) {
+		if (!owner->committed ||
+		    ((home->old_slots | home->new_slots) & unknown) != unknown ||
+		    (home->old_slots & home->new_slots & unknown) != 0) {
 			return NTFS_UNSUPPORTED;
 		}
 		for (slot = 0; slot < NTFS_BATCH_RECOVERY_FILE_SLOTS; slot++) {
@@ -77,17 +77,57 @@ ntfs_batch_recovery_history_home_admit(
 			offset = slot * NTFS_WRITE_RECORD_BYTES;
 			before = (const void *)(home->before + offset);
 			after = (const void *)(home->after + offset);
-			sequence = (uint16_t)(ntfs_u16(before->sequence) + 1u);
-			if (sequence == 0) {
-				sequence = 1;
+			if ((home->old_slots & (1u << slot)) != 0) {
+				if ((ntfs_u16(before->flags) & NTFS_RECORD_IN_USE) == 0) {
+					return NTFS_STALE;
+				}
+				sequence = (uint16_t)(ntfs_u16(before->sequence) + 1u);
+				if (sequence == 0) {
+					sequence = 1;
+				}
+			} else {
+				/* MFT growth also initializes the unused siblings of its
+				 * first file. Their free snapshots precede later creates;
+				 * the earlier unowned bytes remain unknown. */
+				sequence = ntfs_u16(after->sequence);
 			}
-			if ((ntfs_u16(before->flags) & NTFS_RECORD_IN_USE) == 0 ||
-			    ntfs_u16(after->flags) != 0 || ntfs_u16(after->sequence) != sequence ||
+			if (ntfs_u16(after->flags) != 0 || sequence == 0 ||
+			    ntfs_u16(after->sequence) != sequence ||
 			    sequence != projection->next_sequence[slot]) {
 				return NTFS_STALE;
 			}
 		}
 		home->historical_free_slots |= unknown;
+	}
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_batch_recovery_historical_after_admit(const struct ntfs_write_batch_recovery *owner)
+{
+	const struct ntfs_batch_recovery_home *home;
+	size_t index, slot, offset;
+
+	if (!owner->historical || !owner->committed) {
+		return NTFS_INVALID;
+	}
+	for (index = 0; index < owner->homes; index++) {
+		home = &owner->home[index];
+		if (home->historical_free_slots != 0 &&
+		    (home->kind != NTFS_WRITE_MUTATION_FILE ||
+			(home->historical_free_slots & (uint8_t)~home->slots) != 0)) {
+			return NTFS_CORRUPT;
+		}
+		for (slot = 0; slot < NTFS_BATCH_RECOVERY_FILE_SLOTS; slot++) {
+			if ((home->historical_free_slots & (1u << slot)) != 0) {
+				continue;
+			}
+			offset = slot * NTFS_WRITE_RECORD_BYTES;
+			if (!ntfs_equal(home->after + offset, home->source + offset,
+				NTFS_WRITE_RECORD_BYTES)) {
+				return NTFS_STALE;
+			}
+		}
 	}
 	return NTFS_OK;
 }

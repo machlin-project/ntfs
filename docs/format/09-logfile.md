@@ -238,6 +238,17 @@ entry for Initialize FILE (`0x02`) is `0x03`, so a real Initialize FILE undo
 cannot accompany `ADDING`. This is a packet-admission condition, separate from
 transaction outcome and the later correctness of replaying that FILE image.
 
+The flag names and values are already published in NTFS-3G's pinned
+[logfile.h](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/include/ntfs-3g/logfile.h).
+Its separate recovery utility interprets recorded operations, but that does not
+establish every admission condition for newly generated Windows packets. The
+[ntfsrecover manual](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/ntfsrecover.8.in)
+states that NTFS-3G does not log its own writes. Published bit definitions,
+replay behavior and the exact native validator predicate are therefore distinct
+sources of evidence. The selected flag/payload condition below comes from the
+inspected native validator and is exercised by original C regressions and the
+bounded native batch; no NTFS-3G or Windows implementation is imported.
+
 | Selected packet | Ordinary payloads | `ADDING` | This flag predicate |
 | --- | --- | --- | --- |
 | Initialize FILE / Initialize FILE snapshot | Complete before-image in both directions | Clear | Satisfied |
@@ -435,6 +446,42 @@ native loser/winner replay remain execution-owner work. Local framing, allocatio
 faults, packet binding and private inverse effects are covered by
 [the connected C scenarios](../../tests/write_mutation.c) and
 [independent page/packet goldens](../../tests/write_batch_pages.c).
+
+### Free FILE initialization in retained history
+
+The large offline C sequence on immutable Windows source media exposes a separate
+history boundary. Its first MFT growth adds one fragmented cluster and initializes
+four FILE containers. The next operation occupies a still-free sibling. Fresh
+acquisition of both retained lifetimes previously refused: backward projection
+knew how an earlier retirement led to a later initializer, but rejected an earlier
+initialization whose final FILE was itself free. This is an observed local refusal
+before persistence or any transfer, not a Windows mount rejection.
+
+The earlier complete Initialize redo supplies the free FILE body. Its `flags`
+must be zero, its `sequence` must be nonzero and equal the generation consumed by
+the later initializer, and its exact owning MFT mapping and clear allocation bit
+must pass the projected after-view checks. An earlier retirement instead proves
+the same free state through its original live generation and the checked increment.
+Neither proof turns the discarded free bytes into a physical before image. The
+private older projection retains unknown storage before its initialization, and
+recovery never publishes these historical placeholders.
+
+![Free FILE history and generation proof](diagrams/file-free-history.svg)
+
+[Diagram source](diagrams/file-free-history.mmd).
+
+The [historical admission](../../core/write_batch_restore_history.c) and
+[mapping/bitmap validation](../../core/write_batch_restore.c) implement this
+boundary. The [connected tests](../../tests/write_batch_recovery.h) first reproduce
+the refusal, then retain actual ordinary-image MFT growth followed by two sibling
+creates, selected torn metadata homes and zero-rewrite reopens without an intervening
+checkpoint. Independent admission controls refuse live, mismatched-generation,
+unowned-cluster and uncommitted claims. All 198 fatal-ASan/UBSan suites and the
+selected-Xcode style/strict compilation gate pass after the correction. The larger
+891-operation native-source sequence also passes, including six independently
+reviewed Windows growth/pressure/reuse states and 30 journal wraps. Broader growth
+interruptions and the installed general mutation owner remain separate acceptance
+requirements; see [the current evidence](../ACCEPTANCE.md#native-mftdirectory-pressure-and-sustained-journal-reuse).
 
 ### Native creation control: a bounded journal observation
 

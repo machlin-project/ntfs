@@ -1,5 +1,188 @@
 # Acceptance
 
+## General mutation owner and FSKit local boundary
+
+The preceding general-owner implementation passes all 201 unique fatal-ASan/UBSan C
+suites with zero failures or SKIPs, selected-Xcode formatting, all 67 core C
+sources strictly compiled for arm64 and x86_64 with the 2-KiB frame ceiling,
+and four strict changed-test compilations. FSKit components pass 64 host groups
+with thirteen explicit macOS 27 runtime SKIPs and zero failures. The corrected
+universal unsigned Release app and extension both build successfully. A personally
+signed build and exact native tools package are installed. All 81 native
+component groups pass with zero SKIPs. These are distinct from the accepted
+earlier installed writer and from actual mounted general mutation.
+
+The preceding first mounted `mkdir` returns `ENOTSUP`, so no later syscall stage executes.
+The failed name is absent, ordinary unmount releases the backing descriptors,
+and its complete inactive hash equals the pre-mount frozen source. No disk byte
+changed. The extension's create handler does not yet admit the complete creation
+attribute family; an exact request mask was not captured, so that is a diagnosed
+contract gap rather than a proved field-level cause of this invocation. The
+failed batch and its read-only diagnosis are retained in
+`mac-general-mutation-installed13-complete-20261007/` and
+`mac-general-mutation-create-diagnosis13-20261007/`. Export through the guest's
+read-only shared directory separately fails; the original inactive image remains
+preserved. Future postimages use a binary CLI stream after ordinary unmount.
+
+The corrected creation build passes all 81 native component groups and actual
+mounted file/directory creation. Its observed request supplies Mode, UID, GID,
+Flags and BirthTime; all supplied fields are consumed on successful creation.
+Growth to 65,794 bytes with a zero gap, truncate/regrow zeros, observer coherence
+and shared-mapping mutation after writer close pass. Open unlink returns the
+declared unsupported result. The first cross-parent directory move returns EIO;
+later replacement, removal, reuse and fresh-remount stages do not execute.
+
+Ordinary unmount releases the image. Its exact inactive postimage is exported
+through binary CLI stdout, frozen and completely validated. Source-identical C
+preparation and debugger evidence establish the local cause: ancestry requires
+a unique filename while the existing Windows ancestor has a valid same-parent
+Win32/DOS pair. The corrected bounded iterator passes a failing-before regression
+with five valid trees and eleven malformed-parent refusals. Ancestor bytes stay
+exact and pair mutation remains unsupported. Evidence is retained under
+`creation-attributes-installed14-20261008/`,
+`creation-attributes-rename-diagnosis14-20261008/`,
+`creation-attributes-rename-cause14-20261008/`,
+`directory-ancestry-red-valid-security-20261008/` and
+`directory-ancestry-focused-20261008/`. Earlier fixture-authoring and diagnostic
+probe compilation failures remain preserved separately. The complete current
+local batch passes all 201 sanitized suites, selected-Xcode style, 134 strict
+core and four test compilations, 64 host FSKit groups/thirteen runtime SKIPs and
+the universal Release app. On a private clone of the exact native failure image,
+raw rename preparation produces six updates with zero writes/barriers; the
+general owner prepares the complete preview with zero writes and one initial
+persistence barrier. Both preserve the whole image. Evidence is under
+`directory-ancestry-native-prepare15-complete-20261008/` and
+`directory-ancestry-local15-20261008/`. Fresh installed scenario completion and
+independent Windows postimage review remain separate; the failed namespace is
+never retried.
+
+The ancestry-corrected installed build then passes all 81 native component groups,
+cross-parent directory movement with held descendant identity/data, closed-victim
+replacement, nonempty-directory refusal and directory removal. Fourteen subsequent
+create/remove generation-reuse cycles pass; the next create returns `ENOMEM`.
+Later cleanup and fresh-remount stages do not execute. Ordinary unmount and exact
+inactive export pass, preserving every earlier source. Full validation of the
+failed image passes. A source-identical debugger binds the refusal to the root
+recovery owner's 65,536 cumulative allocation-call limit while retained history
+contains 44 lifetimes and 356 packets. The backend refuses no allocation and peaks
+at approximately 1.2 MiB of live storage; this is cumulative recovery work rather
+than physical-memory exhaustion. Reports are retained in
+`directory-ancestry-installed15-20261008/`,
+`general-mutation-memory-diagnosis15-20261008/`,
+`general-mutation-memory-offline15-20261008/` and
+`general-mutation-memory-lldb15-20261008/`.
+
+The independent 100-cycle owner regression first fails on cycle 19 with the
+preceding implementation. Exact historical-state validation reuse and cumulative
+resource-triggered checkpoints then pass all 202 sanitized suites, strict core/
+test compilation, 64 host FSKit groups and the unsigned universal Release build.
+The exact native failure image now admits a complete joint checkpoint/create
+preview with zero writes and an unchanged whole-image hash. That first corrected
+local batch uses a half-budget reserve. Review tightens it to a quarter because
+one prepared request can acquire the old history twice. The bounded follow-up
+retains a physical-space regression failure: redundant full validation of
+36 unchanged attribute-open-only prefixes crosses the stricter resource reserve.
+The current correction still binds every open and reuses its already validated
+unchanged state. The fresh full current-source batch passes all 202 suites,
+134 strict core and four test compilations, selected-Xcode style, 64 host FSKit
+groups/thirteen runtime SKIPs and the universal unsigned Release app. Independent
+review also binds its zero-write checkpoint/create preview to the exact failed
+image. The personally signed current app/tools package passes separate byte,
+profile, entitlement and symbol-UUID review. The signed app is installed with its
+previous app and six inactive saved images preserved. The immediate registration
+query initially returned no module; the later exact public FSClient module is
+disabled. An ordinary CLI user election does not change that FSClient verdict.
+Settings enablement awaits guest unlock. No fresh image import or corrected
+native mutation scenario has run, so installed completion and its Windows
+postimage remain unqualified.
+No native candidate has been retried. Evidence is retained in
+`history-budget-red-20261008/`, `history-budget-local16-20261008/`,
+`history-reserve-local17-20261008/`, `history-space-diagnosis17-20261008/`,
+`history-reserve-local18-20261008/` and
+`history-reserve-signed-pack18-20261008/`.
+
+The new exclusive owner joins fresh image-only recovery, reconstructed-volume
+admission, ordinary mutation, automatic checkpoint preparation and one-shot
+execution. Its tests cover all seven operation kinds, zero gaps and truncate/
+regrow, nineteen automatic checkpoints through repeated storage reuse, pending
+request exclusion, owned request bytes, abandoned plans, deferred claim release,
+joint checkpoint/mutation preflight failures, persistence poisoning and actual
+partial-sector recovery. Native replies, attributes, free-space results and
+descendant paths are prepared before mutation; the component scenario checks
+held descendants, replacement retirement, sequence reuse, allocation refusal
+after durability and fresh exact data/namespace observations.
+
+The Release compiler initially rejects four conditionally initialized time
+outputs. Linear context/result guards correct the callbacks; both failed captures
+remain retained. A stricter native component compile separately exposes two
+test producer paths; split allocation assertions and an exact-transfer sentinel
+preserve their checks. The corrected native checker compiles and signs. Passing
+core suites, strict core compilations and host component results are retained
+without repeating them for those platform/test-only changes. Evidence is under
+`general-owner-fskit-local-20261007/`, `general-mutation-product-20261007/`,
+`general-mutation-release-20261007/` and
+`general-mutation-signed-pack13-complete-20261007/` in `artifacts/overwrite/`.
+
+One separate Windows in-memory batch completes 173 private descriptor calls.
+All 132 nonempty single-ACE profiles agree exactly on ordered flags, masks and
+trustees. Five prior all-Allow creation profiles agree on owner/group and
+effective/propagating mask unions, while four show native redundant-ACE
+coalescence. Thirty-six no-inherited-ACE profiles expose native absent/protected
+DACL handling, distinct from the current C empty ACL. Caller-token defaults and
+SACL inheritance remain unqualified. The generic-mask split has a failing-before
+literal C regression and passes after correction in the 200-suite batch.
+Native reports and independent review are in `windows-private-inheritance-20261007/`;
+[the security reference](format/07-security.md#native-descriptor-observations-and-limits)
+records the exact scope. No filesystem security is changed by this experiment.
+
+The prepared installed syscall scenario covers growth with a zero gap,
+shrink/regrow zeros, shared mmap after writer close, held descendant movement,
+closed-victim replacement, nonempty-directory refusal, removal, record-generation
+reuse and fresh same-saved-URL remount. Its payload/final byte oracle is authored
+independently. Complete installed results and native Windows postimage acceptance
+remain pending. The successful syscall prefixes above do not qualify the
+unexecuted fresh-remount and final postimage checks. Open unlink/open-victim
+replacement, general metadata/ACL setters,
+encoded/named-stream writes and block-device mutation are unsupported contracts.
+
+## Native MFT/directory pressure and sustained journal reuse
+
+The complete ordinary-operation writer now passes 891 distinct actual C
+operations and 234 successful checkpoints on immutable native-source media.
+Six retained states cover directory growth, the first MFT growth, 320 simultaneous
+long-named files, mixed deletion/reuse, sustained journal reuse and final cleanup.
+Every state agrees with an independent complete publication oracle, passes full
+metadata/allocation validation and has zero-write fresh recovery. The original
+four file contents and 29-byte alternate stream stay exact. Ordinary allocation
+preserves slots 16–23; MFT capacity grows from 256 to 388 records. Sixteen sustained
+create/write/shrink/move/remove cycles observe 30 journal sequence wraps.
+
+One prepared Windows invocation accepts all six states. Main reviews 1,068
+namespace/metadata checks, including 1,056 present-file and ten present-directory
+observations, sequence-bearing File IDs, declared FILETIMEs and native projection
+of the expected owner/group/DACL. All six volumes are clean, pass read-only chkdsk
+and have one exact original healthy NTFS event, with zero warnings or repair
+events. All six normally detached postimages are archived exactly; the original
+test volume, frozen inputs and UTM/VM lifecycle stay unchanged. The candidate
+checks preserve all four original contents, their two declared times and ADS,
+plus the initialized file's native ACL/File ID. This pressure manifest did not
+request a separate resident-file ACL/File ID query. Native creation inheritance,
+the broader growth interruption matrix and installed general FSKit mutation
+remain distinct pending gates.
+
+The first false-space refusal during resident INDEX_ROOT spill, the retained
+free-FILE initialization refusal after MFT growth, and the later duplicate
+checkpoint request are preserved. The first two have test-first C corrections;
+the duplicate is a harness scheduling error with a zero-I/O `NTFS_BUSY` result.
+Continuation resumes completed prefixes without executing an operation again.
+The corrected local boundary passes all 198 fatal-ASan/UBSan suites with zero
+SKIPs, selected-Xcode style and eight strict changed-core compilations across
+arm64/x86_64 and `-O2`/`-Os`. Evidence and independent main reviews are under
+`free-initialization-history-local-20261007/`,
+`native-pressure-sequence-resumed-20261007/`,
+`native-pressure-inputs-20261007/` and
+`windows-native-pressure-network-20261007/` in `artifacts/overwrite/`.
+
 ## Private ordinary-operation image harness
 
 The current corrected C writer passes independent native review of 28 distinct
@@ -7,8 +190,8 @@ operation/recovery states. All ten connected ordinary operations, seven actual
 create writer states, seven completed recoveries and four loser/compensation
 states have exact file/metadata checks, clean state, passing read-only chkdsk and
 a matching healthy event. All 28 detached postimages are retained. The chronology
-below preserves preceding failures; native inheritance, MFT pressure, sustained
-ring reuse and installed general FSKit mutation remain open.
+below preserves preceding failures. The later pressure/reuse gate above now
+passes; native inheritance and installed general FSKit mutation remain open.
 
 The manual [ordinary-image CLI](../tests/write_operation_image.c) now captures
 actual partial writes and delivered-but-uncertain persistence for complete

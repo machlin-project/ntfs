@@ -3,6 +3,7 @@
 #import "NTFSNames.h"
 #import "NTFSImageVolume.h"
 #include "../../core/write_owner.h"
+#include "../../core/write_mutation.h"
 #include "../../core/disk.h"
 #include <errno.h>
 #include <os/log.h>
@@ -75,6 +76,126 @@ image_file_write_type(const struct ntfs_stat *stat)
 	    (stat->file_attributes &
 		(NTFS_FILE_READ_ONLY | NTFS_FILE_SYSTEM | NTFS_FILE_COMPRESSED |
 		    NTFS_FILE_ENCRYPTED | NTFS_FILE_SPARSE)) == 0;
+}
+
+static BOOL
+image_directory_write_type(const struct ntfs_stat *stat)
+{
+	return stat->directory && !stat->reparse &&
+	    ((stat->reference & NTFS_REFERENCE_RECORD_MASK) == NTFS_ROOT_RECORD ||
+		(stat->reference & NTFS_REFERENCE_RECORD_MASK) >= NTFS_FIRST_USER_RECORD) &&
+	    (stat->file_attributes &
+		(NTFS_FILE_READ_ONLY | NTFS_FILE_COMPRESSED | NTFS_FILE_ENCRYPTED |
+		    NTFS_FILE_SPARSE)) == 0;
+}
+
+struct image_mutation_input {
+	enum ntfs_write_mutation_kind kind;
+	__unsafe_unretained FSItem *item, *sourceDirectory, *destinationDirectory, *overItem;
+	__unsafe_unretained FSFileName *sourceName, *destinationName;
+	__unsafe_unretained NSData *contents;
+	uint64_t size, offset, fileTime;
+	struct ntfs_write_creation_times creationTimes;
+	BOOL requireWriteOpen;
+};
+
+static enum ntfs_result
+image_mutation_name(FSFileName *name, uint16_t *units, struct ntfs_write_name *out)
+{
+	enum ntfs_result result;
+
+	if (![name isKindOfClass:FSFileName.class] || name.data.length == 0 ||
+	    name.data.length > NTFS_FSKIT_NATIVE_NAME_BYTES || ntfs_native_name_reserved(name)) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_utf8_to_utf16(
+	    name.data.bytes, name.data.length, units, NTFS_NAME_MAX, &out->count);
+	if (result == NTFS_OK) {
+		out->units = units;
+	}
+	return result;
+}
+
+static BOOL
+image_set_attributes_supported(FSItemSetAttributesRequest *request, FSItemAttribute allowed)
+{
+	FSItemAttribute bit;
+
+	if (![request isKindOfClass:FSItemSetAttributesRequest.class]) {
+		return NO;
+	}
+	for (bit = FSItemAttributeType; bit <= FSItemAttributeInhibitKernelOffloadedIO; bit <<= 1) {
+		if ((bit & allowed) == 0 && [request isValid:bit]) {
+			return NO;
+		}
+	}
+	return YES;
+}
+
+static enum ntfs_result
+image_time_filetime(struct timespec time, uint64_t *filetime)
+{
+	uint64_t seconds, ticks, fraction;
+
+	if (time.tv_nsec < 0 || (uint64_t)time.tv_nsec >= NSEC_PER_SEC) {
+		return NTFS_RANGE;
+	}
+	if (time.tv_sec < 0) {
+		if (time.tv_sec < -(int64_t)(NTFS_TIME_EPOCH / NTFS_TIME_TICKS)) {
+			return NTFS_RANGE;
+		}
+		seconds = (uint64_t)-time.tv_sec;
+		ticks = NTFS_TIME_EPOCH - seconds * NTFS_TIME_TICKS;
+	} else {
+		seconds = (uint64_t)time.tv_sec;
+		if (seconds > (INT64_MAX - NTFS_TIME_EPOCH) / NTFS_TIME_TICKS) {
+			return NTFS_RANGE;
+		}
+		ticks = NTFS_TIME_EPOCH + seconds * NTFS_TIME_TICKS;
+	}
+	fraction = (uint64_t)time.tv_nsec / NTFS_TIME_NANOSECONDS_PER_TICK;
+	if (fraction > INT64_MAX - ticks) {
+		return NTFS_RANGE;
+	}
+	*filetime = ticks + fraction;
+	return NTFS_OK;
+}
+
+static enum ntfs_result
+image_creation_times(
+    FSItemSetAttributesRequest *attributes, struct ntfs_write_creation_times *times)
+{
+	enum ntfs_result result;
+
+	if ([attributes isValid:FSItemAttributeBirthTime]) {
+		result = image_time_filetime(attributes.birthTime, &times->created);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		times->fields |= NTFS_WRITE_CREATION_CREATED;
+	}
+	if ([attributes isValid:FSItemAttributeModifyTime]) {
+		result = image_time_filetime(attributes.modifyTime, &times->modified);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		times->fields |= NTFS_WRITE_CREATION_MODIFIED;
+	}
+	if ([attributes isValid:FSItemAttributeChangeTime]) {
+		result = image_time_filetime(attributes.changeTime, &times->changed);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		times->fields |= NTFS_WRITE_CREATION_CHANGED;
+	}
+	if ([attributes isValid:FSItemAttributeAccessTime]) {
+		result = image_time_filetime(attributes.accessTime, &times->accessed);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		times->fields |= NTFS_WRITE_CREATION_ACCESSED;
+	}
+	return NTFS_OK;
 }
 
 static FSDirectoryCookie
@@ -245,6 +366,7 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 	struct ntfs_stat stat;
 	struct ntfs_link_counts links;
 	FSVolumeOpenModes nativeOpenModes;
+	BOOL retired;
 }
 @property(strong) NTFSVolume *owner;
 @end
@@ -262,6 +384,14 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 	[owner releaseUnreferencedItem:self];
 }
 
+@end
+
+@interface NTFSImagePathPublication : NSObject
+@property(strong) NTFSItem *item;
+@property(strong) NTFSDirectoryPath *path;
+@end
+
+@implementation NTFSImagePathPublication
 @end
 
 static FSItemID
@@ -349,7 +479,9 @@ image_volume_create(NTFSImageTransport *transport, BOOL editing, NSError **error
 		admission =
 		    environment.reader.allocate(environment.reader.context, sizeof(*admission));
 		result = admission == NULL ? NTFS_NO_MEMORY : [transport performExclusiveAccess:^{
-		  return ntfs_write_owner_open(&environment, admission, &recovered, &owner);
+		  return editing
+		      ? ntfs_write_mutation_owner_open(&environment, admission, &recovered, &owner)
+		      : ntfs_write_owner_open(&environment, admission, &recovered, &owner);
 		}];
 		if (admission != NULL) {
 			environment.reader.release(
@@ -780,6 +912,602 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 	return result;
 }
 
+- (NSArray<NTFSImagePathPublication *> *)prepareImagePaths:(NSArray<NTFSItem *> *)items
+					    movedReference:(uint64_t)moved
+						 newParent:(NTFSDirectoryPath *)newParent
+						     epoch:(struct ntfs_volume *)epoch
+						    result:(enum ntfs_result *)result
+{
+	NSMutableDictionary<NSNumber *, NTFSDirectoryPath *> *memo =
+	    [NSMutableDictionary dictionary];
+	NSMutableArray<NTFSImagePathPublication *> *publications = [NSMutableArray array];
+	NSMutableArray<NTFSDirectoryPath *> *ancestry;
+	NTFSItem *item;
+	NTFSDirectoryPath *entry, *path;
+	NTFSImagePathPublication *publication;
+	NSNumber *key;
+	NSUInteger index;
+
+	*result = NTFS_OK;
+	if (memo == nil || publications == nil) {
+		*result = NTFS_NO_MEMORY;
+		return nil;
+	}
+	for (item in items) {
+		if (item->directoryPath == nil || item->retired) {
+			continue;
+		}
+		ancestry = [NSMutableArray array];
+		if (ancestry == nil) {
+			*result = NTFS_NO_MEMORY;
+			return nil;
+		}
+		path = nil;
+		for (entry = item->directoryPath; entry != nil; entry = entry.parent) {
+			path = memo[@(entry.reference)];
+			if (path != nil) {
+				break;
+			}
+			if (ancestry.count >= NTFS_FSKIT_LINK_COMPONENT_LIMIT) {
+				*result = NTFS_RANGE;
+				return nil;
+			}
+			[ancestry addObject:entry];
+		}
+		for (index = ancestry.count; index != 0; index--) {
+			entry = ancestry[index - 1];
+			if (memo.count >= NTFS_FSKIT_PATH_LIMIT) {
+				*result = NTFS_NO_MEMORY;
+				return nil;
+			}
+			path = [[NTFSDirectoryPath alloc]
+			    initWithVolume:epoch
+				 reference:entry.reference
+				    parent:entry.reference == moved ? newParent : path];
+			key = @(entry.reference);
+			if (path == nil || key == nil) {
+				*result = NTFS_NO_MEMORY;
+				return nil;
+			}
+			memo[key] = path;
+		}
+		publication = [[NTFSImagePathPublication alloc] init];
+		if (publication == nil) {
+			*result = NTFS_NO_MEMORY;
+			return nil;
+		}
+		publication.item = item;
+		publication.path = path;
+		[publications addObject:publication];
+	}
+	return publications;
+}
+
+- (id)performImageMutation:(const struct image_mutation_input *)input
+	      prepareReply:(NTFSImageMutationReply)prepare
+		    status:(enum ntfs_result *)outStatus
+		     error:(NSError **)error
+{
+	__block struct ntfs_write_mutation_execution *prepared = NULL;
+	__block struct ntfs_write_mutation_report report = {0};
+	__block id nativeReply = nil;
+	__block NSError *preparedError = nil;
+	__block NTFSItem *created = nil;
+	__block NSNumber *createdKey = nil;
+	__block NSArray<NTFSImagePathPublication *> *paths = nil;
+	NSArray<NTFSItem *> *items;
+	NTFSItem *item = nil, *source = nil, *destination = nil, *over = nil;
+	NTFSImagePathPublication *publication;
+	NTFSDirectoryPath *sourcePath, *destinationPath;
+	struct ntfs_volume *epoch;
+	struct ntfs_write_mutation_request request = {0};
+	uint16_t sourceUnits[NTFS_NAME_MAX], destinationUnits[NTFS_NAME_MAX];
+	__block enum ntfs_result result = NTFS_INVALID;
+	BOOL committed = NO, invalidating, namespaceOperation;
+
+	if (error != NULL) {
+		*error = nil;
+	}
+	if (outStatus != NULL) {
+		*outStatus = NTFS_INVALID;
+	}
+	[_publicationLock lock];
+	@try {
+		@synchronized(self) {
+			if (self.lifecycle == NTFSVolumeInvalidating ||
+			    self.lifecycle == NTFSVolumeInvalidated) {
+				return image_write_failure(error, result = NTFS_STALE);
+			}
+			if (!_nativeImageEditing) {
+				return image_write_failure(error, result = NTFS_READ_ONLY);
+			}
+			if (prepare == nil || input->fileTime > INT64_MAX) {
+				return image_write_failure(error, result = NTFS_INVALID);
+			}
+			if (_imageTransport == nil || _writeOwner == NULL) {
+				return image_write_failure(error, result = NTFS_STALE);
+			}
+			if (_readOperations != 0 || _imageViewOpening || _nativeReplyPreparing ||
+			    _imageMutationActive) {
+				return image_write_failure(error, result = NTFS_BUSY);
+			}
+			_imageMutationActive = YES;
+			_nativeReplyPreparing = YES;
+			@try {
+				result = [self ensureImageView];
+				if (result == NTFS_OK) {
+					result = [self admissionResult];
+				}
+				if (result != NTFS_OK) {
+					return image_write_failure(error, result);
+				}
+				if (input->item != nil) {
+					item = [self checkedItem:input->item];
+					if (item == nil) {
+						return image_write_failure(
+						    error, result = _itemAdmission);
+					}
+				}
+				if (input->sourceDirectory != nil) {
+					source = [self checkedItem:input->sourceDirectory];
+					if (source == nil) {
+						return image_write_failure(
+						    error, result = _itemAdmission);
+					}
+					if (!image_directory_write_type(&source->stat) ||
+					    source->linkTarget != nil) {
+						return image_write_failure(
+						    error, result = NTFS_UNSUPPORTED);
+					}
+				}
+				if (input->destinationDirectory != nil) {
+					destination =
+					    [self checkedItem:input->destinationDirectory];
+					if (destination == nil) {
+						return image_write_failure(
+						    error, result = _itemAdmission);
+					}
+					if (!image_directory_write_type(&destination->stat) ||
+					    destination->linkTarget != nil) {
+						return image_write_failure(
+						    error, result = NTFS_UNSUPPORTED);
+					}
+				}
+				if (input->overItem != nil) {
+					over = [self checkedItem:input->overItem];
+					if (over == nil) {
+						return image_write_failure(
+						    error, result = _itemAdmission);
+					}
+				}
+				request.kind = input->kind;
+				if ((request.kind == NTFS_WRITE_RENAME ||
+					request.kind == NTFS_WRITE_REMOVE_FILE) &&
+				    item == nil) {
+					return image_write_failure(error, result = NTFS_INVALID);
+				}
+				if (request.kind == NTFS_WRITE_REMOVE_FILE && item != nil &&
+				    item->stat.directory) {
+					request.kind = NTFS_WRITE_REMOVE_DIRECTORY;
+				}
+				namespaceOperation = request.kind != NTFS_WRITE_RESIZE_FILE &&
+				    request.kind != NTFS_WRITE_GROWING_RANGE;
+				if (input->requireWriteOpen &&
+				    (item == nil ||
+					(item->nativeOpenModes & FSVolumeOpenModesWrite) == 0)) {
+					result = NTFS_READ_ONLY;
+					if (error != NULL) {
+						*error = image_access_denied();
+					}
+					return nil;
+				}
+				if ((request.kind == NTFS_WRITE_REMOVE_FILE ||
+					request.kind == NTFS_WRITE_REMOVE_DIRECTORY) &&
+				    item != nil && item->nativeOpenModes != 0) {
+					return image_write_failure(
+					    error, result = NTFS_UNSUPPORTED);
+				}
+				if (over != nil && over != item && over->nativeOpenModes != 0) {
+					return image_write_failure(
+					    error, result = NTFS_UNSUPPORTED);
+				}
+				if (namespaceOperation) {
+					if (source == nil) {
+						return image_write_failure(
+						    error, result = NTFS_INVALID);
+					}
+					request.source.parent_reference = source->stat.reference;
+					result = image_mutation_name(
+					    input->sourceName, sourceUnits, &request.source);
+					if (result == NTFS_OK &&
+					    request.kind == NTFS_WRITE_RENAME) {
+						if (destination == nil) {
+							return image_write_failure(
+							    error, result = NTFS_INVALID);
+						}
+						request.destination.parent_reference =
+						    destination->stat.reference;
+						result = image_mutation_name(input->destinationName,
+						    destinationUnits, &request.destination);
+					}
+					if (result != NTFS_OK) {
+						return image_write_failure(error, result);
+					}
+				} else if (item == nil) {
+					return image_write_failure(error, result = NTFS_INVALID);
+				}
+				request.reference = item != nil ? item->stat.reference : 0;
+				request.filetime = input->fileTime;
+				request.creation_times = input->creationTimes;
+				request.size = input->size;
+				request.offset = input->offset;
+				request.replace = over != nil;
+				if (request.kind == NTFS_WRITE_GROWING_RANGE) {
+					if (![input->contents isKindOfClass:NSData.class]) {
+						return image_write_failure(
+						    error, result = NTFS_INVALID);
+					}
+					request.data = input->contents.bytes;
+					request.bytes = input->contents.length;
+				}
+				epoch = _core;
+				sourcePath = source != nil ? source->directoryPath : nil;
+				destinationPath =
+				    destination != nil ? destination->directoryPath : nil;
+				items = _items.objectEnumerator.allObjects;
+				[_lifecycleLock lock];
+				if (_lifecycle == NTFSVolumeActive && _pendingUnmounts == 0) {
+					_lifecycle = NTFSVolumeWriting;
+					result = NTFS_OK;
+				} else {
+					result = NTFS_STALE;
+				}
+				[_lifecycleLock unlock];
+				if (result == NTFS_OK) {
+					result = [self detachImageView];
+				}
+				if (result != NTFS_OK) {
+					return image_write_failure(error, result);
+				}
+				result = [_imageTransport performExclusiveAccess:^{
+				  const struct ntfs_write_mutation_preview *preview;
+				  FSItemAttributes *attrs,
+				      *sourceAttrs = nil, *destinationAttrs = nil, *overAttrs = nil;
+				  FSFileName *stored = nil, *requestedName;
+				  id freeSpace = nil;
+				  enum ntfs_result preparedResult;
+
+				  preparedResult = ntfs_write_mutation_execution_prepare(
+				      self->_writeOwner, &request, &prepared);
+				  if (preparedResult != NTFS_OK) {
+					  return preparedResult;
+				  }
+				  preview = ntfs_write_mutation_execution_preview(prepared);
+				  if ((item != nil &&
+					  preview->item.stat.reference != item->stat.reference) ||
+				      (over != nil && over != item &&
+					  (!preview->over_item_present ||
+					      preview->over_item.stat.reference !=
+						  over->stat.reference))) {
+					  return NTFS_STALE;
+				  }
+				  if (namespaceOperation) {
+					  requestedName = request.kind == NTFS_WRITE_RENAME
+					      ? input->destinationName
+					      : input->sourceName;
+					  stored =
+					      [FSFileName nameWithBytes:requestedName.data.bytes
+								 length:requestedName.data.length];
+					  if (stored == nil) {
+						  return NTFS_NO_MEMORY;
+					  }
+				  }
+				  if (request.kind == NTFS_WRITE_CREATE_FILE ||
+				      request.kind == NTFS_WRITE_CREATE_DIRECTORY) {
+					  if (self->_items.count >= NTFS_FSKIT_ITEM_LIMIT) {
+						  return NTFS_NO_MEMORY;
+					  }
+					  created = [[NTFSItem alloc] init];
+					  createdKey = @(preview->item.stat.reference);
+					  if (created == nil || createdKey == nil) {
+						  return NTFS_NO_MEMORY;
+					  }
+					  created->stat = preview->item.stat;
+					  created->links = preview->item.links;
+					  if (created->stat.directory) {
+						  created->parentReference =
+						      request.source.parent_reference;
+						  created->directoryPath =
+						      [[NTFSDirectoryPath alloc]
+							  initWithVolume:epoch
+							       reference:created->stat.reference
+								  parent:sourcePath];
+						  if (created->directoryPath == nil) {
+							  return NTFS_NO_MEMORY;
+						  }
+					  }
+					  created.owner = self;
+					  [self->_items setObject:created forKey:createdKey];
+				  }
+				  if (request.kind == NTFS_WRITE_RENAME &&
+				      preview->item.stat.directory) {
+					  paths =
+					      [self prepareImagePaths:items
+						       movedReference:preview->item.stat.reference
+							    newParent:destinationPath
+								epoch:epoch
+							       result:&preparedResult];
+					  if (paths == nil) {
+						  return preparedResult;
+					  }
+				  }
+				  attrs = [self attributesForStat:&preview->item.stat
+						       linkCounts:&preview->item.links
+						     symbolicLink:NO];
+				  if (preview->source_directory_present) {
+					  sourceAttrs = [self
+					      attributesForStat:&preview->source_directory.stat
+						     linkCounts:&preview->source_directory.links
+						   symbolicLink:NO];
+				  }
+				  if (preview->destination_directory_present) {
+					  destinationAttrs = [self
+					      attributesForStat:&preview->destination_directory.stat
+						     linkCounts:&preview->destination_directory
+								    .links
+						   symbolicLink:NO];
+				  }
+				  if (preview->over_item_present) {
+					  overAttrs =
+					      [self attributesForStat:&preview->over_item.stat
+							   linkCounts:&preview->over_item.links
+							 symbolicLink:NO];
+				  }
+				  if (attrs == nil ||
+				      (preview->source_directory_present && sourceAttrs == nil) ||
+				      (preview->destination_directory_present &&
+					  destinationAttrs == nil) ||
+				      (preview->over_item_present && overAttrs == nil)) {
+					  return NTFS_NO_MEMORY;
+				  }
+#if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
+				  if (@available(macOS 27.0, *)) {
+					  freeSpace = [[FSFreeSpace alloc] init];
+					  if (freeSpace == nil) {
+						  return NTFS_NO_MEMORY;
+					  }
+					  [freeSpace populateWithBytes:preview->free_clusters *
+					      self->_info.cluster_size];
+				  }
+#endif
+				  nativeReply = prepare(created != nil ? created : item, stored,
+				      attrs, sourceAttrs, destinationAttrs, overAttrs, freeSpace);
+				  if (nativeReply == nil) {
+					  return NTFS_NO_MEMORY;
+				  }
+				  if (self.lifecycle != NTFSVolumeWriting ||
+				      (item != nil && item.owner != self) ||
+				      (source != nil && source.owner != self) ||
+				      (destination != nil && destination.owner != self) ||
+				      (over != nil && over.owner != self) ||
+				      (created != nil && created.owner != self)) {
+					  return NTFS_STALE;
+				  }
+				  if (input->requireWriteOpen &&
+				      (item->nativeOpenModes & FSVolumeOpenModesWrite) == 0) {
+					  preparedError = image_access_denied();
+					  return NTFS_READ_ONLY;
+				  }
+				  return ntfs_write_mutation_execution_execute(prepared, &report);
+				}];
+				if (report.execution.poisoned) {
+					[_imageTransport invalidate];
+				}
+				if (result != NTFS_OK) {
+					if (preparedError != nil) {
+						if (error != NULL) {
+							*error = preparedError;
+						}
+						return nil;
+					}
+					return image_write_failure(error, result);
+				}
+				/* Publish only already reserved values. All core children closed
+				 * before the first transfer; fresh readers bind lazily afterward.
+				 */
+				{
+					const struct ntfs_write_mutation_preview *preview =
+					    ntfs_write_mutation_execution_preview(prepared);
+
+					if (item != nil) {
+						item->stat = preview->item.stat;
+						item->links = preview->item.links;
+						item->retired = !preview->item_exists;
+					}
+					if (source != nil) {
+						source->stat = preview->source_directory.stat;
+						source->links = preview->source_directory.links;
+					}
+					if (destination != nil) {
+						destination->stat =
+						    preview->destination_directory.stat;
+						destination->links =
+						    preview->destination_directory.links;
+					}
+					if (over != nil && over != item) {
+						over->stat = preview->over_item.stat;
+						over->links = preview->over_item.links;
+						over->retired = !preview->over_item_exists;
+					}
+					_freeClusters = preview->free_clusters;
+				}
+				for (publication in paths) {
+					publication.item->directoryPath = publication.path;
+					publication.item->parentReference =
+					    publication.path.parent != nil
+					    ? publication.path.parent.reference
+					    : publication.path.reference;
+				}
+				if (namespaceOperation) {
+					_directoryVerifier++;
+					if (_directoryVerifier == 0) {
+						_directoryVerifier++;
+					}
+				}
+				committed = YES;
+				return nativeReply;
+			} @finally {
+				ntfs_write_mutation_execution_close(prepared);
+				if (!committed && created != nil) {
+					if (createdKey != nil) {
+						[_items removeObjectForKey:createdKey];
+					}
+					created.owner = nil;
+				}
+				_nativeReplyPreparing = NO;
+				_imageMutationActive = NO;
+				[_lifecycleLock lock];
+				invalidating = _lifecycle == NTFSVolumeInvalidating;
+				if (_lifecycle == NTFSVolumeWriting) {
+					_lifecycle = NTFSVolumeActive;
+				}
+				[_lifecycleLock unlock];
+				if (invalidating) {
+					[self invalidate];
+				}
+			}
+		}
+	} @finally {
+		if (outStatus != NULL) {
+			*outStatus = result;
+		}
+		[_publicationLock unlock];
+	}
+}
+
+- (id)createImageItemNamed:(FSFileName *)name
+		      type:(FSItemType)type
+	       inDirectory:(FSItem *)directory
+		attributes:(FSItemSetAttributesRequest *)attributes
+		  fileTime:(uint64_t)fileTime
+	      prepareReply:(NTFSImageMutationReply)prepare
+		     error:(NSError **)error
+{
+	struct image_mutation_input input = {0};
+	FSItemAttribute supported = FSItemAttributeType | FSItemAttributeMode | FSItemAttributeUID |
+	    FSItemAttributeGID | FSItemAttributeSize | FSItemAttributeFlags |
+	    FSItemAttributeBirthTime | FSItemAttributeModifyTime | FSItemAttributeChangeTime |
+	    FSItemAttributeAccessTime;
+	FSItemAttribute bit, supplied = 0;
+	uint32_t mode, typeMode;
+	enum ntfs_result status;
+	id result;
+
+	if (type != FSItemTypeFile && type != FSItemTypeDirectory) {
+		return image_write_failure(error, NTFS_UNSUPPORTED);
+	}
+	mode = type == FSItemTypeDirectory ? S_IRWXU : S_IRUSR | S_IWUSR;
+	typeMode = type == FSItemTypeDirectory ? S_IFDIR : S_IFREG;
+	if (attributes != nil &&
+	    (!image_set_attributes_supported(attributes, supported) ||
+		([attributes isValid:FSItemAttributeType] && attributes.type != type) ||
+		([attributes isValid:FSItemAttributeSize] && attributes.size != 0) ||
+		([attributes isValid:FSItemAttributeFlags] && attributes.flags != 0) ||
+		([attributes isValid:FSItemAttributeMode] &&
+		    ((attributes.mode & ~S_IFMT) != mode ||
+			((attributes.mode & S_IFMT) != 0 &&
+			    (attributes.mode & S_IFMT) != typeMode))) ||
+		([attributes isValid:FSItemAttributeUID] && attributes.uid != _nativeUserID) ||
+		([attributes isValid:FSItemAttributeGID] && attributes.gid != _nativeGroupID))) {
+		return image_write_failure(error, NTFS_UNSUPPORTED);
+	}
+	status = image_creation_times(attributes, &input.creationTimes);
+	if (status != NTFS_OK) {
+		return image_write_failure(error, status);
+	}
+	for (bit = FSItemAttributeType; bit <= FSItemAttributeInhibitKernelOffloadedIO; bit <<= 1) {
+		if ([attributes isValid:bit]) {
+			supplied |= bit;
+		}
+	}
+	input.kind =
+	    type == FSItemTypeDirectory ? NTFS_WRITE_CREATE_DIRECTORY : NTFS_WRITE_CREATE_FILE;
+	input.sourceDirectory = directory;
+	input.sourceName = name;
+	input.fileTime = fileTime;
+	result = [self performImageMutation:&input prepareReply:prepare status:NULL error:error];
+	if (result != nil && attributes != nil) {
+		/* Matching fixed native presentation is applied without changing Windows
+		 * security. Supplied times are part of the same durable creation. */
+		attributes.consumedAttributes |= supplied;
+	}
+	return result;
+}
+
+- (id)renameImageItem:(FSItem *)item
+	  inDirectory:(FSItem *)sourceDirectory
+		named:(FSFileName *)sourceName
+	    toNewName:(FSFileName *)name
+	  inDirectory:(FSItem *)directory
+	     overItem:(FSItem *)overItem
+	     fileTime:(uint64_t)fileTime
+	 prepareReply:(NTFSImageMutationReply)prepare
+		error:(NSError **)error
+{
+	struct image_mutation_input input = {0};
+
+	input.kind = NTFS_WRITE_RENAME;
+	input.item = item;
+	input.sourceDirectory = sourceDirectory;
+	input.sourceName = sourceName;
+	input.destinationDirectory = directory;
+	input.destinationName = name;
+	input.overItem = overItem;
+	input.fileTime = fileTime;
+	return [self performImageMutation:&input prepareReply:prepare status:NULL error:error];
+}
+
+- (id)removeImageItem:(FSItem *)item
+		named:(FSFileName *)name
+	fromDirectory:(FSItem *)directory
+	     fileTime:(uint64_t)fileTime
+	 prepareReply:(NTFSImageMutationReply)prepare
+		error:(NSError **)error
+{
+	struct image_mutation_input input = {0};
+
+	input.kind = NTFS_WRITE_REMOVE_FILE;
+	input.item = item;
+	input.sourceDirectory = directory;
+	input.sourceName = name;
+	input.fileTime = fileTime;
+	return [self performImageMutation:&input prepareReply:prepare status:NULL error:error];
+}
+
+- (id)setImageAttributes:(FSItemSetAttributesRequest *)attributes
+		  onItem:(FSItem *)item
+		fileTime:(uint64_t)fileTime
+	    prepareReply:(NTFSImageMutationReply)prepare
+		   error:(NSError **)error
+{
+	struct image_mutation_input input = {0};
+	id result;
+
+	if (!image_set_attributes_supported(attributes, FSItemAttributeSize) ||
+	    ![attributes isValid:FSItemAttributeSize]) {
+		return image_write_failure(error, NTFS_UNSUPPORTED);
+	}
+	input.kind = NTFS_WRITE_RESIZE_FILE;
+	input.item = item;
+	input.size = attributes.size;
+	input.fileTime = fileTime;
+	result = [self performImageMutation:&input prepareReply:prepare status:NULL error:error];
+	if (result != nil) {
+		attributes.consumedAttributes |= FSItemAttributeSize;
+	}
+	return result;
+}
+
 - (enum ntfs_result)overwriteImageItem:(FSItem *)item
 				offset:(off_t)offset
 				 bytes:(const void *)bytes
@@ -796,6 +1524,48 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 		return NTFS_INVALID;
 	}
 	*completed = 0;
+	if (_nativeImageEditing) {
+		struct image_mutation_input input = {0};
+		NSData *contents;
+		id reply;
+
+		if (offset < 0 || (length != 0 && bytes == NULL)) {
+			return NTFS_INVALID;
+		}
+		if (length > NTFS_OVERWRITE_MAX_BYTES) {
+			return NTFS_RANGE;
+		}
+		contents = [NSData dataWithBytes:bytes length:length];
+		if (contents == nil) {
+			return NTFS_NO_MEMORY;
+		}
+		input.kind = NTFS_WRITE_GROWING_RANGE;
+		input.item = item;
+		input.contents = contents;
+		input.offset = (uint64_t)offset;
+		input.fileTime = fileTime;
+		reply = [self performImageMutation:&input
+				      prepareReply:^id(FSItem *preparedItem, FSFileName *name,
+					  FSItemAttributes *attributes, FSItemAttributes *source,
+					  FSItemAttributes *destination, FSItemAttributes *over,
+					  id freeSpace) {
+					(void)preparedItem;
+					(void)name;
+					(void)attributes;
+					(void)source;
+					(void)destination;
+					(void)over;
+					(void)freeSpace;
+					return @YES;
+				      }
+					    status:&result
+					     error:NULL];
+		if (reply != nil) {
+			*completed = length;
+		}
+		return result;
+	}
+
 	[_publicationLock lock];
 	@try {
 		@synchronized(self) {
@@ -934,8 +1704,17 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 		    FSAccessReadSecurity;
 		if (value->stat.directory && value->linkTarget == nil) {
 			supported |= FSAccessSearch;
+			if (image_directory_write_type(&value->stat)) {
+				supported |=
+				    FSAccessAddFile | FSAccessAddSubdirectory | FSAccessDeleteChild;
+				if ((value->stat.reference & NTFS_REFERENCE_RECORD_MASK) !=
+				    NTFS_ROOT_RECORD) {
+					supported |= FSAccessDelete;
+				}
+			}
 		} else if (image_file_write_type(&value->stat) && value->linkTarget == nil) {
-			supported |= FSAccessWriteData;
+			supported |= FSAccessWriteData | FSAccessAppendData |
+			    FSAccessWriteAttributes | FSAccessDelete;
 		}
 		*allowed = (access & ~supported) == 0;
 		return nil;
@@ -1030,97 +1809,42 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 		  toFile:(FSItem *)item
 		atOffset:(off_t)offset
 		fileTime:(uint64_t)fileTime
-	    prepareReply:(id (^)(FSItemAttributes *, size_t))prepare
+	    prepareReply:(id (^)(FSItemAttributes *, size_t, id))prepare
 		   error:(NSError **)error
 {
-	FSItemAttributes *attributes = nil;
-	NSError *attributeError = nil;
-	NTFSItem *value;
-	struct ntfs_time time;
-	size_t completed = 0;
-	id prepared = nil;
-	enum ntfs_result result;
+	struct image_mutation_input input = {0};
 
-	if (error != NULL) {
-		*error = nil;
+	if (![contents isKindOfClass:NSData.class] || offset < 0 || prepare == nil) {
+		return image_write_failure(error, NTFS_INVALID);
 	}
-	[_publicationLock lock];
-	@try {
-		@synchronized(self) {
-			if (!_nativeImageEditing) {
-				return image_write_failure(error, NTFS_READ_ONLY);
-			}
-			if (![contents isKindOfClass:NSData.class] || offset < 0 ||
-			    prepare == nil || fileTime > INT64_MAX) {
-				return image_write_failure(error, NTFS_INVALID);
-			}
-			if (contents.length > NTFS_OVERWRITE_MAX_BYTES) {
-				return image_write_failure(error, NTFS_RANGE);
-			}
-			if (_nativeReplyPreparing) {
-				return image_write_failure(error, NTFS_BUSY);
-			}
-			if (![item isKindOfClass:NTFSItem.class] ||
-			    ((NTFSItem *)item).owner != self) {
-				return image_write_failure(error, NTFS_STALE);
-			}
-			value = (NTFSItem *)item;
-			if ((value->nativeOpenModes & FSVolumeOpenModesWrite) == 0) {
-				if (error != NULL) {
-					*error = image_access_denied();
-				}
-				return nil;
-			}
-			_nativeReplyPreparing = YES;
-			@try {
-				attributes = [self attributes:item error:&attributeError];
-				if (attributes == nil) {
-					if (error != NULL) {
-						*error = attributeError;
-					}
-					return nil;
-				}
-				if (contents.length != 0) {
-					ntfs_decode_time(fileTime, &time);
-					attributes.modifyTime =
-					    (struct timespec){time.seconds, time.nanoseconds};
-					attributes.changeTime = attributes.modifyTime;
-				}
-				prepared = prepare(attributes, contents.length);
-				if (prepared == nil) {
-					return image_write_failure(error, NTFS_NO_MEMORY);
-				}
-			} @finally {
-				_nativeReplyPreparing = NO;
-			}
-			if ((value->nativeOpenModes & FSVolumeOpenModesWrite) == 0) {
-				if (error != NULL) {
-					*error = image_access_denied();
-				}
-				return nil;
-			}
-			result = [self overwriteImageItem:item
-						   offset:offset
-						    bytes:contents.bytes
-						   length:contents.length
-						 fileTime:fileTime
-						completed:&completed];
-			if (result != NTFS_OK) {
-				return image_write_failure(error, result);
-			}
-			NSAssert(
-			    completed == contents.length, @"Complete NTFS image write byte count");
-			return prepared;
-		}
-	} @finally {
-		[_publicationLock unlock];
+	if (contents.length > NTFS_OVERWRITE_MAX_BYTES) {
+		return image_write_failure(error, NTFS_RANGE);
 	}
+	input.kind = NTFS_WRITE_GROWING_RANGE;
+	input.item = item;
+	input.contents = contents;
+	input.offset = (uint64_t)offset;
+	input.fileTime = fileTime;
+	input.requireWriteOpen = YES;
+	return
+	    [self performImageMutation:&input
+			  prepareReply:^id(FSItem *preparedItem, FSFileName *name,
+			      FSItemAttributes *attributes, FSItemAttributes *source,
+			      FSItemAttributes *destination, FSItemAttributes *over, id freeSpace) {
+			    (void)preparedItem;
+			    (void)name;
+			    (void)source;
+			    (void)destination;
+			    (void)over;
+			    return prepare(attributes, contents.length, freeSpace);
+			  }
+				status:NULL
+				 error:error];
 }
 
 - (enum ntfs_result)currentImageFileTime:(uint64_t *)fileTime
 {
 	struct timespec time;
-	uint64_t seconds, ticks, fraction;
 
 	if (fileTime == NULL) {
 		return NTFS_INVALID;
@@ -1129,20 +1853,7 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 	if (clock_gettime(CLOCK_REALTIME, &time) != 0) {
 		return NTFS_IO;
 	}
-	if (time.tv_sec < 0 || time.tv_nsec < 0 || (uint64_t)time.tv_nsec >= NSEC_PER_SEC) {
-		return NTFS_RANGE;
-	}
-	seconds = (uint64_t)time.tv_sec;
-	if (seconds > (INT64_MAX - NTFS_TIME_EPOCH) / NTFS_TIME_TICKS) {
-		return NTFS_RANGE;
-	}
-	ticks = NTFS_TIME_EPOCH + seconds * NTFS_TIME_TICKS;
-	fraction = (uint64_t)time.tv_nsec / (NSEC_PER_SEC / NTFS_TIME_TICKS);
-	if (fraction > INT64_MAX - ticks) {
-		return NTFS_RANGE;
-	}
-	*fileTime = ticks + fraction;
-	return NTFS_OK;
+	return image_time_filetime(time, fileTime);
 }
 
 - (FSItem *)lookup:(FSFileName *)name
@@ -1778,7 +2489,7 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 		return nil;
 	}
 	value = (NTFSItem *)item;
-	if (value.owner != self) {
+	if (value.owner != self || value->retired) {
 		return nil;
 	}
 	if (value->node == NULL && _imageTransport != nil) {
@@ -1857,9 +2568,9 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 	NTFSDirectoryPath *path = nil;
 	enum ntfs_result result;
 
-	/* The private writer changes initialized data and SI timestamps only. Full
-	 * sequence references, namespace ancestry, reparse targets and allocation
-	 * remain fixed by its validated transaction, not by a same-serial guess. */
+	/* Complete sequence references survive ordinary mutations. Ancestry tokens
+	 * are prepared before namespace publication and rebound to this exact fresh
+	 * core epoch. Retired identities can never reopen reused FILE storage. */
 	result = ntfs_node_open(_core, item->stat.reference, &node);
 	if (result != NTFS_OK) {
 		goto done;
@@ -2356,8 +3067,10 @@ done:
 	attrs.gid = _nativeGroupID;
 	attrs.mode =
 	    stat->directory && !link ? NTFS_READ_ONLY_DIRECTORY_MODE : NTFS_READ_ONLY_FILE_MODE;
-	if (_nativeImageEditing && !link && image_file_write_type(stat)) {
+	if (_nativeImageEditing && !link &&
+	    (image_file_write_type(stat) || image_directory_write_type(stat))) {
 		attrs.mode |= S_IWUSR;
+		attrs.flags = 0;
 	}
 	attrs.type =
 	    link ? FSItemTypeSymlink : (stat->directory ? FSItemTypeDirectory : FSItemTypeFile);
@@ -3264,12 +3977,12 @@ done:
 	s.ioSize = NTFS_RESOURCE_WINDOW;
 	s.totalBlocks = _info.cluster_count;
 	s.freeBlocks = _freeClusters;
-	s.availableBlocks = 0;
+	s.availableBlocks = _nativeImageEditing ? _freeClusters : 0;
 	s.usedBlocks = s.totalBlocks - s.freeBlocks;
 	s.totalBytes = s.totalBlocks * _info.cluster_size;
 	s.freeBytes = s.freeBlocks * _info.cluster_size;
 	s.usedBytes = s.usedBlocks * _info.cluster_size;
-	s.availableBytes = 0;
+	s.availableBytes = s.availableBlocks * _info.cluster_size;
 	return s;
 }
 

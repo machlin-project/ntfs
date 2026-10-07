@@ -84,15 +84,21 @@ inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
 		sid_bytes = ace.sid.length;
 		audit_flags = ace.flags & (NTFS_ACE_SUCCESSFUL_ACCESS | NTFS_ACE_FAILED_ACCESS);
 		propagation = ace.flags & (NTFS_ACE_CONTAINER_INHERIT | NTFS_ACE_OBJECT_INHERIT);
-		if (creator && applies) {
-			replacement = ace.trustee.subauthorities[0] == NTFS_MUTATION_CREATOR_OWNER
-			    ? &security->owner_span
-			    : &security->group_span;
-			if (replacement->length == 0) {
-				return NTFS_UNSUPPORTED;
+		if (applies && (creator || ntfs_file_map_rights(ace.mask) != ace.mask)) {
+			if (creator) {
+				replacement =
+				    ace.trustee.subauthorities[0] == NTFS_MUTATION_CREATOR_OWNER
+				    ? &security->owner_span
+				    : &security->group_span;
+				if (replacement->length == 0) {
+					return NTFS_UNSUPPORTED;
+				}
+			} else {
+				replacement = &ace.sid;
 			}
 			result = append_ace(output, used, &count, body, &ace,
-			    audit_flags | NTFS_ACE_INHERITED, parent + replacement->offset,
+			    audit_flags | NTFS_ACE_INHERITED,
+			    creator ? parent + replacement->offset : body + replacement->offset,
 			    replacement->length, true);
 			if (result != NTFS_OK) {
 				return result;

@@ -119,6 +119,332 @@ function Test-NativeOrdinaryFiles($expected, [string]$root) {
     return $result
 }
 
+function Test-NativeMountedMutationProfile($expected, [string]$root) {
+    $names = @('MachlinNativeMutation', 'MachlinNativeMutation\right',
+        'MachlinNativeMutation\right\final.bin', 'MachlinNativeMutation\left',
+        'MachlinNativeMutation\removed.bin', 'MachlinNativeMutation\reuse.bin',
+        'MachlinNativeMutation\right\moved')
+    $directoryTypes = @($true, $true, $false, $true, $false, $false, $true)
+    $entries = @($expected.mountedMutationObjects)
+    $descriptorMaximumBytes = 4096
+    $descriptorMaximumBase64Characters = 5464
+    $descriptorHeaderBytes = 20
+    $referenceSequenceShift = 48
+    $nativePayloadBytes = 65537
+    $nativeGapBytes = 257
+    if ($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -or
+        $entries.Count -ne $names.Count -or
+        $expected.PSObject.Properties.Name -contains 'ordinaryObjects' -or
+        $expected.PSObject.Properties.Name -contains 'sequenceObjects') {
+        throw 'Unexpected mounted mutation namespace profile.'
+    }
+    for ($index = 0; $index -lt $names.Count; $index++) {
+        $entry = $entries[$index]
+        if ($entry.relativePath -cne $names[$index] -or $entry.directory -isnot [bool] -or
+            $entry.directory -ne $directoryTypes[$index] -or $entry.present -isnot [bool] -or
+            $entry.present -ne ($index -lt 3)) {
+            throw 'Unexpected mounted mutation object identity or type.'
+        }
+        if (-not $entry.present) { continue }
+        if ($entry.reference -isnot [string] -or $entry.reference -notmatch '^[0-9]{1,20}$' -or
+            $entry.lastWriteFileTime -isnot [string] -or $entry.lastWriteFileTime -notmatch '^[0-9]{1,20}$' -or
+            $entry.changedFileTime -isnot [string] -or $entry.changedFileTime -notmatch '^[0-9]{1,20}$' -or
+            $entry.securityDescriptor -isnot [string] -or
+            $entry.securityDescriptor.Length -gt $descriptorMaximumBase64Characters -or
+            $entry.securityDescriptor -notmatch '^[A-Za-z0-9+/=]+$') {
+            throw 'Unexpected mounted mutation metadata expectation.'
+        }
+        $reference = [UInt64]::Parse($entry.reference, [Globalization.CultureInfo]::InvariantCulture)
+        if (($reference -shr $referenceSequenceShift) -eq 0) { throw 'A sequence-bearing mounted identity is required.' }
+        [void][DateTime]::FromFileTimeUtc([Int64]::Parse($entry.lastWriteFileTime,
+            [Globalization.CultureInfo]::InvariantCulture))
+        [void][DateTime]::FromFileTimeUtc([Int64]::Parse($entry.changedFileTime,
+            [Globalization.CultureInfo]::InvariantCulture))
+        $descriptor = [Convert]::FromBase64String($entry.securityDescriptor)
+        if ($descriptor.Length -lt $descriptorHeaderBytes -or $descriptor.Length -gt $descriptorMaximumBytes) {
+            throw 'Mounted mutation descriptor exceeds its bound.'
+        }
+        $security = [Security.AccessControl.RawSecurityDescriptor]::new($descriptor, 0)
+        if ($null -ne $security.SystemAcl) { throw 'Mounted mutation SACL is outside this profile.' }
+        if (-not $entry.directory -and ($entry.bytes -ne $nativePayloadBytes + $nativeGapBytes -or
+            $entry.sha256 -notmatch '^[a-f0-9]{64}$')) {
+            throw 'Unexpected mounted mutation content expectation.'
+        }
+    }
+    return $entries
+}
+
+function Initialize-NativeMountedMetadata {
+    if ('MachlinMountedMetadata' -as [type]) { return }
+    # Public FILE_BASIC_INFO and GetFileInformationByHandleEx contract:
+    # https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_basic_info
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class MachlinMountedMetadata {
+    private const uint FileReadAttributes = 0x80;
+    private const uint ShareReadWriteDelete = 0x7;
+    private const uint OpenExisting = 3;
+    private const uint FileFlagBackupSemantics = 0x02000000;
+    private enum FileInfoByHandleClass { FileBasicInfo = 0 }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FileBasicInfo {
+        public long CreationTime, LastAccessTime, LastWriteTime, ChangeTime;
+        public uint FileAttributes;
+    }
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, ExactSpelling=true, SetLastError=true)]
+    private static extern SafeFileHandle CreateFileW(string path, uint access,
+        uint sharing, IntPtr security, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", ExactSpelling=true, SetLastError=true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandleEx(SafeFileHandle handle,
+        FileInfoByHandleClass information, out FileBasicInfo value, uint size);
+    public static FileBasicInfo Read(string path) {
+        using (SafeFileHandle handle = CreateFileW(path, FileReadAttributes,
+            ShareReadWriteDelete, IntPtr.Zero, OpenExisting,
+            FileFlagBackupSemantics, IntPtr.Zero)) {
+            if (handle.IsInvalid) { throw new Win32Exception(Marshal.GetLastWin32Error()); }
+            FileBasicInfo value;
+            if (!GetFileInformationByHandleEx(handle, FileInfoByHandleClass.FileBasicInfo,
+                out value, (uint)Marshal.SizeOf(typeof(FileBasicInfo)))) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            return value;
+        }
+    }
+}
+'@
+}
+
+function Test-NativeMountedMutationFiles($expected, [string]$root) {
+    $entries = @(Test-NativeMountedMutationProfile $expected $root)
+    Initialize-NativeMountedMetadata
+    $referenceHexDigits = 16
+    $fileIdHexDigits = 32
+    $result = [ordered]@{ success=$false; checks=@(); namespaces=@() }
+    foreach ($entry in $entries) {
+        $path = Join-Path $root $entry.relativePath
+        $item = $null
+        try { $item = Get-Item -LiteralPath $path -ErrorAction Stop }
+        catch {
+            if ($entry.present -or $_.Exception -isnot [System.Management.Automation.ItemNotFoundException]) { throw }
+        }
+        if (-not $entry.present) {
+            if ($null -ne $item) { throw 'A retired mounted mutation name is present.' }
+            $result.checks += [ordered]@{ relativePath=$entry.relativePath; present=$false; passed=$true }
+            continue
+        }
+        if ($null -eq $item -or $item.PSIsContainer -ne $entry.directory -or
+            ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Mounted mutation object is missing or has the wrong type.'
+        }
+        $reference = [UInt64]::Parse($entry.reference, [Globalization.CultureInfo]::InvariantCulture)
+        $expectedId = $reference.ToString(('x' + $referenceHexDigits), [Globalization.CultureInfo]::InvariantCulture).PadLeft($fileIdHexDigits, '0')
+        $id = @(& "$env:SystemRoot\System32\fsutil.exe" file queryfileid $path 2>&1)
+        $idExit = $LASTEXITCODE
+        if ($idExit -ne 0 -or ($id -join "`n") -notmatch '0x([0-9a-fA-F]{32})\s*$' -or
+            $Matches[1].ToLowerInvariant() -ne $expectedId) { throw 'Mounted sequence-bearing File ID differs.' }
+        $basic = [MachlinMountedMetadata]::Read($path)
+        $modified = $basic.LastWriteTime.ToString([Globalization.CultureInfo]::InvariantCulture)
+        $changed = $basic.ChangeTime.ToString([Globalization.CultureInfo]::InvariantCulture)
+        if ($modified -ne $entry.lastWriteFileTime -or $changed -ne $entry.changedFileTime) {
+            throw 'Mounted modified/changed FILETIMEs differ.'
+        }
+        $security = [Security.AccessControl.RawSecurityDescriptor]::new(
+            [Convert]::FromBase64String($entry.securityDescriptor), 0)
+        $wantedAcl = $security.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
+        $actualAcl = (Get-Acl -LiteralPath $path).Sddl
+        if ($actualAcl -ne $wantedAcl) { throw 'Mounted native owner/group/DACL differs.' }
+        $row = [ordered]@{ relativePath=$entry.relativePath; present=$true; directory=$entry.directory;
+            reference=$entry.reference; fileId=[ordered]@{exitCode=$idExit;output=$id};
+            lastWriteFileTime=$modified; changedFileTime=$changed; acl=$actualAcl; expectedAcl=$wantedAcl; passed=$false }
+        if (-not $entry.directory) {
+            $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($item.Length -ne $entry.bytes -or $digest -ne $entry.sha256) { throw 'Mounted final file bytes differ.' }
+            $row.bytes = $item.Length
+            $row.sha256 = $digest
+        }
+        $row.passed = $true
+        $result.checks += $row
+    }
+    foreach ($directory in @('', 'MachlinNativeMutation', 'MachlinNativeMutation\right')) {
+        $wanted = switch ($directory) {
+            '' { @('child', 'initialized.bin', 'MachlinNativeMutation', 'rename-after.txt', 'resident.txt') }
+            'MachlinNativeMutation' { @('right') }
+            'MachlinNativeMutation\right' { @('final.bin') }
+        }
+        $path = if ($directory -eq '') { $root } else { Join-Path $root $directory }
+        $actual = @(Get-ChildItem -LiteralPath $path -Force | ForEach-Object { $_.Name } | Sort-Object)
+        $wanted = @($wanted | Sort-Object)
+        if ($actual.Count -ne $wanted.Count -or
+            @(Compare-Object -ReferenceObject $wanted -DifferenceObject $actual -CaseSensitive).Count -ne 0) {
+            throw 'Mounted mutation namespace differs.'
+        }
+        $result.namespaces += [ordered]@{ relativePath=$directory; names=$actual; passed=$true }
+    }
+    $result.success = $true
+    return $result
+}
+
+function Test-NativeSequenceProfile($expected, [string]$root) {
+    $objectMaximum = 322
+    $pressureNameUnits = 180
+    $pressureMaximum = 320
+    $replacementMaximum = 80
+    $descriptorMaximumBase64Characters = 87384
+    $descriptorHeaderBytes = 20
+    $descriptorMaximumBytes = 65536
+    $contentMaximumBytes = 1048576
+    $entries = @($expected.sequenceObjects)
+    if ($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -or
+        $entries.Count -lt 2 -or $entries.Count -gt $objectMaximum) {
+        throw 'Unexpected sequence namespace profile.'
+    }
+    $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $directories = @{}
+    foreach ($entry in $entries) {
+        if ($entry.relativePath -isnot [string] -or $entry.present -isnot [bool] -or
+            $entry.directory -isnot [bool] -or -not $names.Add($entry.relativePath)) {
+            throw 'Unexpected sequence object identity or type.'
+        }
+        $name = $entry.relativePath
+        if ($entry.directory) {
+            if ($name -cne 'native-growth' -and $name -cne 'native-move') {
+                throw 'Unexpected sequence directory.'
+            }
+            $directories[$name] = $entry.present
+        } else {
+            $allowed = $false
+            if ($name -cmatch '^native-growth\\pressure-([0-9]{4})-(n+)$') {
+                $allowed = [int]$Matches[1] -lt $pressureMaximum -and
+                    ($name.Substring('native-growth\'.Length)).Length -eq $pressureNameUnits
+            } elseif ($name -cmatch '^native-growth\\replacement-([0-9]{4})$') {
+                $allowed = [int]$Matches[1] -lt $replacementMaximum
+            } elseif ($name -ceq 'native-growth\sustained-file' -or
+                $name -ceq 'native-move\sustained-renamed' -or
+                $name -ceq 'native-move\replace-target') {
+                $allowed = $true
+            }
+            if (-not $allowed -or -not $entry.present) { throw 'Unexpected sequence filename.' }
+        }
+        if (-not $entry.present) { continue }
+        if ($entry.reference -isnot [string] -or $entry.reference -notmatch '^[0-9]{1,20}$' -or
+            $entry.lastWriteFileTime -isnot [string] -or $entry.lastWriteFileTime -notmatch '^[0-9]{1,20}$' -or
+            $entry.securityDescriptor -isnot [string] -or
+            $entry.securityDescriptor.Length -gt $descriptorMaximumBase64Characters -or
+            $entry.securityDescriptor -notmatch '^[A-Za-z0-9+/=]+$') {
+            throw 'Unexpected sequence metadata expectation.'
+        }
+        if (-not $entry.directory -and (($entry.bytes -isnot [int] -and $entry.bytes -isnot [long]) -or
+            $entry.bytes -lt 0 -or $entry.bytes -gt $contentMaximumBytes -or
+            $entry.sha256 -isnot [string] -or $entry.sha256 -notmatch '^[a-f0-9]{64}$')) {
+            throw 'Unexpected sequence content expectation.'
+        }
+        [void][UInt64]::Parse($entry.reference,[Globalization.CultureInfo]::InvariantCulture)
+        [void][DateTime]::FromFileTimeUtc([Int64]::Parse($entry.lastWriteFileTime,
+            [Globalization.CultureInfo]::InvariantCulture))
+        $descriptor = [Convert]::FromBase64String($entry.securityDescriptor)
+        if ($descriptor.Length -lt $descriptorHeaderBytes -or $descriptor.Length -gt $descriptorMaximumBytes) {
+            throw 'Sequence descriptor exceeds its bound.'
+        }
+        $rawSecurity = [Security.AccessControl.RawSecurityDescriptor]::new($descriptor,0)
+        if ($null -ne $rawSecurity.SystemAcl) { throw 'This native sequence profile does not admit a SACL.' }
+    }
+    if ($directories.Count -ne 2) { throw 'Both sequence directory expectations are required.' }
+    foreach ($entry in $entries) {
+        if (-not $entry.directory -and -not $directories[$entry.relativePath.Split('\')[0]]) {
+            throw 'A sequence child requires its present directory.'
+        }
+    }
+    return $entries
+}
+
+function Test-NativeSequenceFiles($expected, [string]$root) {
+    $descriptorHeaderBytes = 20
+    $descriptorMaximumBytes = 65536
+    $referenceHexDigits = 16
+    $nativeFileIdHexDigits = 32
+    $entries = @(Test-NativeSequenceProfile $expected $root)
+    $result = [ordered]@{ success=$false; checks=@(); rootNames=@(); directoryNames=@{} }
+    foreach ($entry in $entries) {
+        $path = Join-Path $root $entry.relativePath
+        $file = $null
+        try { $file = Get-Item -LiteralPath $path -ErrorAction Stop }
+        catch {
+            if ($entry.present -or $_.Exception -isnot [System.Management.Automation.ItemNotFoundException]) {
+                throw
+            }
+        }
+        if (-not $entry.present) {
+            if ($null -ne $file) { throw 'Unexpected sequence directory remains present.' }
+            $result.checks += [ordered]@{ relativePath=$entry.relativePath; present=$false; passed=$true }
+            continue
+        }
+        if ($null -eq $file -or $file.PSIsContainer -ne $entry.directory -or
+            ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Sequence object is missing, has the wrong type or is a reparse point.'
+        }
+        $reference = [UInt64]::Parse($entry.reference,[Globalization.CultureInfo]::InvariantCulture)
+        $expectedId = $reference.ToString(('x' + $referenceHexDigits),
+            [Globalization.CultureInfo]::InvariantCulture).PadLeft($nativeFileIdHexDigits,'0')
+        $fileId = @(& "$env:SystemRoot\System32\fsutil.exe" file queryfileid $path 2>&1)
+        $idExit = $LASTEXITCODE
+        if ($idExit -ne 0 -or ($fileId -join "`n") -notmatch '0x([0-9a-fA-F]{32})\s*$' -or
+            $Matches[1].ToLowerInvariant() -ne $expectedId) { throw 'Sequence-bearing File ID differs.' }
+        $time = $file.LastWriteTimeUtc.ToFileTimeUtc().ToString([Globalization.CultureInfo]::InvariantCulture)
+        if ($time -ne $entry.lastWriteFileTime) { throw 'Sequence modified FILETIME differs.' }
+        $descriptor = [Convert]::FromBase64String($entry.securityDescriptor)
+        if ($descriptor.Length -lt $descriptorHeaderBytes -or $descriptor.Length -gt $descriptorMaximumBytes) {
+            throw 'Sequence descriptor exceeds its bound.'
+        }
+        $rawSecurity = [Security.AccessControl.RawSecurityDescriptor]::new($descriptor,0)
+        if ($null -ne $rawSecurity.SystemAcl) { throw 'This native sequence profile does not admit a SACL.' }
+        $expectedAcl = $rawSecurity.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
+        $actualAcl = (Get-Acl -LiteralPath $path).Sddl
+        if ($actualAcl -ne $expectedAcl) { throw 'Sequence native owner/group/DACL differs.' }
+        $row = [ordered]@{ relativePath=$entry.relativePath; present=$true; directory=$file.PSIsContainer;
+            reference=$entry.reference; fileId=[ordered]@{exitCode=$idExit;output=$fileId};
+            lastWriteFileTime=$time; acl=$actualAcl; expectedAcl=$expectedAcl; passed=$false }
+        if (-not $entry.directory) {
+            $digest = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($file.Length -ne $entry.bytes -or $digest -ne $entry.sha256) {
+                throw ('Sequence native content differs: ' + $entry.relativePath)
+            }
+            $row.bytes = $file.Length
+            $row.sha256 = $digest
+        }
+        $row.passed = $true
+        $result.checks += $row
+    }
+    $wantedRoot = @('child','initialized.bin','rename-after.txt','resident.txt')
+    foreach ($entry in $entries) {
+        if ($entry.directory -and $entry.present) {
+            $wantedRoot += $entry.relativePath
+            $prefix = $entry.relativePath + '\'
+            $wanted = @($entries | Where-Object { -not $_.directory -and $_.relativePath.StartsWith($prefix) } |
+                ForEach-Object { $_.relativePath.Substring($prefix.Length) } | Sort-Object)
+            $actual = @(Get-ChildItem -LiteralPath (Join-Path $root $entry.relativePath) -Force |
+                ForEach-Object { $_.Name } | Sort-Object)
+            if ($wanted.Count -ne $actual.Count -or ($wanted.Count -gt 0 -and
+                @(Compare-Object -ReferenceObject $wanted -DifferenceObject $actual -CaseSensitive).Count -ne 0)) {
+                throw 'Sequence child namespace differs.'
+            }
+            $result.directoryNames[$entry.relativePath] = $actual
+        }
+    }
+    $wantedRoot = @($wantedRoot | Sort-Object)
+    $actualRoot = @(Get-ChildItem -LiteralPath $root -Force | ForEach-Object { $_.Name } | Sort-Object)
+    if ($wantedRoot.Count -ne $actualRoot.Count -or
+        @(Compare-Object -ReferenceObject $wantedRoot -DifferenceObject $actualRoot -CaseSensitive).Count -ne 0) {
+        throw 'Sequence root namespace differs.'
+    }
+    $result.rootNames = $actualRoot
+    $result.success = $true
+    return $result
+}
+
 function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
     if ($root -notmatch '^[TR]:\\MachlinWriteCases-native-write-alias-20261006$' -or
         @($expected.files).Count -ne 4) { throw 'Unexpected workload root or count.' }
@@ -172,7 +498,14 @@ function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
         $result.resident = [ordered]@{ acl=$residentAcl; fileId=[ordered]@{exitCode=$residentIdExit;output=$residentFileId};lastWriteFileTime=$residentTime;passed=$true }
     }
     if ($expected.PSObject.Properties.Name -contains 'ordinaryObjects') {
+        if ($expected.PSObject.Properties.Name -contains 'sequenceObjects') { throw 'Conflicting native namespace profiles.' }
         $result.ordinary = Test-NativeOrdinaryFiles $expected $root
+    }
+    if ($expected.PSObject.Properties.Name -contains 'sequenceObjects') {
+        $result.sequence = Test-NativeSequenceFiles $expected $root
+    }
+    if ($expected.PSObject.Properties.Name -contains 'mountedMutationObjects') {
+        $result.mountedMutation = Test-NativeMountedMutationFiles $expected $root
     }
     $result.success = $true
     return $result
@@ -272,6 +605,14 @@ try {
     $batch = Get-Content -LiteralPath $BatchManifest -Raw | ConvertFrom-Json
     if ($batch.directory -notmatch '^C:\\Windows\\Temp\\MachlinNTFSImageRecovery-[A-Za-z0-9-]{1,48}$' -or
         @($batch.products).Count -lt 1 -or @($batch.products).Count -gt 256) { throw 'Unexpected private fixture directory or count.' }
+    # Admit every declared mounted profile before constructing or attaching any
+    # disposable candidate. This validation performs no filesystem mutation.
+    foreach ($product in $batch.products) {
+        if ($product.PSObject.Properties.Name -contains 'mountedMutationObjects') {
+            [void](Test-NativeMountedMutationProfile $product $product.root)
+            Initialize-NativeMountedMetadata
+        }
+    }
     $folder = Get-Item -LiteralPath $batch.directory
     if (-not $folder.PSIsContainer -or ($folder.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'A plain fixture directory is required.' }
     $base = Join-Path $batch.directory 'base.vhd'
@@ -292,9 +633,26 @@ try {
         if (Test-Path -LiteralPath $candidate) { throw 'Retained candidate must not be overwritten or remounted.' }
         $case = [ordered]@{ case=$product.case; stage='container-construction'; success=$false; nativeChecks=@{} }
         $report.cases += $case
-        [IO.File]::Copy($base,$candidate,$false)
-        $file = [IO.FileStream]::new($candidate,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
-        try {
+        if ($product.PSObject.Properties.Name -contains 'preparedVhdName') {
+            $preparedVhdMaximumBytes = 134217728
+            if ($product.preparedVhdName -cne ('input-' + $product.case + '.vhd') -or
+                @($product.patches).Count -ne 0 -or $product.preparedVhdBytes -lt 1 -or
+                $product.preparedVhdBytes -gt $preparedVhdMaximumBytes) {
+                throw 'Unexpected prepared disposable VHD profile.'
+            }
+            $prepared = Join-Path $batch.directory $product.preparedVhdName
+            $preparedFile = Get-Item -LiteralPath $prepared
+            if ($preparedFile.PSIsContainer -or ($preparedFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                $preparedFile.Length -ne $product.preparedVhdBytes -or
+                (Get-DiskImage -ImagePath $prepared).Attached -or
+                (Get-FileHash -LiteralPath $prepared -Algorithm SHA256).Hash.ToLowerInvariant() -ne $product.expectedVhdSha256) {
+                throw 'Prepared detached VHD bytes disagree.'
+            }
+            [IO.File]::Copy($prepared,$candidate,$false)
+        } else {
+            [IO.File]::Copy($base,$candidate,$false)
+            $file = [IO.FileStream]::new($candidate,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+            try {
             $total = 0
             foreach ($patch in $product.patches) {
                 $offset = [long]$patch.offset
@@ -308,7 +666,8 @@ try {
                 $file.Write($value,0,$value.Length)
             }
             $file.Flush($true)
-        } finally { $file.Dispose() }
+            } finally { $file.Dispose() }
+        }
         $case.preMountSha256 = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($case.preMountSha256 -ne $product.expectedVhdSha256) { throw 'Candidate differs before native attachment.' }
         $case.mountStartedUtc = [DateTime]::UtcNow.ToString('o')

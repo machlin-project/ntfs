@@ -2,6 +2,7 @@
 #ifndef MACHLIN_NTFS_WRITE_MUTATION_H
 #define MACHLIN_NTFS_WRITE_MUTATION_H
 #include "write_execute.h"
+#include "write_checkpoint.h"
 
 struct ntfs_write_name {
 	uint64_t parent_reference;
@@ -11,7 +12,9 @@ struct ntfs_write_name {
 
 struct ntfs_write_mutation_report {
 	struct ntfs_write_execution_report execution;
+	struct ntfs_write_checkpoint_report checkpoint;
 	uint64_t reference, requested_bytes, completed_bytes;
+	bool initial_persistence_attempted, initial_persistence_succeeded, checkpointed;
 };
 
 enum ntfs_write_mutation_kind {
@@ -24,14 +27,69 @@ enum ntfs_write_mutation_kind {
 	NTFS_WRITE_RENAME
 };
 
+enum ntfs_write_creation_time_field {
+	NTFS_WRITE_CREATION_CREATED = 1u << 0,
+	NTFS_WRITE_CREATION_MODIFIED = 1u << 1,
+	NTFS_WRITE_CREATION_CHANGED = 1u << 2,
+	NTFS_WRITE_CREATION_ACCESSED = 1u << 3,
+	NTFS_WRITE_CREATION_ALL_TIMES = NTFS_WRITE_CREATION_CREATED | NTFS_WRITE_CREATION_MODIFIED |
+	    NTFS_WRITE_CREATION_CHANGED | NTFS_WRITE_CREATION_ACCESSED
+};
+
+/* Optional creation FILETIMEs, in unsigned 100-ns ticks since 1601. Unselected
+ * fields default to the operation time. Both the new standard information and
+ * filename/index cache carry these values; the parent keeps the operation time. */
+struct ntfs_write_creation_times {
+	uint64_t created, modified, changed, accessed;
+	uint32_t fields;
+};
+
 struct ntfs_write_mutation_request {
 	enum ntfs_write_mutation_kind kind;
 	struct ntfs_write_name source, destination;
 	uint64_t reference, offset, size, filetime;
+	struct ntfs_write_creation_times creation_times;
 	const void *data;
 	size_t bytes;
 	bool replace;
 };
+
+struct ntfs_write_mutation_item {
+	struct ntfs_stat stat;
+	struct ntfs_link_counts links;
+};
+
+/* Value-only final metadata for native reply preparation. Retired items retain
+ * their old sequence-bearing identity and sizes but project zero live links.
+ * No node, stream, source callback or borrowed request storage escapes here. */
+struct ntfs_write_mutation_preview {
+	enum ntfs_write_mutation_kind kind;
+	struct ntfs_write_mutation_item item, source_directory, destination_directory, over_item;
+	uint64_t requested_bytes, free_clusters;
+	bool item_exists, source_directory_present, destination_directory_present;
+	bool over_item_present, over_item_exists, checkpoint_required;
+};
+
+struct ntfs_write_mutation_execution;
+
+/* Validate request values and name spans without callbacks or allocation. */
+bool ntfs_write_mutation_request_valid(const struct ntfs_write_mutation_request *);
+
+/* Preparation reserves the complete mutation, optional checkpoint and exact
+ * projected metadata without writes or persistence. Request/name/data storage
+ * can be released after return. One prepared child excludes further owner work.
+ * Native callers construct all fallible replies before execute. Execution is
+ * one-shot, performs no reads/allocation, and permanently poisons uncertain I/O.
+ * Closing a prepared child without execution leaves all media bytes unchanged.
+ * Closing its parent defers claim release until the child closes and prevents
+ * execution. The borrowed preview remains valid through child close. */
+enum ntfs_result ntfs_write_mutation_execution_prepare(struct ntfs_overwrite *,
+    const struct ntfs_write_mutation_request *, struct ntfs_write_mutation_execution **);
+const struct ntfs_write_mutation_preview *ntfs_write_mutation_execution_preview(
+    const struct ntfs_write_mutation_execution *);
+enum ntfs_result ntfs_write_mutation_execution_execute(
+    struct ntfs_write_mutation_execution *, struct ntfs_write_mutation_report *);
+void ntfs_write_mutation_execution_close(struct ntfs_write_mutation_execution *);
 
 enum ntfs_write_mutation_region_kind {
 	NTFS_WRITE_MUTATION_FILE,
@@ -92,6 +150,10 @@ void ntfs_write_mutation_plan_close(struct ntfs_write_mutation_plan *);
 /* These operations share the exclusive image owner and its poison/lifetime
  * contract. Borrowed names and data remain immutable and disjoint from output.
  * All fallible reservations and complete metadata validation precede writes.
+ * Journal-space reclamation prepares a checkpoint and rebinds execution to its
+ * exact private final view before either operation can write. Failed preparation
+ * therefore cannot publish a checkpoint. The report retains checkpoint and
+ * initial-persistence outcomes independently of mutation completion.
  * No immutable core child survives mutation. Success is durable and publishes
  * the complete namespace/allocation change; report.reference is sequence-bearing.
  * This interface does not grant FSKit admission for unqualified operations. */

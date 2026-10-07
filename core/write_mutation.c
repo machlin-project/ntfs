@@ -318,11 +318,23 @@ valid_name(const struct ntfs_write_name *name)
 	    (name->count == 1 || (name->count == 2 && name->units[1] == '.')));
 }
 
-static bool
-valid_request(const struct ntfs_write_mutation_request *request)
+bool
+ntfs_write_mutation_request_valid(const struct ntfs_write_mutation_request *request)
 {
-	if (request->filetime > INT64_MAX || request->kind > NTFS_WRITE_RENAME ||
+	const struct ntfs_write_creation_times *times;
+
+	if (request == NULL || request->filetime > INT64_MAX || request->kind > NTFS_WRITE_RENAME ||
 	    request->kind < NTFS_WRITE_CREATE_FILE) {
+		return false;
+	}
+	times = &request->creation_times;
+	if ((times->fields & ~NTFS_WRITE_CREATION_ALL_TIMES) != 0 ||
+	    (times->fields != 0 && request->kind != NTFS_WRITE_CREATE_FILE &&
+		request->kind != NTFS_WRITE_CREATE_DIRECTORY) ||
+	    ((times->fields & NTFS_WRITE_CREATION_CREATED) != 0 && times->created > INT64_MAX) ||
+	    ((times->fields & NTFS_WRITE_CREATION_MODIFIED) != 0 && times->modified > INT64_MAX) ||
+	    ((times->fields & NTFS_WRITE_CREATION_CHANGED) != 0 && times->changed > INT64_MAX) ||
+	    ((times->fields & NTFS_WRITE_CREATION_ACCESSED) != 0 && times->accessed > INT64_MAX)) {
 		return false;
 	}
 	switch (request->kind) {
@@ -506,7 +518,7 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 	}
 	if (source == NULL || request == NULL || source->api_version != NTFS_API_VERSION ||
 	    source->allocate == NULL || source->release == NULL || source->read == NULL ||
-	    !valid_request(request)) {
+	    !ntfs_write_mutation_request_valid(request)) {
 		*out = NULL;
 		return NTFS_INVALID;
 	}

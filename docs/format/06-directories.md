@@ -95,11 +95,60 @@ New production support for DOS-pair mutation and complete native WAL/recovery st
 need acceptance before create reaches the FSKit product. These diagnostics retain
 the preceding journal and do not qualify the actual C writer.
 
-A fresh actual C create with this corrected representation still fails Windows
+A preceding actual C create with this corrected representation still fails Windows
 native health admission before file/chkdsk checks. The complete detached
 postimage retains the POSIX name and unchanged new FILE bytes. Thus the tested
 filename correction is closed, while native journal/recovery composition remains
 unqualified. The failure alone does not identify its packet or replay cause.
+
+The later connected ordinary gate passes 28 actual C operation/recovery states
+after its separate bitmap, spanning-LSN and packet-flag corrections. That native
+evidence closes the selected composition; it does not establish MFT/INDX growth
+or sustained ring reuse. The earlier failed postimage remains part of the research
+record, rather than being replaced by the later successful result.
+
+## Directory ancestry through native aliases
+
+A directory move checks the destination's complete parent chain before preparing
+any metadata publication. The parent reference belongs to the namespace edge;
+requiring exactly one physical `FILE_NAME` confuses that edge with its stored
+name representations.
+
+The installed native scenario creates and writes a nested tree, then fails its
+first cross-parent directory move before transfers. The preserved image passes
+complete allocation, namespace and security validation. Source-identical C
+preparation reproduces the error, and the debugger stops at the unique-attribute
+lookup in the ancestry check. The existing Windows-authored ancestor has one
+Win32 long name and one DOS alias, two physical links and the same full parent
+reference in both values. Thus the failure is an incorrect local uniqueness
+assumption, rather than a native journal rejection or an unproved FSKit field.
+
+![Two native names share one directory parent edge](diagrams/directory-ancestry.svg)
+
+[Diagram source](diagrams/directory-ancestry.mmd)
+
+The corrected [ancestry check](../../core/write_namespace.c) iterates the complete
+admitted base FILE. It accepts a single POSIX, Win32 or combined Win32/DOS name,
+or one Win32 name plus one DOS alias in either attribute order. Every filename
+must be unnamed, resident and flag-free, with an exact declared UTF-16 extent,
+known namespace and nonzero parent generation. All names must share one full
+parent reference; it cannot be the directory's own reference. Stored physical
+link count must match. Missing names, duplicate representations, a lone DOS name,
+conflicting parents and malformed values refuse before publication. Parent
+record retrieval checks its generation, and traversal retains the existing
+directory-depth and mutation-record bounds.
+
+Independent [fixture authoring](../../tests/write_mutation_cases.py) supplies five
+complete valid trees and eleven malformed ancestor records. The
+[C regression](../../tests/write_mutation.c) moves a nested subtree and moves it
+back through fresh readers, checks child identity/data and complete validation,
+and proves the ancestor's original FILE bytes remain unchanged. It also rejects
+moving into a descendant and malformed ancestry without writes, barriers, leaked
+allocation or a published plan. The paired-tree move fails on the preceding
+unique lookup and passes after correction. This read-only use of an existing
+pair does not qualify renaming or removing the paired directory itself; those
+mutations retain their explicit unsupported result. Installed completion and
+independent Windows postimage acceptance belong to [ACCEPTANCE.md](../ACCEPTANCE.md).
 
 ## Index structure
 
@@ -107,6 +156,29 @@ The index's resident root is an attribute named `$I30` with type `$INDEX_ROOT`.
 Larger trees additionally use `$INDEX_ALLOCATION:$I30` and `$BITMAP:$I30`.
 The root prefix contains indexed type, collation, block size and its VCN geometry.
 See [original root research](https://flatcap.github.io/linux-ntfs/ntfs/attributes/index_root.html).
+
+### Capacity during inline-to-external preparation
+
+The final external tree can fit even when temporarily appending its attributes
+beside the old large resident root cannot. This is FILE-container capacity,
+distinct from free volume clusters. In the retained native-source offline batch,
+the first long child leaves a directory FILE with 976 used bytes and a 528-byte
+INDEX_ROOT attribute. Only 48 bytes remain; adding INDEX_ALLOCATION before
+contracting the root falsely returns `NTFS_NO_SPACE` on the second child.
+
+Our private builder now replaces that large root with its complete small external
+root before adding the allocation and bitmap attributes. Intermediate private
+metadata is not sealed or published. The operation's complete FILE/INDX snapshots
+and native journal ordering retain their existing ownership boundary.
+
+An independently authored security/filename fixture reproduces the full inline
+state before the C correction. Its regression requires a successful conversion,
+multiple protected INDX blocks, exact inherited descriptors, complete lookups and
+removal. The subsequent 891-operation native-source sequence retains six states,
+including 320 simultaneous long filenames and directory growth. All six pass
+independent Windows namespace, metadata, read-only chkdsk and original healthy-event
+review. This closes the tested growth/pressure profile; broader growth interruption
+matrices remain separate. See [the native acceptance](../ACCEPTANCE.md#native-mftdirectory-pressure-and-sustained-journal-reuse).
 
 ![The directory tree stores keys in internal nodes as well as leaves](diagrams/directory.svg)
 

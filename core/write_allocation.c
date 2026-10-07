@@ -370,7 +370,7 @@ ntfs_mutation_new_record(struct ntfs_write_mutation_plan *plan, struct ntfs_muta
 		if (result != NTFS_OK) {
 			return result;
 		}
-		for (number = NTFS_FIRST_USER_RECORD; number < records; number++) {
+		for (number = NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD; number < records; number++) {
 			if (!ntfs_mutation_bit(
 				plan->mft_bitmap.before, plan->mft_bitmap.bytes, number) &&
 			    !ntfs_mutation_bit(

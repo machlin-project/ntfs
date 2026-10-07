@@ -113,6 +113,62 @@ broader token semantics remain open. Microsoft's
 [ACE inheritance rules](https://learn.microsoft.com/en-us/windows/win32/secauthz/ace-inheritance-rules)
 provide the semantic baseline.
 
+### Generic rights need two directory ACEs
+
+An effective ACE grants rights on the child itself. A propagating ACE carries
+the original inheritance instructions to later children. For a directory, one
+parent ACE can require both. Generic rights are mapped for the effective ACE;
+the inherit-only propagating ACE retains its generic mask. Creator-owner and
+creator-group are substituted only on the effective ACE. Microsoft's
+[inheritance algorithm](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/0f0c6ffc-f57d-47f8-a6c8-63889e874e24)
+and the ACE inheritance rules above define this distinction.
+
+![Effective mapped rights and unchanged propagation are separate child ACEs](diagrams/ace-inheritance.svg)
+
+[Diagram source](diagrams/ace-inheritance.mmd)
+
+For example, an Allow ACE for Users with `OBJECT_INHERIT | CONTAINER_INHERIT`
+and `GENERIC_READ` (`0x80000000`) produces these two ACEs on an inheriting
+directory under the tested file generic mapping:
+
+| Child ACE | Flags | Access mask | Trustee |
+| --- | --- | --- | --- |
+| Effective | `INHERITED` (`0x10`) | `FILE_GENERIC_READ` (`0x00120089`) | Original Users SID |
+| Propagating | `OBJECT_INHERIT | CONTAINER_INHERIT | INHERIT_ONLY | INHERITED` (`0x1B`) | `GENERIC_READ` (`0x80000000`) | Original Users SID |
+
+The split is necessary for generic masks even without a creator SID.
+`NO_PROPAGATE` suppresses the second ACE. An object-inherit-only parent ACE on
+a directory remains an inherit-only propagation instruction; a file receives
+only its effective ACE. The current
+[inheritance implementation](../../core/write_inherit.c) and independent
+[literal descriptor fixtures](../../tests/write_mutation_cases.py) verify these
+relationships through a directory, direct file and descendant file.
+
+### Native descriptor observations and limits
+
+One retained Windows batch invokes
+[CreatePrivateObjectSecurityEx](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-createprivateobjectsecurityex)
+173 times in memory using the explicit file generic mapping and parent-selected
+owner/group. The [native checker](../../tests/windows_security_inheritance.ps1)
+changes no filesystem security. Of 168 single-ACE profiles, 132 nonempty results
+agree exactly on ordered ACE types, flags, masks and SIDs, including generic
+mapping and creator substitution.
+
+The remaining 36 profiles inherit no ACE. This null-token experiment produces
+an absent, protected DACL; the current C parent-derived profile constructs an
+empty ACL instead. These states are materially different. The experiment does
+not qualify caller-default handling or authorize replacing the empty ACL with
+an unrestricted descriptor. The owning creation policy must settle that contract.
+
+Five existing all-Allow child profiles preserve the same owner/group and
+effective/file-propagation/directory-propagation mask unions. Windows coalesces
+redundant inherited Allow ACEs in four of them; only one ordered ACE list is
+literally identical. That semantic comparison is limited to these all-Allow
+children and is not a general equivalence rule for mixed Allow/Deny order.
+Requesting both native auto-inherit flags also marks absent SACL inheritance;
+our C profile marks only present ACLs. Caller-token owner defaults, SACL
+inheritance, broader ACE forms and durable shared-store insertion remain open.
+
 ## Implementation and evidence
 
 - Descriptor/SID/ACL framing: [security.c](../../core/security.c),
@@ -122,7 +178,11 @@ provide the semantic baseline.
 - Independent descriptor bytes: [secure_fixtures.py](../../tests/secure_fixtures.py).
 - Store relationships: [secure_store_fixtures.py](../../tests/secure_store_fixtures.py).
 - Native comparison pipeline: [ACCESS-ORACLE.md](../ACCESS-ORACLE.md).
+- Creation/inheritance: [write_inherit.c](../../core/write_inherit.c),
+  [write_mutation.c](../../tests/write_mutation.c),
+  [Windows descriptor oracle](../../tests/windows_security_inheritance.ps1).
 
 Existing bounded overwrites preserve security bytes and identity in native
 acceptance. That evidence does not qualify general security rewriting or the
-new creation inheritance profile.
+complete Windows creation inheritance profile. The bounded in-memory comparison
+above qualifies only its stated descriptor relationships.

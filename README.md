@@ -9,8 +9,25 @@ today. See LICENSE and docs/PROVENANCE.md.
 The implementation provides bounded read-only extraction and experimental editing
 of ordinary files in offline images. The C core passes a bounded native Windows
 gate for create, allocation, resize, rename, removal and interrupted recovery.
-Installed FSKit initialized-range and resident-range acceptance are complete;
-general FSKit mutation is still pending. It is not a production NTFS driver.
+The larger native-source sequence now passes 891 actual C operations and 234
+checkpoints, including MFT growth, large directories and 30 journal ring wraps.
+All six retained pressure/reuse states pass independent Windows namespace,
+metadata, read-only chkdsk and original healthy-event review.
+Installed FSKit initialized-range and resident-range acceptance are complete.
+The general C owner and FSKit create/resize/rename/remove callbacks pass
+202 sanitized C suites, 64 host FSKit groups and a universal Release app build.
+The signed general build is installed and all 81 native component groups pass.
+The corrected installed creation path accepts the observed native attributes.
+Actual create, growth, truncate/regrow, shared-mapping writes, cross-parent
+directory movement and closed-victim replacement pass. The installed scenario
+then reaches a cumulative recovery-allocation quota after fourteen generation
+reuse cycles. The exact failed image is preserved; a test-first correction adds
+early checkpoints and reuses validation only for proved identical historical
+states. Its 100-cycle regression and full current-source local batch pass with
+the stricter joint-request reserve. The signed current build is installed but
+awaits ordinary OS module enablement; its complete installed/Windows scenario
+remains pending.
+It is not a production NTFS driver.
 Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
@@ -50,7 +67,7 @@ input. Automation imports generated images only from the app's own Inbox;
 external files require an ordinary picker grant. Initial OS extension enablement
 is separate from repeated mount/test automation. See [DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-The current resident implementation passes 176 fatal ASan/UBSan suites, selected-Xcode
+The preceding resident implementation passes 176 fatal ASan/UBSan suites, selected-Xcode
 style and both freestanding architectures. FSKit components pass 63 host groups
 with thirteen explicit runtime SKIPs and all 80 native groups with zero SKIPs,
 preserving 871 preceding inputs and twelve new resident files. All 91 actual
@@ -83,7 +100,8 @@ composition remains experimental. Settled checkpoint advancement and circular
 journal reuse now pass a complete 196-suite local regression and a real POSIX
 sequence of 640 mutations, 256 checkpoints and 119 wraps with F_FULLFSYNC and
 fresh zero-rewrite recovery. Native snapshot qualification, sustained native
-reuse and FSKit mutation admission still require the connected native acceptance gate.
+reuse subsequently pass the larger six-state native gate described above;
+installed FSKit mutation retains its separate acceptance gate.
 The separate actual C checkpoint transition and interrupted-recovery gate now passes
 all 196 Windows states, read-only chkdsk and original-event review; this does not
 qualify new FILE/INDX mutation or sustained native ring reuse. The connected
@@ -126,8 +144,8 @@ healthy events, clean state and passing read-only chkdsk. One injected journal
 warning and one injected INDX warning match exact sector bytes. The collector
 stopped on the missing INDX expectation; its failure is retained, and only the
 seven unattempted states ran afterward. No candidate was repeated. Native
-creation inheritance, MFT pressure, sustained ring reuse and general FSKit
-mutation remain open. See
+creation inheritance and general FSKit mutation remained open at that boundary;
+the subsequent pressure/reuse results are described above. See
 [the current batch evidence](docs/ACCEPTANCE.md#private-ordinary-operation-image-harness)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

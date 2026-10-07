@@ -565,6 +565,10 @@ prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 		result = NTFS_UNSUPPORTED;
 		goto done;
 	}
+	if (ntfs_write_batch_history_checkpoint_needed(&work->history)) {
+		result = NTFS_NO_SPACE;
+		goto done;
+	}
 	window.restart = work->history.origin;
 	window.floor_lsn = work->history.client.oldest_lsn;
 	window.tail_lsn = work->history.history.completed_end_lsn;

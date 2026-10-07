@@ -1,0 +1,9 @@
+flowchart TB
+    subgraph Existing["Existing user object"]
+        E["Open a stored FILE reference"] --> R["Admission starts at record 16\nValidate generation and ownership"]
+    end
+    subgraph Creation["New ordinary base record"]
+        N["Create a file or directory"] --> F["Select a free MFT slot\nRecord number at least 24"]
+        F --> G["Grow MFT when ordinary slots are full\nENOSPC leaves the source unchanged"]
+        N -. "excluded from ordinary allocation" .-> S["Records 16–23: extension / recovery reserve\nPreserve existing bytes and allocation bits"]
+    end

@@ -1,0 +1,13 @@
+flowchart TD
+    R["Creation request\nfour optional object times"] --> V["Validate before I/O\n1601 epoch · signed FILETIME bound\n100-ns storage unit"]
+    O["Operation time"] --> D["Default omitted fields"]
+    V --> T["Resolved child times"]
+    D --> T
+    T --> S["New FILE\nSTANDARD_INFORMATION"]
+    T --> F["New FILE\nFILE_NAME cache"]
+    F --> I["Parent directory\nfilename index key"]
+    O --> P["Parent namespace change time"]
+    S --> J["One prepared journal operation\ncomplete FILE and directory homes"]
+    I --> J
+    P --> J
+    J --> C["Durable success\nconsume supported native attributes"]

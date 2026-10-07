@@ -10,6 +10,16 @@ enum ntfs_result ntfs_write_owner_open(const struct ntfs_overwrite_environment *
     struct ntfs_overwrite_admission *, struct ntfs_write_recovery_report *,
     struct ntfs_overwrite **);
 
+/* Private complete ordinary-mutation owner. Journal-derived recovery is prepared
+ * from the exclusively claimed image. Full metadata and admission policy are
+ * checked on its exact final publication view before recovery writes. No original
+ * mutation plan is required, including after a torn MFT bootstrap. This capability
+ * is separate from the bounded existing-range owner and does not enable FSKit
+ * admission. Caller serializes all operations and excludes external readers. */
+enum ntfs_result ntfs_write_mutation_owner_open(const struct ntfs_overwrite_environment *,
+    struct ntfs_overwrite_admission *, struct ntfs_write_recovery_report *,
+    struct ntfs_overwrite **);
+
 struct ntfs_write_range_report {
 	struct ntfs_write_execution_report execution;
 	uint64_t requested_bytes, completed_bytes;

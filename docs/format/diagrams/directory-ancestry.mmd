@@ -1,0 +1,7 @@
+flowchart TD
+    D["Destination directory"] -->|"read ancestry"| A["Windows-authored ancestor FILE\ntwo physical names"]
+    A --> L["FILE_NAME\nWin32 long name"]
+    A --> S["FILE_NAME\nDOS alias"]
+    L -->|"same full parent reference"| P["One parent FILE\nsequence checked"]
+    S -->|"same full parent reference"| P
+    P --> R["Continue toward root\nreject a move into its own subtree"]

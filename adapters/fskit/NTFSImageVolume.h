@@ -12,6 +12,14 @@ NTFSVolume *ntfs_image_volume_create(NTFSImageTransport *, NSError **);
  * DACL mapping remains outside this explicitly selected offline-image policy. */
 NTFSVolume *ntfs_image_editing_volume_create(NTFSImageTransport *, NSError **);
 
+/* Complete final attributes are borrowed during preparation. The returned
+ * retained result must own its item/name/attribute inputs. No builder runs after
+ * disk publication, including when journal reclamation is required. The final
+ * object is FSFreeSpace on macOS 27; nil keeps older component runtimes usable
+ * without referencing an unavailable native class in the shared bridge. */
+typedef id (^NTFSImageMutationReply)(FSItem *, FSFileName *, FSItemAttributes *, FSItemAttributes *,
+    FSItemAttributes *, FSItemAttributes *, id);
+
 @interface NTFSVolume (PrivateImageWrites)
 /* Full durable completion reports the actual committed byte count even if a
  * later immutable-view allocation fails. Subsequent reads retry that allocation;
@@ -45,7 +53,34 @@ NTFSVolume *ntfs_image_editing_volume_create(NTFSImageTransport *, NSError **);
 		  toFile:(FSItem *)item
 		atOffset:(off_t)offset
 		fileTime:(uint64_t)fileTime
-	    prepareReply:(id (^)(FSItemAttributes *, size_t))prepare
+	    prepareReply:(id (^)(FSItemAttributes *, size_t, id))prepare
 		   error:(NSError **)error;
 - (enum ntfs_result)currentImageFileTime:(uint64_t *)fileTime;
+- (id)createImageItemNamed:(FSFileName *)name
+		      type:(FSItemType)type
+	       inDirectory:(FSItem *)directory
+		attributes:(FSItemSetAttributesRequest *)attributes
+		  fileTime:(uint64_t)fileTime
+	      prepareReply:(NTFSImageMutationReply)prepare
+		     error:(NSError **)error;
+- (id)renameImageItem:(FSItem *)item
+	  inDirectory:(FSItem *)sourceDirectory
+		named:(FSFileName *)sourceName
+	    toNewName:(FSFileName *)name
+	  inDirectory:(FSItem *)directory
+	     overItem:(FSItem *)overItem
+	     fileTime:(uint64_t)fileTime
+	 prepareReply:(NTFSImageMutationReply)prepare
+		error:(NSError **)error;
+- (id)removeImageItem:(FSItem *)item
+		named:(FSFileName *)name
+	fromDirectory:(FSItem *)directory
+	     fileTime:(uint64_t)fileTime
+	 prepareReply:(NTFSImageMutationReply)prepare
+		error:(NSError **)error;
+- (id)setImageAttributes:(FSItemSetAttributesRequest *)attributes
+		  onItem:(FSItem *)item
+		fileTime:(uint64_t)fileTime
+	    prepareReply:(NTFSImageMutationReply)prepare
+		   error:(NSError **)error;
 @end

@@ -1320,6 +1320,8 @@ main(int argc, char **argv)
 		ntfs_test_fskit_resident_image_volume(
 		    [[@(argv[1]) stringByDeletingLastPathComponent]
 			stringByAppendingPathComponent:@"../write-resident-journal-fixtures"]);
+		ntfs_test_fskit_image_mutation([[@(argv[1]) stringByDeletingLastPathComponent]
+		    stringByAppendingPathComponent:@"../write-mutation-cases"]);
 		ntfs_test_fskit_read_path();
 		image = [NSData dataWithContentsOfFile:@(argv[1])];
 		assert(image != nil);

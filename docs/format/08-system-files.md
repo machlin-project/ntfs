@@ -29,11 +29,38 @@ under `$Extend` require checked namespace ownership, not a guessed fixed record
 number. The table follows [original MFT research](https://flatcap.github.io/linux-ntfs/ntfs/files/mft.html)
 and the named identities in [disk.h](../../core/disk.h).
 
-This bootstrap reservation does not establish Windows's ordinary allocation
-policy for every later slot. The older MFT research describes slots 16–23 as
-unused reserved space, while Microsoft's version-3 description reserves the
-first sixteen. Our local planner excludes slots below 16; native qualification
-of reuse in the 16–23 range remains a separate question in
+### Ordinary allocation and the extension reserve
+
+The first sixteen bootstrap identities and an ordinary allocation floor are
+different contracts. Existing user objects can have records starting at 16;
+reading or admitting such an object does not make every free slot eligible for
+a new ordinary base record.
+
+![Existing-object admission and ordinary allocation have different floors](diagrams/mft-reservation.svg)
+
+[Diagram source](diagrams/mft-reservation.mmd)
+
+The primary [NTFS-3G allocation contract](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/libntfs-3g/mft.c)
+describes an ordinary floor of 24, retaining eight earlier slots for extension
+records and recovery work. Its constrained-space policy leaves those slots
+reserved even when further MFT growth cannot obtain storage. We adopt that
+reservation as a format compatibility policy; no implementation code is imported.
+
+Our allocator now selects new ordinary records at or above 24. The public
+`NTFS_FIRST_USER_RECORD=16` still describes existing-object admission. A dedicated
+independent fixture fills free slots 16–23 with opaque bytes, including malformed
+FILE signatures. Its local regression requires exact preservation of those bytes
+and clear bitmap bits through ordinary allocation, MFT growth, removal and reuse.
+When all ordinary slots and volume clusters are occupied, another create must
+return `NTFS_NO_SPACE` without changing visible or durable bytes.
+
+Earlier selected native operation states with an ordinary record at 16 pass
+Windows file and read-only chkdsk checks. That observation does not qualify
+reserved-record allocation under pressure. The later native-source composition
+preserves the reserve through 891 operations, growing MFT capacity from 256 to 388
+records. All six retained growth/pressure/reuse states pass independent Windows
+namespace/metadata, clean-state, read-only chkdsk and healthy-event review. Growth
+interruptions and extension-record allocation remain separate questions in
 [the research register](13-research-and-coverage.md).
 
 ## Three allocation maps
@@ -96,8 +123,17 @@ especially sensitive because subsequent FILE addresses depend on it.
 
 Generation reuse must invalidate old full references. A retired, correctly
 framed FILE can supply its next sequence; torn or contradictory retirement
-requires refusal or an owning recovery solution. The first sixteen slots are
-outside ordinary file allocation.
+requires refusal or an owning recovery solution. Ordinary allocation starts at
+record 24; the earlier read boundary and the reserve are explained
+[above](#ordinary-allocation-and-the-extension-reserve).
+
+Growth initializes every FILE container in its new clusters, including siblings
+whose MFT allocation bits remain clear. A later create can consume such a sibling
+before an intervening checkpoint. Backward history must distinguish its complete
+logged free state from the unknown physical bytes before the cluster belonged to
+the MFT. The [journal chapter](09-logfile.md#free-file-initialization-in-retained-history)
+defines the generation and allocation proof; a valid free FILE signature alone
+still cannot authorize an old-image inverse.
 
 An MFT zone or allocation locality preference is not an additional allocation
 bitmap. Do not infer cluster ownership from a zone or from apparent physical

@@ -1,0 +1,7 @@
+flowchart TD
+    P["Parent Allow ACE\nUsers · GENERIC_READ\nOBJECT_INHERIT + CONTAINER_INHERIT"] --> D["Directory child\napplies here and propagates"]
+    D --> E["Effective ACE\nUsers · FILE_GENERIC_READ\nINHERITED"]
+    D --> I["Propagation ACE\nUsers · GENERIC_READ\nOBJECT_INHERIT + CONTAINER_INHERIT\nINHERIT_ONLY + INHERITED"]
+    I --> F["Later file child\nmap generic mask\nINHERITED effective ACE"]
+    N["NO_PROPAGATE on parent"] -. "suppresses" .-> I
+    C["Creator SID on parent"] -. "substitute child owner/group\nonly on effective ACE" .-> E

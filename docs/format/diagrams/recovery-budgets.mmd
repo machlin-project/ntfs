@@ -1,0 +1,25 @@
+flowchart TB
+    latest["Latest before + committed after<br/>Full metadata validation"]
+    prior["Earlier historical lifetime<br/>Mount both views · bind owners and mappings"]
+    distinct["Distinct before state<br/>Full metadata validation"]
+    same["Identical adjacent state<br/>Compare every protected home byte<br/>Prove excluded free FILE generations and clear bits"]
+    reuse["Reuse validated state<br/>No discarded packets or shortened endpoint"]
+    usage["Root cumulative recovery counters<br/>Read calls/bytes · allocation calls/bytes"]
+    pressure{"Any counter ≥ ¼ budget?"}
+    ordinary["Prepare ordinary mutation"]
+    joint["Prepare checkpoint + mutation together<br/>Reserve all transfers and barriers"]
+    publish["One-shot durable execution<br/>No reads or allocations after publication starts"]
+    latest --> prior
+    prior --> distinct
+    prior --> same --> reuse
+    distinct --> usage
+    reuse --> usage
+    usage --> pressure
+    pressure -->|No| ordinary --> publish
+    pressure -->|Yes| joint --> publish
+    classDef proof fill:#e7eef8,stroke:#52759f,color:#183352
+    classDef accounting fill:#fff1dc,stroke:#ac7933,color:#57390e
+    classDef prepared fill:#e7f3ec,stroke:#497c5a,color:#163823
+    class latest,prior,distinct,same,reuse proof
+    class usage,pressure accounting
+    class ordinary,joint,publish prepared

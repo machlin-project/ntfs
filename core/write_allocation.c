@@ -268,12 +268,16 @@ ntfs_mutation_bitmap_flush(
 			return result;
 		}
 	}
-	clusters = bitmap->bytes / NTFS_WRITE_CLUSTER_BYTES +
-	    (bitmap->bytes % NTFS_WRITE_CLUSTER_BYTES != 0);
-	result = ntfs_mutation_resize_runs(plan, bitmap->stream, clusters, &runs, &count);
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_nonresident(plan, bitmap->record, bitmap->type, NULL, 0,
-		    runs, count, bitmap->bytes, bitmap->bytes, 0);
+	/* A bit update does not resize or re-encode its owning bitmap stream. */
+	result = NTFS_OK;
+	if (bitmap->stream->resident || bitmap->bytes != bitmap->original_bytes) {
+		clusters = bitmap->bytes / NTFS_WRITE_CLUSTER_BYTES +
+		    (bitmap->bytes % NTFS_WRITE_CLUSTER_BYTES != 0);
+		result = ntfs_mutation_resize_runs(plan, bitmap->stream, clusters, &runs, &count);
+		if (result == NTFS_OK) {
+			result = ntfs_mutation_nonresident(plan, bitmap->record, bitmap->type, NULL,
+			    0, runs, count, bitmap->bytes, bitmap->bytes, 0);
+		}
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_mutation_stream(plan, bitmap->record, bitmap->type, NULL, 0, &stream);

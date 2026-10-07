@@ -46,6 +46,9 @@ UNUSED_STORAGE_PROFILES = ('file-stale', 'file-torn', 'index-stale', 'index-torn
 EXPANDED_JOURNAL_BYTES = 1024 * 1024
 FIRST_USER_RECORD = 16
 MAX_FILE_SEQUENCE = (1 << 16) - 1
+BITMAP_ALLOCATION_CLUSTERS = 2
+BITMAP_UNUSED_PATTERN = 0xa6
+BITMAP_STORAGE_PROFILES = ('mft', 'volume', 'both')
 
 
 def wrapped_free_file_image(original):
@@ -358,6 +361,70 @@ def unused_storage_images(directory, original):
         (directory / f'unused-{profile}.img').write_bytes(image)
 
 
+def bitmap_storage_images(directory, original):
+    """Bit changes retain nonresident bitmap metadata and allocated tail bytes."""
+    import fixtures as f
+    import filename_storage as storage
+
+    def parts(image, number):
+        first = f.MFT_LCN * f.CLUSTER + number * f.RECORD
+        return storage.record_parts(image[first:first + f.RECORD])
+
+    original_header, original_attributes = parts(original, f.BITMAP_RECORD)
+    allocation_slot = next(index for index, attribute in enumerate(original_attributes)
+                           if storage.attr_header(attribute)['type'] == f.DATA)
+    original_allocation = storage.resident_value(original_attributes[allocation_slot])
+    for profile in BITMAP_STORAGE_PROFILES:
+        label = 'bitmap-storage-' + profile
+        image = bytearray(original)
+        allocation = bytearray(original_allocation)
+        owners = []
+        if profile in ('mft', 'both'):
+            owners.append((f.MFT_RECORD, f.BITMAP))
+        if profile in ('volume', 'both'):
+            owners.append((f.BITMAP_RECORD, f.DATA))
+        extents = []
+        for number, kind in owners:
+            lcn = next(first for first in range(len(image) // f.CLUSTER - BITMAP_ALLOCATION_CLUSTERS + 1)
+                       if all(not allocation[cluster // f.BYTE_BITS] & (1 << (cluster % f.BYTE_BITS))
+                              for cluster in range(first, first + BITMAP_ALLOCATION_CLUSTERS)))
+            for cluster in range(lcn, lcn + BITMAP_ALLOCATION_CLUSTERS):
+                allocation[cluster // f.BYTE_BITS] |= 1 << (cluster % f.BYTE_BITS)
+            extents.append((number, kind, lcn))
+        if profile == 'mft':
+            attributes = list(original_attributes)
+            attributes[allocation_slot] = f.resident(f.DATA, allocation,
+                storage.attr_header(attributes[allocation_slot])['instance'])
+            f.put_record(image, f.BITMAP_RECORD,
+                         storage.encoded_record(f.BITMAP_RECORD, attributes, original_header))
+        rows = []
+        for number, kind, lcn in extents:
+            header, attributes = parts(image, number)
+            slot = next(index for index, attribute in enumerate(attributes)
+                        if storage.attr_header(attribute)['type'] == kind)
+            previous = attributes[slot]
+            value = bytes(allocation) if number == f.BITMAP_RECORD else storage.resident_value(previous)
+            assert 0 < len(value) < f.CLUSTER
+            attribute = f.nonresident(kind, [(BITMAP_ALLOCATION_CLUSTERS, lcn)], len(value),
+                storage.attr_header(previous)['instance'],
+                allocated=BITMAP_ALLOCATION_CLUSTERS * f.CLUSTER, initialized=len(value))
+            common = storage.attr_header(attribute)
+            assert not common['name_length'] and common['name_offset'] == f.ATTR_HEADER.size + f.NONRESIDENT_HEADER.size
+            attributes[slot] = attribute
+            encoded = storage.encoded_record(number, attributes, header)
+            f.put_record(image, number, encoded)
+            if number == f.MFT_RECORD:
+                f.put_data(image, f.MIRROR_LCN, encoded)
+            allocation_bytes = bytearray([BITMAP_UNUSED_PATTERN]) * (BITMAP_ALLOCATION_CLUSTERS * f.CLUSTER)
+            allocation_bytes[:len(value)] = value
+            f.put_data(image, lcn, allocation_bytes)
+            (directory / (label + '-' + str(number) + '.attribute')).write_bytes(attribute)
+            (directory / (label + '-' + str(number) + '.tail')).write_bytes(allocation_bytes[f.CLUSTER:])
+            rows.append(f'{number} {kind:x} {(lcn + 1) * f.CLUSTER}')
+        (directory / (label + '.img')).write_bytes(image)
+        (directory / (label + '.rows')).write_text('\n'.join(rows) + '\n')
+
+
 def author(directory, source=None):
     directory.mkdir(parents=True, exist_ok=True)
     payload = bytes((position * PATTERN_MULTIPLIER + PATTERN_BIAS) & 0xff
@@ -398,17 +465,20 @@ def author(directory, source=None):
             (directory / f'large-{name}.img').write_bytes(expanded_journal_image(original))
         large = (directory / 'large-source.img').read_bytes()
         (directory / 'large-reuse-wrapped.img').write_bytes(wrapped_free_file_image(large))
+        bitmap_storage_images(directory, large)
     manifest = dict(writeOffset=WRITE_OFFSET, payloadBytes=PAYLOAD_BYTES,
                     growBytes=GROW_BYTES, shrinkBytes=SHRINK_BYTES,
                     regrowBytes=REGROW_BYTES, children=CHILDREN,
                     childNameUnits=NAME_UNITS, reuseOperations=REUSE_OPERATIONS,
                     unusedStorageProfiles=list(UNUSED_STORAGE_PROFILES),
+                    bitmapStorageProfiles=list(BITMAP_STORAGE_PROFILES),
                     bytes={name: dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
                            for name, data in bodies.items()},
                     requiredScenarios=['resident-growth-and-storage-conversion',
                         'fragmented-allocation-and-zero-gap', 'shrink-and-zero-regrowth',
                         'cross-directory-move-and-replacement', 'file-and-directory-removal',
                         'MFT-generation-reuse', 'directory-index-split-and-MFT-growth',
+                        'nonresident-bitmap-storage-preservation',
                         'full-space-and-preparation-unchanged', 'writer-and-recovery-interruptions',
                         'sustained-journal-reuse-and-wrap'],
                     creationOwnerAndGroup='parent',

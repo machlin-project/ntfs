@@ -2241,11 +2241,128 @@ retired_record_reading(const char *source)
 }
 #endif
 
+#if defined(NTFS_TEST_MUTATION_PLAN)
+struct bitmap_storage_expectation {
+	uint8_t *attribute, *tail;
+	size_t attribute_bytes;
+	uint64_t number, tail_physical;
+	uint32_t type;
+};
+
+static void
+check_bitmap_storage(struct test_case *test, const struct bitmap_storage_expectation *expected)
+{
+	const struct ntfs_disk_boot *boot = (const void *)test->device.visible;
+	struct ntfs_attr_view attribute;
+	uint8_t *logical;
+	uint64_t physical;
+
+	physical = ntfs_u64(boot->mft_lcn) * NTFS_WRITE_CLUSTER_BYTES +
+	    expected->number * NTFS_WRITE_RECORD_BYTES;
+	assert(physical <= test->device.bytes &&
+	    NTFS_WRITE_RECORD_BYTES <= test->device.bytes - physical);
+	logical = malloc(NTFS_WRITE_RECORD_BYTES);
+	assert(logical != NULL);
+	memcpy(logical, test->device.visible + physical, NTFS_WRITE_RECORD_BYTES);
+	assert(ntfs_record_decode(logical, NTFS_WRITE_RECORD_BYTES, false) == NTFS_OK);
+	assert(ntfs_attr_find(logical, NTFS_WRITE_RECORD_BYTES, expected->type, NULL, 0, UINT16_MAX,
+		   &attribute) == NTFS_OK);
+	assert(attribute.disk->nonresident && attribute.length == expected->attribute_bytes);
+	assert(memcmp(attribute.bytes, expected->attribute, expected->attribute_bytes) == 0);
+	assert(expected->tail_physical <= test->device.bytes &&
+	    NTFS_WRITE_CLUSTER_BYTES <= test->device.bytes - expected->tail_physical);
+	assert(memcmp(test->device.visible + expected->tail_physical, expected->tail,
+		   NTFS_WRITE_CLUSTER_BYTES) == 0);
+	free(logical);
+}
+
+static void
+bitmap_storage_preservation(const char *cases)
+{
+	static const char *profiles[] = {
+	    "bitmap-storage-mft", "bitmap-storage-volume", "bitmap-storage-both"};
+	struct bitmap_storage_expectation expected[2];
+	struct test_case *test;
+	FILE *contract;
+	char *path, *file;
+	uint8_t *payload;
+	uint64_t reference;
+	unsigned number, type;
+	unsigned long long physical;
+	size_t profile, count, index, bytes, tail_bytes;
+	int length, fields;
+
+	path = malloc(TEST_PATH_BYTES);
+	file = malloc(TEST_PATH_BYTES);
+	assert(path != NULL && file != NULL);
+	payload = load(cases, "payload.bin", &bytes);
+	for (profile = 0; profile < sizeof(profiles) / sizeof(*profiles); profile++) {
+		length = snprintf(file, TEST_PATH_BYTES, "%s.img", profiles[profile]);
+		assert(length > 0 && length < TEST_PATH_BYTES);
+		test = prepare_image(cases, file);
+		length = snprintf(path, TEST_PATH_BYTES, "%s/%s.rows", cases, profiles[profile]);
+		assert(length > 0 && length < TEST_PATH_BYTES);
+		contract = fopen(path, "rb");
+		assert(contract != NULL);
+		count = 0;
+		for (;;) {
+			fields = fscanf(contract, "%u %x %llu", &number, &type, &physical);
+			if (fields == EOF) {
+				assert(feof(contract) && !ferror(contract));
+				break;
+			}
+			assert(fields == 3 && count < sizeof(expected) / sizeof(*expected));
+			expected[count].number = number;
+			expected[count].type = type;
+			expected[count].tail_physical = physical;
+			length = snprintf(
+			    file, TEST_PATH_BYTES, "%s-%u.attribute", profiles[profile], number);
+			assert(length > 0 && length < TEST_PATH_BYTES);
+			expected[count].attribute =
+			    load(cases, file, &expected[count].attribute_bytes);
+			length = snprintf(
+			    file, TEST_PATH_BYTES, "%s-%u.tail", profiles[profile], number);
+			assert(length > 0 && length < TEST_PATH_BYTES);
+			expected[count].tail = load(cases, file, &tail_bytes);
+			assert(tail_bytes == NTFS_WRITE_CLUSTER_BYTES);
+			check_bitmap_storage(test, &expected[count]);
+			count++;
+		}
+		assert(count != 0 && fclose(contract) == 0);
+		reference = create(test, test->root_reference, "bitmap-storage.txt", false);
+		for (index = 0; index < count; index++) {
+			check_bitmap_storage(test, &expected[index]);
+		}
+		write_data(test, reference, TEST_WRITE_OFFSET, payload, bytes);
+		check_data(test, reference, cases, "written.bin");
+		for (index = 0; index < count; index++) {
+			check_bitmap_storage(test, &expected[index]);
+		}
+		resize(test, reference, TEST_SHRINK_BYTES);
+		check_data(test, reference, cases, "shrunk.bin");
+		remove_entry(test, test->root_reference, "bitmap-storage.txt", false, NTFS_OK);
+		for (index = 0; index < count; index++) {
+			check_bitmap_storage(test, &expected[index]);
+			free(expected[index].attribute);
+			free(expected[index].tail);
+		}
+		validate(test);
+		finish(test);
+	}
+	free(payload);
+	free(path);
+	free(file);
+	puts("PASS: bitmap bit changes retain original attributes, mappings and allocated tail "
+	     "bytes");
+}
+#endif
+
 int
 main(int argc, char **argv)
 {
 	assert(argc == 3);
 #if defined(NTFS_TEST_MUTATION_PLAN)
+	bitmap_storage_preservation(argv[2]);
 	unused_storage(argv[2]);
 	owned_index_damage(argv[1]);
 #endif

@@ -56,6 +56,37 @@ Allocation maps prove occupancy. Stream mappings and the complete validator
 establish which object owns occupied storage. A set volume bit does not identify
 a file; an unset MFT bit does not prove the old slot's bytes are valid for reuse.
 
+### Changing bits without resizing the stream
+
+A bitmap's logical byte length, initialized prefix and physical allocation are
+separate from the bits it contains. Changing occupancy within its existing
+length does not require changing its mapping pairs or releasing allocation
+beyond EOF. The owning bitmap attribute can retain additional allocated clusters.
+
+Our content-only planner preserves the complete existing nonresident attribute,
+including its sizes, mappings, name fields and padding. It writes changed bitmap
+content through the checked projected stream. Resident conversion and actual
+logical growth have separate paths that may change the owning attribute.
+
+![A content-only bitmap change preserves its owning stream storage](diagrams/bitmap-storage.svg)
+
+[Diagram source](diagrams/bitmap-storage.mmd)
+
+Comparison of the failed native-source create with its predecessor found no
+MFT size change. The planner had re-encoded the unchanged nonresident
+`$MFT::$BITMAP` attribute, normalizing an unused name-offset field and introducing
+unnecessary FILE-zero and mirror publications. A regression reproduces that
+normalization and unwanted allocation-tail shrinkage. Three independent profiles
+cover the MFT bitmap, volume bitmap and both together through create, growing
+write, shrink and removal; their attribute bytes and allocated tail bytes remain
+exact after the correction. This closes the local storage-preservation contract;
+it does not establish the cause of Windows's rejection of the journal.
+
+The owning implementation is [write_allocation.c](../../core/write_allocation.c).
+Independent source attributes and tail oracles are authored in
+[write_mutation_cases.py](../../tests/write_mutation_cases.py) and checked in
+[write_mutation.c](../../tests/write_mutation.c).
+
 ## MFT growth and reuse
 
 Allocating a FILE slot can require growing `$MFT::$DATA`, its mapping and its

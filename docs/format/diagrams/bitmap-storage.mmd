@@ -1,0 +1,6 @@
+flowchart TB
+    B["Nonresident bitmap stream"] --> S{"Logical byte length changes?"}
+    S -- "No" --> C["Write changed bits through the existing stream"]
+    C --> K["Keep attribute bytes and mapping pairs\nKeep allocation beyond logical EOF"]
+    S -- "Yes" --> R["Prepare size and mapping changes"]
+    R --> O["Bind allocation, attribute and bitmap updates\nin the owning metadata transaction"]

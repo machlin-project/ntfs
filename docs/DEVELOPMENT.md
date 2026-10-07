@@ -38,6 +38,50 @@ and actual unsigned Release build. Explicit result guards and cleanup-size
 ownership are reviewed separately from new journal/recovery semantics; see
 [the refactoring plan](REFACTORING.md).
 
+## Private ordinary-operation image CLI
+
+The manual `ntfs-write-operation-image-tests` executable uses the experimental
+complete-operation owner on a private ordinary image. It resolves ASCII acceptance
+paths through checked full file references and closes every immutable core child
+before preparing or executing a mutation. It does not mount media or enable FSKit
+namespace/resize operations.
+
+```sh
+meson compile -C .build ntfs-write-operation-image-tests
+mkdir artifacts/operation-create-prepare-next
+.build/ntfs-write-operation-image-tests prepare PRIVATE_IMAGE create /fixture/new.txt FILETIME artifacts/operation-create-prepare-next
+```
+
+Replace `PRIVATE_IMAGE` with an inactive, exclusively owned disposable image and
+`FILETIME` with unsigned decimal 100-nanosecond ticks since the Windows epoch.
+The modes are `prepare` and `execute`; operations are `create`, `mkdir`, `remove`,
+`rmdir`, `resize SIZE`, `write OFFSET PAYLOAD_FILE` and `rename DESTINATION REPLACE`.
+`REPLACE` is zero or one. Write payloads are bounded ordinary files. The fresh
+trace directory receives complete original/projected regions, physical publication
+frames and `plan.json` before execution. The final JSON distinguishes requested
+execution, actual execution, completion and permanent poisoning. Preparation
+performs no writes. Retain the first failing invocation and its private image;
+do not retry uncertain execution.
+
+Ten connected private-fixture operations pass exact full-image, content, zero-gap,
+time, full validation and fresh zero-rewrite recovery checks. Read-only create
+preparation on the native checkpoint postimage also passes without changing media.
+These CLI results are under `artifacts/overwrite/operation-image-cli-*`; native
+execution of new FILE/INDX families remains a separate acceptance requirement.
+
+For native Windows batches, use QGA for bounded manifests/reports and
+`scripts/windows_image_archive.py` for full detached postimages. The receiver binds
+the private VM interface, one exact peer and a bounded set of expected case/hash
+pairs. Gzip transfer bounds both wire bytes and decoded image size; the host checks
+the complete native post-detach SHA, persists the exact image and publishes a
+read-only file before returning a receipt. Release only generated detached guest
+copies after every corresponding host receipt and full file has been verified.
+The release body first rechecks the complete group's paths, plain-file state,
+detachment, sizes and hashes. Original disks/base images are never operands.
+Transport failure preserves partials and returns no successful receipt; no native
+case is repeated automatically. Five independent archive tests run as
+`windows-image-archive` in the ordinary Meson suite.
+
 ## Installed image commands
 
 The signed app exposes `--image-command status|import FILE_NAME|mount IMAGE_ID|unmount IMAGE_ID`

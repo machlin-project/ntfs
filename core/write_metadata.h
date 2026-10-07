@@ -21,6 +21,12 @@ struct ntfs_write_file_plan {
 	uint8_t protected_after[NTFS_WRITE_RECORD_BYTES];
 };
 
+/* Compare caller-validated restored metadata bytes, excluding only the right
+ * image's USA storage. The caller supplies complete readable images and their
+ * explicit comparison length; identity, framing and history proofs stay there.
+ * LSNs and every other byte remain significant. No I/O/allocation occurs. */
+bool ntfs_write_restored_record_equal(const uint8_t *, const uint8_t *, size_t);
+
 /* Private preparation for the qualified native ordinary-file mutation family.
  * No device writes occur. The caller owns/serializes the immutable node and
  * supplies separate private output storage. Success contains only values/bytes;

@@ -2,17 +2,6 @@
 #include "write_batch_recover_internal.h"
 #include <ntfs/record.h>
 
-static bool
-checkpoint_logical_page_equal(const uint8_t *left, const uint8_t *right)
-{
-	const struct ntfs_disk_mst *mst = (const void *)right;
-	size_t first = ntfs_u16(mst->usa_offset);
-	size_t end = first + (size_t)ntfs_u16(mst->usa_count) * sizeof(uint16_t);
-
-	return end <= NTFS_WRITE_CLUSTER_BYTES && ntfs_equal(left, right, first) &&
-	    ntfs_equal(left + end, right + end, NTFS_WRITE_CLUSTER_BYTES - end);
-}
-
 static enum ntfs_result
 checkpoint_root_transition_bind(struct ntfs_write_batch_recovery *owner,
     struct ntfs_batch_recovery_workspace *work, const struct ntfs_logfile_restart *older,
@@ -62,7 +51,8 @@ checkpoint_root_transition_bind(struct ntfs_write_batch_recovery *owner,
 	ntfs_put_u16(area->flags, newer->flags);
 	ntfs_put_u64(entry->oldest_lsn, checkpoint->client.oldest_lsn);
 	ntfs_put_u64(entry->restart_lsn, checkpoint->client.restart_lsn);
-	if (!checkpoint_logical_page_equal(work->before, work->image)) {
+	if (!ntfs_write_restored_record_equal(
+		work->before, work->image, NTFS_WRITE_CLUSTER_BYTES)) {
 		return NTFS_STALE;
 	}
 	checkpoint->advanced = *newer;
@@ -390,7 +380,9 @@ checkpoint_recovery_home(struct ntfs_write_batch_recovery *owner, struct ntfs_st
 	if (ntfs_fixup(work->guard.restored, NTFS_WRITE_CLUSTER_BYTES, "RCRD") != NTFS_OK) {
 		return NTFS_CORRUPT;
 	}
-	if (result == NTFS_OK && checkpoint_logical_page_equal(work->image, work->guard.restored)) {
+	if (result == NTFS_OK &&
+	    ntfs_write_restored_record_equal(
+		work->image, work->guard.restored, NTFS_WRITE_CLUSTER_BYTES)) {
 		return NTFS_OK;
 	}
 	image =

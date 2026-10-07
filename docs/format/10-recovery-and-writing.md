@@ -462,6 +462,13 @@ old-root view acquires the actual still-retained history; the exact final Forget
 empty checkpoint and all settled homes must justify advancement. A larger LSN,
 clean hint or fabricated projected root is insufficient.
 
+The private [metadata byte comparison](../../core/write_metadata.c) is shared
+by ordinary restoration and both recovery components. It excludes only the
+right-hand restored image's USA storage and retains every other byte, including
+LSNs. Callers own the explicit comparison length and complete framing,
+identity and history proofs; sharing this pure helper changes none of those
+interpretation or admission rules.
+
 Pending recovery may repair the checkpoint's home from a proved complete copy.
 A new settled origin must already have both exact circular packet homes before
 another operation reuses the copy slots. An invalid restart copy can be bypassed

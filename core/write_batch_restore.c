@@ -4,17 +4,6 @@
 #include "write_retirement.h"
 #include <ntfs/record.h>
 
-static bool
-recovery_logical_equal(const uint8_t *left, const uint8_t *right, size_t bytes)
-{
-	const struct ntfs_disk_mst *header = (const void *)right;
-	size_t first = ntfs_u16(header->usa_offset);
-	size_t end = first + (size_t)ntfs_u16(header->usa_count) * sizeof(uint16_t);
-
-	return end <= bytes && ntfs_equal(left, right, first) &&
-	    ntfs_equal(left + end, right + end, bytes - end);
-}
-
 static enum ntfs_result
 recovery_logical_file(const void *bytes, uint64_t number)
 {
@@ -428,7 +417,7 @@ recovery_files_protect(struct ntfs_write_batch_recovery *owner,
 		result = ntfs_record_decode(work->image, NTFS_WRITE_RECORD_BYTES, false);
 		complete = result == NTFS_OK;
 		known = complete &&
-		    recovery_logical_equal(
+		    ntfs_write_restored_record_equal(
 			work->image, home->after + offset, NTFS_WRITE_RECORD_BYTES);
 		if (owner->historical && owner->committed && !known) {
 			return NTFS_STALE;
@@ -445,7 +434,7 @@ recovery_files_protect(struct ntfs_write_batch_recovery *owner,
 				return result;
 			}
 			known = complete &&
-			    recovery_logical_equal(
+			    ntfs_write_restored_record_equal(
 				work->image, work->before, NTFS_WRITE_RECORD_BYTES);
 			if (!known &&
 			    (!owner->committed || complete ||
@@ -497,8 +486,8 @@ recovery_index_protect(struct ntfs_write_batch_recovery *owner,
 	ntfs_copy(work->image, home->source, sizeof(work->image));
 	result = ntfs_fixup(work->image, sizeof(work->image), "INDX");
 	complete = result == NTFS_OK;
-	known =
-	    complete && recovery_logical_equal(work->image, home->after, NTFS_WRITE_CLUSTER_BYTES);
+	known = complete &&
+	    ntfs_write_restored_record_equal(work->image, home->after, NTFS_WRITE_CLUSTER_BYTES);
 	if (owner->historical && owner->committed && !known) {
 		return NTFS_STALE;
 	}
@@ -513,7 +502,8 @@ recovery_index_protect(struct ntfs_write_batch_recovery *owner,
 			return result;
 		}
 		known = complete &&
-		    recovery_logical_equal(work->image, work->before, NTFS_WRITE_CLUSTER_BYTES);
+		    ntfs_write_restored_record_equal(
+			work->image, work->before, NTFS_WRITE_CLUSTER_BYTES);
 		header = (const void *)home->source;
 		before = (const void *)work->before;
 		after = (const void *)home->after;

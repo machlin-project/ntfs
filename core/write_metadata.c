@@ -2,6 +2,17 @@
 #include "write_metadata.h"
 #include <ntfs/record.h>
 
+bool
+ntfs_write_restored_record_equal(const uint8_t *left, const uint8_t *right, size_t bytes)
+{
+	const struct ntfs_disk_mst *header = (const void *)right;
+	size_t first = ntfs_u16(header->usa_offset);
+	size_t end = first + (size_t)ntfs_u16(header->usa_count) * sizeof(uint16_t);
+
+	return end <= bytes && ntfs_equal(left, right, first) &&
+	    ntfs_equal(left + end, right + end, bytes - end);
+}
+
 static bool
 separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
 {

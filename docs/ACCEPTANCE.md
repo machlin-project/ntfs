@@ -54,6 +54,17 @@ derived markers close the comparison without changing C or repeating the writer.
 This offline native-source evidence remains separate from actual Windows recovery
 and is recorded in [CHECKPOINT-REUSE.md](CHECKPOINT-REUSE.md).
 
+A separate behavior-preserving cleanup moves three identical restored-record
+comparisons into the private metadata component. All seven callers retain their
+original lengths and owning proofs. The complete 196-suite fatal-sanitizer
+regression, style, 128 freestanding and 128 strict Release checks, 23 standalone
+headers and actual universal unsigned app build pass. All 38 actual postimages
+and four modeled seeds are byte-identical to the functional checkpoint. Main's
+source-body and surrounding-token review is retained under
+`refactor-restored-metadata-main-review-20261007/`; [REFACTORING.md](REFACTORING.md)
+records scope and remaining cleanup. Native acceptance and product admission are
+unchanged by this cleanup.
+
 ## Ordinary mutation planning and complete LFS placement
 
 The active connected write batch now has pure ordinary mutation/program/page

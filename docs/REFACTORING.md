@@ -113,6 +113,31 @@ column and ran no tests; its failure remains separate from the machine-readable
 option check and sole full regression. Evidence is retained under
 `artifacts/overwrite/refactor-mutation-components-*`.
 
+The subsequent checkpoint/reuse checkpoint is followed by a separate cleanup of
+three identical restored-record comparisons. The existing private
+[metadata component](../core/write_metadata.c) now owns that pure byte helper.
+Seven caller sites in ordinary restoration, ordinary recovery and checkpoint
+recovery retain their exact lengths, right-hand USA selection and every owning
+validation. LSNs remain significant. Helpers that additionally exclude FILE LSNs
+or unused padding retain their different contracts.
+
+Main verifies the three old bodies against the shared helper and compares all
+surrounding source tokens after the explicit call substitutions. Callbacks,
+identity/history proofs, fields, policies and cleanup remain unchanged. The full
+196-suite fatal-ASan/UBSan regression passes; 38 actual postimages, including the
+640-operation POSIX sequence, and four modeled recovery seeds are byte-identical
+to the functional checkpoint. Style, 128 freestanding and 128 strict Release
+checks across both architectures, 23 standalone headers and the actual unsigned
+universal app/extension/archive all pass. Eight actual affected-module compilation
+commands and archive members are checked. Evidence is in
+`artifacts/overwrite/refactor-restored-metadata-*`.
+
+The first review wrapper substituted an identifier inside a struct tag, and its
+next product check used the preceding report's key names. These wrapper corrections
+are retained separately; source, tests and builds were not repeated. This cleanup
+does not change FSKit code or native admission and requires no new installed
+acceptance. The larger FSKit extraction remains in the plan.
+
 ## Concrete findings
 
 | Area | Current finding | Proposed change |

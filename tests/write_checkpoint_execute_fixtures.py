@@ -141,7 +141,8 @@ def ordinary_settled_at_end(source, compensated):
                (changed, tables.TABLE.size + tables.TRANSACTION.size, ADDING_FLAG, lsn(1), lsn(1))]
     if compensated:
         empty_inverse = payload(0, inverse=COMPENSATION_OPERATION, target=True)
-        updates.append((empty_inverse, tables.TABLE.size + tables.TRANSACTION.size, 0, lsn(2), lsn(1)))
+        updates.append((empty_inverse, tables.TABLE.size + tables.TRANSACTION.size,
+                        DELETING_FLAG, lsn(2), lsn(1)))
         inverse = bytearray(payload(INITIALIZE_FILE_OPERATION, bytes(before[:snapshot_bytes]),
             inverse=COMPENSATION_OPERATION, target=True))
         w.UPDATE.put(inverse, 'undo_bytes', snapshot_bytes)

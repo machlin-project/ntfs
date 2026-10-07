@@ -143,6 +143,31 @@ about every historical NTFS implementation. USA detects the guarded torn-sector
 model; it is not a checksum, cryptographic integrity or arbitrary corruption
 detector.
 
+### Native INDX sector-fault observation
+
+**Observed and byte-bound:** an actual C create fault delivers only the first
+512 bytes of an originally allocated 4096-byte INDX buffer. The retained input
+has new `USA[0]=3` and protected tails `3, 2, 2, 2, 2, 2, 2, 2`. Its exact mapped
+directory reference and logical buffer offset are retained with the transfer
+trace. Windows Event ID 7 names that directory and reports the first mismatch:
+
+| Event field | Independently bound meaning |
+| --- | --- |
+| `FileName`, `FileReference` | Owning directory and its MFT record number |
+| `BufferOffset` | Byte offset in the directory's index-allocation stream |
+| `TornStructureOffset` | Zero for this buffer's selected structure |
+| `BlockIndex` | Zero-based sector index; 1 in this first-sector-only transfer |
+| `ExpectedSequenceNumber` | New USA marker, 3 |
+| `ActualSequenceNumber` | Retained old sector marker, 2 |
+
+The candidate has a matching healthy NTFS event, exact native namespace/content/
+metadata checks, clean state and successful read-only chkdsk. Its complete
+ordinarily detached image is retained. The collector initially refuses the
+warning because its expectation vocabulary covers only `$LogFile`; independent
+review preserves that failure and attributes the exact original event. It does
+not allow arbitrary metadata warnings or prove general torn-INDX repair. See
+[the bounded native gate](../ACCEPTANCE.md#private-ordinary-operation-image-harness).
+
 ### Original ownership and free bytes
 
 A FILE or INDX signature is framing evidence only after the owning stream has

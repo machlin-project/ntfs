@@ -147,6 +147,25 @@ fixture and compiler failures. Review fresh connected C output against the
 inspected packet-admission predicates before transferring the new packet to
 Windows. Complete native replay and installed general mutation remain separate.
 
+The additional compensation audit finds empty Noop redo without `DELETING`,
+native reason 47, before the prepared snapshot-flags packet executes. Those
+native inputs remain unexecuted. Program and reopened-media compensation output,
+exact retained-chain binding and independent checkpoint/chain fixtures now agree
+on the selected flag. The red regression and a full fresh 198-suite green run,
+style and twelve strict compilations pass review. Use the new
+`noop-compensation-*` packet after main reviews its ordinary and compensation
+bytes. The resulting 28-state native gate now passes independent original-event
+and complete-postimage review. Its collector stops on the allocated-INDX fault
+because only journal USA faults were declared. Exact input-sector/identity/event
+review attributes that warning; native file checks, clean state and chkdsk had
+already passed. Preserve the original failure. The following invocation selects
+only the seven unattempted inputs; none of the 21 attempted candidates repeats.
+The combined review binds all 28 healthy events and both exact injected warnings.
+Keep native creation inheritance, MFT pressure, sustained reuse and installed
+general mutation as separate gates. A prior outer capture-directory collision
+issued no VM command. Do not transfer the earlier snapshot-flags packet or treat
+static predicates as complete native replay qualification.
+
 Use the pinned standalone `ntfsrecover` only with an explicitly recorded scope.
 This binary takes `--transactions` without a count and refuses it with `--sync`.
 A clean selected-mode early return does not check new transactions. Historical

@@ -49,8 +49,9 @@ recovery_journal_visit(
 					: chain->aborting && chain->remaining == 0);
 		chain->forgotten = true;
 	} else {
-		assert(!chain->committed && chain->remaining != 0 &&
-		    (record->flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) == 0);
+		assert(!chain->committed && chain->remaining != 0);
+		assert((record->flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) ==
+		    (update.redo_operation == NTFS_LOG_OP_NOOP ? NTFS_LOGFILE_RECORD_DELETING : 0));
 		chain->aborting = true;
 		original = --chain->remaining;
 		step = &oracle->step[original];

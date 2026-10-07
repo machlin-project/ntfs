@@ -7,8 +7,10 @@ The owner intends a later open-source release; no open-source license is granted
 today. See LICENSE and docs/PROVENANCE.md.
 
 The implementation provides bounded read-only extraction and experimental editing
-of existing ordinary-file ranges in offline images. Installed initialized-range
-and resident-range acceptance are complete. It is not a production NTFS driver.
+of ordinary files in offline images. The C core passes a bounded native Windows
+gate for create, allocation, resize, rename, removal and interrupted recovery.
+Installed FSKit initialized-range and resident-range acceptance are complete;
+general FSKit mutation is still pending. It is not a production NTFS driver.
 Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
@@ -114,8 +116,18 @@ failure image is retained and reviewed.
 The exact driver's packet validator also rejects full FILE undo snapshots
 carrying `ADDING`; the compiler and recovery owner now enforce the valid
 representation. Current local coverage is 198 passing suites, with selected-Xcode
-style and twelve strict compilations. A fresh native operation/recovery gate is
-pending. See
+style and twelve strict compilations. Additional compensation review finds empty
+Noop redo must carry `DELETING`; both generators and retained-chain validation
+now enforce it. A complete fresh 198-suite run passes, including flag-only
+refusals before writes. The earlier snapshot-flags native inputs stay unexecuted;
+the corrected connected gate now passes independent review of all 28 distinct
+Windows operation/recovery states and exact detached postimages. All have matching
+healthy events, clean state and passing read-only chkdsk. One injected journal
+warning and one injected INDX warning match exact sector bytes. The collector
+stopped on the missing INDX expectation; its failure is retained, and only the
+seven unattempted states ran afterward. No candidate was repeated. Native
+creation inheritance, MFT pressure, sustained ring reuse and general FSKit
+mutation remain open. See
 [the current batch evidence](docs/ACCEPTANCE.md#private-ordinary-operation-image-harness)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

@@ -307,6 +307,48 @@ at the payload's endpoint while storing only redo bytes. Our decoder preserves
 that inactive declaration separately and exposes an empty safe undo span. It
 does not generally excuse out-of-bounds update spans.
 
+### Empty Noop compensation and redo admission
+
+Compensation's inactive undo declaration does not waive redo admission. In the
+same exact driver's `NtfsCheckLogRecord`, a packet without `DELETING` must have
+a bounded, nonempty redo span unless the redo operation's validation class
+permits emptiness. Noop (`0x00`) has class byte zero in the inspected table. An
+empty Noop redo without `DELETING` therefore fails with diagnostic reason 47.
+LFS delivers `DELETING` from common-header flag `0x0002` to that check.
+
+| Selected compensation packet | Redo payload | `DELETING` | This admission predicate |
+| --- | --- | --- | --- |
+| Noop / Compensation | Empty | Clear | Refused, native reason 47 |
+| Noop / Compensation | Empty | Set | Satisfied |
+| Initialize FILE / Compensation | Complete FILE inverse | Clear | Satisfied |
+
+Independent static review binds fourteen actual C packets from two completed
+create-undo chains. Four empty Noop compensations violate this predicate; changing
+only that flag satisfies the inspected checks. No new Windows batch was executed
+with these inputs. This is another concrete local defect, separate from live
+attribution of a mount warning or full inverse-operation qualification.
+
+The [program compensation compiler](../../core/write_program_packets.c) and
+[journal-derived recovery constructor](../../core/write_batch_capture.c) now emit
+`DELETING` for the selected empty Noop form and require it when binding an already
+recorded compensation. The [packet regression](../../tests/write_mutation.c) and
+[independent inverse-chain oracle](../../tests/write_batch_recovery_journal.h)
+distinguish it from payload-bearing compensation. The
+[ownership refusal](../../tests/write_batch_recovery_ownership.h) changes only
+the flag in a completed exact chain and requires refusal before any write.
+Noop compensation still follows its bound `PreviousLSN` and `UndoNextLSN`; the
+empty redo is not a terminal Forget operation.
+
+Fresh review checks all fourteen corrected compensation packets and all 86
+ordinary packets against the inspected predicates. The complete current-C
+operation/recovery gate subsequently passes independent Windows review of 28
+distinct states, including uncommitted create, completed compensation,
+interrupted compensation and resumed compensation. This qualifies the selected
+composition under its owning history/geometry contract. It does not identify
+which live branch produced an earlier aggregate mount warning or admit arbitrary
+native histories. [Acceptance](../ACCEPTANCE.md#private-ordinary-operation-image-harness)
+records the original events and two exact injected USA observations.
+
 ## Native operation vocabulary
 
 These numbers describe the researched wire vocabulary. Only a qualified subset
@@ -363,12 +405,12 @@ requires complete framing checks.
 
 | Region or transition | Private redo / undo composition | Evidence boundary |
 | --- | --- | --- |
-| Changed owned FILE | Full 1024-byte before image as Initialize / Initialize, then the full after image as Initialize / Noop. | Full FILE snapshots are used by the accepted overwrite family; this full before-inverse pair and replacement composition need separate native recovery acceptance. |
-| Retired FILE | Full before inverse above, then empty Deallocate redo with the observed 24-byte Initialize inverse. | The header transition has original witnesses; the complete connected transaction remains unqualified. |
-| Previously uninitialized FILE | Retain Noop / Deallocate with an eight-byte zero MST inverse **before** the full Initialize / Noop redo. | Eight-byte inverse forms have original witnesses. This selected composition, storage-ownership interpretation and consumed-generation rollback need native qualification. |
-| Changed owned INDX | Full 4096-byte restored images as Update nonresident value / Update nonresident value (`0x08 / 0x08`). | Original `0x08` packets exist, but do not establish arbitrary whole-buffer substitution. |
-| New INDX | Full restored image as `0x08 / Noop`; the old owning FILE/bitmap must make the buffer unowned on rollback. | Complete parent, allocation and buffer recovery must be qualified together. |
-| Bitmap | The independently tested set/clear programs below. | Whole OAT/mapping and durability qualification remains separate. |
+| Changed owned FILE | Full 1024-byte before image as Initialize / Initialize, then the full after image as Initialize / Noop. | The selected ordinary composition passes the bounded 28-state native gate; arbitrary FILE families remain outside it. |
+| Retired FILE | Full before inverse above, then empty Deallocate redo with the observed 24-byte Initialize inverse. | Original header witnesses and connected native file/directory removal pass; broader retirement faults and native generation wrap remain separate. |
+| Previously uninitialized FILE | Retain Noop / Deallocate with an eight-byte zero MST inverse **before** the full Initialize / Noop redo. | Selected native create/loser/compensation states pass. Newly exposed MFT storage and reservation pressure retain separate gates. |
+| Changed owned INDX | Full 4096-byte restored images as Update nonresident value / Update nonresident value (`0x08 / 0x08`). | Selected ordinary states and the exactly attributed torn-INDX recovery pass; arbitrary whole-buffer substitution is not admitted. |
+| New INDX | Full restored image as `0x08 / Noop`; the old owning FILE/bitmap must make the buffer unowned on rollback. | Native directory/child operations pass. General splitting, growth and cross-object interruption matrices remain separate. |
+| Bitmap | The independently tested set/clear programs below. | Selected native allocation/free and actual create interruption/recovery pass; full-pressure and broader mapping gates remain open. |
 
 Retaining the new-FILE inverse first is necessary for the local prefix contract.
 If initialization were logged before its inverse, a complete prefix ending there

@@ -29,9 +29,12 @@ the exact quiet origin, a settled qualified prefix and several ordinary groups.
 Private backward views prove previous ownership and FILE generation reuse;
 only the final transaction may require recovery. Completed compensation and
 attribute-open-only prefixes can precede another operation without a fabricated
-completion marker. Sustained checkpoint/ring reuse and whole native qualification
-still precede write-owner
-and FSKit admission; see the current
+completion marker. The selected ordinary composition now passes independent
+native Windows review of 28 distinct operation/recovery states. The one stopped
+INDX fault is attributed to exact original sector bytes and event fields; only
+the seven unattempted candidates execute afterward. Native creation inheritance,
+MFT pressure and sustained ring reuse still precede write-owner and general
+FSKit admission; see the current
 [batch evidence](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
 
 One exclusive C owner must prepare all affected FILE/INDX images, mapping pairs,

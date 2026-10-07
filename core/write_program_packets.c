@@ -324,6 +324,7 @@ ntfs_write_program_compensation_prepare(const struct ntfs_environment *source,
 	const struct ntfs_write_program_update *step;
 	const uint8_t *payload;
 	size_t index, original_index, stride = sizeof(struct ntfs_disk_log_update_storage);
+	uint16_t flags;
 	enum ntfs_result result;
 
 	if (original != NULL &&
@@ -381,8 +382,11 @@ ntfs_write_program_compensation_prepare(const struct ntfs_environment *source,
 		    (struct ntfs_logfile_buffer){payload + update.lcns.offset, update.lcns.length};
 		inverse.redo =
 		    (struct ntfs_logfile_buffer){payload + update.undo.offset, update.undo.length};
+		/* Empty Noop redo uses the native missing-redo flag, also for compensation. */
+		flags =
+		    inverse.redo_operation == NTFS_LOG_OP_NOOP ? NTFS_LOGFILE_RECORD_DELETING : 0;
 		result = program_packet_encode(&work, index, &inverse, client->sequence,
-		    NTFS_WRITE_TRANSACTION_KEY, 0, index == 0 ? SIZE_MAX : index - 1, SIZE_MAX);
+		    NTFS_WRITE_TRANSACTION_KEY, flags, index == 0 ? SIZE_MAX : index - 1, SIZE_MAX);
 		if (result != NTFS_OK) {
 			goto done;
 		}

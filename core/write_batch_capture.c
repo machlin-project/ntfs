@@ -159,6 +159,8 @@ recovery_compensation_matches(const struct ntfs_batch_recovery_packet *original,
 	const struct ntfs_logfile_update *a = &original->update, *b = &inverse->update;
 	const uint8_t *old = original->bytes + original->record.data.offset;
 	const uint8_t *payload = inverse->bytes + inverse->record.data.offset;
+	uint16_t expected_flags =
+	    a->undo_operation == NTFS_LOG_OP_NOOP ? NTFS_LOGFILE_RECORD_DELETING : 0;
 
 	return b->redo_operation == a->undo_operation &&
 	    b->undo_operation == NTFS_LOG_OP_COMPENSATION &&
@@ -170,7 +172,7 @@ recovery_compensation_matches(const struct ntfs_batch_recovery_packet *original,
 	    b->compensation_undo_bytes == b->redo.length &&
 	    ntfs_equal(payload + b->lcns.offset, old + a->lcns.offset, b->lcns.length) &&
 	    ntfs_equal(payload + b->redo.offset, old + a->undo.offset, b->redo.length) &&
-	    (inverse->record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) == 0 &&
+	    (inverse->record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) == expected_flags &&
 	    inverse->record.undo_next_lsn == original->record.undo_next_lsn;
 }
 
@@ -666,6 +668,9 @@ ntfs_batch_recovery_pages(struct ntfs_write_batch_recovery *owner,
 			payload = old->bytes + old->record.data.offset;
 			inverse.redo_operation = old->update.undo_operation;
 			inverse.undo_operation = NTFS_LOG_OP_COMPENSATION;
+			entry->record.flags = inverse.redo_operation == NTFS_LOG_OP_NOOP
+			    ? NTFS_LOGFILE_RECORD_DELETING
+			    : 0;
 			inverse.target_attribute = old->update.target_attribute;
 			inverse.target_vcn = old->update.target_vcn;
 			inverse.record_offset = old->update.record_offset;

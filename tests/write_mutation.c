@@ -978,6 +978,9 @@ verify_program(struct test_case *test, const struct ntfs_write_mutation_plan *pl
 		    update.undo_operation == NTFS_LOG_OP_COMPENSATION);
 		assert(update.redo.length == original.undo.length && update.undo.length == 0);
 		assert(update.compensation_undo_bytes == original.undo.length);
+		/* Native empty Noop redo requires DELETING even in a compensation. */
+		assert((record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) ==
+		    (update.redo_operation == NTFS_LOG_OP_NOOP ? NTFS_LOGFILE_RECORD_DELETING : 0));
 		assert(memcmp(payload + update.redo.offset,
 			   (const uint8_t *)step->payload.data + original.undo.offset,
 			   original.undo.length) == 0);

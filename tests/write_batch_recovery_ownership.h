@@ -249,6 +249,89 @@ recovery_snapshot_flags_refusal(const char *directory, const char *image_name)
 	puts("PASS: FILE snapshots with ADDING refuse before writes for loser and winner");
 }
 
+static void
+recovery_noop_flags_refusal(const char *directory, const char *image_name)
+{
+	struct recovery_case *source;
+	struct test_case *test;
+	struct ntfs_write_batch_recovery *owner = NULL;
+	const struct ntfs_write_batch_recovery_publication *step;
+	struct ntfs_write_recovery_report report;
+	struct ntfs_logfile_update update;
+	struct ntfs_disk_log_record *record;
+	uint8_t *logical, *encoded, *input;
+	uint64_t physical = 0;
+	size_t publication;
+	bool matched = false, poisoned = false;
+	enum ntfs_result result;
+
+	source = recovery_source(directory, image_name, NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
+	test = source->test;
+	recovery_state(source, source->commit, 0, false);
+	logical = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	encoded = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	input = malloc(test->device.bytes);
+	assert(logical != NULL && encoded != NULL && input != NULL);
+	assert(
+	    ntfs_write_batch_recover_prepare(&test->backend, &owner) == NTFS_OK && owner != NULL);
+	for (publication = 0; publication < ntfs_write_batch_recovery_count(owner); publication++) {
+		step = ntfs_write_batch_recovery_get(owner, publication);
+		if (step->stage != NTFS_WRITE_RECOVERY_ABORT_HOME) {
+			continue;
+		}
+		memcpy(logical, step->image, NTFS_WRITE_CLUSTER_BYTES);
+		assert(ntfs_fixup(logical, NTFS_WRITE_CLUSTER_BYTES, "RCRD") == NTFS_OK);
+		record = (void *)(logical + source->oracle->restart.page_data_offset);
+		if ((ntfs_u16(record->flags) & NTFS_LOGFILE_RECORD_MULTI_PAGE) != 0 ||
+		    ntfs_u32(record->type) != NTFS_LOGFILE_RECORD_UPDATE ||
+		    ntfs_u64(record->lsn) !=
+			ntfs_u64(((struct ntfs_disk_log_page *)(void *)logical)->copy_value)) {
+			continue;
+		}
+		assert(ntfs_logfile_update_decode((uint8_t *)record + sizeof(*record),
+			   ntfs_u32(record->data_bytes), &update) == NTFS_OK);
+		if (update.redo_operation == NTFS_LOG_OP_NOOP &&
+		    update.undo_operation == NTFS_LOG_OP_COMPENSATION) {
+			assert(update.redo.length == 0 &&
+			    ntfs_u16(record->flags) == NTFS_LOGFILE_RECORD_DELETING);
+			physical = step->physical;
+			matched = true;
+			break;
+		}
+	}
+	assert(matched);
+	assert(recovery_execute(test, owner, &poisoned, &report) == NTFS_OK && !poisoned &&
+	    report.completed);
+	ntfs_write_batch_recovery_close(owner);
+	test->device.writes = test->device.barriers = 0;
+	owner = NULL;
+	assert(ntfs_write_batch_recover_prepare(&test->backend, &owner) == NTFS_OK &&
+	    ntfs_write_batch_recovery_count(owner) == 0);
+	ntfs_write_batch_recovery_close(owner);
+	memcpy(logical, test->device.visible + physical, NTFS_WRITE_CLUSTER_BYTES);
+	assert(ntfs_fixup(logical, NTFS_WRITE_CLUSTER_BYTES, "RCRD") == NTFS_OK);
+	record = (void *)(logical + source->oracle->restart.page_data_offset);
+	assert(ntfs_u16(record->flags) == NTFS_LOGFILE_RECORD_DELETING);
+	/* Retain the completed inverse and chain; only remove native redo admission. */
+	ntfs_put_u16(record->flags, 0);
+	assert(ntfs_record_protect(logical, NTFS_WRITE_CLUSTER_BYTES, encoded,
+		   NTFS_WRITE_CLUSTER_BYTES) == NTFS_OK);
+	memcpy(test->device.visible + physical, encoded, NTFS_WRITE_CLUSTER_BYTES);
+	memcpy(test->device.durable, test->device.visible, test->device.bytes);
+	memcpy(input, test->device.visible, test->device.bytes);
+	owner = (void *)(uintptr_t)1;
+	result = ntfs_write_batch_recover_prepare(&test->backend, &owner);
+	assert(result == NTFS_CORRUPT && owner == NULL && test->device.live == 0 &&
+	    test->device.writes == 0 && test->device.barriers == 0 &&
+	    memcmp(input, test->device.visible, test->device.bytes) == 0 &&
+	    memcmp(input, test->device.durable, test->device.bytes) == 0);
+	free(input);
+	free(encoded);
+	free(logical);
+	recovery_source_close(source);
+	puts("PASS: empty Noop compensation without DELETING refuses before writes");
+}
+
 static enum ntfs_result
 recovery_generation_packet(
     void *context, const struct ntfs_logfile_record_view *view, const void *bytes)
@@ -363,5 +446,6 @@ batch_recovery_ownership_tests(const char *directory, const char *output)
 	recovery_unowned_file(directory, "source.img", TEST_DEFAULT, true);
 	recovery_unowned_file(directory, "large-unused-mft-tail-stale.img", TEST_MFT_GROWTH, false);
 	recovery_snapshot_flags_refusal(directory, "source.img");
+	recovery_noop_flags_refusal(directory, "source.img");
 	free(recovery_output);
 }

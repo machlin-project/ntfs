@@ -568,6 +568,26 @@ tested name-format defect without qualifying the actual native journal program.
 Its packet/replay cause remains unresolved, and whole FILE/INDX composition
 still requires the owning native acceptance gate.
 
+The later exact-driver observations identify violated spanning-page LSN and
+[FILE/Noop flag admission](09-logfile.md#flags-and-a-real-file-undo).
+After those original C corrections, the bounded connected gate passes all 28
+distinct actual operation/recovery states: ten complete operations, seven create
+writer states, seven completed recoveries and four loser/compensation states.
+Windows observes expected namespace, contents, zero gaps, times, File IDs and
+descriptors, clean state, read-only chkdsk and a healthy event for each candidate.
+All complete detached postimages are retained.
+
+The allocated-INDX first-sector fault stops the original collector because it
+only declares journal USA warnings. Independent original-byte/trace/event review
+binds the directory and buffer identity plus every reported mismatch field; the
+same native case had already passed file/metadata, clean state and chkdsk.
+Its original collector failure is preserved. Only the seven unattempted states
+execute afterward. This is bounded native recovery evidence, not warning
+suppression, a remount or a repaired image. The two expected warnings are one
+journal USA fault and one [INDX USA fault](02-records-and-fixups.md#native-indx-sector-fault-observation).
+Native inheritance, MFT pressure, sustained ring reuse and installed general
+mutation still need their own gates.
+
 ## Implementation and evidence
 
 - Family preparation: [write_transaction.c](../../core/write_transaction.c).
@@ -608,5 +628,7 @@ still requires the owning native acceptance gate.
 
 Actual installed initialized and unchanged-size resident overwrites, offline
 interruption recovery and independent Windows checks have qualified evidence.
-Allocation/namespace, sustained native checkpoint/ring reuse and hardware power
-cuts do not inherit that evidence. [ACCEPTANCE.md](../ACCEPTANCE.md) records the distinction.
+Selected allocation/namespace operations now have the separate bounded native
+gate above. Installed general mutation, sustained native checkpoint/ring reuse
+and hardware power cuts do not inherit it. [ACCEPTANCE.md](../ACCEPTANCE.md)
+records the distinction.

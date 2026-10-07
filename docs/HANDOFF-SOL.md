@@ -215,10 +215,30 @@ compilations pass. Retain the earlier fixture failures and strict compiler
 warning; use the closed report under `file-snapshot-flags-local-closed-*`.
 The fresh ten-operation/fault packet must pass main's complete byte and static
 packet review before a new Windows gate. Older failed candidates stay detached.
-The actual C journal gate remains open. Follow the main agent's VM handoff and
-prepared commands; do not repair/remount an earlier failed or diagnostic candidate
-or resume the remaining inputs without a reviewed diagnosis and new packet.
-Passing filename diagnostics do not qualify the ordinary writer.
+The additional inverse-chain audit finds four empty Noop compensations among
+fourteen C packets without native `DELETING` admission, reason 47. No
+`snapshot-flags-*` native case is run. The new compensation construction/binding
+contract passes its red regression, a complete fresh 198-suite green run, style
+and twelve strict builds. Main reviews the zero-write malformed-flag refusal.
+Use the newly prepared `noop-compensation-*` packet after ordinary and inverse
+packet reviews; the earlier unexecuted inputs are diagnostic evidence only.
+That packet now passes the bounded 28-state Windows gate and main's combined
+original-XML/full-postimage review. Twenty cases complete before the collector
+stops on the exact injected INDX sector mixture. Its file/metadata, clean state
+and chkdsk checks passed; main attributes the original warning to the mapped
+directory, buffer offset and USA words. All nine detached group images are
+retained. Only seven previously unattempted inputs execute afterward, all passing.
+The original collector failure remains preserved. The combined review binds 28
+healthy events, one journal fault and one INDX fault, with no candidate repeats.
+Evidence is under `windows-noop-compensation-*`; use `main-combined-review.json`
+in `windows-noop-compensation-network-20261007/`. An outer capture collision
+before any VM command is retained separately. Prepared self-capturing scripts
+create their own output directories; do not precreate or wrap those directories.
+
+Native creation inheritance, MFT reservation pressure, sustained native ring reuse
+and general FSKit mutation remain open. Follow the main agent's VM handoff and
+prepared commands; do not repair/remount earlier failed or diagnostic candidates.
+Passing filename diagnostics alone do not qualify the ordinary writer.
 Unsupported rejection,
 building or private serialization is not feature acceptance. Continue through the
 user's broad write scope; do not mark the goal complete at this checkpoint.

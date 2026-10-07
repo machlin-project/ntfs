@@ -73,6 +73,16 @@ the refused combination of `ADDING` and Initialize FILE undo. The original C
 correction and tests express that interoperability contract without importing
 driver code or a generic native validation implementation. Static reviews and
 all Microsoft binary material remain ignored diagnostic artifacts.
+The same read-only validation observation also establishes that selected empty
+Noop compensation needs `DELETING` for redo admission. Original program/recovery
+changes and independent chain/flag regressions express that bounded contract;
+they do not copy native executable code or import its generic class table.
+The corrected actual-C packet subsequently passes independent native review of
+28 distinct operation/recovery states. A stopped collector's INDX warning is
+attributed through original input bytes, transfer trace and exact event fields;
+the seven remaining states execute without repeating attempted candidates.
+This native evidence qualifies the selected composition, not a copied native
+algorithm or general private-driver contract.
 
 The app image picker, saved-bookmark commands and versioned VM CLI harness are
 original implementations. They create and positively restore genuine app-scope

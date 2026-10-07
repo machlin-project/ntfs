@@ -2,6 +2,14 @@
 
 ## Private ordinary-operation image harness
 
+The current corrected C writer passes independent native review of 28 distinct
+operation/recovery states. All ten connected ordinary operations, seven actual
+create writer states, seven completed recoveries and four loser/compensation
+states have exact file/metadata checks, clean state, passing read-only chkdsk and
+a matching healthy event. All 28 detached postimages are retained. The chronology
+below preserves preceding failures; native inheritance, MFT pressure, sustained
+ring reuse and installed general FSKit mutation remain open.
+
 The manual [ordinary-image CLI](../tests/write_operation_image.c) now captures
 actual partial writes and delivered-but-uncertain persistence for complete
 ordinary mutations and fresh journal-derived recovery. Its private
@@ -232,6 +240,50 @@ retained event against the fresh 32-publication/65-event plan.
 Evidence and main reviews are under `windows-ntfs-validator-functions-*`,
 `windows-ntfs-snapshot-contract-*` and `file-snapshot-flags-*` in
 `artifacts/overwrite/`.
+
+Before executing that native packet, additional static review binds fourteen
+actual C packets from completed/resumed create undo to the same validator. Four
+empty Noop compensations lack `DELETING` and fail its redo-admission predicate,
+reason 47. The prepared `snapshot-flags-*` native cases remain unexecuted. The new
+regression fails on the previous code; both compensation constructors and their
+recorded-chain binding now enforce the selected missing-redo flag. Independent
+checkpoint fixtures and inverse-chain checks preserve the same contract.
+A malformed-flag test changes only the completed Noop header and verifies
+recovery refusal with no writes, barriers or changed input bytes.
+
+The connected correction passes a complete fresh 198-suite fatal-ASan/UBSan run
+with zero failures/skips, selected-Xcode style and twelve strict core/test
+compilations. Main independently reviews original logs, including the new
+Noop refusal and preceding FILE-snapshot loser/winner refusals. Fresh current-C
+output passes ten complete offline operations, five checkpoints, seven fault
+profiles, 28 complete input/container reviews and all inspected admission checks
+for 86 ordinary and fourteen compensation packets.
+
+Native Windows execution then completes twenty cases before the allocated-INDX
+sector profile stops the collector on an unanticipated Event ID 7. That same
+case has already passed file/metadata, clean state and read-only chkdsk. Main
+independently binds its raw event to the exact injected first 512-byte write:
+the directory's mapped INDX has USA marker 3, first tail 3 and remaining tails 2;
+Windows reports the first mismatch at zero-based block 1. Directory identity,
+logical buffer offset, candidate volume and event time all match. A separate
+read-only collection retains this case and the preceding eight completed group
+images, with the same original warning and one matching healthy event. No repair
+provider event is present. The original collector failure remains preserved.
+
+Only the seven unattempted, immutable inputs then execute, all successfully.
+Main's combined original-XML review accepts all 28 distinct first-attempt states,
+28 matching healthy events, one exactly predicted journal USA warning and one
+exactly attributed injected INDX USA warning. Every detached image is hash-bound
+to its receipt. Original disk/base remain unchanged; no candidate is repeated,
+remounted or repaired, and no VM lifecycle changes occur. This closes the bounded
+ordinary-operation gate, not inherited-security, reserved-record pressure,
+sustained native reuse, hardware cuts or installed general mutation. An initial
+outer log-directory collision happened before any VM command; its failure is
+retained separately. Evidence is under
+`windows-ntfs-noop-compensation-contract-*` and `noop-compensation-*` in
+`artifacts/overwrite/`; native capture/review is under
+`windows-noop-compensation-*`, with `main-combined-review.json` in
+`windows-noop-compensation-network-20261007/`.
 
 The pinned standalone NTFS-3G recovery utility is built separately and remains
 outside the product. Four initial range calls were CLI usage failures; four clean

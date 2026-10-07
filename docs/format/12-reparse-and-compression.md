@@ -117,7 +117,7 @@ or provider bytes as ordinary user content would silently change semantics.
 ## Implementation and evidence
 
 - Reparse snapshots: [reparse.c](../../core/reparse.c).
-- NTFS compression: [lznt1.c](../../core/lznt1.c), [stream.c](../../core/stream.c).
+- NTFS compression: [lznt1.c](../../core/lznt1.c), [stream_read.c](../../core/stream_read.c).
 - WOF geometry/provider: [wof.c](../../core/wof.c), [wof_stream.c](../../core/wof_stream.c).
 - Codecs: [xpress.c](../../core/xpress.c), [lzx.c](../../core/lzx.c).
 - Independent provider files: [wof_file_fixtures.py](../../tests/wof_file_fixtures.py).

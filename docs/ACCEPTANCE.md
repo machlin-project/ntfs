@@ -1,5 +1,19 @@
 # Acceptance
 
+## Read-only stream component cleanup
+
+Read-only stream ownership, mapping-pair/run processing and data/LZNT1 reads now
+have separate implementation modules. Main verifies unchanged ordered tokens in
+all seventeen moved/renamed functions and unchanged shared fields/prototypes.
+The cleanup passes 197 fatal-ASan/UBSan suites, style, 132 freestanding and
+132 strict Release compilations, and host FSKit 63 PASS / 13 runtime SKIP /
+0 FAIL. All 38 actual postimages and four modeled seeds remain byte-identical.
+The actual unsigned universal app, extension copies and core archive include
+all three stream modules in both architectures. This is structural cleanup;
+installed read/write admission is unchanged. [REFACTORING.md](REFACTORING.md)
+owns the full-driver scope and remaining component reviews. Evidence is under
+`artifacts/overwrite/refactor-stream-components-*`.
+
 ## Experimental settled checkpoint and journal reuse
 
 The private checkpoint writer and fresh recovery owner now bind a settled actual

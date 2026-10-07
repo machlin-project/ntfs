@@ -103,6 +103,7 @@ prevent writable admission. Detailed extended-metadata coverage is recorded in
 ## Implementation and evidence
 
 - MFT bootstrap and stream: [mount.c](../../core/mount.c), [stream.c](../../core/stream.c).
+- Metadata-only bad-cluster mappings: [stream_mapping.c](../../core/stream_mapping.c).
 - Whole-volume ownership and bitmaps: [validate.c](../../core/validate.c),
   [VALIDATION.md](../VALIDATION.md).
 - Independent ownership fixtures: [validation_fixtures.py](../../tests/validation_fixtures.py).

@@ -7,9 +7,10 @@ native recovery retain their separate unfinished gates. Refactoring proceeds in
 focused behavior-preserving commits on `development`.
 
 The purpose is consistent, readable ownership and module boundaries across the C
-core and FSKit. Formatting already passes the selected-Xcode profile. The larger
-problems are repeated helpers, inconsistent internal names and files that combine
-several responsibilities.
+core and FSKit, including reading, namespace traversal, security and diagnostics.
+Formatting already passes the selected-Xcode profile. The larger problems are
+repeated helpers, inconsistent internal names and files that combine several
+responsibilities. Completed writer cleanup does not close the rest of the driver.
 
 ## Applied cleanup
 
@@ -138,6 +139,35 @@ are retained separately; source, tests and builds were not repeated. This cleanu
 does not change FSKit code or native admission and requires no new installed
 acceptance. The larger FSKit extraction remains in the plan.
 
+The next cleanup covers read-only streams. [Stream ownership](../core/stream.c),
+[mapping-pair decoding and run lookup](../core/stream_mapping.c) and
+[data reads and LZNT1 unit filling](../core/stream_read.c) now have separate modules.
+The internal `$Bad` mapping profile stays with the mapping decoder, preserving its
+metadata-only description and distinct implicit-hole contract. WOF keeps its
+separate provider owner and shares the existing stream read and decoded-unit APIs.
+
+Internal helpers now identify their stream action, and local variables identify
+streams, volumes, attribute views, disk fields and runs. Seventeen complete
+function bodies retain identical ordered C tokens after these explicit identifier
+substitutions. Internal fields/prototypes, public interfaces, operation admission,
+I/O order, sparse/VDL zeroing, optional-cache policy and release accounting are
+unchanged. No write capability is added to the read-only environment.
+
+The connected regression passes all 197 suites with assertions and fatal
+ASan/UBSan. The 38 actual postimages and four modeled seeds are byte-identical
+to the preceding cleanup, including the complete 640-operation POSIX sequence.
+Selected-Xcode style, 132 freestanding and 132 strict Release compilations across
+66 core sources pass under the 2-KiB frame ceiling. Host FSKit remains 63 PASS /
+13 explicit runtime SKIP / 0 FAIL. The actual unsigned universal app, both
+extension copies and core archive pass, with all core members and six affected
+compilation commands checked. The format reference passes 410 local links and
+nineteen unchanged rendered SVGs. Source/evidence review is under
+`artifacts/overwrite/refactor-stream-components-*`.
+
+The cleanup preserves mounted admission and native lifecycle/authorization code;
+it adds no installed or Windows qualification. MFT/attribute, directory, security,
+validator, journal and FSKit cleanup remain the separate reviewed work below.
+
 ## Concrete findings
 
 | Area | Current finding | Proposed change |
@@ -145,6 +175,12 @@ acceptance. The larger FSKit extraction remains in the plan.
 | Pointer/range checks | Ten modules now use one checked-arithmetic helper; remaining local policies differ in zero-length and NULL admission. | Preserve explicit caller-specific NULL/output rules and audit each further conversion. |
 | Complete program | Metadata compilation/application and packet/compensation composition now have separate modules behind one private retained owner. | Keep public opaque getters, copied byte lifetime and exact accounting at this boundary when adding new families. |
 | Writer contracts | Component contracts replace the combined header; the native image-owner contract exposes entry points and durable reports. | Include the owning interfaces explicitly and preserve structure fields, policy values and public declarations. |
+| Stream reading | Stream ownership, mapping-pair decoding/run lookup and data/LZNT1 reading now have separate modules, with unchanged functions and object fields. | Close the existing sparse, VDL, extent, compression-cache, metadata-only, failure and lifetime checks before committing. |
+| MFT and attributes | Boot/bootstrap, checked FILE records, attribute-list traversal and node metadata already have distinct components. Their internal names and cleanup conventions still vary. | Audit equivalent helpers and error publication; keep bootstrap's reachable-prefix proof and sequence/instance checks in their owning layers. Do not split a complete bootstrap operation merely to reduce file size. |
+| Directory reading | The persistent filename-tree cursor owns its frames, visited VCNs and inherited bounds; the separate index module checks physical allocation inventories. | Regularize cursor/frame/key names and cleanup while preserving ordinal cookies, collation, local/ancestor bounds and caller credits. Keep security view indexes separate from filename indexes. |
+| Security storage | `secure.c` combines SII/SDH index seek/cursors, descriptor acquisition, snapshot lifetime and whole-store validation. The standalone wire decoder and DACL evaluator are already separate. | Separate complete index traversal, descriptor ownership and whole-store passes behind a private storage contract. Preserve original ACE order and unsupported-feature refusal; do not change native authorization. |
+| Whole-volume validation | `validate.c` owns shared diagnostic credits and combines record/attribute, namespace/allocation, mirror/boot and security passes. | Extract complete passes behind one private validator owner. Preserve pass order, partial reports, selected security requirements and forbidden bad-cluster I/O. |
+| Immutable journal acquisition | `logfile_source.c` combines source lifetime, protected-page routing, retained indexing and ordered assembly. Its write/recovery consumers have separate contracts. | Review complete observation boundaries and private borrowed-buffer lifetimes. Keep physical inventory, selected framing and authoritative recovery evidence distinct. |
 | Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |
 | Mutation storage | FILE ownership/replacement, attributes and streams have separate modules; directory inspection/key changes and complete index storage construction are separate. One mutation plan retains memory, work, provenance and cleanup ownership. | Review further duplication against these complete operation boundaries. Keep collation, allocation and durability in their semantic layer. |
 | Memory and cleanup | Program, mutation, bitmap, replay and volume owners have distinct accounting, reservation and lifetime rules, with repeated cleanup patterns. | Make local ownership/cleanup conventions uniform. Share byte helpers, not an allocator framework that would erase different governors or change callback order. |
@@ -165,11 +201,21 @@ acceptance. The larger FSKit extraction remains in the plan.
    mapping/bitmap construction and directory byte building. Remove duplicates
    only when their semantic and ownership contracts agree. Use named local
    cleanup paths and predictable result publication without combining policies.
-4. **Review and extract FSKit responsibilities.** Start with private item/cache
+4. **Separate and regularize reading.** Close stream ownership, mapping decoding
+   and data-reading extraction first. Then review MFT/attribute, filename cursor
+   and metadata-cache conventions against their existing owning boundaries. Keep
+   the read-only environment without a write method; reuse the existing content,
+   quota, callback, corruption and lifetime oracles.
+5. **Separate security and diagnostic passes.** Review security view traversal,
+   descriptor/snapshot ownership and whole-store validation before extracting
+   them. Keep a single accounting owner for whole-volume passes and retained
+   journal acquisition. These are structural changes, not stronger validation
+   claims or expanded recovery authority.
+6. **Review and extract FSKit responsibilities.** Start with private item/cache
    and complete image-operation boundaries. Prepare the exact extraction and
    locking/lifetime review before moving methods. Preserve native reply timing,
    authenticated caller rights, read leases and draining unmount/invalidation.
-5. **Close the refactoring boundary.** Run the complete local regression once
+7. **Close each connected refactoring boundary.** Run the complete local regression once
    after the connected cleanup. Run installed acceptance where changed native
    lifecycle, authorization, buffering or persistence requires it. Then resume
    functional write/recovery integration under its original acceptance contract.

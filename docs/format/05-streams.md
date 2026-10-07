@@ -118,7 +118,9 @@ The exact durability protocol is in [recovery and writing](10-recovery-and-writi
 
 ## Implementation and evidence
 
-- Storage and zero-readable boundaries: [stream.c](../../core/stream.c).
+- Storage lifetime: [stream.c](../../core/stream.c).
+- Mapping ownership: [stream_mapping.c](../../core/stream_mapping.c).
+- Readable ranges and zero boundaries: [stream_read.c](../../core/stream_read.c).
 - Independent stream catalogue: [catalog.c](../../core/catalog.c).
 - Size and timestamp presentation: [node.c](../../core/node.c).
 - Existing DATA-only owner: [overwrite.c](../../core/overwrite.c),

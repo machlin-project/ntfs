@@ -17,6 +17,15 @@ required header tail. Both header layouts have complete synthetic image tests.
 The environment supplies allocation, deallocation and bounded exact reads.
 It has no write method. Media must remain immutable for an entire mounted owner.
 
+Read-only streams have three private implementation components. `stream.c` owns
+ordinary attribute-derived construction and final release. `stream_mapping.c`
+owns mapping-pair assembly, run lookup and the distinct metadata-only `$Bad`
+profile. `stream_read.c` owns physical/sparse reads, initialized-data clipping and
+LZNT1 unit filling. All retain the existing shared stream object, volume allocator,
+operation governor and decoded-unit cache; no additional owner or callback is
+introduced. Public call admission remains in `api.c`, and WOF retains its separate
+provider lifetime and content route.
+
 The private `NTFSImageTransport` platform component holds the original authorized
 `FSPathURLResource` and balances successful security-scope access for its lifetime.
 [FSKit transports that scope intact](https://developer.apple.com/documentation/fskit/fspathurlresource).

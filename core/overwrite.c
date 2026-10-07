@@ -260,6 +260,7 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 	    (environment->alignment & (environment->alignment - 1u)) != 0) {
 		return NTFS_INVALID;
 	}
+	allocation_bytes = sizeof(*work) + environment->alignment - 1u;
 	owner = environment->reader.allocate(environment->reader.context, sizeof(*owner));
 	if (owner == NULL) {
 		return NTFS_NO_MEMORY;
@@ -302,7 +303,6 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 		if (result != NTFS_OK) {
 			goto done;
 		}
-		allocation_bytes = sizeof(*work) + environment->alignment - 1u;
 		allocation = overwrite_allocate(owner, allocation_bytes);
 		if (allocation == NULL) {
 			result = NTFS_NO_MEMORY;

@@ -194,9 +194,10 @@ prepare_resident(struct ntfs_node *node, uint64_t filetime, uint64_t lsn, uint64
 	}
 	result = ntfs_attr_find(node->record, NTFS_WRITE_RECORD_BYTES, NTFS_ATTRIBUTE_DATA, NULL, 0,
 	    UINT16_MAX, &attribute);
-	if (result == NTFS_OK) {
-		result = ntfs_attr_value(&attribute, &value, &value_bytes);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	result = ntfs_attr_value(&attribute, &value, &value_bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}

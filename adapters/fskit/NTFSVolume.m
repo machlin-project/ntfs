@@ -1861,34 +1861,45 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 	 * sequence references, namespace ancestry, reparse targets and allocation
 	 * remain fixed by its validated transaction, not by a same-serial guess. */
 	result = ntfs_node_open(_core, item->stat.reference, &node);
-	if (result == NTFS_OK) {
-		result = ntfs_node_metadata(node, &stat);
+	if (result != NTFS_OK) {
+		goto done;
 	}
-	if (result == NTFS_OK &&
-	    (stat.directory != item->stat.directory || stat.reparse != item->stat.reparse)) {
+	result = ntfs_node_metadata(node, &stat);
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	if (stat.directory != item->stat.directory || stat.reparse != item->stat.reparse) {
 		result = NTFS_STALE;
+		goto done;
 	}
-	if (result == NTFS_OK && (!stat.reparse || item->wof)) {
+	if (!stat.reparse || item->wof) {
 		result = ntfs_node_stat(node, &stat);
-	}
-	if (result == NTFS_OK) {
-		result = ntfs_node_link_counts(node, &links);
-	}
-	if (result == NTFS_OK && item->directoryPath != nil) {
-		path = [self rebindImagePath:item->directoryPath result:&result];
-	}
-	if (result == NTFS_OK) {
-		if (item->linkTarget != nil) {
-			stat.size = item->stat.size;
-			stat.allocated_size = item->stat.allocated_size;
+		if (result != NTFS_OK) {
+			goto done;
 		}
-		item->node = node;
-		item->stat = stat;
-		item->links = links;
-		item->directoryPath = path;
-	} else {
-		ntfs_node_close(node);
 	}
+	result = ntfs_node_link_counts(node, &links);
+	if (result != NTFS_OK) {
+		goto done;
+	}
+	if (item->directoryPath != nil) {
+		path = [self rebindImagePath:item->directoryPath result:&result];
+		if (result != NTFS_OK) {
+			goto done;
+		}
+	}
+	if (item->linkTarget != nil) {
+		stat.size = item->stat.size;
+		stat.allocated_size = item->stat.allocated_size;
+	}
+	item->node = node;
+	item->stat = stat;
+	item->links = links;
+	item->directoryPath = path;
+	return result;
+
+done:
+	ntfs_node_close(node);
 	return result;
 }
 

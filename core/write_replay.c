@@ -365,9 +365,10 @@ bind_resident(const struct ntfs_write_replay_input *input, struct ntfs_write_rep
 	}
 	result = ntfs_attr_find(work->snapshot, sizeof(work->snapshot), NTFS_ATTRIBUTE_DATA, NULL,
 	    0, UINT16_MAX, &attribute);
-	if (result == NTFS_OK) {
-		result = ntfs_attr_value(&attribute, &value, &bytes);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	result = ntfs_attr_value(&attribute, &value, &bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}

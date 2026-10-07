@@ -319,20 +319,23 @@ grow_mft(struct ntfs_write_mutation_plan *plan)
 	bitmap_bytes =
 	    (bitmap_bytes + NTFS_WIRE_ALIGNMENT - 1u) & ~(size_t)(NTFS_WIRE_ALIGNMENT - 1u);
 	result = ntfs_mutation_bitmap_grow(plan, &plan->mft_bitmap, bitmap_bytes);
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_resize_runs(plan, plan->mft, clusters, &runs, &count);
+	if (result != NTFS_OK) {
+		goto done;
 	}
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_record_get(plan, NTFS_MFT_RECORD, true, &mft);
+	result = ntfs_mutation_resize_runs(plan, plan->mft, clusters, &runs, &count);
+	if (result != NTFS_OK) {
+		goto done;
 	}
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_nonresident(plan, mft, NTFS_ATTRIBUTE_DATA, NULL, 0, runs,
-		    count, plan->mft->size > initialized ? plan->mft->size : initialized,
-		    initialized, 0);
+	result = ntfs_mutation_record_get(plan, NTFS_MFT_RECORD, true, &mft);
+	if (result != NTFS_OK) {
+		goto done;
 	}
+	result = ntfs_mutation_nonresident(plan, mft, NTFS_ATTRIBUTE_DATA, NULL, 0, runs, count,
+	    plan->mft->size > initialized ? plan->mft->size : initialized, initialized, 0);
 	if (result == NTFS_OK) {
 		result = ntfs_mutation_stream(plan, mft, NTFS_ATTRIBUTE_DATA, NULL, 0, &stream);
 	}
+done:
 	ntfs_mutation_release(plan, runs, NTFS_MUTATION_MAX_RUNS * sizeof(*runs));
 	if (result != NTFS_OK) {
 		ntfs_stream_close(stream);

@@ -16,6 +16,28 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+## Writer control flow and Release checks
+
+Check a fallible producer's result before consuming its output. When a function
+owns resources, take the same cleanup path on failure and retain the exact size
+used for each allocation. The directory constructor now retains its root buffer
+size rather than deriving it from construction state during cleanup. Recovery
+selects the final retained transaction only after proving the array is nonempty.
+These conventions preserve callback order, error values and release accounting.
+The image item's native rebind method likewise checks metadata, stat, link counts
+and ancestry before transferring the node and publishing the item's fields.
+Every failure keeps its existing single node-close path; locking, native replies
+and authenticated open rights retain their original contract.
+
+The selected Xcode Release compiler exposed conditional-initialization warnings
+that the sanitized build did not report. The prepared strict check compiles every
+core C source independently for arm64 and x86_64 with `-Os`,
+`-Wconditional-uninitialized -Werror`, freestanding flags and the 2-KiB frame
+ceiling. Keep its failed and corrected reports alongside the connected regression
+and actual unsigned Release build. Explicit result guards and cleanup-size
+ownership are reviewed separately from new journal/recovery semantics; see
+[the refactoring plan](REFACTORING.md).
+
 ## Installed image commands
 
 The signed app exposes `--image-command status|import FILE_NAME|mount IMAGE_ID|unmount IMAGE_ID`

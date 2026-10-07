@@ -264,9 +264,10 @@ ntfs_mutation_directory_open(struct ntfs_write_mutation_plan *plan,
 	}
 	result = ntfs_attr_find(record->bytes, sizeof(record->bytes), NTFS_ATTR_STANDARD, NULL, 0,
 	    UINT16_MAX, &standard);
-	if (result == NTFS_OK) {
-		result = ntfs_attr_value(&standard, &value, &bytes);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	result = ntfs_attr_value(&standard, &value, &bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -281,9 +282,10 @@ ntfs_mutation_directory_open(struct ntfs_write_mutation_plan *plan,
 	    policy->directory_flags == NTFS_STANDARD_DIRECTORY_CASE_SENSITIVE;
 	result = ntfs_attr_find(record->bytes, sizeof(record->bytes), NTFS_ATTR_INDEX_ROOT,
 	    ntfs_mutation_index_name, 4, UINT16_MAX, &root);
-	if (result == NTFS_OK) {
-		result = ntfs_attr_value(&root, &value, &bytes);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	result = ntfs_attr_value(&root, &value, &bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -508,9 +510,10 @@ build_node(struct mutation_tree *tree, size_t first, size_t end, unsigned depth,
 	} else {
 		median = first + (end - first) / 2u;
 		result = build_node(tree, first, median, depth + 1u, &left);
-		if (result == NTFS_OK) {
-			result = build_node(tree, median + 1u, end, depth + 1u, &right);
+		if (result != NTFS_OK) {
+			return result;
 		}
+		result = build_node(tree, median + 1u, end, depth + 1u, &right);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -632,8 +635,8 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 	struct ntfs_mutation_patch *patch;
 	uint8_t *root = NULL, *bitmap = NULL;
 	uint64_t top, physical;
-	size_t total, position, index, count = 0, bitmap_count = 0, bitmap_bytes = 0, unused,
-				       available;
+	size_t total, position, index, count = 0, bitmap_count = 0, bitmap_bytes = 0,
+				       root_bytes = 0, unused, available;
 	enum ntfs_result result;
 	bool inline_root;
 
@@ -669,7 +672,8 @@ ntfs_mutation_directory_store(struct ntfs_write_mutation_plan *plan,
 	    ((sizeof(struct ntfs_disk_attr) + sizeof(struct ntfs_disk_resident) +
 		 4 * NTFS_UTF16_UNIT_BYTES + total + NTFS_WIRE_ALIGNMENT - 1u) &
 		~(size_t)(NTFS_WIRE_ALIGNMENT - 1u)) <= available;
-	root = ntfs_mutation_allocate(plan, inline_root ? total : NTFS_WRITE_RECORD_BYTES);
+	root_bytes = inline_root ? total : NTFS_WRITE_RECORD_BYTES;
+	root = ntfs_mutation_allocate(plan, root_bytes);
 	if (root == NULL) {
 		result = NTFS_NO_MEMORY;
 		goto done;
@@ -808,10 +812,7 @@ done:
 		ntfs_mutation_release(plan, tree.blocks[index], NTFS_WRITE_CLUSTER_BYTES);
 	}
 	ntfs_mutation_release(plan, tree.blocks, tree.capacity * sizeof(*tree.blocks));
-	ntfs_mutation_release(plan, root,
-	    root == NULL      ? 0
-		: inline_root ? total
-			      : NTFS_WRITE_RECORD_BYTES);
+	ntfs_mutation_release(plan, root, root == NULL ? 0 : root_bytes);
 	ntfs_mutation_release(plan, bitmap, bitmap_bytes);
 	ntfs_mutation_release(plan, runs, NTFS_MUTATION_MAX_RUNS * sizeof(*runs));
 	ntfs_mutation_release(plan, bitmap_runs, NTFS_MUTATION_MAX_RUNS * sizeof(*bitmap_runs));

@@ -230,7 +230,11 @@ journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 	if (first != work->history.count) {
 		return NTFS_CORRUPT;
 	}
-	if (work->history.transactions == 0 || current->committed || current->compensated) {
+	if (work->history.transactions == 0) {
+		return NTFS_OK;
+	}
+	current = &work->history.transaction[work->history.transactions - 1];
+	if (current->committed || current->compensated) {
 		return NTFS_OK;
 	}
 	result = ntfs_write_abort_encode(&work->history.origin, work->history.client.sequence,

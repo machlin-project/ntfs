@@ -12,9 +12,10 @@ changed(struct ntfs_mutation_record *record, uint64_t filetime)
 
 	result = ntfs_attr_find(record->bytes, sizeof(record->bytes), NTFS_ATTR_STANDARD, NULL, 0,
 	    UINT16_MAX, &attribute);
-	if (result == NTFS_OK) {
-		result = ntfs_attr_value(&attribute, &value, &bytes);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	result = ntfs_attr_value(&attribute, &value, &bytes);
 	if (result != NTFS_OK || bytes != NTFS_WRITE_STANDARD_BYTES) {
 		return result == NTFS_OK ? NTFS_UNSUPPORTED : result;
 	}
@@ -65,9 +66,10 @@ create(struct ntfs_write_mutation_plan *plan, const struct ntfs_write_mutation_r
 	}
 	result = ntfs_mutation_security_inherit(
 	    plan, parent->record, directory, &security, &security_bytes);
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_new_record(plan, &record);
+	if (result != NTFS_OK) {
+		goto done;
 	}
+	result = ntfs_mutation_new_record(plan, &record);
 	if (result != NTFS_OK) {
 		goto done;
 	}
@@ -316,13 +318,15 @@ check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64
 			return NTFS_OK;
 		}
 		result = ntfs_mutation_record_admit(record, true, true);
-		if (result == NTFS_OK) {
-			result = ntfs_attr_find(record->bytes, sizeof(record->bytes),
-			    NTFS_ATTR_FILENAME, NULL, 0, UINT16_MAX, &attribute);
+		if (result != NTFS_OK) {
+			return result;
 		}
-		if (result == NTFS_OK) {
-			result = ntfs_attr_value(&attribute, &value, &bytes);
+		result = ntfs_attr_find(record->bytes, sizeof(record->bytes), NTFS_ATTR_FILENAME,
+		    NULL, 0, UINT16_MAX, &attribute);
+		if (result != NTFS_OK) {
+			return result;
 		}
+		result = ntfs_attr_value(&attribute, &value, &bytes);
 		if (result != NTFS_OK || bytes < sizeof(*name)) {
 			return result == NTFS_OK ? NTFS_CORRUPT : result;
 		}

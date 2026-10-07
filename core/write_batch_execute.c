@@ -225,13 +225,15 @@ prepare_log_page(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 	enum ntfs_result result;
 
 	result = log_physical(log, page->offset, &physical);
-	if (result == NTFS_OK) {
-		result = log_physical(log,
-		    (NTFS_LFS_RESTART_PAGES + slot) * NTFS_WRITE_CLUSTER_BYTES, &copy_physical);
+	if (result != NTFS_OK) {
+		return result;
 	}
-	if (result == NTFS_OK) {
-		result = batch_read(owner, physical, work->before, sizeof(work->before));
+	result = log_physical(
+	    log, (NTFS_LFS_RESTART_PAGES + slot) * NTFS_WRITE_CLUSTER_BYTES, &copy_physical);
+	if (result != NTFS_OK) {
+		return result;
 	}
+	result = batch_read(owner, physical, work->before, sizeof(work->before));
 	if (result != NTFS_OK) {
 		return result;
 	}

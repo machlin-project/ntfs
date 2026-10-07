@@ -45,7 +45,8 @@ struct ntfs_write_batch_pages;
 
 /* Pure complete bounded ring placement and native LFS 1.1 continuation framing.
  * Each packet starts in a fresh page; each page describes a separate one-page
- * physical transfer. A later commit cannot share its prepared page. The owner
+ * physical transfer and carries the packet's LSN, including pure continuations.
+ * A later commit cannot share its prepared page. The owner
  * must persist every complete packet before publishing dependent home bytes.
  * Input record.lsn and MULTI_PAGE are zero, data.offset names the common header,
  * and data.length equals the payload length. Ordinal links precede their packet

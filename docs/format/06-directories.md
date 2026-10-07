@@ -54,6 +54,12 @@ native identity need explicit owning contracts. The active write planner refuses
 unqualified DOS-pair mutation. See [NATIVE-NAMESPACE.md](../NATIVE-NAMESPACE.md)
 and [LINK-POLICY.md](../LINK-POLICY.md) for current presentation rules.
 
+The upstream [NTFS-3G manual](https://github.com/tuxera/ntfs-3g/wiki/Manual#windows-filename-compatibility)
+documents POSIX as its new-file namespace. Its `windows_names` option restricts
+the permitted characters; it does not describe changing that namespace to an
+unpaired Win32 representation. This published contract supplies an independent
+comparison for our selected representation, alongside the native checks below.
+
 ## Native creation research
 
 The initial experimental create planner emitted one Win32 `FILE_NAME` and one corresponding

@@ -264,6 +264,7 @@ static void
 compare_plan(const struct batch_case *test, const struct ntfs_write_batch_pages *plan)
 {
 	const struct ntfs_write_batch_page *page;
+	const struct ntfs_disk_log_page *header;
 	size_t index;
 
 	assert(plan != NULL && ntfs_write_batch_pages_count(plan) == test->pages);
@@ -273,6 +274,10 @@ compare_plan(const struct batch_case *test, const struct ntfs_write_batch_pages 
 	}
 	for (index = 0; index < test->pages; index++) {
 		page = ntfs_write_batch_pages_get(plan, index);
+		assert(page != NULL && page->packet < test->input.packets);
+		header = (const void *)page->protected_bytes;
+		/* Native spanning reads require the page LSN to cover this packet. */
+		assert(ntfs_u64(header->copy_value) >= test->records[page->packet].lsn);
 		assert(page != NULL && page->offset == test->page[index].offset &&
 		    page->packet == test->page[index].packet &&
 		    memcmp(page->protected_bytes, test->page[index].bytes,

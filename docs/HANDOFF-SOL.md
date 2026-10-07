@@ -170,6 +170,41 @@ bytes remain unchanged. Main reviews the original NTFS error and full detached
 postimage. The other 27 inputs are unexecuted; the original volume/base remain
 unchanged, and the failed guest copy and immutable archive are retained.
 See `windows-ordinary-posix-*` reports under `artifacts/overwrite/`.
+The separate content-only bitmap correction preserves nonresident attributes,
+mappings and allocated tails. Its three profiles reproduce the old defect before
+the fix; all 198 suites and six strict changed-file compilations then pass. Ten
+fresh operations preserve FILE zero and its mirror, seven fault profiles pass,
+and all 28 native inputs are reviewed. The create plan is now 32 publications/
+65 events; earlier 38/77 fault coordinates do not apply. Windows still rejects
+the first fresh complete create before file/chkdsk checks. Main reviews its NTFS
+98/level-2/state-3 event, unchanged new FILE/POSIX bytes, changed volume flags and
+all 351 changed sectors. The exact detached image and guest copy are retained;
+the other 27 cases are unexecuted. Original volume/base are unchanged and no
+repair/remount/retry or VM lifecycle operation occurs. See `ordinary-bitmap-*`
+and `windows-ordinary-bitmap-*` reports. Main owns the unresolved journal diagnosis.
+
+The separate read-only NTFS-3G contract comparison does not grant native authority.
+Its clean calls return early, its historical scans warn even on accepted controls,
+and its selected simulation fails on two previously Windows-accepted checkpoint
+states before any action. Do not use its exit code to change native status or
+repeat completed Windows cases. Exact decoded packets and documented field/
+operation contracts are research evidence only; external code is not linked into
+the driver. Main's consolidated diagnostic review is under
+`ntfsrecover-create-contract-review-continued-20261007/`.
+The exact Windows driver/PDB static comparison now proves two zero-LSN circular
+continuations violate its spanning-record reader condition. The C writer carries
+the packet LSN on all segments; its before/after regression, all 198 suites,
+six strict compilations, ten operations and seven fault profiles pass. Main
+reviews all 28 fresh `continuation-lsn-*` inputs. Windows still reports a health
+warning on its first complete create, with the matching original error event;
+file/chkdsk checks and the other 27 inputs are unexecuted. Main reviews the exact
+detached postimage; volume flags change while the corrected new FILE stays
+unchanged. Bounded offline `$Repair` extraction finds no `$Corrupt` or `$Verify`
+stream. Preserve `windows-continuation-lsn-*` separately from earlier failures.
+The original failed images remain retained and are not remounted. Windows VM
+ownership has returned to main; no worker may start another native packet
+without an explicit handoff.
+Do not infer the live warning's entire cause or native acceptance from disassembly.
 The actual C journal gate remains open. Follow the main agent's VM handoff and
 prepared commands; do not repair/remount an earlier failed or diagnostic candidate
 or resume the remaining inputs without a reviewed diagnosis and new packet.

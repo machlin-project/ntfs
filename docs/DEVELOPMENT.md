@@ -111,6 +111,39 @@ The corrected POSIX filename remains unchanged in the retained full postimage;
 original XML binds the matching NTFS error. The other 27 inputs are unexecuted.
 Retain this separate failure and do not repair, remount or repeat it. Preserve
 every earlier diagnostic outcome.
+The content-only bitmap correction has a separate failing-before/passing-after
+regression: nonresident attribute/mapping bytes and unused allocated tails remain
+exact. All 198 suites, ten fresh operations and seven fault profiles pass. The
+fresh create trace is 32 publications/65 events, so derive fault coordinates from
+its retained plan rather than reusing the earlier 38/77 calibration. Main also
+checks unchanged FILE-zero and mirror bytes. All 28 input/container reviews pass,
+but Windows still rejects the first bitmap-corrected candidate before file/chkdsk
+checks. Its original event and exact detached image are reviewed; the other
+27 inputs are unexecuted. This locally closed defect is not the proved rejection
+cause. Do not resume that packet without main's contract diagnosis.
+
+Read-only static diagnosis now binds the exact Windows driver to its public PDB
+and identifies the spanning-page LSN predicate violated by the old C output.
+The correction carries the packet LSN on every circular segment. Its regression
+fails on the preceding writer; all 198 suites, six strict compilations, ten
+fresh operations and seven fault profiles pass. The new `continuation-lsn-*`
+packet passes main's full 28-input review, but its first complete create still
+gets a native health warning. Main reviews its matching original error event
+and exact detached postimage; file/chkdsk checks and the other 27 cases do not
+run. Retain the `windows-continuation-lsn-*` evidence and do not repair, remount
+or repeat that candidate. No `$Corrupt` or `$Verify` stream is present in its
+allocated `$Repair` object. The next gate requires a reviewed contract diagnosis
+and a fresh packet. The test VM and UTM remain running; collection uses the
+existing QGA transport.
+
+Use the pinned standalone `ntfsrecover` only with an explicitly recorded scope.
+This binary takes `--transactions` without a count and refuses it with `--sync`.
+A clean selected-mode early return does not check new transactions. Historical
+range warnings and selected-mode exit codes are not writer acceptance: two actual
+checkpoint states already accepted by Windows also fail its simulation before
+any action. Reuse retained immutable inputs and diagnostic logs; keep original
+usage failures separate from recovery results. No external recovery library is
+linked into the driver.
 [ACCEPTANCE.md](ACCEPTANCE.md)
 records their evidence and remaining gates.
 

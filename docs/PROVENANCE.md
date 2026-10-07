@@ -17,6 +17,56 @@ NTFS-3G implementation code is imported. This is not a source-isolated clean-roo
 claim. Standalone NTFS-3G tools under ignored vendor state are used only as external
 read/comparison utilities for documented offline corpora.
 
+The content-only bitmap preservation correction and its independent overallocated
+MFT/volume fixtures are original repository code. They follow the allocation,
+logical-size and initialized-prefix distinctions already attributed below;
+no foreign bitmap/allocator implementation is imported. The retained native
+creation control supplies original long/DOS names, FILE and journal packets for
+bounded original-byte observations, without qualifying complete owning history.
+
+The NTFS-3G
+[manual](https://github.com/tuxera/ntfs-3g/wiki/Manual) was consulted for the POSIX
+namespace chosen for newly created files and the separate `windows_names` policy.
+The pinned
+[ntfsrecover manual](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/ntfsrecover.8.in)
+states that NTFS-3G does not log its own writes and explains historical-scan
+sequencing limits. Selected
+[ntfsrecover diagnostic conditions](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/ntfsrecover.c)
+were inspected for CLI compatibility, clean early returns and continuation/free-
+space warnings. Selected
+[playlog operation conditions](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/playlog.c)
+were inspected for Initialize and nonresident INDX value target/length contracts;
+they admit a full index value as well as partial ranges. This is format/diagnostic
+research, not imported parser, replay, transaction or writer implementation.
+The separately built GPL utility retains its upstream notices under ignored
+vendor/artifact state, is never installed or shipped, and is not a product
+dependency. Original read-only comparisons include known Windows-accepted dirty
+controls and demonstrate that the utility's exit code is not our WAL oracle.
+Implementation, physical witness assembly and expected-byte tests remain original.
+The pinned Linux
+[NTFS3 log reader](https://github.com/torvalds/linux/blob/v6.18/fs/ntfs3/fslog.c)
+and [original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/)
+are additional page-field and sequence-consistency research sources. Selected
+reader conditions are inspected for the long-packet contract; no Linux NTFS3
+reader, page-routing or recovery algorithm is imported or linked.
+
+Read-only diagnosis retains exact signed Microsoft `ntfs.sys`, `chkdsk.exe` and
+`untfs.dll` files from the running test VM under ignored artifacts. Source hashes,
+version metadata and the guest boot remain unchanged. Matching public PDBs come
+from the [Microsoft symbol server](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/microsoft-public-symbols).
+The PDB binding follows Microsoft's published
+[OpenValidate conditions](https://github.com/microsoft/microsoft-pdb/blob/master/PDB/dbi/pdb.cpp):
+matching GUID, PDB Info age at least the PE age, and DBI age equal to the PE age.
+The ARM64X utility exposes two equivalent PE debug identities. Original tooling
+failures and completed binary/symbol transfers remain retained separately.
+Selected ARM64 driver disassembly establishes the spanning-page LSN read
+predicate and its corrupt-disk exception. This is interoperability diagnosis,
+not imported implementation; Microsoft binaries, PDBs and disassembly are not
+product dependencies or tracked source. The field correction, regression,
+expected-byte fixture changes and diagram are original repository work. Static
+counterexamples remain distinct from observing a live native rejection branch
+or passing a fresh Windows recovery gate.
+
 The app image picker, saved-bookmark commands and versioned VM CLI harness are
 original implementations. They create and positively restore genuine app-scope
 bookmarks through Apple's documented Foundation APIs; no bookmark or sandbox

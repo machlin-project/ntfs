@@ -1,0 +1,9 @@
+flowchart LR
+    R["Spanning LFS record<br/>this_lsn = R"] --> P0
+    subgraph Pages["Fresh circular pages · one physical transfer per page"]
+        direction LR
+        P0["First segment<br/>copy_value = R<br/>No completed endpoint"] --> P1["Pure continuation<br/>copy_value = R<br/>No completed endpoint"] --> P2["Final continuation<br/>copy_value = R<br/>last_end_lsn = R<br/>Record-end flag"]
+    end
+    P2 --> C{"Native spanning read<br/>Every page LSN >= R"}
+    C -->|Satisfied| B["Copy the complete record"]
+    C -->|Violated| E["STATUS_DISK_CORRUPT_ERROR"]

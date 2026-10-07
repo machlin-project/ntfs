@@ -136,7 +136,7 @@ The common page header is 40 bytes. Offsets are relative to the page:
 | Offset | Width | Field | Interpretation |
 | --- | --- | --- | --- |
 | `0x00` | 8 | MST prefix | Magic `RCRD`, USA location/count |
-| `0x08` | 8 | `copy_value` | Last-start LSN in circular pages; target offset in legacy tails |
+| `0x08` | 8 | `copy_value` | Circular-page LSN; target offset in legacy tails |
 | `0x10` | 4 | `flags` | Record-end `0x00000001`; qualified client-restart flag `0x00000002` |
 | `0x14` | 2 | `page_count` | Pages in the described I/O transfer |
 | `0x16` | 2 | `page_position` | One-based position in that transfer |
@@ -159,6 +159,50 @@ the current data/header position and carry no unrelated end LSN. Historical
 variants of zero boundary and native multi-page publication need separately
 recorded evidence; the scalar page decoder's tolerance does not widen the
 owning-history contract.
+
+### Native spanning-read predicate
+
+Static diagnosis uses the exact signed `ntfs.sys` retained from the running
+Windows test VM and its matching Microsoft public PDB. The public function
+`LfsCopyReadLogRecord` reads the circular page's `copy_value` and the requested
+record's `this_lsn`, compares them, and raises `STATUS_DISK_CORRUPT_ERROR` when the
+page LSN is less than the requested LSN. This check runs on every segment copied,
+including pages containing only continuation bytes. The observed binary uses a
+signed comparison; equal carried LSNs satisfy it for the writer's fresh-page
+profile. Public symbols identify function addresses, not private source, local
+variables or all supported format variants. Microsoft's
+[symbol documentation](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/public-and-private-symbols)
+describes that distinction.
+
+The exact preceding C create image contains an 8280-byte full-INDX redo/undo
+record spanning three pages. Its first page carries the record LSN, but its two
+continuations store zero. Both violate this native read predicate. Independent
+review binds the protected publication pages to the complete C image and the
+candidate actually presented to Windows. This proves a format defect; no live
+debugger has observed that branch during the original mount, so it does not alone
+prove the entire cause of Event 98 or establish recovery acceptance.
+
+![Circular pages carry the LSN of the spanning record](diagrams/log-continuation.svg)
+
+[Editable diagram source](diagrams/log-continuation.mmd).
+
+The [batch-page writer](../../core/write_batch_pages.c) now carries the packet's
+LSN on every separately described circular page. An unfinished segment still
+has no completed endpoint; the final segment carries `last_end_lsn` and the
+record-end flag. Legacy tail-copy routing retains its separate target-offset
+meaning. The [independent byte fixtures](../../tests/write_batch_pages_fixtures.py)
+and [C regression](../../tests/write_batch_pages.c) check all output segments,
+including one-byte continuation, three-page, retained-span and ring-wrap cases.
+The regression fails on the preceding C writer before the correction.
+The corrected complete-create candidate still produces a matching Windows
+health error. Its exact detached postimage and original event are reviewed;
+the locally corrected page predicate does not establish complete native recovery.
+
+The missing Windows-authored pure-continuation witness remains a separate
+research question. An exact native reader condition is useful evidence without
+claiming a complete native publication/transaction protocol. See
+[acceptance](../ACCEPTANCE.md#private-ordinary-operation-image-harness) for the
+local correction and fresh Windows gate.
 
 ## LFS record header
 
@@ -314,16 +358,53 @@ Observed native OAT opens include named parent `$I30`, unnamed MFT DATA and
 allocation bitmaps. Their names, attribute types, file references and flags are
 retained as original observations, rather than inferred from the C program.
 
-This inventory reads only first physical-I/O pages and packets wholly contained
-there. It omits spanning packets and later pages of an I/O group, does not select
-complete owning history, and does not bind every observed transaction to the
-creation operation. Opcode counts or absent forms in this partial inventory
-cannot establish Windows' complete creation protocol. The current C whole-INDX
-redo/undo packet spans multiple pages; both its framing and operation-specific
-replay remain unqualified. Complete native assembly and transaction ownership
-are required before treating this comparison as a cause of the native rejection.
-Reports are under `native-create-journal-observation-reviewed-fields-20261007/`
-in `artifacts/overwrite/`; this observation performs no VM operation or write.
+The initial inventory reads only first physical-I/O pages and packets wholly
+contained there. A subsequent bounded observer assembles physical packets across
+later I/O pages and circular continuations using the record's declared byte
+length. It preserves every earlier complete-local observation and distinguishes
+physical byte assembly from completed-page-header evidence and selected history.
+The retained Windows control supplies 292 physically assembled packets, including
+four spanning packets; 37 lack completed-page-header evidence. They are not
+qualified transactions merely because their bytes can be assembled.
+
+Following `previous_lsn` links identifies a six-packet chain associated with the
+control's two exact filename keys and newly initialized FILE. All six use one
+transaction key and have completed-page-header evidence:
+
+| Order | Redo / undo | Observed target or payload |
+| --- | --- | --- |
+| 1 | Set bitmap bits / Clear bitmap bits | MFT bitmap slot occupancy |
+| 2 | Noop / Deallocate FILE | New FILE location; eight-byte inverse |
+| 3 | Add index entry to allocation / Delete index entry | Long Win32 filename key in the parent `$I30` |
+| 4 | Add index entry to allocation / Delete index entry | Corresponding DOS filename key |
+| 5 | Initialize FILE / Noop | The new record's 432-byte used prefix |
+| 6 | Forget / Compensation | Terminal link back to the preceding update |
+
+For an MFT target, `target_vcn * cluster_bytes + cluster_index * sector_bytes`
+locates the FILE. `record_offset` describes an operation-relative position; it
+must not be added again when identifying the owning FILE. OAT lifetime and
+complete current-history selection remain separate proof obligations. The chain
+is a concrete creation witness, not a universal program for every create.
+
+Three spanning native packets with completed-header evidence also have new record
+starts on their continuation pages. The fourth spanning packet lacks that evidence.
+This capture therefore supplies no qualified pure-continuation-page example from
+which to derive the required `copy_value` on such a page. The earlier C
+whole-INDX redo/undo packet spans three separately described one-page transfers.
+Its continuation framing and whole-buffer `0x08 / 0x08` replay remain unqualified;
+absence of that form in this one control is not proof that the opcode forbids it.
+
+A further bounded read-only review of three retained Windows journals assembles
+84 completed spanning packets from exact original protected pages. Their largest
+packet is 1392 bytes. Each ending continuation also contains later record starts;
+none supplies a pure continuation page. This extends the physical witness set
+without resolving the long-packet field interpretation or selecting complete
+current client/transaction history. Keep that missing witness explicit when
+evaluating the C writer's much larger redo/undo packet.
+
+[Acceptance](../ACCEPTANCE.md#private-ordinary-operation-image-harness) retains the
+exact physical observations and original images. These observers perform no VM
+operation or write and do not establish the cause of native rejection.
 
 ### FILE retirement: a header inverse
 

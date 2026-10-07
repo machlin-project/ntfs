@@ -435,7 +435,8 @@ pages_encode(const struct ntfs_write_batch_pages_input *input, const struct batc
 			}
 			ntfs_zero(work->data, sizeof(work->data));
 			ntfs_copy(work->data, work->packet + copied, take);
-			frame.page.copy_value = copied == 0 ? record.lsn : 0;
+			/* Every circular segment covers the record being copied through it. */
+			frame.page.copy_value = record.lsn;
 			frame.page.last_end_lsn = copied + take == bytes ? record.lsn : 0;
 			frame.page.flags =
 			    copied + take == bytes ? NTFS_LOGFILE_PAGE_RECORD_END : 0;

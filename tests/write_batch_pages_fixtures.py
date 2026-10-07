@@ -96,7 +96,7 @@ def author_case(output, label, floor_page, tail_page, lengths, expected,
                 flags |= CLIENT_RESTART_PAGE
             logical = bytearray(f.PAGE_BYTES)
             logical[:f.PAGE.size] = f.PAGE.pack(dict(magic=b'RCRD',
-                usa_offset=f.PAGE.size, copy_value=(lsn & WIRE_LSN_MASK) if used == 0 else 0,
+                usa_offset=f.PAGE.size, copy_value=lsn & WIRE_LSN_MASK,
                 flags=flags, page_count=1, page_position=1,
                 next_record_offset=f.aligned(f.PAGE_DATA_OFFSET + take) if end
                     else f.PAGE_DATA_OFFSET,

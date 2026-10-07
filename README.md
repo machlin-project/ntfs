@@ -94,8 +94,22 @@ emit the selected POSIX representation, with a regression and all 198 sanitized
 suites passing. A fresh current-C batch also passes ten offline operations and seven
 fault profiles, but Windows again rejects its first complete create image before
 file/chkdsk checks. Its corrected filename is preserved in the exact detached
-failure image; the other 27 inputs remain unexecuted. Actual C journal/recovery
-and FSKit mutation admission remain open. See
+failure image; the other 27 inputs remain unexecuted. A separate bitmap regression
+now preserves unchanged nonresident attribute/mapping bytes and allocated tails
+during content-only changes. All 198 sanitized suites, ten fresh operations and
+seven fault profiles pass; FILE zero and its mirror stay unchanged in those ten
+operations. Windows still rejects the fresh bitmap-corrected create candidate
+before file/chkdsk checks. Its exact detached image and original error are reviewed.
+Standalone `ntfsrecover` comparisons supply decoded fields, but its selected mode
+also rejects two previously Windows-accepted checkpoint states; its return code
+cannot qualify our WAL. Actual C journal/recovery and FSKit mutation admission
+remain open. Exact Windows driver disassembly now identifies a violated spanning-
+page LSN condition in the preceding C create. The corrected writer carries the
+packet LSN on every circular segment; all 198 sanitized suites, ten fresh
+operations and seven fault profiles pass. Windows still reports `Warning` on
+the first fresh complete-create candidate, with a matching error event and
+unchanged new FILE bytes; the other 27 inputs have not run. The exact detached
+failure image is retained and reviewed. See
 [the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

@@ -32,6 +32,39 @@ A raw Commit or Forget opcode is not enough to classify an arbitrary lifetime.
 Our confirmed family requires its exact preceding packets, links, metadata and
 native observed terminal marker. Unknown or incomplete families refuse.
 
+### Comparing the NTFS-3G contracts
+
+NTFS-3G is a useful independent source for metadata and namespace contracts, and
+its standalone tools can inspect our test images. Its upstream
+[ntfsrecover manual](https://github.com/tuxera/ntfs-3g/blob/2022.10.3/ntfsprogs/ntfsrecover.8.in)
+also states that the driver does not log its own updates. The utility restores
+Windows-authored committed metadata changes; it cannot recover updates made by
+NTFS-3G itself from a journal that the driver did not produce.
+
+Consequently, a successful NTFS-3G file write does not supply the Windows replay
+contract for a journal packet authored by our writer. The utility's read-only
+decoded operations and native Windows captures can supply additional independent
+evidence. Both selected recovery and explicit historical/range observation need
+their scopes recorded: a clean-volume early return does not validate new packets,
+and examining physical records across older sessions does not select current
+owning history. The manual explicitly notes sequencing ambiguities in historical
+forward/backward scans.
+
+Actual read-only comparisons also delimit this tool's authority. It decodes our
+attribute opens and full-INDX value update in a bounded physical range, but warns
+on historical framing in both the qualified origin and the native creation
+control. Selected recovery stops before any action on two interrupted C create
+states **and on two checkpoint states already accepted by Windows**. Its exit
+code therefore cannot classify our WAL as valid or invalid. Compare the concrete
+wire fields, target coordinates and operation meaning, then retain the native
+acceptance experiment as a separate result. These diagnostic controls and their
+original-byte review are recorded in [ACCEPTANCE.md](../ACCEPTANCE.md).
+
+External utilities stay under ignored vendor/artifact paths and are not linked
+into the driver. Format facts and behavioral observations are attributed in
+[PROVENANCE.md](../PROVENANCE.md); our implementation and expected-byte tests
+remain owned here.
+
 ## Prepare everything before mutation
 
 The exclusive owner proves:

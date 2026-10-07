@@ -136,14 +136,86 @@ packet, replay rule or cross-object relationship caused that rejection.
 Evidence and main review are under `windows-ordinary-posix-network-20261007/`
 and `windows-ordinary-posix-failure-observation-20261007/`.
 
-Read-only journal observation on the retained Windows creation control and failed
-C create records original restart/page fields and complete local packets. It
-does not assemble spanning records, select complete history or bind every native
-transaction to that create; it cannot supply ordinary-writer acceptance or prove
-the cause of rejection. The source images are unchanged and no VM command runs.
-The explicit scope and next questions are recorded in
+A separate regression first reproduces content-only nonresident bitmap updates
+resizing/re-encoding their owning stream. The correction preserves unchanged
+attribute bytes, mappings and unused allocated tails, with three independently
+authored MFT/volume/both profiles covering create, grow, shrink and remove. All
+198 fatal-ASan/UBSan suites, selected-Xcode style and six strict changed-file
+compilations pass. Ten fresh current-C operations and seven create/fault profiles
+pass their complete independent oracles. Main checks unchanged FILE-zero and
+mirror bytes in all ten operations; the first create now has 32 publications and
+65 writer events, replacing the earlier 38/77 trace. All 28 newly packaged native
+inputs pass independent full-image/container review.
+
+Windows still rejects the first bitmap-corrected complete create at native health
+admission. Main binds the original NTFS 98/level-2/state-3 event and reviews the
+exact detached postimage, including all changed sectors. The new FILE bytes and
+POSIX name are unchanged; volume flags change from zero to `0x0101`. File checks
+and chkdsk do not execute; the other 27 inputs are unexecuted. Original test volume
+and base stay unchanged, the guest copy and immutable archive are retained, and
+there is no repair, remount, case retry or VM lifecycle change. The bitmap defect
+is locally closed, but it did not resolve this native rejection. Evidence and
+main reviews are under `ordinary-bitmap-storage-*`, `ordinary-bitmap-sequence-*`,
+`ordinary-bitmap-profiles-*`, `ordinary-bitmap-native-inputs-*` and
+`windows-ordinary-bitmap-*` in `artifacts/overwrite/`.
+
+Read-only journal research now physically assembles 292 retained Windows packets,
+including four spanning packets. Thirty-seven lack completed-page-header evidence
+and remain excluded from qualification. Six linked complete packets associate
+the exact long/DOS names and new FILE with bitmap, index-entry, initialization
+and Forget operations, without selecting the complete native OAT/current history.
+The three completed continuations also contain new record starts. A further
+bounded review of three original Windows journals retains 84 completed spanning
+packets, at most 1392 bytes each, with no pure continuation page. These observations
+do not qualify the C writer's separate three-page full-INDX packet or identify the
+native rejection cause. Sources are unchanged and no VM command runs. See
 [the format reference](format/09-logfile.md#native-creation-control-a-bounded-journal-observation).
-Evidence is under `native-create-journal-observation-reviewed-fields-20261007/`.
+Evidence is under `native-create-journal-observation-reviewed-fields-20261007/`,
+`native-create-journal-assembly-bounded-completion-20261007/` and
+`native-pure-continuation-observation-20261007/`.
+
+Exact signed Windows driver/utility files and PE-matched public PDBs are retained
+for read-only static diagnosis, with source metadata unchanged. Completed byte
+transfers and symbol identity checks are independently reviewed; collector setup
+failures remain retained separately without repeating completed producers.
+The exact driver `LfsCopyReadLogRecord`
+requires every copied page LSN to cover the requested record LSN and otherwise
+raises `STATUS_DISK_CORRUPT_ERROR`. Main binds two zero-LSN continuation pages of
+the preceding actual C create to this violated predicate. A local regression
+fails before the fix; all 198 fatal-ASan/UBSan suites, selected-Xcode style and six
+strict changed-file compilations pass after carrying the packet LSN on every
+circular segment. Ten fresh complete operations and seven actual fault/recovery
+profiles also pass their full-image, metadata/content and quiet-reopen oracles.
+Static counterexamples do not prove that live branch caused the entire original
+mount warning. All 28 fresh native inputs pass independent exact image/container
+review, but Windows still reports `Warning` on the first complete-create case.
+Its original NTFS event is ID 98, level 2 and `CorruptionActionState=3`;
+volume flags change from zero to `0x0101`, while the new FILE and corrected
+POSIX name stay unchanged. Main reviews the original event XML and all changed
+sectors of the exact immutable detached postimage. Native file/chkdsk checks and
+the remaining 27 cases do not execute. Original volume/base stay unchanged;
+there is no remount, repair, retry or VM lifecycle change. Bounded offline
+extraction finds the allocated `$Repair` object, but no `$Corrupt` or `$Verify`
+stream. The LSN correction is locally verified and does not resolve the complete
+native health warning.
+Evidence is under `windows-ntfs-binary-*`, `windows-ntfs-public-symbols-*`,
+`windows-untfs-public-symbols-*`, `windows-ntfs-static-functions-*`,
+`windows-ntfs-contract-review-*`, `continuation-lsn-*` and
+`windows-continuation-lsn-*` in `artifacts/overwrite/`.
+
+The pinned standalone NTFS-3G recovery utility is built separately and remains
+outside the product. Four initial range calls were CLI usage failures; four clean
+selected-mode calls return without checking the newly authored transactions.
+Corrected read-only range calls decode the C attribute opens and full-INDX update,
+but also produce historical framing warnings on the qualified origin and native
+creation control. Two actual interrupted C create states fail selected simulation
+before any action. The same mode also fails before any action on two checkpoint
+states already accepted by Windows. Main therefore rejects the utility return code
+as an ordinary-writer oracle; decoded fields and documented operation contracts
+remain useful evidence. Inputs are unchanged and accepted native cases are not
+repeated. Setup mistakes remain separate from recovery results. Reports are under
+`ntfsrecover-*`; the consolidated review is
+`ntfsrecover-create-contract-review-continued-20261007/`.
 
 ## Read-only stream component cleanup
 

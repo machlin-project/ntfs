@@ -77,7 +77,10 @@ owner now derives recovery from reopened media, including torn MFT bootstrap,
 complete old/committed metadata and interrupted compensation. It retains a settled
 qualified prefix and several ordinary lifetimes after the exact quiet origin,
 with private backward ownership and FILE generation-reuse proofs. Whole FILE/INDX
-composition remains experimental; native snapshot qualification, sustained checkpoint
+composition remains experimental. Settled checkpoint advancement and circular
+journal reuse now pass a complete 196-suite local regression and a real POSIX
+sequence of 640 mutations, 256 checkpoints and 119 wraps with F_FULLFSYNC and
+fresh zero-rewrite recovery. Native snapshot qualification, sustained native
 reuse and FSKit mutation admission still require the connected native acceptance gate. See
 [the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).

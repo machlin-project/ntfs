@@ -471,6 +471,55 @@ overlay_read(void *context, uint64_t physical, void *memory, size_t bytes)
 }
 
 static enum ntfs_result
+prepare_recovery_capacity(struct ntfs_write_batch_execution *owner,
+    const struct ntfs_write_program *program, const struct ntfs_write_batch_pages *pages,
+    const struct ntfs_logfile_client *client, const struct ntfs_write_batch_pages_input *input,
+    size_t retained_packets)
+{
+	struct ntfs_write_batch_pages_input window = *input;
+	struct ntfs_write_batch_pages *inverse = NULL;
+	const struct ntfs_write_batch_page *terminal;
+	size_t count = ntfs_write_program_count(program);
+	enum ntfs_result result;
+
+	terminal = ntfs_write_batch_pages_get(pages, ntfs_write_batch_pages_count(pages) - 1);
+	if (terminal == NULL || count == 0 || terminal->packet <= count) {
+		return NTFS_CORRUPT;
+	}
+	/* A completed loser retains the original prefix, every published forward
+	 * update, every inverse and its Forget, then one checkpoint. Physical free
+	 * pages alone do not reserve the acquisition owner's retained-record cap. */
+	if (retained_packets > NTFS_WRITE_BATCH_MAX_PACKETS ||
+	    terminal->packet > NTFS_WRITE_BATCH_MAX_PACKETS - retained_packets ||
+	    count + 1 > NTFS_WRITE_BATCH_MAX_PACKETS - retained_packets - terminal->packet ||
+	    NTFS_WRITE_EMPTY_CHECKPOINT_PAGES >
+		NTFS_WRITE_BATCH_MAX_PACKETS - retained_packets - terminal->packet - (count + 1)) {
+		return NTFS_NO_SPACE;
+	}
+	/* The complete-update prefix is the largest possible loser. Its terminal
+	 * Forget replaces the forward terminal at the same fresh-page cursor; all
+	 * inverse pages and a subsequent checkpoint must fit before any transfer. */
+	window.tail_lsn = ntfs_write_batch_pages_lsn(pages, terminal->packet - 1);
+	window.next_lsn = ntfs_write_batch_pages_lsn(pages, terminal->packet);
+	result = ntfs_write_program_compensation_prepare(
+	    &owner->reader, program, pages, count, client, &window, &inverse);
+	if (result == NTFS_OK) {
+		terminal =
+		    ntfs_write_batch_pages_get(inverse, ntfs_write_batch_pages_count(inverse) - 1);
+		if (terminal == NULL) {
+			result = NTFS_CORRUPT;
+		} else {
+			window.tail_lsn = ntfs_write_batch_pages_lsn(inverse, terminal->packet);
+			window.next_lsn = ntfs_write_batch_pages_next_lsn(inverse);
+			result = ntfs_write_batch_pages_capacity_check(
+			    &window, NTFS_WRITE_EMPTY_CHECKPOINT_PAGES);
+		}
+	}
+	ntfs_write_batch_pages_close(inverse);
+	return result;
+}
+
+static enum ntfs_result
 prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_program *program)
 {
 	struct batch_execute_workspace *work = NULL;
@@ -522,6 +571,10 @@ prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 	window.next_lsn = work->history.history.next_lsn;
 	result = ntfs_write_program_pages_prepare(
 	    &owner->reader, program, &work->history.client, &window, &pages);
+	if (result == NTFS_OK) {
+		result = prepare_recovery_capacity(owner, program, pages, &work->history.client,
+		    &window, work->history.history.visited_records);
+	}
 	if (result == NTFS_OK) {
 		result = ntfs_node_by_number(volume, NTFS_LOGFILE_RECORD, &node);
 	}

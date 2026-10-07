@@ -24,6 +24,7 @@ diagrams, field maps, examples and a research register.
 | Security | [Storage](SECURITY.md), [DACL evaluation](ACCESS.md), [native access](NATIVE-ACCESS.md), [Windows oracle](ACCESS-ORACLE.md) |
 | Journal and recovery | [Log framing](LOGFILE.md), [recovery inputs](RECOVERY-INPUTS.md), [model](RECOVERY-MODEL.md), [write foundations](WRITE-FOUNDATIONS.md) |
 | Writable images | [Native journal](NATIVE-WRITE-JOURNAL.md), [DATA-only overwrite](DATA-OVERWRITE.md), [installation](NATIVE-INSTALLATION.md) |
+| Journal reuse | [Settled checkpoint implementation/test contract](CHECKPOINT-REUSE.md) |
 | Content and performance | [WOF](WOF.md), [read caches](READ-CACHE-POLICY.md), [performance](PERFORMANCE.md) |
 | Product preparation | [Commercialization](COMMERCIALIZATION.md), [ext4 integration lessons](FSKIT-EXT4-LESSONS.md) |
 

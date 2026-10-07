@@ -1,5 +1,59 @@
 # Acceptance
 
+## Experimental settled checkpoint and journal reuse
+
+The private checkpoint writer and fresh recovery owner now bind a settled actual
+Forget/empty-checkpoint origin, reserve full inverse/checkpoint capacity and
+advance restart roots only after proving complete retained history and settled
+homes. This is experimental offline-image support; installed FSKit mutation
+admission and actual C Windows recovery retain their unfinished native gate.
+See [the owning contract](CHECKPOINT-REUSE.md) and
+[the format relationship](format/10-recovery-and-writing.md#checkpoint-advancement-and-ring-reuse).
+
+Focused fatal-ASan/UBSan checks pass 29 origin profiles, 15 forward-fitting space
+profiles and four independent complete-byte publication families at two alignments.
+All 2,861 checkpoint preparation and 5,262 recovery preparation allocation/read
+faults preserve media and retry to identical output. Fifty-seven independently
+authored ownership refusals pass. Writer interruption covers 912 transfer/barrier
+states; interrupted recovery covers 1,264 transfer/barrier states. Each fresh
+recovery preserves complete user bytes and its second opening requires zero writes.
+
+Sustained modeled execution passes 640 create/grow/shrink/rename/remove operations
+on each of the small and enlarged journals, with 5,632 new packets per sequence.
+The two runs advance 256/128 checkpoints and wrap 119/27 times. They check names,
+complete data, zero gaps, FILE generation reuse, complete allocation/metadata
+validation, all unowned bytes and fresh zero-rewrite recovery after each operation.
+The complete actual POSIX run also passes 640 operations, 5,632 packets,
+256 checkpoints and 119 wraps with real F_FULLFSYNC and a closed/reopened
+ordinary backing image between operations. Its complete final postimage is
+retained; this result is separate from modeled persistence and the earlier smoke.
+
+Focused evidence is under `artifacts/overwrite/checkpoint-reuse-*`. The earlier
+invalid-floor refusal fixture safely recovered through the surviving old root;
+the corrected structurally valid contradictory floor is refused. Setup/fixture
+mistakes and the actual Release conditional-initialization refusal remain retained
+separately. The complete local regression passes 196/196 suites with assertions
+and fatal ASan/UBSan, style and 128 freestanding checks across 64 core sources.
+Explicit successful-producer guards close the Release warning without changing
+ordered calls/errors; all three affected byte/fault/refusal suites pass again.
+Strict Release passes 128 checks, the modified module passes both freestanding
+architectures, and 23 private writer headers pass standalone syntax checks.
+The actual unsigned Release app, both extension copies and core archive build
+for arm64/x86_64. Nine required module commands and members are verified per
+architecture. The closing evidence is in `checkpoint-reuse-final-local-20261007/`,
+`checkpoint-reuse-release-closure-20261007/` and
+`checkpoint-reuse-release-app-corrected-20261007/`. The connected native gate
+remains separate from these successful local stages.
+
+Actual C checkpoint execution also passes on an exclusively claimed private
+clone of the immutable native resident-complete export. All eight publication
+frames and the complete postimage match an independent source-derived oracle;
+fresh C recovery performs zero writes. The earlier manual oracle used another
+USA transport seed, so its initial raw comparison failed; exact predecessor-
+derived markers close the comparison without changing C or repeating the writer.
+This offline native-source evidence remains separate from actual Windows recovery
+and is recorded in [CHECKPOINT-REUSE.md](CHECKPOINT-REUSE.md).
+
 ## Ordinary mutation planning and complete LFS placement
 
 The active connected write batch now has pure ordinary mutation/program/page

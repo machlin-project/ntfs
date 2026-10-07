@@ -18,8 +18,11 @@ struct ntfs_write_batch_publication {
  * logical/physical mapping proof belongs to the mutation planner. The caller
  * preserves that source from planning through execution, or supplies an exact
  * copy. This executor does not independently resolve every logical target.
- * This owner acquires the original settled qualified history, derives its exact
- * successor, creates the complete program's pages and rechecks every changed
+ * This owner acquires the actual settled retained history, derives its exact
+ * successor, creates the complete program's pages and admits space for the full
+ * inverse prefix, terminal Forget and following empty checkpoint, including
+ * retained-record credits, before writing.
+ * It rechecks every changed
  * physical before image. All copied/aligned publications, guards and metadata
  * validation precede output. Every internal immutable child closes on return.
  * Program bytes may be released after success. Failed preparation writes and

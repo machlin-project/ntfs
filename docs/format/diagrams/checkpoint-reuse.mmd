@@ -1,0 +1,22 @@
+flowchart TB
+    H["Actual complete retained history\nFinal Forget + every settled log / metadata home"] --> P["Prepare all aligned output\nReserve checkpoint page under the old floor"]
+    P --> B["First persistence barrier\nEstablish the proved settled homes"]
+    subgraph O["Experimental checkpoint publication · 8 writes / 9 barriers"]
+        direction LR
+        D["Dirty old roots\nBarrier after each"] --> C["Checkpoint copy → circular home\nBarrier after each"]
+        C --> A["Dirty advanced roots\nCurrent / oldest / restart LSNs\nBarrier after each"]
+        A --> N["Clean advanced roots\nBarrier after each"]
+    end
+    B --> D
+    N --> U["Fresh settled origin: actual Forget + checkpoint\nBoth circular homes complete\nOld interval can be reused"]
+    M["Fresh reopened media after interruption"] --> R["Bind actual roots, copies and complete packets\nKeep the physical endpoint intact"]
+    R --> S["Valid roots span advancement?\nPrivate old-root analysis view\nExact complete old history proves new fields"]
+    S --> Q["Prove actual pending checkpoint\nActual terminal Forget + settled homes\nNo live undo / older journal-home repair"]
+    Q --> F["Preallocated recovery\nPersist homes → repair checkpoint home if needed\nAdvance and clean roots"]
+    F --> U
+    Q -. "Missing proof" .-> X["Refuse before mutation\nA larger CurrentLsn supplies no authority"]
+    U --> G["Separate connected native gate\nActual C publication / Windows recovery / FSKit admission"]
+    classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
+    classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
+    class H,P,B,D,C,A,N,U,M,R,S,Q,F private
+    class X,G gate

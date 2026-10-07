@@ -209,6 +209,22 @@ ntfs_write_journal_reserve(const struct ntfs_logfile_restart *restart, uint16_t 
 	return ntfs_write_journal_reserve_tail(restart, 0, snapshot_bytes, out);
 }
 
+static bool
+empty_checkpoint_matches(const struct ntfs_logfile_client_restart *checkpoint, uint64_t anchor,
+    const uint8_t *body, size_t bytes)
+{
+	return checkpoint->major == NTFS_LOG_CLIENT_MAJOR_ATTRIBUTES &&
+	    checkpoint->minor == NTFS_LOG_CLIENT_MINOR && checkpoint->analysis_lsn == anchor &&
+	    checkpoint->extension.length == NTFS_WRITE_QUIET_EXTENSION_BYTES &&
+	    checkpoint->open_attributes.lsn == 0 && checkpoint->attribute_names.lsn == 0 &&
+	    checkpoint->dirty_pages.lsn == 0 && checkpoint->transactions.lsn == 0 &&
+	    checkpoint->open_attributes.bytes == 0 && checkpoint->attribute_names.bytes == 0 &&
+	    checkpoint->dirty_pages.bytes == 0 && checkpoint->transactions.bytes == 0 &&
+	    ntfs_equal(body + sizeof(struct ntfs_disk_log_client_restart), empty_extension_prefix,
+		NTFS_WRITE_QUIET_EXTENSION_PREFIX_BYTES) &&
+	    ntfs_u64(body + bytes - sizeof(uint64_t)) == anchor;
+}
+
 enum ntfs_result
 ntfs_write_quiet_bind(const struct ntfs_logfile_restart *restart,
     const struct ntfs_logfile_client *client, const void *bootstrap, const void *checkpoint_input)
@@ -264,19 +280,91 @@ ntfs_write_quiet_bind(const struct ntfs_logfile_restart *restart,
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if (checkpoint.major != NTFS_LOG_CLIENT_MAJOR_ATTRIBUTES ||
-	    checkpoint.minor != NTFS_LOG_CLIENT_MINOR || checkpoint.analysis_lsn != first.lsn ||
-	    checkpoint.extension.length != NTFS_WRITE_QUIET_EXTENSION_BYTES ||
-	    checkpoint.open_attributes.lsn != 0 || checkpoint.attribute_names.lsn != 0 ||
-	    checkpoint.dirty_pages.lsn != 0 || checkpoint.transactions.lsn != 0 ||
-	    checkpoint.open_attributes.bytes != 0 || checkpoint.attribute_names.bytes != 0 ||
-	    checkpoint.dirty_pages.bytes != 0 || checkpoint.transactions.bytes != 0 ||
-	    !ntfs_equal(body + sizeof(struct ntfs_disk_log_client_restart), empty_extension_prefix,
-		NTFS_WRITE_QUIET_EXTENSION_PREFIX_BYTES) ||
-	    ntfs_u64(body + last.data.length - sizeof(uint64_t)) != first.lsn) {
+	if (!empty_checkpoint_matches(&checkpoint, first.lsn, body, last.data.length)) {
 		return NTFS_UNSUPPORTED;
 	}
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_write_checkpoint_origin_bind(const struct ntfs_logfile_restart *restart,
+    const struct ntfs_logfile_client *client, const struct ntfs_logfile_buffer *anchor,
+    const struct ntfs_logfile_buffer *checkpoint_input)
+{
+	struct ntfs_logfile_record first, last;
+	struct ntfs_logfile_update marker;
+	struct ntfs_logfile_client_restart checkpoint;
+	struct ntfs_logfile_lsn previous;
+	const uint8_t *body;
+	enum ntfs_result result;
+
+	if (restart == NULL || client == NULL || anchor == NULL || checkpoint_input == NULL ||
+	    anchor->data == NULL || checkpoint_input->data == NULL) {
+		return NTFS_INVALID;
+	}
+	if (checkpoint_input->bytes != NTFS_WRITE_CHECKPOINT_BYTES) {
+		return NTFS_UNSUPPORTED;
+	}
+	if (anchor->bytes == NTFS_WRITE_BOOTSTRAP_BYTES) {
+		return ntfs_write_quiet_bind(restart, client, anchor->data, checkpoint_input->data);
+	}
+	if (anchor->bytes != NTFS_WRITE_FORGET_BYTES || !qualified_restart(restart) ||
+	    client->name_length != 4 || client->name[0] != 'N' || client->name[1] != 'T' ||
+	    client->name[2] != 'F' || client->name[3] != 'S' ||
+	    client->previous != NTFS_LOGFILE_NO_CLIENT || client->next != NTFS_LOGFILE_NO_CLIENT) {
+		return NTFS_UNSUPPORTED;
+	}
+	result = ntfs_logfile_record_decode(
+	    anchor->data, anchor->bytes, sizeof(struct ntfs_disk_log_record), &first);
+	if (result == NTFS_OK) {
+		result = ntfs_logfile_record_decode(checkpoint_input->data, checkpoint_input->bytes,
+		    sizeof(struct ntfs_disk_log_record), &last);
+	}
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (first.type != NTFS_LOGFILE_RECORD_UPDATE ||
+	    first.flags != NTFS_LOGFILE_RECORD_DELETING ||
+	    first.transaction != NTFS_WRITE_TRANSACTION_KEY || first.previous_lsn == 0 ||
+	    first.previous_lsn >= first.lsn || first.undo_next_lsn != 0 ||
+	    first.client_index != 0 || first.client_sequence != client->sequence ||
+	    first.lsn != client->oldest_lsn || last.type != NTFS_LOGFILE_RECORD_RESTART ||
+	    last.flags != 0 || last.transaction != 0 || last.previous_lsn != 0 ||
+	    last.undo_next_lsn != 0 || last.client_index != 0 ||
+	    last.client_sequence != client->sequence || last.lsn != client->restart_lsn ||
+	    last.lsn != restart->current_lsn || first.lsn >= last.lsn) {
+		return NTFS_UNSUPPORTED;
+	}
+	result = ntfs_logfile_lsn_decode(restart, first.previous_lsn, &previous);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	body = (const uint8_t *)anchor->data + first.data.offset;
+	result = ntfs_logfile_update_decode(body, first.data.length, &marker);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (first.data.length != sizeof(struct ntfs_disk_log_update_storage) ||
+	    marker.redo_operation != NTFS_LOG_OP_FORGET_TRANSACTION ||
+	    marker.undo_operation != NTFS_LOG_OP_COMPENSATION || marker.redo.length != 0 ||
+	    marker.undo.length != 0 || marker.compensation_undo_bytes != 0 ||
+	    marker.lcn_count != 0 ||
+	    !((marker.target_attribute == 0 && marker.attribute_flags == 0) ||
+		(marker.target_attribute == NTFS_WRITE_MFT_KEY &&
+		    marker.attribute_flags == NTFS_WRITE_MFT_TARGET_FLAG)) ||
+	    marker.target_vcn != 0 || marker.cluster_index != 0 || marker.record_offset != 0 ||
+	    marker.attribute_offset != 0 ||
+	    ntfs_u64(body + sizeof(struct ntfs_disk_log_update)) != UINT64_MAX) {
+		return NTFS_UNSUPPORTED;
+	}
+	body = (const uint8_t *)checkpoint_input->data + last.data.offset;
+	result = ntfs_logfile_client_restart_decode(body, last.data.length, &checkpoint);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	return empty_checkpoint_matches(&checkpoint, first.lsn, body, last.data.length)
+	    ? NTFS_OK
+	    : NTFS_UNSUPPORTED;
 }
 
 static enum ntfs_result

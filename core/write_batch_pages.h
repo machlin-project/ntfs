@@ -59,6 +59,11 @@ struct ntfs_write_batch_pages;
  * NTFS update semantics, checkpoint/recovery decision or writable admission. */
 enum ntfs_result ntfs_write_batch_pages_prepare(const struct ntfs_environment *,
     const struct ntfs_write_batch_pages_input *, struct ntfs_write_batch_pages **);
+/* Pure capacity/sequence admission for a fresh-page suffix of the same proved
+ * retained window. Input packet/packets are empty. This neither claims media nor
+ * changes its floor; exclusive ownership and the actual history remain required. */
+enum ntfs_result ntfs_write_batch_pages_capacity_check(
+    const struct ntfs_write_batch_pages_input *, size_t pages);
 size_t ntfs_write_batch_pages_count(const struct ntfs_write_batch_pages *);
 const struct ntfs_write_batch_page *ntfs_write_batch_pages_get(
     const struct ntfs_write_batch_pages *, size_t);

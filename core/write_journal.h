@@ -17,8 +17,11 @@ enum {
 	    NTFS_WRITE_QUIET_EXTENSION_BYTES - sizeof(uint64_t),
 	NTFS_WRITE_BOOTSTRAP_BYTES = sizeof(struct ntfs_disk_log_record) +
 	    sizeof(struct ntfs_disk_log_update_storage) + 2 * sizeof(uint64_t),
+	NTFS_WRITE_EMPTY_CHECKPOINT_PAGES = 1,
 	NTFS_WRITE_CHECKPOINT_BYTES = sizeof(struct ntfs_disk_log_record) +
 	    sizeof(struct ntfs_disk_log_client_restart) + NTFS_WRITE_QUIET_EXTENSION_BYTES,
+	NTFS_WRITE_FORGET_BYTES =
+	    sizeof(struct ntfs_disk_log_record) + sizeof(struct ntfs_disk_log_update_storage),
 	NTFS_WRITE_UPDATE_PAYLOAD_BYTES =
 	    sizeof(struct ntfs_disk_log_update_storage) + 2 * NTFS_WRITE_RECORD_BYTES
 };
@@ -89,6 +92,13 @@ enum ntfs_result ntfs_write_tail_copy_encode(
  * Complete history ownership and physical recovery remain caller obligations. */
 enum ntfs_result ntfs_write_quiet_bind(const struct ntfs_logfile_restart *,
     const struct ntfs_logfile_client *, const void *bootstrap, const void *checkpoint);
+/* Experimental empty origin. The separately qualified overwrite owner retains
+ * ntfs_write_quiet_bind; this binder also admits an exact settled Forget marker
+ * with no retained undo obligation before its empty owning checkpoint. Complete
+ * physical roots/history and publication remain the caller's owning contract. */
+enum ntfs_result ntfs_write_checkpoint_origin_bind(const struct ntfs_logfile_restart *,
+    const struct ntfs_logfile_client *, const struct ntfs_logfile_buffer *anchor,
+    const struct ntfs_logfile_buffer *checkpoint);
 
 struct ntfs_write_abort_plan {
 	uint64_t offset, compensation_lsn, end_lsn, resident_compensation_lsn;

@@ -79,6 +79,14 @@ ntfs_batch_recovery_overlay_read(void *context, uint64_t physical, void *memory,
 	if (result != NTFS_OK) {
 		return result;
 	}
+	if (owner->checkpoint.projection_active) {
+		for (index = 0; index < NTFS_LFS_RESTART_PAGES; index++) {
+			recovery_overlay_copy(physical, memory, bytes,
+			    owner->checkpoint.physical[index],
+			    owner->checkpoint.root_projection + index * NTFS_WRITE_CLUSTER_BYTES,
+			    NTFS_WRITE_CLUSTER_BYTES);
+		}
+	}
 	if (owner->view == NTFS_BATCH_RECOVERY_BOOTSTRAP) {
 		recovery_overlay_copy(physical, memory, bytes,
 		    owner->mft_lcn * NTFS_WRITE_CLUSTER_BYTES, owner->bootstrap,
@@ -132,13 +140,18 @@ recovery_analysis_close(struct ntfs_write_batch_recovery *owner)
 	    owner, owner->lifetime, owner->lifetime_capacity * sizeof(*owner->lifetime));
 	ntfs_batch_recovery_release(
 	    owner, owner->projection, owner->projection_capacity * sizeof(*owner->projection));
+	ntfs_batch_recovery_release(owner, owner->checkpoint.root_projection,
+	    NTFS_LFS_RESTART_PAGES * NTFS_WRITE_CLUSTER_BYTES);
+	owner->checkpoint.root_projection = NULL;
+	owner->checkpoint.projection_active = false;
 	owner->packet = NULL;
 	owner->target = NULL;
 	owner->home = NULL;
 	owner->qualified = NULL;
 	owner->lifetime = NULL;
 	owner->projection = NULL;
-	owner->packets = owner->packet_capacity = owner->targets = owner->target_capacity = 0;
+	owner->packets = owner->packet_capacity = owner->operation_packets = owner->targets =
+	    owner->target_capacity = 0;
 	owner->homes = owner->home_capacity = 0;
 	owner->qualified_count = owner->qualified_capacity = 0;
 	owner->lifetimes = owner->lifetime_capacity = owner->projections =
@@ -455,6 +468,7 @@ recovery_prepare(struct ntfs_write_batch_recovery *owner)
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *log = NULL;
 	struct ntfs_write_batch_pages *original = NULL, *abort = NULL;
+	struct ntfs_write_batch_pages *checkpoint = NULL;
 	struct ntfs_limits limits;
 	struct ntfs_batch_recovery_home *home;
 	uint8_t *image;
@@ -473,8 +487,12 @@ recovery_prepare(struct ntfs_write_batch_recovery *owner)
 		result = ntfs_mount_journal(&owner->reader, &limits, &volume);
 	}
 	if (result == NTFS_OK) {
+		result = ntfs_batch_checkpoint_roots_capture(owner, volume, work);
+	}
+	if (result == NTFS_OK) {
 		result = ntfs_batch_recovery_capture(owner, volume, work);
 	}
+	owner->checkpoint.projection_active = false;
 	if (volume != NULL) {
 		ntfs_unmount(volume);
 		volume = NULL;
@@ -488,6 +506,9 @@ recovery_prepare(struct ntfs_write_batch_recovery *owner)
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_batch_recovery_pages(owner, &original, &abort);
+	}
+	if (result == NTFS_OK) {
+		result = ntfs_batch_checkpoint_pages(owner, &checkpoint);
 	}
 	if (result != NTFS_OK) {
 		goto done;
@@ -512,6 +533,10 @@ recovery_prepare(struct ntfs_write_batch_recovery *owner)
 	abort_pages = ntfs_write_batch_pages_count(abort);
 	owner->capacity =
 	    2 * NTFS_LFS_RESTART_PAGES + original_pages + 2 * abort_pages + owner->homes;
+	if (owner->checkpoint.pending) {
+		owner->capacity +=
+		    ntfs_write_batch_pages_count(checkpoint) + 2 * NTFS_LFS_RESTART_PAGES;
+	}
 	owner->publication =
 	    ntfs_batch_recovery_allocate(owner, owner->capacity * sizeof(*owner->publication));
 	owner->allocation_bytes =
@@ -523,6 +548,18 @@ recovery_prepare(struct ntfs_write_batch_recovery *owner)
 	}
 	owner->frames = (void *)(((uintptr_t)owner->allocation + owner->backend.alignment - 1u) &
 	    ~(uintptr_t)(owner->backend.alignment - 1u));
+	if (owner->checkpoint.pending) {
+		/* A checkpoint may discard only a fully settled prefix. Ordinary log
+		 * reconstruction must require no repair, and no undo may remain. */
+		result = recovery_log_homes_prepare(owner, log, original, work);
+		if (result == NTFS_OK && (owner->count != 0 || abort != NULL)) {
+			result = NTFS_STALE;
+		}
+		if (result == NTFS_OK) {
+			result = ntfs_batch_checkpoint_prepare(owner, log, checkpoint, work);
+		}
+		goto done;
+	}
 	result = recovery_restarts_prepare(owner, log, work, &roots_changed);
 	if (result == NTFS_OK) {
 		result = recovery_log_homes_prepare(owner, log, original, work);
@@ -560,6 +597,7 @@ done:
 	owner->view = NTFS_BATCH_RECOVERY_SOURCE;
 	ntfs_write_batch_pages_close(original);
 	ntfs_write_batch_pages_close(abort);
+	ntfs_write_batch_pages_close(checkpoint);
 	ntfs_batch_recovery_release(owner, work, sizeof(*work));
 	return result;
 }
@@ -641,7 +679,15 @@ ntfs_write_batch_recover_execute(struct ntfs_write_batch_recovery *owner, bool *
 	}
 	owner->prepared = false;
 	report->reconstructed_files = owner->reconstructed_files;
-	for (index = 0; index < owner->count; index++) {
+	if (owner->checkpoint.pending) {
+		report->barriers++;
+		result = owner->backend.persist(owner->backend.reader.context);
+		if (result == NTFS_OK) {
+			report->homes_persisted = true;
+			report->durable_stage = NTFS_WRITE_RECOVERY_SETTLED_HOMES;
+		}
+	}
+	for (index = 0; result == NTFS_OK && index < owner->count; index++) {
 		step = &owner->publication[index];
 		transferred = 0;
 		report->writes++;

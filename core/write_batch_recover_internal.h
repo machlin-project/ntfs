@@ -63,6 +63,15 @@ struct ntfs_batch_recovery_projection {
 	bool unknown_index, unowned_cluster;
 };
 
+struct ntfs_batch_recovery_checkpoint {
+	struct ntfs_logfile_restart advanced;
+	struct ntfs_logfile_client client;
+	uint8_t *root_projection;
+	uint64_t physical[NTFS_LFS_RESTART_PAGES];
+	size_t old_slot, new_slot;
+	bool root_transition, projection_active, pending;
+};
+
 struct ntfs_write_batch_recovery {
 	struct ntfs_overwrite_environment backend;
 	struct ntfs_environment reader;
@@ -73,6 +82,7 @@ struct ntfs_write_batch_recovery {
 	struct ntfs_logfile_restart selected, origin;
 	struct ntfs_logfile_client client;
 	struct ntfs_logfile_history_report history;
+	struct ntfs_batch_recovery_checkpoint checkpoint;
 	struct ntfs_batch_recovery_packet *packet;
 	struct ntfs_batch_recovery_target *target;
 	struct ntfs_batch_recovery_home *home;
@@ -80,7 +90,8 @@ struct ntfs_write_batch_recovery {
 	struct ntfs_batch_recovery_lifetime *lifetime;
 	struct ntfs_batch_recovery_projection *projection;
 	struct ntfs_write_batch_recovery *history_owner;
-	size_t packets, packet_capacity, targets, target_capacity, homes, home_capacity;
+	size_t packets, packet_capacity, operation_packets, targets, target_capacity, homes,
+	    home_capacity;
 	size_t qualified_count, qualified_capacity, ordinary_first;
 	size_t lifetimes, lifetime_capacity, projections, projection_capacity;
 	size_t first_update, updates, compensations, remaining_undo;
@@ -129,5 +140,15 @@ enum ntfs_result ntfs_batch_recovery_history_home_admit(
 enum ntfs_result ntfs_batch_recovery_pages(struct ntfs_write_batch_recovery *,
     struct ntfs_write_batch_pages **, struct ntfs_write_batch_pages **);
 enum ntfs_result ntfs_batch_recovery_mapping(const struct ntfs_stream *, uint64_t, uint64_t *);
+enum ntfs_result ntfs_batch_checkpoint_roots_capture(struct ntfs_write_batch_recovery *,
+    struct ntfs_volume *, struct ntfs_batch_recovery_workspace *);
+enum ntfs_result ntfs_batch_checkpoint_bind(struct ntfs_write_batch_recovery *);
+enum ntfs_result ntfs_batch_checkpoint_origin_homes(struct ntfs_write_batch_recovery *,
+    struct ntfs_logfile *, struct ntfs_batch_recovery_workspace *);
+enum ntfs_result ntfs_batch_checkpoint_pages(
+    struct ntfs_write_batch_recovery *, struct ntfs_write_batch_pages **);
+enum ntfs_result ntfs_batch_checkpoint_prepare(struct ntfs_write_batch_recovery *,
+    struct ntfs_stream *, const struct ntfs_write_batch_pages *,
+    struct ntfs_batch_recovery_workspace *);
 
 #endif

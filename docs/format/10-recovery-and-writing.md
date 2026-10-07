@@ -433,6 +433,44 @@ remains disqualified. Product advancement needs complete C framing, interrupted
 publication tests, sustained reuse/wrap and one connected native acceptance batch.
 Clearing flags or introducing a private journal cannot substitute for this gate.
 
+The experimental [checkpoint/reuse owner](../CHECKPOINT-REUSE.md) retains the
+actual settled Forget as the analysis anchor. Its independent
+[origin fixture author](../../tests/write_checkpoint_fixtures.py) covers
+clean/dirty, circular-end and explicit live-undo/client/anchor refusals.
+The ordinary experimental owner accepts the exact settled-Forget/empty-checkpoint
+pair after these binding tests; the earlier qualified overwrite owner's origin
+admission is unchanged. This does not grant installed FSKit admission.
+
+![Settled homes, exact root transition and complete new origin precede journal reuse](diagrams/checkpoint-reuse.svg)
+
+[Diagram source](diagrams/checkpoint-reuse.mmd)
+
+The [checkpoint writer](../../core/write_checkpoint.c) prepares eight complete
+publications: two dirty old roots, checkpoint copy/home, two dirty advanced roots
+and two clean advanced roots. Nine barriers include the initial persistence of
+proved settled homes. The old floor protects the new checkpoint page until this
+transition completes. Ordinary operation admission reserves all worst-case inverse
+pages, a terminal Forget and a following checkpoint, plus the retained-packet
+credits needed to reopen that history.
+
+[Fresh checkpoint recovery](../../core/write_checkpoint_recover.c) receives only
+reopened media. A complete pending checkpoint remains in the actual packet
+inventory and physical endpoint while operation analysis binds its preceding
+lifetimes. Two valid roots across advancement must match in every restored byte
+except the five owned root/client fields and their USA arrays. An explicit private
+old-root view acquires the actual still-retained history; the exact final Forget,
+empty checkpoint and all settled homes must justify advancement. A larger LSN,
+clean hint or fabricated projected root is insufficient.
+
+Pending recovery may repair the checkpoint's home from a proved complete copy.
+A new settled origin must already have both exact circular packet homes before
+another operation reuses the copy slots. An invalid restart copy can be bypassed
+through the surviving root and complete actual history; contradictory valid roots
+fail their transition proof. The [independent byte fixtures](../../tests/write_checkpoint_execute_fixtures.py),
+[preparation/refusal checks](../../tests/write_checkpoint_execute.c) and
+[interruption checks](../../tests/write_checkpoint_interrupt.c) keep these cases
+distinct. Their passing local states remain separate from native Windows qualification.
+
 ## Implementation and evidence
 
 - Family preparation: [write_transaction.c](../../core/write_transaction.c).

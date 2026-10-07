@@ -127,6 +127,15 @@ local regression before preparing the VM batch. Do not introduce per-feature
 VM loops during implementation. The five native Forget-anchored checkpoint
 observations are byte-level experiments; actual C checkpoint execution,
 interrupted publication and circular reuse remain unqualified.
+The experimental local C checkpoint/recovery implementation now passes independent
+full-byte and interruption/fault inputs plus two sustained modeled sequences.
+The closing local regression passes all 196 suites, both strict compiler targets,
+23 private headers and the actual unsigned universal app/extension build.
+The actual POSIX sequence passes 640 mutations, 256 checkpoints and 119 wraps
+with F_FULLFSYNC and fresh recovery between operations. Its actual C Windows
+gate remains unqualified; [CHECKPOINT-REUSE.md](CHECKPOINT-REUSE.md) records this
+local evidence separately from native acceptance.
+Prepare one native batch only after main reviews that local closure.
 Unsupported rejection,
 building or private serialization is not feature acceptance. Continue through the
 user's broad write scope; do not mark the goal complete at this checkpoint.

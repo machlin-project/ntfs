@@ -243,6 +243,40 @@ window_prepare(const struct ntfs_write_batch_pages_input *input, struct batch_wi
 	return NTFS_OK;
 }
 
+enum ntfs_result
+ntfs_write_batch_pages_capacity_check(
+    const struct ntfs_write_batch_pages_input *input, size_t pages)
+{
+	struct batch_window window = {0};
+	uint64_t page, sequence;
+	size_t index;
+	enum ntfs_result result;
+
+	if (!ntfs_pointer_range_valid(input, sizeof(*input)) || input->packet != NULL ||
+	    input->packets != 0 || pages == 0) {
+		return NTFS_INVALID;
+	}
+	if (pages > NTFS_WRITE_BATCH_MAX_PAGES) {
+		return NTFS_RANGE;
+	}
+	result = window_prepare(input, &window);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	if (pages > window.available_pages) {
+		return NTFS_NO_SPACE;
+	}
+	page = window.page;
+	sequence = window.sequence;
+	for (index = 1; index < pages; index++) {
+		result = advance(&input->restart, &window, &page, &sequence);
+		if (result != NTFS_OK) {
+			return result;
+		}
+	}
+	return NTFS_OK;
+}
+
 static enum ntfs_result
 link_admit(const struct ntfs_write_batch_pages_input *input, size_t ordinal, size_t target,
     uint64_t absolute)

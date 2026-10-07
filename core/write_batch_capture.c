@@ -185,7 +185,7 @@ recovery_qualified_prefix(struct ntfs_write_batch_recovery *owner, struct ntfs_v
 	size_t first = NTFS_BATCH_RECOVERY_ORIGIN_PACKETS, index, count;
 	enum ntfs_result result;
 
-	while (owner->packets - first >= 2) {
+	while (owner->operation_packets - first >= 2) {
 		snapshot = &owner->packet[first + NTFS_WRITE_REPLAY_SNAPSHOT].update;
 		if (owner->packet[first].update.redo_operation !=
 			NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE ||
@@ -194,7 +194,8 @@ recovery_qualified_prefix(struct ntfs_write_batch_recovery *owner, struct ntfs_v
 			break;
 		}
 		if (owner->qualified == NULL) {
-			owner->qualified_capacity = owner->packets / NTFS_WRITE_REPLAY_PACKETS;
+			owner->qualified_capacity =
+			    owner->operation_packets / NTFS_WRITE_REPLAY_PACKETS;
 			if (owner->qualified_capacity > NTFS_WRITE_HISTORY_TRANSACTIONS) {
 				owner->qualified_capacity = NTFS_WRITE_HISTORY_TRANSACTIONS;
 			}
@@ -207,7 +208,7 @@ recovery_qualified_prefix(struct ntfs_write_batch_recovery *owner, struct ntfs_v
 		if (owner->qualified_count == owner->qualified_capacity) {
 			return NTFS_RANGE;
 		}
-		count = owner->packets - first;
+		count = owner->operation_packets - first;
 		if (count > NTFS_WRITE_REPLAY_MAX_PACKETS) {
 			count = NTFS_WRITE_REPLAY_MAX_PACKETS;
 		}
@@ -251,7 +252,7 @@ recovery_lifetime_bind(struct ntfs_write_batch_recovery *owner, size_t *cursor)
 	owner->committed = owner->compensated = false;
 	owner->target = NULL;
 	owner->target_capacity = 0;
-	for (index = *cursor; index < owner->packets &&
+	for (index = *cursor; index < owner->operation_packets &&
 	    owner->packet[index].update.redo_operation == NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE;
 	    index++) {
 		if (owner->target_capacity != 0 &&
@@ -269,7 +270,7 @@ recovery_lifetime_bind(struct ntfs_write_batch_recovery *owner, size_t *cursor)
 		return NTFS_NO_MEMORY;
 	}
 	index = *cursor;
-	while (index < owner->packets) {
+	while (index < owner->operation_packets) {
 		packet = &owner->packet[index];
 		if (packet->record.type != NTFS_LOGFILE_RECORD_UPDATE) {
 			return NTFS_UNSUPPORTED;
@@ -293,12 +294,12 @@ recovery_lifetime_bind(struct ntfs_write_batch_recovery *owner, size_t *cursor)
 	/* Attribute opens have no transaction undo obligation. A recovered prefix
 	 * may end before the first update, then a later operation starts a fresh
 	 * open group. Retain both actual groups without inventing a Forget. */
-	if (index < owner->packets &&
+	if (index < owner->operation_packets &&
 	    owner->packet[index].update.redo_operation == NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE) {
 		*cursor = index;
 		return NTFS_OK;
 	}
-	for (; index < owner->packets; index++) {
+	for (; index < owner->operation_packets; index++) {
 		packet = &owner->packet[index];
 		if (packet->record.type != NTFS_LOGFILE_RECORD_UPDATE ||
 		    packet->record.transaction != NTFS_WRITE_TRANSACTION_KEY ||
@@ -373,12 +374,12 @@ recovery_history_bind(struct ntfs_write_batch_recovery *owner, struct ntfs_volum
     struct ntfs_batch_recovery_workspace *work)
 {
 	struct ntfs_batch_recovery_packet *packet;
+	struct ntfs_logfile_buffer anchor, checkpoint;
 	size_t index, first;
 	enum ntfs_result result;
 
 	if (!owner->history.complete || !owner->history.endpoint_verified ||
 	    owner->packets < NTFS_BATCH_RECOVERY_ORIGIN_PACKETS ||
-	    owner->packet[0].count != NTFS_WRITE_BOOTSTRAP_BYTES ||
 	    owner->packet[1].count != NTFS_WRITE_CHECKPOINT_BYTES ||
 	    !ntfs_equal(
 		owner->packet[1].bytes, work->checkpoint_packet, NTFS_WRITE_CHECKPOINT_BYTES) ||
@@ -388,12 +389,19 @@ recovery_history_bind(struct ntfs_write_batch_recovery *owner, struct ntfs_volum
 		return NTFS_UNSUPPORTED;
 	}
 	owner->origin = owner->selected;
-	result = ntfs_write_quiet_bind(
-	    &owner->origin, &owner->client, owner->packet[0].bytes, owner->packet[1].bytes);
+	anchor = (struct ntfs_logfile_buffer){owner->packet[0].bytes, owner->packet[0].count};
+	checkpoint = (struct ntfs_logfile_buffer){owner->packet[1].bytes, owner->packet[1].count};
+	result =
+	    ntfs_write_checkpoint_origin_bind(&owner->origin, &owner->client, &anchor, &checkpoint);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	for (index = NTFS_BATCH_RECOVERY_ORIGIN_PACKETS; index < owner->packets; index++) {
+	result = ntfs_batch_checkpoint_bind(owner);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	for (index = NTFS_BATCH_RECOVERY_ORIGIN_PACKETS; index < owner->operation_packets;
+	    index++) {
 		packet = &owner->packet[index];
 		if (packet->record.type != NTFS_LOGFILE_RECORD_UPDATE) {
 			return NTFS_UNSUPPORTED;
@@ -409,17 +417,17 @@ recovery_history_bind(struct ntfs_write_batch_recovery *owner, struct ntfs_volum
 		return result;
 	}
 	owner->first_update = owner->ordinary_first;
-	if (owner->ordinary_first == owner->packets) {
+	if (owner->ordinary_first == owner->operation_packets) {
 		return owner->history.tail_lsn == 0 ? NTFS_OK : NTFS_UNSUPPORTED;
 	}
-	owner->lifetime_capacity = owner->packets - owner->ordinary_first;
+	owner->lifetime_capacity = owner->operation_packets - owner->ordinary_first;
 	owner->lifetime = ntfs_batch_recovery_allocate(
 	    owner, owner->lifetime_capacity * sizeof(*owner->lifetime));
 	if (owner->lifetime == NULL) {
 		return NTFS_NO_MEMORY;
 	}
 	index = owner->ordinary_first;
-	while (index < owner->packets) {
+	while (index < owner->operation_packets) {
 		first = index;
 		result = recovery_lifetime_bind(owner, &index);
 		owner->lifetime[owner->lifetimes++] = (struct ntfs_batch_recovery_lifetime){
@@ -429,7 +437,7 @@ recovery_history_bind(struct ntfs_write_batch_recovery *owner, struct ntfs_volum
 		if (result != NTFS_OK) {
 			return result;
 		}
-		if (index < owner->packets && owner->updates != 0 && !owner->committed &&
+		if (index < owner->operation_packets && owner->updates != 0 && !owner->committed &&
 		    !owner->compensated) {
 			return NTFS_BUSY;
 		}
@@ -562,6 +570,9 @@ ntfs_batch_recovery_capture(struct ntfs_write_batch_recovery *owner, struct ntfs
 		result = recovery_qualified_pages(owner, log, work);
 	}
 	if (result == NTFS_OK) {
+		result = ntfs_batch_checkpoint_origin_homes(owner, log, work);
+	}
+	if (result == NTFS_OK) {
 		result = ntfs_batch_recovery_tail_bind(owner, log, work);
 	}
 	ntfs_logfile_close(log);
@@ -576,7 +587,7 @@ recovery_packet_ordinal(const struct ntfs_write_batch_recovery *owner, uint64_t 
 	if (lsn == 0) {
 		return SIZE_MAX;
 	}
-	for (index = owner->ordinary_first; index < owner->packets; index++) {
+	for (index = owner->ordinary_first; index < owner->operation_packets; index++) {
 		if (owner->packet[index].record.lsn == lsn) {
 			return index - owner->ordinary_first;
 		}
@@ -600,7 +611,7 @@ ntfs_batch_recovery_pages(struct ntfs_write_batch_recovery *owner,
 	enum ntfs_result result = NTFS_OK;
 
 	*original = *abort = NULL;
-	count = owner->packets - owner->ordinary_first;
+	count = owner->operation_packets - owner->ordinary_first;
 	capacity = count > owner->remaining_undo + 1 ? count : owner->remaining_undo + 1;
 	packet = ntfs_batch_recovery_allocate(owner, capacity * sizeof(*packet));
 	if (packet == NULL) {

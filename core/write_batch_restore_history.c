@@ -191,6 +191,7 @@ recovery_prior_lifetime(struct ntfs_write_batch_recovery *owner,
 	prior->history = owner->history;
 	prior->packet = owner->packet;
 	prior->packets = owner->packets;
+	prior->operation_packets = owner->operation_packets;
 	prior->ordinary_first = NTFS_BATCH_RECOVERY_ORIGIN_PACKETS;
 	prior->history_owner = owner;
 	prior->historical = true;

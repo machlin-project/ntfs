@@ -161,6 +161,19 @@ functional checkpoint. The native FSKit extraction remains a separately reviewed
 boundary; it must preserve authenticated rights, read leases, serialized ownership
 and exactly-once replies before new files or classes are introduced.
 
+At the next committable checkpoint/reuse boundary, review the three identical
+restored-record comparisons in ordinary recovery, ordinary metadata restoration
+and checkpoint recovery. Each compares complete logical bytes while excluding
+only the right-hand image's USA storage. Move this equivalent byte operation
+to the existing private metadata component, retaining each caller's explicit
+record length, validation and owning-history proof. FILE comparisons that also
+exclude LSNs or unused padding have different contracts and remain separate.
+Close this small cleanup with unchanged whole postimages, affected byte/fault/
+interruption suites, complete local regression and strict two-architecture builds.
+The functional checkpoint and cleanup remain separate commits; neither expands
+the native admission policy. FSKit extraction keeps its separately reviewed place
+in the plan.
+
 ## Conventions to apply
 
 | Concern | Convention |

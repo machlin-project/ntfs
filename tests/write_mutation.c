@@ -871,6 +871,14 @@ verify_program(struct test_case *test, const struct ntfs_write_mutation_plan *pl
 		assert(step != NULL && step->region < regions);
 		assert(ntfs_logfile_update_decode(
 			   step->payload.data, step->payload.bytes, &update) == NTFS_OK);
+		if (update.redo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD &&
+		    update.undo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD) {
+			/* Native ADDING admission excludes a real FILE initialization undo. */
+			assert(step->record_flags == 0);
+		} else if (update.redo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD &&
+		    update.undo_operation == NTFS_LOG_OP_NOOP) {
+			assert(step->record_flags == NTFS_LOGFILE_RECORD_ADDING);
+		}
 		assert(ntfs_write_program_region(program, step->region, &region) == NTFS_OK);
 		assert(!region.target.mirror && region.kind != NTFS_WRITE_MUTATION_DATA);
 		assert(update.lcn_count == 1);
@@ -937,6 +945,7 @@ verify_program(struct test_case *test, const struct ntfs_write_mutation_plan *pl
 			   packet, bytes, sizeof(struct ntfs_disk_log_record), &record) == NTFS_OK);
 		step = ntfs_write_program_get(program, index);
 		assert(record.data.length == step->payload.bytes);
+		assert((record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) == step->record_flags);
 		assert(memcmp(packet + record.data.offset, step->payload.data,
 			   step->payload.bytes) == 0);
 		previous = index == 0 ? 0 : ntfs_write_batch_pages_lsn(pages, opens + index - 1);

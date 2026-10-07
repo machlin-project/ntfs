@@ -205,6 +205,16 @@ The original failed images remain retained and are not remounted. Windows VM
 ownership has returned to main; no worker may start another native packet
 without an explicit handoff.
 Do not infer the live warning's entire cause or native acceptance from disassembly.
+Further static diagnosis binds fifteen full FILE snapshots among 86 actual C
+packets to native reason 53: Initialize FILE undo cannot carry `ADDING`.
+The regression fails on the old compiler; snapshot output and fresh recovery
+now distinguish it from Initialize/Noop. Current local coverage is 198 passing
+suites, explicitly composed from 191 unaffected passes, six refreshed checkpoint
+fixture suites and one refreshed ownership suite. Style and twelve strict
+compilations pass. Retain the earlier fixture failures and strict compiler
+warning; use the closed report under `file-snapshot-flags-local-closed-*`.
+The fresh ten-operation/fault packet must pass main's complete byte and static
+packet review before a new Windows gate. Older failed candidates stay detached.
 The actual C journal gate remains open. Follow the main agent's VM handoff and
 prepared commands; do not repair/remount an earlier failed or diagnostic candidate
 or resume the remaining inputs without a reviewed diagnosis and new packet.

@@ -196,6 +196,9 @@ recovery_file_compile(struct ntfs_write_batch_recovery *owner, size_t ordinal,
 	uint64_t number;
 	size_t offset, slot;
 	uint16_t flags = packet->record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE;
+	uint16_t expected_flags = update->undo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD
+	    ? 0
+	    : NTFS_LOGFILE_RECORD_ADDING;
 	enum ntfs_result result;
 
 	offset = (size_t)update->cluster_index * NTFS_MST_STRIDE;
@@ -236,7 +239,7 @@ recovery_file_compile(struct ntfs_write_batch_recovery *owner, size_t ordinal,
 		    packet->record.lsn, home->after + offset, NTFS_WRITE_RECORD_BYTES);
 	}
 	if (update->redo_operation != NTFS_LOG_OP_INITIALIZE_FILE_RECORD ||
-	    update->redo.length != NTFS_WRITE_RECORD_BYTES || flags != NTFS_LOGFILE_RECORD_ADDING) {
+	    update->redo.length != NTFS_WRITE_RECORD_BYTES || flags != expected_flags) {
 		return NTFS_UNSUPPORTED;
 	}
 	result = recovery_logical_file(payload + update->redo.offset, number);

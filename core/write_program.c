@@ -274,15 +274,14 @@ program_file_compile(
 	input.attribute_flags = NTFS_WRITE_MFT_TARGET_FLAG;
 	input.lcns = (struct ntfs_logfile_buffer){lcn, sizeof(lcn)};
 	if (predecessor) {
-		/* Initialize is already used as a native full before-snapshot. Its
-		 * complete inverse is an experimental composition, requiring Windows
-		 * replay/undo acceptance before this program may reach the product. */
+		/* This snapshot has a real FILE inverse, so it does not carry ADDING.
+		 * Complete inverse composition still requires Windows replay/undo
+		 * acceptance before this program may reach the product. */
 		input.redo_operation = NTFS_LOG_OP_INITIALIZE_FILE_RECORD;
 		input.undo_operation = NTFS_LOG_OP_INITIALIZE_FILE_RECORD;
 		input.redo = input.undo =
 		    (struct ntfs_logfile_buffer){old, NTFS_WRITE_RECORD_BYTES};
-		result = program_update_encode(
-		    program, work, ordinal, NTFS_LOGFILE_RECORD_ADDING, &input);
+		result = program_update_encode(program, work, ordinal, 0, &input);
 		if (result != NTFS_OK) {
 			return result;
 		}

@@ -67,6 +67,13 @@ expected-byte fixture changes and diagram are original repository work. Static
 counterexamples remain distinct from observing a live native rejection branch
 or passing a fresh Windows recovery gate.
 
+Further exact-driver diagnosis inspects `NtfsCheckLogRecord`, LFS flag delivery
+and bounded operation-validation bytes for the full FILE snapshot. It establishes
+the refused combination of `ADDING` and Initialize FILE undo. The original C
+correction and tests express that interoperability contract without importing
+driver code or a generic native validation implementation. Static reviews and
+all Microsoft binary material remain ignored diagnostic artifacts.
+
 The app image picker, saved-bookmark commands and versioned VM CLI harness are
 original implementations. They create and positively restore genuine app-scope
 bookmarks through Apple's documented Foundation APIs; no bookmark or sandbox

@@ -228,6 +228,52 @@ correct client/transaction lifetime. A reused transaction key alone is not a
 stable transaction identity. Flag framing is separate from interpreting NTFS
 transaction state.
 
+### Flags and a real FILE undo
+
+The same exact driver supplies an operation-specific flag predicate in
+`NtfsCheckLogRecord`. Its LFS query context derives `ADDING` from common-header
+flag `0x0004`. For that context, an undo operation with bit 1 set in the driver's
+validation-class table is refused with diagnostic reason 53. The exact table
+entry for Initialize FILE (`0x02`) is `0x03`, so a real Initialize FILE undo
+cannot accompany `ADDING`. This is a packet-admission condition, separate from
+transaction outcome and the later correctness of replaying that FILE image.
+
+| Selected packet | Ordinary payloads | `ADDING` | This flag predicate |
+| --- | --- | --- | --- |
+| Initialize FILE / Initialize FILE snapshot | Complete before-image in both directions | Clear | Satisfied |
+| Initialize FILE / Initialize FILE snapshot | Complete before-image in both directions | Set | Refused, native reason 53 |
+| Initialize FILE / Noop initialization | Complete redo, empty ordinary undo | Set | Satisfied |
+
+![FILE snapshot and initialization flags](diagrams/file-snapshot-flags.svg)
+
+[Editable diagram source](diagrams/file-snapshot-flags.mmd).
+
+Independent static review checks 86 exact preceding C packets from ten connected
+operations. Fifteen full FILE snapshots carry the refused combination, including
+a snapshot in the candidate actually presented to Windows. Their spanning pages already
+satisfy the corrected LSN predicate. This proves another concrete packet defect;
+the aggregate mount event does not identify a live failure branch.
+
+The [program compiler](../../core/write_program.c) now emits full FILE snapshots
+without `ADDING`. The [fresh recovery owner](../../core/write_batch_restore.c)
+accepts that selected representation and refuses the old malformed combination
+before any write. The [program regression](../../tests/write_mutation.c) checks
+both snapshot and Initialize/Noop flags and their serialized common headers.
+The [ownership test](../../tests/write_batch_recovery_ownership.h) keeps exact
+FILE bytes and ownership while changing only snapshot flags for loser and winner
+states. General opcode classes and private driver structures remain unclaimed;
+compensation records have a separate inactive-undo contract described below.
+The independently authored [settled-checkpoint fixture](../../tests/write_checkpoint_execute_fixtures.py)
+also clears this flag for a full FILE inverse; synthetic histories are subject
+to the same native admission contract as compiler output.
+
+Fresh corrected C output passes all inspected packet-admission predicates for
+86 packets from ten connected operations, including fifteen complete FILE
+snapshots. The review binds exact complete-image bytes, corrected spanning LSNs
+and the same driver/class-table observation. It assumes the qualified client's
+byte-keyed OAT and transaction entries; it does not observe private live driver
+state or establish general native replay acceptance.
+
 ## NTFS update payload
 
 The NTFS update common prefix is 32 bytes. The stored form reserves one 8-byte

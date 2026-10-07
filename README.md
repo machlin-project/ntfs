@@ -109,8 +109,14 @@ packet LSN on every circular segment; all 198 sanitized suites, ten fresh
 operations and seven fault profiles pass. Windows still reports `Warning` on
 the first fresh complete-create candidate, with a matching error event and
 unchanged new FILE bytes; the other 27 inputs have not run. The exact detached
-failure image is retained and reviewed. See
-[the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
+failure image is retained and reviewed.
+
+The exact driver's packet validator also rejects full FILE undo snapshots
+carrying `ADDING`; the compiler and recovery owner now enforce the valid
+representation. Current local coverage is 198 passing suites, with selected-Xcode
+style and twelve strict compilations. A fresh native operation/recovery gate is
+pending. See
+[the current batch evidence](docs/ACCEPTANCE.md#private-ordinary-operation-image-harness)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 
 Two original, locked Windows test-disk captures now supply complete native clean

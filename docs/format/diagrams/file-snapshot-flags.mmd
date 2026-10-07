@@ -1,0 +1,10 @@
+flowchart LR
+    F["Selected FILE packet"] --> U{"Undo operation"}
+    U -->|Initialize FILE| S["Full before-image<br/>Real FILE undo"]
+    U -->|Noop| N["No ordinary undo payload"]
+    S --> Z["ADDING clear"]
+    S --> B["ADDING set"]
+    N --> A["ADDING set"]
+    Z --> V["This flag check passes"]
+    A --> V
+    B --> E["Native rejection<br/>Diagnostic reason 53"]

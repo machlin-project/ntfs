@@ -135,8 +135,9 @@ def ordinary_settled_at_end(source, compensated):
     snapshot = payload(INITIALIZE_FILE_OPERATION, bytes(before[:snapshot_bytes]),
         bytes(before[:snapshot_bytes]), inverse=INITIALIZE_FILE_OPERATION, target=True)
     changed = payload(INITIALIZE_FILE_OPERATION, bytes(after[:snapshot_bytes]), target=True)
+    # A complete FILE inverse must remain visible to native undo validation.
     updates = [(opened, tables.TABLE.size, ADDING_FLAG, 0, 0),
-               (snapshot, tables.TABLE.size + tables.TRANSACTION.size, ADDING_FLAG, 0, 0),
+               (snapshot, tables.TABLE.size + tables.TRANSACTION.size, 0, 0, 0),
                (changed, tables.TABLE.size + tables.TRANSACTION.size, ADDING_FLAG, lsn(1), lsn(1))]
     if compensated:
         empty_inverse = payload(0, inverse=COMPENSATION_OPERATION, target=True)

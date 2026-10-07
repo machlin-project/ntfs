@@ -136,6 +136,17 @@ allocated `$Repair` object. The next gate requires a reviewed contract diagnosis
 and a fresh packet. The test VM and UTM remain running; collection uses the
 existing QGA transport.
 
+Further exact-driver diagnosis proves the selected full FILE snapshot must
+clear `ADDING` when it carries Initialize FILE undo. The regression first fails
+on the previous C output. Compiler/recovery and independent checkpoint fixtures
+now agree on that representation; malformed flags still refuse before writes.
+The closing local report explicitly composes 198 passing suites from 191
+unaffected passes, six refreshed fixture suites and one refreshed ownership
+suite, with style and twelve strict core/test compilations. Preserve the earlier
+fixture and compiler failures. Review fresh connected C output against the
+inspected packet-admission predicates before transferring the new packet to
+Windows. Complete native replay and installed general mutation remain separate.
+
 Use the pinned standalone `ntfsrecover` only with an explicitly recorded scope.
 This binary takes `--transactions` without a count and refuses it with `--sync`.
 A clean selected-mode early return does not check new transactions. Historical

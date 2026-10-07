@@ -19,6 +19,8 @@ struct ntfs_write_program_update {
  * initialization, not logged metadata. Mirrors share their primary MFT target.
  * This experimental composition uses complete FILE Initialize images and INDX
  * nonresident images with native bitmap/deallocation operations. The full-image
+ * FILE snapshot carries both payloads without ADDING; an Initialize/Noop carries
+ * ADDING and no ordinary undo payload. The full-image
  * inverse composition has not received native Windows recovery qualification:
  * this is private transaction preparation, not device or FSKit admission.
  * The result owns all bytes after plan close. Only allocation/release callbacks

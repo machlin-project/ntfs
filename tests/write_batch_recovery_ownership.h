@@ -105,6 +105,7 @@ recovery_unowned_file(
 		}
 		assert(publication < source->commit);
 		step = &source->publication[publication];
+		record = (void *)(logical + source->oracle->restart.page_data_offset);
 		snapshot.redo_operation = snapshot.undo_operation =
 		    NTFS_LOG_OP_INITIALIZE_FILE_RECORD;
 		snapshot.target_attribute = original.target_attribute;
@@ -122,7 +123,7 @@ recovery_unowned_file(
 		assert(ntfs_logfile_update_encode(&snapshot, (uint8_t *)record + sizeof(*record),
 			   payload_bytes) == NTFS_OK);
 		ntfs_put_u32(record->data_bytes, measured);
-		ntfs_put_u16(record->flags, NTFS_LOGFILE_RECORD_ADDING);
+		ntfs_put_u16(record->flags, 0);
 		page = (void *)logical;
 		next = source->oracle->restart.page_data_offset + sizeof(*record) + measured;
 		next = (next + NTFS_WIRE_ALIGNMENT - 1) & ~(size_t)(NTFS_WIRE_ALIGNMENT - 1);
@@ -170,6 +171,82 @@ recovery_unowned_file(
 	recovery_source_close(source);
 	printf("PASS: complete false FILE predecessor refuses for both loser/winner: %s\n",
 	    initialized ? "bitmap-clear initialized slot" : "uninitialized allocated MFT tail");
+}
+
+static void
+recovery_snapshot_flags_refusal(const char *directory, const char *image_name)
+{
+	struct recovery_case *source;
+	struct test_case *test;
+	struct ntfs_write_batch_recovery *owner;
+	const struct ntfs_write_batch_publication *step;
+	struct ntfs_logfile_update update;
+	struct ntfs_disk_log_record *record;
+	uint8_t *logical, *encoded, *input;
+	size_t winner, publication, changed;
+	enum ntfs_result result;
+
+	source = recovery_source(directory, image_name, NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
+	test = source->test;
+	logical = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	encoded = malloc(NTFS_WRITE_CLUSTER_BYTES);
+	input = malloc(test->device.bytes);
+	assert(logical != NULL && encoded != NULL && input != NULL);
+	for (winner = 0; winner < 2; winner++) {
+		recovery_state(source, source->commit + winner, 0, false);
+		owner = NULL;
+		assert(ntfs_write_batch_recover_prepare(&test->backend, &owner) == NTFS_OK &&
+		    owner != NULL);
+		ntfs_write_batch_recovery_close(owner);
+		assert(test->device.live == 0 && test->device.writes == 0 &&
+		    test->device.barriers == 0);
+		changed = 0;
+		for (publication = 0; publication < source->commit; publication++) {
+			step = &source->publication[publication];
+			if (step->stage != NTFS_WRITE_EXECUTION_PREPARE_COPY &&
+			    step->stage != NTFS_WRITE_EXECUTION_PREPARE_HOME) {
+				continue;
+			}
+			memcpy(logical, test->device.visible + step->physical,
+			    NTFS_WRITE_CLUSTER_BYTES);
+			assert(ntfs_fixup(logical, NTFS_WRITE_CLUSTER_BYTES, "RCRD") == NTFS_OK);
+			record = (void *)(logical + source->oracle->restart.page_data_offset);
+			if ((ntfs_u16(record->flags) & NTFS_LOGFILE_RECORD_MULTI_PAGE) != 0 ||
+			    ntfs_u32(record->type) != NTFS_LOGFILE_RECORD_UPDATE) {
+				continue;
+			}
+			assert(ntfs_logfile_update_decode((uint8_t *)record + sizeof(*record),
+				   ntfs_u32(record->data_bytes), &update) == NTFS_OK);
+			if (update.redo_operation != NTFS_LOG_OP_INITIALIZE_FILE_RECORD ||
+			    update.undo_operation != NTFS_LOG_OP_INITIALIZE_FILE_RECORD) {
+				continue;
+			}
+			assert(ntfs_u16(record->flags) == 0 &&
+			    update.undo.length == NTFS_WRITE_RECORD_BYTES);
+			/* The snapshot and ownership stay exact; only native flag admission
+			 * is violated. Both journal copies and circular homes are checked. */
+			ntfs_put_u16(record->flags, NTFS_LOGFILE_RECORD_ADDING);
+			assert(ntfs_record_protect(logical, NTFS_WRITE_CLUSTER_BYTES, encoded,
+				   NTFS_WRITE_CLUSTER_BYTES) == NTFS_OK);
+			memcpy(test->device.visible + step->physical, encoded,
+			    NTFS_WRITE_CLUSTER_BYTES);
+			changed++;
+		}
+		assert(changed != 0);
+		memcpy(test->device.durable, test->device.visible, test->device.bytes);
+		memcpy(input, test->device.visible, test->device.bytes);
+		owner = (void *)(uintptr_t)1;
+		result = ntfs_write_batch_recover_prepare(&test->backend, &owner);
+		assert(result == NTFS_UNSUPPORTED && owner == NULL && test->device.live == 0 &&
+		    test->device.writes == 0 && test->device.barriers == 0 &&
+		    memcmp(input, test->device.visible, test->device.bytes) == 0 &&
+		    memcmp(input, test->device.durable, test->device.bytes) == 0);
+	}
+	free(input);
+	free(encoded);
+	free(logical);
+	recovery_source_close(source);
+	puts("PASS: FILE snapshots with ADDING refuse before writes for loser and winner");
 }
 
 static enum ntfs_result
@@ -285,5 +362,6 @@ batch_recovery_ownership_tests(const char *directory, const char *output)
 	recovery_output_begin(output);
 	recovery_unowned_file(directory, "source.img", TEST_DEFAULT, true);
 	recovery_unowned_file(directory, "large-unused-mft-tail-stale.img", TEST_MFT_GROWTH, false);
+	recovery_snapshot_flags_refusal(directory, "source.img");
 	free(recovery_output);
 }

@@ -203,6 +203,36 @@ Evidence is under `windows-ntfs-binary-*`, `windows-ntfs-public-symbols-*`,
 `windows-ntfs-contract-review-*`, `continuation-lsn-*` and
 `windows-continuation-lsn-*` in `artifacts/overwrite/`.
 
+The exact driver's `NtfsCheckLogRecord` supplies another concrete admission
+condition: `ADDING` with Initialize FILE undo is refused with diagnostic reason
+53. Main binds fifteen offending full FILE snapshots among 86 actual C packets
+to that predicate, including the candidate actually presented to Windows. The
+regression fails on the preceding writer. The compiler now clears `ADDING` for
+Initialize/Initialize snapshots while preserving it for Initialize/Noop. Fresh
+recovery accepts the selected representation and refuses the malformed flag for
+both loser and winner before any write. Independent settled-checkpoint fixtures
+now use the same valid snapshot flags; ownership-refusal fixtures continue to
+test stale storage independently of flag admission.
+
+Current local coverage is 198 passing fatal-ASan/UBSan suites: 191 unaffected
+passes from the full run, six refreshed shared-checkpoint-fixture suites and
+one refreshed ownership suite. Selected-Xcode style and twelve strict changed
+core/test compilations pass. Earlier fixture failures and a strict test compiler
+warning remain retained separately. A fresh connected operation/fault packet
+is required for Windows; this static admission proof does not establish complete
+replay semantics or which live branch caused the preceding aggregate warning.
+Ten fresh current-C operations and five intermediate checkpoints pass complete
+byte/content/time, validation and fresh zero-write recovery checks. Main's
+independent review binds all ten postimages and all 86 logged packets; every
+inspected native admission predicate passes, including the fifteen full FILE
+snapshots and corrected spanning-page LSNs. Actual Windows replay remains pending.
+Seven fresh actual-C create/fault profiles also pass independent writer/recovery
+byte oracles, full validation and a zero-write second recovery. Main reviews every
+retained event against the fresh 32-publication/65-event plan.
+Evidence and main reviews are under `windows-ntfs-validator-functions-*`,
+`windows-ntfs-snapshot-contract-*` and `file-snapshot-flags-*` in
+`artifacts/overwrite/`.
+
 The pinned standalone NTFS-3G recovery utility is built separately and remains
 outside the product. Four initial range calls were CLI usage failures; four clean
 selected-mode calls return without checking the newly authored transactions.

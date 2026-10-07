@@ -1,6 +1,8 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
 #include "write_batch_execute.h"
+#include "write_history.h"
+#include <ntfs/validate.h>
 #include <ntfs/record.h>
 
 struct ntfs_write_batch_execution {

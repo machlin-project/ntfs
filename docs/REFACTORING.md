@@ -22,19 +22,51 @@ bounded journal/history/recovery interfaces, retain their existing local policy.
 No allocator, operation governor or native transport policy is combined.
 
 All fourteen affected writer/encoder suites pass with fatal ASan/UBSan; their
-existing byte, fault, lifetime and alias oracles are retained. This is the first
-cleanup unit, not completed driver refactoring. Complete-program/private-header
-separation and the full connected regression follow; FSKit extraction remains a
-separate native review. Evidence is in
+existing byte, fault, lifetime and alias oracles are retained. Evidence is in
 `artifacts/overwrite/refactor-pointer-ranges-focused-20261007/`.
+
+The complete program is now separated into
+[metadata compilation/application](../core/write_program.c) and
+[packet, original-binding and compensation composition](../core/write_program_packets.c).
+The [private storage contract](../core/write_program_internal.h) preserves one
+retained owner, copied payload lifetime and exact accounting. Internal compiler
+and packet helpers now identify their owning object and action.
+
+The former combined writer header is replaced by component contracts for
+metadata, journal serialization, replay, retained history, overlay validation,
+physical execution, transaction preparation and recovery. The native adapter
+includes only the [image-owner entry points](../core/write_owner.h) and
+[durable reports](../core/write_status.h); it receives no private FILE/journal
+workspace layouts through that boundary. The qualified family's packet-size
+ceiling belongs to replay and is reused by retained history; the original values,
+structure fields and stage ordering are preserved. These are implementation
+boundaries, not expanded operation or recovery admission.
+
+The connected cleanup passes all 181 fatal-ASan/UBSan suites, selected-Xcode
+formatting, 106 freestanding objects (53 core sources per architecture) under
+the 2-KiB frame ceiling, and eleven independent private-header syntax checks.
+FSKit host components remain 63 PASS / 13 explicit runtime-SDK SKIP / 0 FAIL.
+The three actual regular-image postimages are byte-identical to the preceding
+physical-execution checkpoint. Main checks unchanged program function bodies,
+structure fields, prototypes, stage order and policy expressions independently.
+The updated diagram is rendered and visually reviewed. Initial missing budget
+and native wire includes, plus a failed header-check wrapper invocation, remain
+retained separately from their corrected evidence. Reports and the consolidated
+review are in `artifacts/overwrite/refactor-write-components-*` directories.
+
+Mutation-construction review, broader naming/cleanup work and FSKit extraction
+remain in the plan; this does not complete driver refactoring. Native lifecycle,
+locking, authorization, transfers and reply code are unchanged, so this cleanup
+adds no installed VM acceptance. Functional recovery/write admission retains
+its original native gate.
 
 ## Concrete findings
 
 | Area | Current finding | Proposed change |
 | --- | --- | --- |
 | Pointer/range checks | Ten modules now use one checked-arithmetic helper; remaining local policies differ in zero-length and NULL admission. | Preserve explicit caller-specific NULL/output rules and audit each further conversion. |
-| Complete program | `write_program.c` combines retained storage, FILE/INDX compilation, private application, OAT/transaction serialization, source-packet binding and compensation placement. | Separate metadata compilation/application from packet binding and page composition behind one private owner. Keep public opaque getters and lifetime unchanged. |
-| Writer contracts | `write_internal.h` collects overwrite metadata, journal layout, history, replay, execution, recovery and owner entry points. Most modules receive more declarations than they use. | Split private contracts by owning component and include only the required interfaces. Preserve wire structures and public declarations. |
+| Complete program | Metadata compilation/application and packet/compensation composition now have separate modules behind one private retained owner. | Keep public opaque getters, copied byte lifetime and exact accounting at this boundary when adding new families. |
+| Writer contracts | Component contracts replace the combined header; the native image-owner contract exposes entry points and durable reports. | Include the owning interfaces explicitly and preserve structure fields, policy values and public declarations. |
 | Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |
 | Mutation storage | Record construction, attribute replacement and stream serialization live together in `write_record.c`; directory verification and tree reconstruction live together in `write_directory.c`. | Separate byte construction from namespace/storage algorithms where this removes a real dependency. Keep complete mutation ownership and collation in their existing semantic layer. |
 | Memory and cleanup | Program, mutation, bitmap, replay and volume owners have distinct accounting, reservation and lifetime rules, with repeated cleanup patterns. | Make local ownership/cleanup conventions uniform. Share byte helpers, not an allocator framework that would erase different governors or change callback order. |

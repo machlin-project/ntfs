@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_journal.h"
 #include <ntfs/record.h>
 
 enum {

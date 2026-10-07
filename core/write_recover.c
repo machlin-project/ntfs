@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_recover.h"
+#include "write_overlay.h"
 #include <ntfs/record.h>
 
 enum { RECOVER_ORIGIN_PACKETS = 2 };

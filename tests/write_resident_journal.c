@@ -1,5 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_transaction.h"
+#include "write_overlay.h"
+#include "write_owner.h"
 #include "fuzz_device.h"
 #include "../adapters/posix/image.h"
 #include <ntfs/record.h>

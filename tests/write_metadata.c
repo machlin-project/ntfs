@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_metadata.h"
 #include "fuzz_device.h"
 #include <assert.h>
 #include <stdio.h>

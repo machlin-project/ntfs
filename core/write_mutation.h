@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #ifndef MACHLIN_NTFS_WRITE_MUTATION_H
 #define MACHLIN_NTFS_WRITE_MUTATION_H
-#include "write_internal.h"
+#include "write_execute.h"
 
 struct ntfs_write_name {
 	uint64_t parent_reference;

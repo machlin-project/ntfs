@@ -1,5 +1,9 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_execute.h"
+#include "write_transaction.h"
+#include "write_recover.h"
+#include "write_overlay.h"
+#include "write_owner.h"
 #include "fuzz_device.h"
 #include "image_fault.h"
 #include "../adapters/posix/overwrite_image.h"

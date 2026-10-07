@@ -227,9 +227,29 @@ output aliases and callback order are unchanged; stricter local policies remain
 separate. Fourteen affected fatal-ASan/UBSan suites pass. The three regular-image
 postimages agree with the preceding physical-execution checkpoint. This is focused
 cleanup evidence, not a new write capability or completed driver refactoring.
-The [current plan](REFACTORING.md#applied-cleanup) retains C module/header separation
-and native FSKit review. Reports are under
+The complete program now separates metadata compilation/application from
+packet/original-binding/compensation composition behind one retained private
+owner. Separate component headers preserve the original structure fields,
+policy values and stage ordering. The native adapter includes only the
+image-owner entry points and durable reports; no lifecycle, locking, permission
+or write-dispatch code changes. The [current plan](REFACTORING.md#applied-cleanup)
+retains further mutation-construction/cleanup and native FSKit review. Reports are under
 `artifacts/overwrite/refactor-pointer-ranges-focused-20261007/`.
+
+The connected component separation passes all 181 fatal-ASan/UBSan Meson suites,
+selected-Xcode formatting, eleven standalone private-header compiler checks and
+106 freestanding arm64/x86_64 objects under the same 2-KiB frame ceiling.
+Host FSKit remains 63 PASS / 13 runtime-SDK SKIP / 0 FAIL. Main independently
+checks 26 preserved program function bodies, 24 unchanged private structure
+layouts, 23 existing writer prototypes, durable stage order and original policy
+expressions. The actual postimages remain byte-identical to the preceding
+physical checkpoint. Separate raw runs retain missing budget/wire dependencies
+and a header-check wrapper failure; already passing C/header/object evidence is
+explicitly reused after the native include-only correction. The program diagram
+and documentation links pass their separate render/review checks. Reports are
+in `artifacts/overwrite/refactor-write-components-*`; the consolidated result is
+`refactor-write-components-main-review-20261007/result.json`. No VM or installed
+driver operation is added.
 
 ## Resident ordinary-file overwrite continuation
 

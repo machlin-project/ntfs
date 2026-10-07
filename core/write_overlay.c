@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_overlay.h"
+#include "write_history.h"
 #include <ntfs/validate.h>
 
 struct write_overlay {

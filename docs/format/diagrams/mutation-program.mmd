@@ -1,10 +1,10 @@
 flowchart TB
     O["Original storage ownership\nMFT initialization / map · index map / bitmap"] --> S["Sealed ordinary mutation\nComplete regions + logical owners + provenance"]
-    S --> C["Private operation compiler\nCopied before / after images + ownership"]
+    S --> C["Private metadata compiler / application\nOne retained program owner · copied images"]
     C --> F["FILE images\nSnapshot · replacement · retirement"]
     C --> I["INDX images\nWhole-buffer hypothesis"]
     C --> B["Bitmap ranges\nSet / clear inverses"]
-    F --> P["Complete generated packet program\nOAT opens → metadata updates → Forget"]
+    F --> P["Journal packet composition\nOAT opens → metadata updates → Forget"]
     I --> P
     B --> P
     P --> J["Owned protected LFS pages\nExplicit proved floor / tail / successor"]

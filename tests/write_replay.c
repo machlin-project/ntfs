@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_replay.h"
 #include "fuzz_device.h"
 #include <ntfs/record.h>
 #include <assert.h>

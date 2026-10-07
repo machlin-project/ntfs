@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
-#include "write_internal.h"
+#include "write_replay.h"
 #include <ntfs/record.h>
 
 enum {
@@ -549,8 +549,8 @@ prepare(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
 			return NTFS_RANGE;
 		}
 	}
-	if (input->resident.bytes > NTFS_WRITE_HISTORY_PACKET_BYTES ||
-	    input->resident_compensation.bytes > NTFS_WRITE_HISTORY_PACKET_BYTES) {
+	if (input->resident.bytes > NTFS_WRITE_REPLAY_PACKET_BYTES ||
+	    input->resident_compensation.bytes > NTFS_WRITE_REPLAY_PACKET_BYTES) {
 		return NTFS_RANGE;
 	}
 	result = decode_packets(input, work, fourth);

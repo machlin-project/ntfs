@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
-#include "write_program.h"
+#include "write_program_internal.h"
 #include "write_bitmap.h"
 #include "write_retirement.h"
 #include "write_mutation_internal.h"
@@ -13,30 +13,8 @@ enum {
 	PROGRAM_FILE_SLOTS = NTFS_WRITE_CLUSTER_BYTES / NTFS_WRITE_RECORD_BYTES,
 	PROGRAM_INITIAL_UPDATES = 16,
 	PROGRAM_FILE_USA_COUNT = NTFS_WRITE_RECORD_BYTES / NTFS_MST_STRIDE + 1,
-	PROGRAM_OPEN_PAYLOAD_BYTES = sizeof(struct ntfs_disk_log_update_storage) +
-	    sizeof(struct ntfs_disk_log_open_attribute) +
-	    NTFS_WRITE_MUTATION_TARGET_NAME_UNITS * sizeof(uint16_t),
 	PROGRAM_PAYLOAD_BYTES =
 	    sizeof(struct ntfs_disk_log_update_storage) + 2 * NTFS_WRITE_CLUSTER_BYTES
-};
-
-struct program_target {
-	struct ntfs_write_mutation_target identity;
-	uint16_t key, flags;
-};
-
-struct program_region {
-	struct ntfs_write_mutation_region view;
-	size_t target;
-	uint8_t before[NTFS_WRITE_CLUSTER_BYTES], after[NTFS_WRITE_CLUSTER_BYTES];
-};
-
-struct ntfs_write_program {
-	struct ntfs_environment environment;
-	size_t live, regions, targets, count, capacity;
-	struct program_region *region;
-	struct program_target *target;
-	struct ntfs_write_program_update *update;
 };
 
 struct program_workspace {
@@ -44,14 +22,8 @@ struct program_workspace {
 	uint8_t payload[PROGRAM_PAYLOAD_BYTES];
 };
 
-struct packet_workspace {
-	struct ntfs_write_batch_packet *packet;
-	uint8_t *payload;
-	size_t count, packet_bytes, payload_bytes, stride;
-};
-
 static void *
-allocate(struct ntfs_write_program *program, size_t bytes)
+program_allocate(struct ntfs_write_program *program, size_t bytes)
 {
 	void *memory;
 
@@ -67,7 +39,7 @@ allocate(struct ntfs_write_program *program, size_t bytes)
 }
 
 static void
-release(struct ntfs_write_program *program, void *memory, size_t bytes)
+program_release(struct ntfs_write_program *program, void *memory, size_t bytes)
 {
 	if (memory != NULL) {
 		program->environment.release(program->environment.context, memory, bytes);
@@ -86,24 +58,25 @@ ntfs_write_program_close(struct ntfs_write_program *program)
 	}
 	environment = program->environment;
 	for (index = 0; index < program->count; index++) {
-		release(program, (void *)program->update[index].payload.data,
+		program_release(program, (void *)program->update[index].payload.data,
 		    program->update[index].payload.bytes);
 	}
-	release(program, program->update, program->capacity * sizeof(*program->update));
-	release(program, program->target, program->regions * sizeof(*program->target));
-	release(program, program->region, program->regions * sizeof(*program->region));
+	program_release(program, program->update, program->capacity * sizeof(*program->update));
+	program_release(program, program->target, program->regions * sizeof(*program->target));
+	program_release(program, program->region, program->regions * sizeof(*program->region));
 	environment.release(environment.context, program, sizeof(*program));
 }
 
 static bool
-same_target(const struct ntfs_write_mutation_target *a, const struct ntfs_write_mutation_target *b)
+program_targets_equal(
+    const struct ntfs_write_mutation_target *a, const struct ntfs_write_mutation_target *b)
 {
 	return a->reference == b->reference && a->attribute_type == b->attribute_type &&
 	    a->name_count == b->name_count && ntfs_equal(a->name, b->name, sizeof(a->name));
 }
 
 static enum ntfs_result
-target(struct ntfs_write_program *program, struct program_region *region)
+program_target_bind(struct ntfs_write_program *program, struct program_region *region)
 {
 	const struct ntfs_write_mutation_target *identity = &region->view.target;
 	struct program_target *entry;
@@ -128,7 +101,7 @@ target(struct ntfs_write_program *program, struct program_region *region)
 		return NTFS_UNSUPPORTED;
 	}
 	for (index = 0; index < program->targets; index++) {
-		if (same_target(identity, &program->target[index].identity)) {
+		if (program_targets_equal(identity, &program->target[index].identity)) {
 			region->target = index;
 			return NTFS_OK;
 		}
@@ -149,8 +122,8 @@ target(struct ntfs_write_program *program, struct program_region *region)
 }
 
 static enum ntfs_result
-append(struct ntfs_write_program *program, size_t region, uint16_t flags, const void *payload,
-    size_t bytes)
+program_update_append(struct ntfs_write_program *program, size_t region, uint16_t flags,
+    const void *payload, size_t bytes)
 {
 	struct ntfs_write_program_update *entries, *entry;
 	void *copy;
@@ -166,16 +139,16 @@ append(struct ntfs_write_program *program, size_t region, uint16_t flags, const 
 		if (capacity > NTFS_WRITE_BATCH_MAX_PACKETS) {
 			capacity = NTFS_WRITE_BATCH_MAX_PACKETS;
 		}
-		entries = allocate(program, capacity * sizeof(*entries));
+		entries = program_allocate(program, capacity * sizeof(*entries));
 		if (entries == NULL) {
 			return NTFS_NO_MEMORY;
 		}
 		ntfs_copy(entries, program->update, program->count * sizeof(*entries));
-		release(program, program->update, program->capacity * sizeof(*entries));
+		program_release(program, program->update, program->capacity * sizeof(*entries));
 		program->update = entries;
 		program->capacity = capacity;
 	}
-	copy = allocate(program, bytes);
+	copy = program_allocate(program, bytes);
 	if (copy == NULL) {
 		return NTFS_NO_MEMORY;
 	}
@@ -188,50 +161,22 @@ append(struct ntfs_write_program *program, size_t region, uint16_t flags, const 
 }
 
 static enum ntfs_result
-native_payload(
-    const struct ntfs_logfile_update_input *input, void *memory, size_t capacity, uint32_t *bytes)
-{
-	struct ntfs_disk_log_update_storage *stored = memory;
-	enum ntfs_result result;
-
-	result = ntfs_logfile_update_measure(input, bytes);
-	if (result == NTFS_OK) {
-		result = ntfs_logfile_update_encode(input, memory, capacity);
-	}
-	if (result != NTFS_OK) {
-		return result;
-	}
-	if (input->redo.bytes == 0) {
-		ntfs_put_u16(stored->header.redo_offset, sizeof(*stored));
-	}
-	if (input->undo.bytes == 0) {
-		ntfs_put_u16(stored->header.undo_offset, (uint16_t)*bytes);
-	}
-	if (input->undo_operation == NTFS_LOG_OP_COMPENSATION && input->redo.bytes != 0) {
-		ntfs_put_u16(stored->header.undo_bytes, (uint16_t)input->redo.bytes);
-	}
-	if (input->lcns.bytes == 0) {
-		ntfs_put_u64(stored->first_lcn, UINT64_MAX);
-	}
-	return NTFS_OK;
-}
-
-static enum ntfs_result
-emit(struct ntfs_write_program *program, struct program_workspace *work, size_t region,
-    uint16_t flags, const struct ntfs_logfile_update_input *input)
+program_update_encode(struct ntfs_write_program *program, struct program_workspace *work,
+    size_t region, uint16_t flags, const struct ntfs_logfile_update_input *input)
 {
 	uint32_t bytes;
 	enum ntfs_result result;
 
-	result = native_payload(input, work->payload, sizeof(work->payload), &bytes);
+	result =
+	    ntfs_write_program_payload_encode(input, work->payload, sizeof(work->payload), &bytes);
 	if (result == NTFS_OK) {
-		result = append(program, region, flags, work->payload, bytes);
+		result = program_update_append(program, region, flags, work->payload, bytes);
 	}
 	return result;
 }
 
 static bool
-same_file(const uint8_t *before, const uint8_t *after)
+program_file_bytes_equal(const uint8_t *before, const uint8_t *after)
 {
 	const struct ntfs_disk_record *header = (const void *)before;
 	size_t first = ntfs_u16(header->mst.usa_offset);
@@ -272,7 +217,7 @@ logical_file(const void *record)
 }
 
 static enum ntfs_result
-file_record(
+program_file_compile(
     struct ntfs_write_program *program, struct program_workspace *work, size_t ordinal, size_t slot)
 {
 	const struct program_region *region = &program->region[ordinal];
@@ -318,7 +263,7 @@ file_record(
 		if (result != NTFS_OK) {
 			return result;
 		}
-		if (same_file(old, new)) {
+		if (program_file_bytes_equal(old, new)) {
 			return NTFS_OK;
 		}
 	}
@@ -337,7 +282,8 @@ file_record(
 		input.undo_operation = NTFS_LOG_OP_INITIALIZE_FILE_RECORD;
 		input.redo = input.undo =
 		    (struct ntfs_logfile_buffer){old, NTFS_WRITE_RECORD_BYTES};
-		result = emit(program, work, ordinal, NTFS_LOGFILE_RECORD_ADDING, &input);
+		result = program_update_encode(
+		    program, work, ordinal, NTFS_LOGFILE_RECORD_ADDING, &input);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -350,14 +296,15 @@ file_record(
 		ntfs_copy(work->payload, old, NTFS_WRITE_RECORD_BYTES);
 		ntfs_put_u16(expected->sequence, generation == 0 ? 1 : generation);
 		ntfs_put_u16(expected->flags, 0);
-		if (!same_file(work->payload, new)) {
+		if (!program_file_bytes_equal(work->payload, new)) {
 			return NTFS_UNSUPPORTED;
 		}
 		input.redo_operation = NTFS_LOG_OP_DEALLOCATE_FILE_RECORD;
 		input.undo_operation = NTFS_LOG_OP_INITIALIZE_FILE_RECORD;
 		input.redo = (struct ntfs_logfile_buffer){0};
 		input.undo = (struct ntfs_logfile_buffer){old, NTFS_WRITE_RETIREMENT_PREFIX_BYTES};
-		return emit(program, work, ordinal, NTFS_LOGFILE_RECORD_DELETING, &input);
+		return program_update_encode(
+		    program, work, ordinal, NTFS_LOGFILE_RECORD_DELETING, &input);
 	}
 	if (!predecessor) {
 		/* Retain the new-slot inverse before initialization, so every complete
@@ -367,7 +314,8 @@ file_record(
 		input.undo_operation = NTFS_LOG_OP_DEALLOCATE_FILE_RECORD;
 		input.redo = (struct ntfs_logfile_buffer){0};
 		input.undo = (struct ntfs_logfile_buffer){empty, sizeof(empty)};
-		result = emit(program, work, ordinal, NTFS_LOGFILE_RECORD_DELETING, &input);
+		result = program_update_encode(
+		    program, work, ordinal, NTFS_LOGFILE_RECORD_DELETING, &input);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -376,11 +324,12 @@ file_record(
 	input.undo_operation = NTFS_LOG_OP_NOOP;
 	input.redo = (struct ntfs_logfile_buffer){new, NTFS_WRITE_RECORD_BYTES};
 	input.undo = (struct ntfs_logfile_buffer){0};
-	return emit(program, work, ordinal, NTFS_LOGFILE_RECORD_ADDING, &input);
+	return program_update_encode(program, work, ordinal, NTFS_LOGFILE_RECORD_ADDING, &input);
 }
 
 static enum ntfs_result
-compile_region(struct ntfs_write_program *program, struct program_workspace *work, size_t ordinal)
+program_region_compile(
+    struct ntfs_write_program *program, struct program_workspace *work, size_t ordinal)
 {
 	const struct program_region *region = &program->region[ordinal];
 	struct ntfs_write_bitmap_program *bitmap = NULL;
@@ -399,14 +348,15 @@ compile_region(struct ntfs_write_program *program, struct program_workspace *wor
 		for (index = 0;
 		    result == NTFS_OK && index < ntfs_write_bitmap_program_count(bitmap); index++) {
 			payload = ntfs_write_bitmap_program_get(bitmap, index);
-			result = append(program, ordinal, 0, payload->data, payload->bytes);
+			result = program_update_append(
+			    program, ordinal, 0, payload->data, payload->bytes);
 		}
 		ntfs_write_bitmap_program_close(bitmap);
 		return result;
 	}
 	if (region->view.kind == NTFS_WRITE_MUTATION_FILE) {
 		for (index = 0; result == NTFS_OK && index < PROGRAM_FILE_SLOTS; index++) {
-			result = file_record(program, work, ordinal, index);
+			result = program_file_compile(program, work, ordinal, index);
 		}
 		return result;
 	}
@@ -434,7 +384,7 @@ compile_region(struct ntfs_write_program *program, struct program_workspace *wor
 	input.attribute_flags = PROGRAM_INDEX_TARGET_FLAG;
 	input.lcns = (struct ntfs_logfile_buffer){lcn, sizeof(lcn)};
 	input.redo = (struct ntfs_logfile_buffer){work->after, NTFS_WRITE_CLUSTER_BYTES};
-	return emit(
+	return program_update_encode(
 	    program, work, ordinal, input.undo.bytes == 0 ? NTFS_LOGFILE_RECORD_ADDING : 0, &input);
 }
 
@@ -483,9 +433,9 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 	program->environment = *source;
 	program->live = sizeof(*program);
 	program->regions = count;
-	program->region = allocate(program, count * sizeof(*program->region));
-	program->target = allocate(program, count * sizeof(*program->target));
-	work = allocate(program, sizeof(*work));
+	program->region = program_allocate(program, count * sizeof(*program->region));
+	program->target = program_allocate(program, count * sizeof(*program->target));
+	work = program_allocate(program, sizeof(*work));
 	if (program->region == NULL || program->target == NULL || work == NULL) {
 		result = NTFS_NO_MEMORY;
 		goto done;
@@ -504,7 +454,7 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 		ntfs_copy(program->region[index].after, region.after, region.bytes);
 		program->region[index].view.before = program->region[index].before;
 		program->region[index].view.after = program->region[index].after;
-		result = target(program, &program->region[index]);
+		result = program_target_bind(program, &program->region[index]);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -527,7 +477,7 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 		if (selected == count) {
 			break;
 		}
-		result = compile_region(program, work, selected);
+		result = program_region_compile(program, work, selected);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -544,7 +494,7 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 			    (pass == 0 ? NTFS_WRITE_MUTATION_INDEX : NTFS_WRITE_MUTATION_BITMAP)) {
 				continue;
 			}
-			result = compile_region(program, work, index);
+			result = program_region_compile(program, work, index);
 			if (result != NTFS_OK) {
 				goto done;
 			}
@@ -552,7 +502,7 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 	}
 	result = program->count == 0 ? NTFS_UNSUPPORTED : NTFS_OK;
 done:
-	release(program, work, sizeof(*work));
+	program_release(program, work, sizeof(*work));
 	if (result != NTFS_OK) {
 		ntfs_write_program_close(program);
 		return result;
@@ -717,399 +667,4 @@ ntfs_write_program_apply(const struct ntfs_write_program *program, size_t index,
 	ntfs_copy(&header->mst, payload + span.offset, span.length);
 	ntfs_put_u64(header->lsn, lsn);
 	return NTFS_OK;
-}
-
-static enum ntfs_result
-packets_allocate(const struct ntfs_environment *source, size_t count, size_t stride,
-    struct packet_workspace *work)
-{
-	if (count == 0 || count > NTFS_WRITE_BATCH_MAX_PACKETS ||
-	    count > SIZE_MAX / sizeof(*work->packet) || stride == 0 || count > SIZE_MAX / stride) {
-		return NTFS_RANGE;
-	}
-	work->count = count;
-	work->packet_bytes = count * sizeof(*work->packet);
-	work->stride = stride;
-	work->payload_bytes = count * stride;
-	if (work->packet_bytes > NTFS_DEFAULT_MAX_LIVE_BYTES ||
-	    work->payload_bytes > NTFS_DEFAULT_MAX_LIVE_BYTES - work->packet_bytes) {
-		return NTFS_RANGE;
-	}
-	work->packet = source->allocate(source->context, work->packet_bytes);
-	work->payload = source->allocate(source->context, work->payload_bytes);
-	if (work->packet == NULL || work->payload == NULL) {
-		return NTFS_NO_MEMORY;
-	}
-	ntfs_zero(work->packet, work->packet_bytes);
-	ntfs_zero(work->payload, work->payload_bytes);
-	return NTFS_OK;
-}
-
-static void
-packets_release(const struct ntfs_environment *source, struct packet_workspace *work)
-{
-	if (work->packet != NULL) {
-		source->release(source->context, work->packet, work->packet_bytes);
-	}
-	if (work->payload != NULL) {
-		source->release(source->context, work->payload, work->payload_bytes);
-	}
-}
-
-static enum ntfs_result
-packet_update(struct packet_workspace *work, size_t ordinal,
-    const struct ntfs_logfile_update_input *update, uint16_t sequence, uint32_t transaction,
-    uint16_t flags, size_t previous, size_t undo)
-{
-	struct ntfs_write_batch_packet *packet = &work->packet[ordinal];
-	uint8_t *payload = work->payload + ordinal * work->stride;
-	uint32_t bytes;
-	enum ntfs_result result;
-
-	result = native_payload(update, payload, work->stride, &bytes);
-	if (result != NTFS_OK) {
-		return result;
-	}
-	packet->record = (struct ntfs_logfile_record){0};
-	packet->record.type = NTFS_LOGFILE_RECORD_UPDATE;
-	packet->record.client_sequence = sequence;
-	packet->record.transaction = transaction;
-	packet->record.flags = flags;
-	packet->record.data =
-	    (struct ntfs_logfile_span){sizeof(struct ntfs_disk_log_record), bytes};
-	packet->payload = (struct ntfs_logfile_buffer){payload, bytes};
-	packet->previous = previous;
-	packet->undo_next = undo;
-	return NTFS_OK;
-}
-
-static enum ntfs_result
-pages_admit(const struct ntfs_environment *source, const struct ntfs_write_program *program,
-    const struct ntfs_logfile_client *client, const struct ntfs_write_batch_pages_input *input,
-    struct ntfs_write_batch_pages **out)
-{
-	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
-	    (program != NULL && !ntfs_write_program_output_separate(program, out, sizeof(*out))) ||
-	    (source != NULL &&
-		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out))) ||
-	    (client != NULL &&
-		!ntfs_pointer_ranges_separate(client, sizeof(*client), out, sizeof(*out))) ||
-	    (input != NULL &&
-		!ntfs_pointer_ranges_separate(input, sizeof(*input), out, sizeof(*out)))) {
-		return NTFS_INVALID;
-	}
-	*out = NULL;
-	if (program == NULL || source == NULL || input == NULL || client == NULL ||
-	    source->api_version != NTFS_API_VERSION || source->allocate == NULL ||
-	    source->release == NULL || input->packet != NULL || input->packets != 0 ||
-	    input->restart.client_count != 1 || input->restart.in_use_head != 0 ||
-	    client->oldest_lsn != input->floor_lsn || client->restart_lsn > input->tail_lsn ||
-	    client->name_length != sizeof("NTFS") - 1 || client->name[0] != 'N' ||
-	    client->name[1] != 'T' || client->name[2] != 'F' || client->name[3] != 'S') {
-		return NTFS_INVALID;
-	}
-	return NTFS_OK;
-}
-
-enum ntfs_result
-ntfs_write_program_pages_prepare(const struct ntfs_environment *source,
-    const struct ntfs_write_program *program, const struct ntfs_logfile_client *client,
-    const struct ntfs_write_batch_pages_input *input, struct ntfs_write_batch_pages **out)
-{
-	struct packet_workspace work = {0};
-	struct ntfs_write_batch_pages_input placement;
-	struct ntfs_write_batch_pages *draft = NULL;
-	struct ntfs_logfile_update_input update = {0};
-	struct ntfs_disk_log_open_attribute entry;
-	struct ntfs_disk_log_update *wire;
-	const struct program_target *identity;
-	struct ntfs_write_batch_packet *packet;
-	uint8_t name[NTFS_WRITE_MUTATION_TARGET_NAME_UNITS * sizeof(uint16_t)];
-	uint16_t sequence;
-	uint64_t predecessor;
-	size_t index, ordinal, unit;
-	enum ntfs_result result;
-
-	result = pages_admit(source, program, client, input, out);
-	if (result != NTFS_OK) {
-		return result;
-	}
-	/* Client sequence comes from the exact selected owner, not an OAT key.
-	 * It is carried in this private descriptor's selected restart client. */
-	sequence = client->sequence;
-	result = packets_allocate(
-	    source, program->targets + program->count + 1, PROGRAM_OPEN_PAYLOAD_BYTES, &work);
-	if (result != NTFS_OK) {
-		goto done;
-	}
-	for (index = 0; index < program->targets; index++) {
-		identity = &program->target[index];
-		ntfs_zero(&entry, sizeof(entry));
-		ntfs_put_u32(entry.allocated, NTFS_LOG_TABLE_ALLOCATED);
-		ntfs_put_u32(entry.index_buffer_bytes,
-		    identity->identity.attribute_type == NTFS_ATTR_INDEX_ALLOCATION
-			? NTFS_WRITE_CLUSTER_BYTES
-			: 0);
-		ntfs_put_u32(entry.attribute_type, identity->identity.attribute_type);
-		ntfs_put_u64(entry.reference, identity->identity.reference);
-		ntfs_put_u64(entry.open_lsn, input->tail_lsn);
-		ntfs_zero(name, sizeof(name));
-		for (unit = 0; unit < identity->identity.name_count; unit++) {
-			ntfs_put_u16(name + unit * sizeof(uint16_t), identity->identity.name[unit]);
-		}
-		ntfs_zero(&update, sizeof(update));
-		update.redo_operation = NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE;
-		update.target_attribute = identity->key;
-		update.attribute_flags = identity->flags;
-		update.redo = (struct ntfs_logfile_buffer){&entry, sizeof(entry)};
-		update.undo = (struct ntfs_logfile_buffer){
-		    name, identity->identity.name_count * sizeof(uint16_t)};
-		result = packet_update(&work, index, &update, sequence, NTFS_WRITE_MFT_KEY,
-		    identity->identity.name_count == 0 ? NTFS_LOGFILE_RECORD_ADDING : 0, SIZE_MAX,
-		    SIZE_MAX);
-		if (result != NTFS_OK) {
-			goto done;
-		}
-	}
-	for (index = 0; index < program->count; index++) {
-		ordinal = program->targets + index;
-		packet = &work.packet[ordinal];
-		packet->record.client_sequence = sequence;
-		packet->record.type = NTFS_LOGFILE_RECORD_UPDATE;
-		packet->record.transaction = NTFS_WRITE_TRANSACTION_KEY;
-		packet->record.flags = program->update[index].record_flags;
-		packet->record.data =
-		    (struct ntfs_logfile_span){sizeof(struct ntfs_disk_log_record),
-			(uint32_t)program->update[index].payload.bytes};
-		packet->payload = program->update[index].payload;
-		packet->previous = packet->undo_next = index == 0 ? SIZE_MAX : ordinal - 1;
-	}
-	ordinal = program->targets + program->count;
-	ntfs_zero(&update, sizeof(update));
-	update.redo_operation = NTFS_LOG_OP_FORGET_TRANSACTION;
-	update.undo_operation = NTFS_LOG_OP_COMPENSATION;
-	result = packet_update(&work, ordinal, &update, sequence, NTFS_WRITE_TRANSACTION_KEY,
-	    NTFS_LOGFILE_RECORD_DELETING, ordinal - 1, SIZE_MAX);
-	if (result != NTFS_OK) {
-		goto done;
-	}
-	placement = *input;
-	placement.packet = work.packet;
-	placement.packets = work.count;
-	result = ntfs_write_batch_pages_prepare(source, &placement, &draft);
-	if (result != NTFS_OK) {
-		goto done;
-	}
-	for (index = 0; index < program->targets; index++) {
-		predecessor =
-		    index == 0 ? input->tail_lsn : ntfs_write_batch_pages_lsn(draft, index - 1);
-		wire = (void *)work.packet[index].payload.data;
-		ntfs_put_u64((uint8_t *)wire + ntfs_u16(wire->redo_offset) +
-			offsetof(struct ntfs_disk_log_open_attribute, open_lsn),
-		    predecessor);
-	}
-	ntfs_write_batch_pages_close(draft);
-	draft = NULL;
-	result = ntfs_write_batch_pages_prepare(source, &placement, out);
-done:
-	ntfs_write_batch_pages_close(draft);
-	packets_release(source, &work);
-	return result;
-}
-
-static enum ntfs_result
-bind_original(const struct ntfs_environment *source, const struct ntfs_write_program *program,
-    const struct ntfs_write_batch_pages *original, size_t prefix,
-    const struct ntfs_logfile_client *client)
-{
-	struct ntfs_logfile_record record;
-	struct ntfs_logfile_update update;
-	const struct ntfs_disk_log_open_attribute *entry;
-	const struct program_target *target;
-	const struct ntfs_write_program_update *step;
-	uint8_t *packet;
-	size_t index, bytes, unit;
-	uint64_t previous;
-	enum ntfs_result result = NTFS_OK;
-
-	packet = source->allocate(source->context, NTFS_WRITE_BATCH_MAX_PACKET_BYTES);
-	if (packet == NULL) {
-		return NTFS_NO_MEMORY;
-	}
-	for (index = 0; result == NTFS_OK && index < program->targets + prefix; index++) {
-		result = ntfs_write_batch_pages_packet_copy(
-		    original, index, packet, NTFS_WRITE_BATCH_MAX_PACKET_BYTES, &bytes);
-		if (result == NTFS_OK) {
-			result = ntfs_logfile_record_decode(
-			    packet, bytes, sizeof(struct ntfs_disk_log_record), &record);
-		}
-		if (result != NTFS_OK) {
-			break;
-		}
-		if (record.lsn != ntfs_write_batch_pages_lsn(original, index) ||
-		    record.type != NTFS_LOGFILE_RECORD_UPDATE || record.client_index != 0 ||
-		    record.client_sequence != client->sequence) {
-			result = NTFS_STALE;
-			break;
-		}
-		if (index >= program->targets) {
-			step = &program->update[index - program->targets];
-			previous = index == program->targets
-			    ? 0
-			    : ntfs_write_batch_pages_lsn(original, index - 1);
-			if (record.transaction != NTFS_WRITE_TRANSACTION_KEY ||
-			    (record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) !=
-				step->record_flags ||
-			    record.previous_lsn != previous || record.undo_next_lsn != previous ||
-			    record.data.length != step->payload.bytes ||
-			    !ntfs_equal(packet + record.data.offset, step->payload.data,
-				step->payload.bytes)) {
-				result = NTFS_STALE;
-			}
-			continue;
-		}
-		target = &program->target[index];
-		result = ntfs_logfile_update_decode(
-		    packet + record.data.offset, record.data.length, &update);
-		if (result != NTFS_OK) {
-			break;
-		}
-		if (record.transaction != NTFS_WRITE_MFT_KEY || record.previous_lsn != 0 ||
-		    record.undo_next_lsn != 0 ||
-		    record.flags !=
-			(target->identity.name_count == 0 ? NTFS_LOGFILE_RECORD_ADDING : 0) ||
-		    update.redo_operation != NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE ||
-		    update.undo_operation != NTFS_LOG_OP_NOOP ||
-		    update.target_attribute != target->key ||
-		    update.attribute_flags != target->flags ||
-		    update.redo.length != sizeof(*entry) ||
-		    update.undo.length != target->identity.name_count * sizeof(uint16_t) ||
-		    update.lcn_count != 0 || update.target_vcn != 0 || update.record_offset != 0 ||
-		    update.attribute_offset != 0 || update.cluster_index != 0) {
-			result = NTFS_STALE;
-			break;
-		}
-		entry = (const void *)(packet + record.data.offset + update.redo.offset);
-		if (ntfs_u32(entry->allocated) != NTFS_LOG_TABLE_ALLOCATED ||
-		    ntfs_u64(entry->reference) != target->identity.reference ||
-		    ntfs_u32(entry->attribute_type) != target->identity.attribute_type ||
-		    ntfs_u32(entry->index_buffer_bytes) !=
-			(target->identity.attribute_type == NTFS_ATTR_INDEX_ALLOCATION
-				? NTFS_WRITE_CLUSTER_BYTES
-				: 0) ||
-		    (index != 0 &&
-			ntfs_u64(entry->open_lsn) !=
-			    ntfs_write_batch_pages_lsn(original, index - 1)) ||
-		    ntfs_u64(entry->open_lsn) >= record.lsn) {
-			result = NTFS_STALE;
-			break;
-		}
-		for (unit = 0; unit < target->identity.name_count; unit++) {
-			if (ntfs_u16(packet + record.data.offset + update.undo.offset +
-				unit * sizeof(uint16_t)) != target->identity.name[unit]) {
-				result = NTFS_STALE;
-				break;
-			}
-		}
-	}
-	source->release(source->context, packet, NTFS_WRITE_BATCH_MAX_PACKET_BYTES);
-	return result;
-}
-
-enum ntfs_result
-ntfs_write_program_compensation_prepare(const struct ntfs_environment *source,
-    const struct ntfs_write_program *program, const struct ntfs_write_batch_pages *original,
-    size_t prefix, const struct ntfs_logfile_client *client,
-    const struct ntfs_write_batch_pages_input *input, struct ntfs_write_batch_pages **out)
-{
-	struct packet_workspace work = {0};
-	struct ntfs_write_batch_pages_input placement;
-	struct ntfs_logfile_update_input inverse = {0};
-	struct ntfs_logfile_update update;
-	const struct ntfs_write_program_update *step;
-	const uint8_t *payload;
-	size_t index, original_index, stride = sizeof(struct ntfs_disk_log_update_storage);
-	enum ntfs_result result;
-
-	if (original != NULL &&
-	    !ntfs_write_batch_pages_output_separate(original, out, sizeof(*out))) {
-		return NTFS_INVALID;
-	}
-	result = pages_admit(source, program, client, input, out);
-	if (result != NTFS_OK) {
-		return result;
-	}
-	if (original == NULL || prefix == 0 || prefix > program->count) {
-		return NTFS_INVALID;
-	}
-	if (input->tail_lsn !=
-	    ntfs_write_batch_pages_lsn(original, program->targets + prefix - 1)) {
-		return NTFS_STALE;
-	}
-	result = bind_original(source, program, original, prefix, client);
-	if (result != NTFS_OK) {
-		return result;
-	}
-	for (index = 0; index < prefix; index++) {
-		step = &program->update[index];
-		result =
-		    ntfs_logfile_update_decode(step->payload.data, step->payload.bytes, &update);
-		if (result != NTFS_OK) {
-			return result;
-		}
-		if (sizeof(struct ntfs_disk_log_update_storage) + update.undo.length > stride) {
-			stride = sizeof(struct ntfs_disk_log_update_storage) + update.undo.length;
-		}
-	}
-	result = packets_allocate(source, prefix + 1, stride, &work);
-	if (result != NTFS_OK) {
-		goto done;
-	}
-	for (index = 0; index < prefix; index++) {
-		original_index = prefix - 1 - index;
-		step = &program->update[original_index];
-		payload = step->payload.data;
-		result = ntfs_logfile_update_decode(payload, step->payload.bytes, &update);
-		if (result != NTFS_OK) {
-			goto done;
-		}
-		ntfs_zero(&inverse, sizeof(inverse));
-		inverse.redo_operation = update.undo_operation;
-		inverse.undo_operation = NTFS_LOG_OP_COMPENSATION;
-		inverse.target_attribute = update.target_attribute;
-		inverse.target_vcn = update.target_vcn;
-		inverse.record_offset = update.record_offset;
-		inverse.attribute_offset = update.attribute_offset;
-		inverse.cluster_index = update.cluster_index;
-		inverse.attribute_flags = update.attribute_flags;
-		inverse.lcns =
-		    (struct ntfs_logfile_buffer){payload + update.lcns.offset, update.lcns.length};
-		inverse.redo =
-		    (struct ntfs_logfile_buffer){payload + update.undo.offset, update.undo.length};
-		result = packet_update(&work, index, &inverse, client->sequence,
-		    NTFS_WRITE_TRANSACTION_KEY, 0, index == 0 ? SIZE_MAX : index - 1, SIZE_MAX);
-		if (result != NTFS_OK) {
-			goto done;
-		}
-		work.packet[index].record.previous_lsn = index == 0
-		    ? ntfs_write_batch_pages_lsn(original, program->targets + prefix - 1)
-		    : 0;
-		work.packet[index].record.undo_next_lsn = original_index == 0
-		    ? 0
-		    : ntfs_write_batch_pages_lsn(original, program->targets + original_index - 1);
-	}
-	ntfs_zero(&inverse, sizeof(inverse));
-	inverse.redo_operation = NTFS_LOG_OP_FORGET_TRANSACTION;
-	inverse.undo_operation = NTFS_LOG_OP_COMPENSATION;
-	result = packet_update(&work, prefix, &inverse, client->sequence,
-	    NTFS_WRITE_TRANSACTION_KEY, NTFS_LOGFILE_RECORD_DELETING, prefix - 1, SIZE_MAX);
-	if (result == NTFS_OK) {
-		placement = *input;
-		placement.packet = work.packet;
-		placement.packets = work.count;
-		result = ntfs_write_batch_pages_prepare(source, &placement, out);
-	}
-done:
-	packets_release(source, &work);
-	return result;
 }

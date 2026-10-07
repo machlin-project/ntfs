@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
-#include "write_internal.h"
+#include "write_execute.h"
 
 enum {
 	FRAME_DIRTY_FIRST,

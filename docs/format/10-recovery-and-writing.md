@@ -254,6 +254,16 @@ parser. Fresh journal-derived general recovery, torn MFT bootstrap, interrupted
 compensation, checkpoint reuse, open-unlink lifetime and native Windows acceptance
 remain open before writable-owner or FSKit admission.
 
+The implementation separates complete metadata compilation/private application
+from journal packet/page and compensation composition. Both use one retained
+program owner; the split does not alter copied payload lifetime, update order or
+allocation accounting. Metadata, journal, replay, history, overlay, execution,
+transaction and recovery have separate private contracts. The native image-owner
+boundary exposes entry points and durable reports instead of private preparation
+workspaces. These module boundaries add no native operation semantics or writable
+admission; the [refactoring plan](../REFACTORING.md#applied-cleanup) records their
+verification and remaining review.
+
 ## Checkpoint advancement and ring reuse
 
 ![A retained floor cannot move until homes and a new owning checkpoint are durable](diagrams/checkpoint.svg)
@@ -283,7 +293,9 @@ Clearing flags or introducing a private journal cannot substitute for this gate.
   [write_bitmap.c](../../core/write_bitmap.c), [contract](../../core/write_bitmap.h)
   and [independent goldens](../../tests/write_bitmap_fixtures.py).
 - Experimental complete metadata/OAT/compensation preparation:
-  [write_program.c](../../core/write_program.c), [contract](../../core/write_program.h)
+  [metadata compiler/application](../../core/write_program.c),
+  [packet/original-binding/compensation composition](../../core/write_program_packets.c),
+  [contract](../../core/write_program.h)
   and [connected private prefix tests](../../tests/write_mutation.c).
 - Physical preflight and execution: [write_execute.c](../../core/write_execute.c).
 - Experimental complete-operation physical execution:
@@ -294,6 +306,8 @@ Clearing flags or introducing a private journal cannot substitute for this gate.
 - Complete retained family history: [write_history.c](../../core/write_history.c).
 - Fresh overlay validation: [write_overlay.c](../../core/write_overlay.c).
 - Owning recovery: [write_recover.c](../../core/write_recover.c).
+- Native image-owner boundary: [write_owner.h](../../core/write_owner.h),
+  [durable reports](../../core/write_status.h).
 - Transfer/barrier fault tests: [write_execute.c](../../tests/write_execute.c).
 
 Actual installed initialized and unchanged-size resident overwrites, offline

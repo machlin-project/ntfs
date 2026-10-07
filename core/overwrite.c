@@ -1,6 +1,9 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
-#include "write_internal.h"
+#include "write_owner.h"
+#include "write_recover.h"
+#include "write_transaction.h"
+#include "write_overlay.h"
 #include "logfile_tables_disk.h"
 #include <ntfs/overwrite.h>
 

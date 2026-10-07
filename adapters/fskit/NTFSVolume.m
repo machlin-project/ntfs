@@ -2,7 +2,8 @@
 #import "NTFSVolume.h"
 #import "NTFSNames.h"
 #import "NTFSImageVolume.h"
-#include "../../core/write_internal.h"
+#include "../../core/write_owner.h"
+#include "../../core/disk.h"
 #include <errno.h>
 #include <os/log.h>
 #include <unistd.h>

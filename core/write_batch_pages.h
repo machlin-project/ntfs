@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #ifndef MACHLIN_NTFS_WRITE_BATCH_PAGES_H
 #define MACHLIN_NTFS_WRITE_BATCH_PAGES_H
-#include "write_internal.h"
+#include "write_journal.h"
 
 enum {
 	NTFS_WRITE_BATCH_MAX_PACKETS = 4096,

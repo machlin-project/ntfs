@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_history.h"
+#include "write_overlay.h"
 #include "fuzz_device.h"
 #include <ntfs/validate.h>
 #include <assert.h>

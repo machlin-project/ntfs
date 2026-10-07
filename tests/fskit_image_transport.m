@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "fskit_image_transport.h"
 #import "NTFSImageTransport.h"
-#include "../core/write_internal.h"
+#include "../core/write_owner.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>

@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_internal.h"
+#include "write_history.h"
 #include <ntfs/recovery.h>
 
 enum { HISTORY_ORIGIN_PACKETS = 2 };

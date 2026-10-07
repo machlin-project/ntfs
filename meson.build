@@ -5,7 +5,7 @@ core_sources = files('core/support.c', 'core/operation.c', 'core/api.c', 'core/r
 core_sources += files('core/logfile_tables.c', 'core/checkpoint.c', 'core/logfile_encode.c', 'core/recovery.c', 'core/overwrite.c')
 core_sources += files('core/write_metadata.c', 'core/write_journal.c', 'core/write_replay.c', 'core/write_history.c', 'core/write_overlay.c', 'core/write_execute.c', 'core/write_transaction.c', 'core/write_recover.c')
 core_sources += files('core/write_mutation.c', 'core/write_record.c', 'core/write_allocation.c', 'core/write_growth.c', 'core/write_directory.c', 'core/write_inherit.c', 'core/write_namespace.c')
-core_sources += files('core/write_batch_pages.c', 'core/write_bitmap.c', 'core/write_retirement.c', 'core/write_program.c')
+core_sources += files('core/write_batch_pages.c', 'core/write_bitmap.c', 'core/write_retirement.c', 'core/write_program.c', 'core/write_program_packets.c')
 core_sources += files('core/write_batch_execute.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)

@@ -476,7 +476,27 @@ through the surviving root and complete actual history; contradictory valid root
 fail their transition proof. The [independent byte fixtures](../../tests/write_checkpoint_execute_fixtures.py),
 [preparation/refusal checks](../../tests/write_checkpoint_execute.c) and
 [interruption checks](../../tests/write_checkpoint_interrupt.c) keep these cases
-distinct. Their passing local states remain separate from native Windows qualification.
+distinct. Their passing local states remain separate from the connected native
+qualification below.
+
+On the captured 512-byte-sector/4-KiB-cluster Windows source, the complete actual
+C checkpoint and 195 controlled writer/recovery states now pass Windows recovery,
+clean-state checks and read-only chkdsk. Native files, ADS, FILETIME, identities
+and ACLs remain exact. Original event XML has one matching healthy result per
+candidate and exactly the 133 USA warnings independently predicted from injected
+sector prefixes. This is evidence for the complete settled-origin transition,
+including copy-only and mixed-root recovery; a successful empty-origin parse alone
+would not supply it. [Checkpoint acceptance](../CHECKPOINT-REUSE.md#actual-c-windows-checkpoint-and-recovery-evidence)
+owns the controlled-image method and remaining native/installed limits.
+
+The private ordinary-image fault harness now reserves its complete measured
+event trace before claiming the image. Its create calibration observes 38
+publications and 77 writer events, including initial predecessor persistence.
+Nonempty ordinary recovery persists each publication without an extra initial
+barrier; quiet recovery performs one persistence without writing. Pending
+checkpoint recovery separately establishes proved settled homes before publishing
+roots. These execution relationships are tested independently from the journal's
+wire framing. They do not establish native new/free FILE or whole-INDX semantics.
 
 ## Implementation and evidence
 
@@ -518,5 +538,5 @@ distinct. Their passing local states remain separate from native Windows qualifi
 
 Actual installed initialized and unchanged-size resident overwrites, offline
 interruption recovery and independent Windows checks have qualified evidence.
-Allocation/namespace/general checkpoint recovery and hardware power cuts do not
-inherit that evidence. [ACCEPTANCE.md](../ACCEPTANCE.md) records the distinction.
+Allocation/namespace, sustained native checkpoint/ring reuse and hardware power
+cuts do not inherit that evidence. [ACCEPTANCE.md](../ACCEPTANCE.md) records the distinction.

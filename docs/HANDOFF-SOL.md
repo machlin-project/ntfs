@@ -125,17 +125,28 @@ mutations with their complete native WAL/recovery contract. Main writes the
 batch tests first, implements the connected operations, then reviews one complete
 local regression before preparing the VM batch. Do not introduce per-feature
 VM loops during implementation. The five native Forget-anchored checkpoint
-observations are byte-level experiments; actual C checkpoint execution,
-interrupted publication and circular reuse remain unqualified.
+observations remain byte-level experiments, distinct from the later actual C
+checkpoint and interrupted-recovery gate described below.
 The experimental local C checkpoint/recovery implementation now passes independent
 full-byte and interruption/fault inputs plus two sustained modeled sequences.
 The closing local regression passes all 196 suites, both strict compiler targets,
 23 private headers and the actual unsigned universal app/extension build.
 The actual POSIX sequence passes 640 mutations, 256 checkpoints and 119 wraps
-with F_FULLFSYNC and fresh recovery between operations. Its actual C Windows
-gate remains unqualified; [CHECKPOINT-REUSE.md](CHECKPOINT-REUSE.md) records this
-local evidence separately from native acceptance.
-Prepare one native batch only after main reviews that local closure.
+with F_FULLFSYNC and fresh recovery between operations. All 196 actual C
+checkpoint/recovery Windows states now pass native file/ADS/time/ID/ACL, clean
+state, read-only chkdsk and main's original-XML review. All full detached VHDs
+are retained read-only; completed native cases are not repeated after transport
+or log-sharing failures. [CHECKPOINT-REUSE.md](CHECKPOINT-REUSE.md) records the
+settled-origin transition separately from still-open sustained native reuse.
+
+The private ordinary-image harness now supports bounded transfer/persistence
+faults and fresh recovery. Its complete regression passes 198 suites; seven
+actual-C native-source create profiles pass full byte/content/validation and
+quiet-reopen checks. Ten connected native-source operations and independent
+standalone read comparisons also pass. Windows qualification of new/free FILE
+and whole-INDX families, MFT reservation pressure and general installed FSKit
+mutations remain open. Prepare their native batch from the reviewed local
+closure; do not inherit their acceptance from the narrower checkpoint gate.
 Unsupported rejection,
 building or private serialization is not feature acceptance. Continue through the
 user's broad write scope; do not mark the goal complete at this checkpoint.

@@ -54,7 +54,7 @@ mkdir artifacts/operation-create-prepare-next
 
 Replace `PRIVATE_IMAGE` with an inactive, exclusively owned disposable image and
 `FILETIME` with unsigned decimal 100-nanosecond ticks since the Windows epoch.
-The modes are `prepare` and `execute`; operations are `create`, `mkdir`, `remove`,
+The ordinary modes are `prepare`, `execute` and `interrupt`; operations are `create`, `mkdir`, `remove`,
 `rmdir`, `resize SIZE`, `write OFFSET PAYLOAD_FILE` and `rename DESTINATION REPLACE`.
 `REPLACE` is zero or one. Write payloads are bounded ordinary files. The fresh
 trace directory receives complete original/projected regions, physical publication
@@ -63,11 +63,33 @@ execution, actual execution, completion and permanent poisoning. Preparation
 performs no writes. Retain the first failing invocation and its private image;
 do not retry uncertain execution.
 
-Ten connected private-fixture operations pass exact full-image, content, zero-gap,
-time, full validation and fresh zero-rewrite recovery checks. Read-only create
-preparation on the native checkpoint postimage also passes without changing media.
-These CLI results are under `artifacts/overwrite/operation-image-cli-*`; native
-execution of new FILE/INDX families remains a separate acceptance requirement.
+`execute` and `interrupt` first persist the complete predecessor before journal
+publication. `interrupt` appends `--fault WRITE PREFIX BARRIER CAPACITY` after the
+ordinary operation arguments. Select either a one-based write or persistence
+index, with zero for the other. A write prefix is zero or a multiple of 512 bytes
+through the complete 4-KiB frame. Reserve the complete measured publications plus
+barriers, including initial persistence; an insufficient trace refuses before
+mutation. Intended full frames and actual prefixes are retained separately.
+Allocation stays under the original fault transport's total storage ceiling;
+there is no execution-time growth.
+
+`prepare-recovery IMAGE TRACE` acquires fresh ordinary/checkpoint recovery and
+captures its complete publication frames without writing. `recover IMAGE TRACE
+--fault WRITE PREFIX BARRIER CAPACITY` executes that prepared owning contract.
+Reserve at least twice the publication count plus one event. This is an upper
+bound: nonempty ordinary recovery has one barrier per publication, quiet recovery
+has one barrier without a write, and pending-checkpoint recovery first persists
+its proved settled homes. Do not impose the checkpoint's initial-barrier rule
+on every recovery. Keep the first failed invocation, trace and image intact.
+
+Ten connected private-fixture operations and ten native-source operations pass
+exact full-image, content, zero-gap, time, full validation and fresh zero-rewrite
+recovery checks. Separate standalone utilities verify native-source content,
+namespace and record identities without changing snapshots. Seven actual-C
+native-source create/fault profiles calibrate the extended transport. These CLI
+results remain distinct from Windows recovery of new/free FILE and whole-INDX
+families or installed FSKit mutation admission; [ACCEPTANCE.md](ACCEPTANCE.md)
+records their evidence and remaining gates.
 
 For native Windows batches, use QGA for bounded manifests/reports and
 `scripts/windows_image_archive.py` for full detached postimages. The receiver binds

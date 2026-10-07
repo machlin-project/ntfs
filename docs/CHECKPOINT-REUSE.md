@@ -162,9 +162,10 @@ or native admission change.
 
 The local closing reports are `checkpoint-reuse-final-local-20261007/` and
 `checkpoint-reuse-release-closure-20261007/` under `artifacts/overwrite/`.
-Actual macOS/Windows operation, recovery, read-only chkdsk and original-event
-acceptance remain the next connected native gate. Local origin admission or a
-successful app build does not close that gate.
+Installed general macOS mutation and sustained native operation/recovery remain
+the next connected gates. Local origin admission or a successful app build does
+not close them. The narrower actual C checkpoint and interrupted-recovery Windows
+gate is closed below.
 
 An additional actual C checkpoint on a private clone of the immutable Windows
 resident-complete export passes all eight independently authored publication
@@ -174,5 +175,30 @@ storage and protected sector tails. A new independent oracle derives the exact
 markers from each actual predecessor and fresh page; all logical fields and full
 bytes agree without a C change or another writer invocation. Both comparisons
 remain retained under `checkpoint-reuse-native-calibration-20261007/` and
-`checkpoint-reuse-native-exact-oracle-20261007/`. This is offline execution on
-native source bytes; the new postimage has not yet been recovered by Windows.
+`checkpoint-reuse-native-exact-oracle-20261007/`. This first result is offline
+execution on native source bytes; the subsequent Windows gate remains separate.
+
+## Actual C Windows checkpoint and recovery evidence
+
+All 196 controlled actual-image states pass native recovery on the isolated
+Windows VM: one complete checkpoint, every 512-byte prefix of each of its eight
+4-KiB publications, every delivered-but-uncertain writer barrier, and complete,
+partial-transfer and uncertain-barrier recovery from copy-only and mixed-root
+origins. Fresh recovery is derived only from reopened captured media. The actual
+C inputs and complete source-derived byte oracles are independently reviewed
+before native execution.
+
+Native checks preserve exact original file/ADS bytes, FILETIME, File IDs and ACLs,
+report clean NTFS state and pass read-only chkdsk. Main's original-XML review binds
+196 positive healthy events and 133 exactly predicted injected USA warnings;
+unknown warnings and repair events are refused. Every complete post-detach VHD
+is retained read-only on the host with its native full hash. Generated detached
+guest copies are released only after their complete archive receipts are verified.
+Transport/log collection failures are retained without repeating completed native
+cases. Reports are under `checkpoint-reuse-native-inputs-20261007/` and
+`windows-checkpoint-reuse-network-final-20261007/` in `artifacts/overwrite/`.
+
+This qualifies the actual settled-origin transition and its interrupted recovery
+on the captured geometry. It does not qualify sustained Windows ring reuse,
+new/free FILE or whole-INDX mutation, installed FSKit general operations or
+hardware power cuts. Their original acceptance gates remain open.

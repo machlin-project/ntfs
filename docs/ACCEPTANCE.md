@@ -1,5 +1,51 @@
 # Acceptance
 
+## Private ordinary-operation image harness
+
+The manual [ordinary-image CLI](../tests/write_operation_image.c) now captures
+actual partial writes and delivered-but-uncertain persistence for complete
+ordinary mutations and fresh journal-derived recovery. Its private
+[fault transport](../tests/image_fault.c) reserves measured event capacity and
+transfer storage before claiming the image, retaining the original allocation
+ceiling and default profile. It never grows storage during execution.
+[Independent transfer checks](../tests/image_fault_profile.py) pass twelve
+actual-file profiles and eleven before-open refusals, including more than the
+old 32-event ceiling. Product transports and admission are unchanged.
+
+All 198 Meson suites pass with assertions and fatal ASan/UBSan. Selected-Xcode
+style and six strict Release compilations of the three affected C sources across
+arm64/x86_64 pass. This harness-only change does not rerun or add app-build or
+installed-mount acceptance. The preceding complete core and app checks retain
+their own evidence.
+
+Seven actual-C create states on a private native-source clone pass independently
+constructed complete writer/recovery byte oracles, preservation of all four
+original files, full metadata/allocation validation and a zero-write second
+recovery. They cover complete execution, initial persistence, a partial first
+restart sector, delivered commit copy, partial fresh FILE and allocated INDX
+homes, and the final persistence. The create plan has 38 publications and
+77 writer events. A wrapper first expected an extra initial barrier for ordinary
+nonempty recovery. Its successful four-write/four-barrier execution is retained;
+the corrected continuation reuses it and the completed regression, executing
+only the four previously unexecuted profiles. Pending-checkpoint recovery has a
+separate initial persistence contract. Reports and main review are under
+`ordinary-image-fault-local-*` in `artifacts/overwrite/`.
+
+Ten connected create/write/resize/rename/remove and directory/child operations
+also pass on native source bytes, with a checkpoint after every two operations.
+Each complete image agrees with independent physical patches, data and zero-gap
+expectations, exact core time checks, full validation and fresh zero-write
+recovery. Main independently reviews all retained command results and content/
+identity expectations. Separate read-only NTFS-3G utilities agree on the ten
+images' contents, namespace and sequence-bearing record identities; their time
+output is retained but is not an independent timestamp comparison. All source
+and snapshot bytes remain unchanged during those utility checks. Evidence is in
+`operation-image-native-sequence-20261007/` and
+`operation-image-native-standalone-oracle-continued-20261007/`.
+These are offline native-source results. Windows replay of new/free FILE and
+whole-INDX families, MFT reservation pressure, sustained native reuse and installed
+general FSKit mutation remain open.
+
 ## Read-only stream component cleanup
 
 Read-only stream ownership, mapping-pair/run processing and data/LZNT1 reads now
@@ -19,8 +65,9 @@ owns the full-driver scope and remaining component reviews. Evidence is under
 The private checkpoint writer and fresh recovery owner now bind a settled actual
 Forget/empty-checkpoint origin, reserve full inverse/checkpoint capacity and
 advance restart roots only after proving complete retained history and settled
-homes. This is experimental offline-image support; installed FSKit mutation
-admission and actual C Windows recovery retain their unfinished native gate.
+homes. This is experimental offline-image support. Its actual C checkpoint and
+interrupted-recovery Windows gate now passes below; sustained native reuse,
+ordinary snapshot qualification and installed FSKit mutation admission remain open.
 See [the owning contract](CHECKPOINT-REUSE.md) and
 [the format relationship](format/10-recovery-and-writing.md#checkpoint-advancement-and-ring-reuse).
 
@@ -67,6 +114,28 @@ USA transport seed, so its initial raw comparison failed; exact predecessor-
 derived markers close the comparison without changing C or repeating the writer.
 This offline native-source evidence remains separate from actual Windows recovery
 and is recorded in [CHECKPOINT-REUSE.md](CHECKPOINT-REUSE.md).
+
+The connected Windows gate passes all 196 unique actual-C checkpoint/recovery
+states: one complete checkpoint, 72 writer sector prefixes, nine delivered-but-
+uncertain writer barriers, two complete fresh recoveries, 99 interrupted-recovery
+sector prefixes and thirteen uncertain recovery barriers. Each candidate has a
+unique private GPT identity. Native checks preserve all four original files,
+ADS, FILETIME, File IDs and ACLs, report a clean volume and pass read-only chkdsk.
+Main reconstructs the original event XML and binds 196 matching healthy events
+and all 133 independently predicted injected USA warnings to their exact volumes,
+times and sector-marker fields. There are no unrelated warning or repair events.
+These are controlled actual-image states, not hardware power cuts.
+
+All 196 complete post-detach VHDs are persisted read-only on the host and their
+full hashes match the native reports. Only detached generated guest copies with
+verified host receipts are released. Earlier storage/transport/log-sharing
+failures and their partials remain retained; closed native cases are reused,
+with no native re-execution or automatic retry. Reports and original-XML main
+review are in `windows-checkpoint-reuse-network-final-20261007/`; actual-C input
+byte review is in `checkpoint-reuse-native-inputs-20261007/`. The accepted scope
+is the settled checkpoint transition and its recovery on the captured geometry.
+It does not qualify sustained native ring reuse, ordinary new/free metadata
+families or expanded FSKit capabilities.
 
 A separate behavior-preserving cleanup moves three identical restored-record
 comparisons into the private metadata component. All seven callers retain their

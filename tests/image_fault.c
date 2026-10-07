@@ -59,11 +59,11 @@ fault_write(void *context, uint64_t physical, const void *bytes, size_t length, 
 		    &fault->image, physical, bytes, length, completed);
 	}
 	*completed = 0;
-	if (fault->events == NTFS_IMAGE_FAULT_EVENTS || length > NTFS_OVERWRITE_MAX_BYTES) {
+	if (fault->events == fault->event_capacity || length > fault->event_bytes) {
 		return NTFS_RANGE;
 	}
 	event = &fault->event[fault->events];
-	memcpy(fault->storage + fault->events * NTFS_OVERWRITE_MAX_BYTES, bytes, length);
+	memcpy(fault->storage + fault->events * fault->event_bytes, bytes, length);
 	fault->events++;
 	fault->writes++;
 	event->physical = physical;
@@ -99,7 +99,7 @@ fault_persist(void *context)
 	if (!fault->enabled) {
 		return fault->image.environment.persist(&fault->image);
 	}
-	if (fault->events == NTFS_IMAGE_FAULT_EVENTS) {
+	if (fault->events == fault->event_capacity) {
 		return NTFS_RANGE;
 	}
 	event = &fault->event[fault->events++];
@@ -126,19 +126,37 @@ int
 ntfs_image_fault_open(
     const char *path, size_t write, size_t prefix, size_t barrier, struct ntfs_image_fault *fault)
 {
+	return ntfs_image_fault_open_bounded(
+	    path, write, prefix, barrier, NTFS_IMAGE_FAULT_EVENTS, NTFS_OVERWRITE_MAX_BYTES, fault);
+}
+
+int
+ntfs_image_fault_open_bounded(const char *path, size_t write, size_t prefix, size_t barrier,
+    size_t capacity, size_t frame_bytes, struct ntfs_image_fault *fault)
+{
 	int error;
 
 	memset(fault, 0, sizeof(*fault));
 	fault->image.fd = -1;
-	if (write > NTFS_IMAGE_FAULT_EVENTS || barrier > NTFS_IMAGE_FAULT_EVENTS ||
-	    (write != 0 && barrier != 0) || prefix > NTFS_OVERWRITE_MAX_BYTES ||
-	    prefix % NTFS_OVERWRITE_MIN_ALIGNMENT != 0 || (write == 0 && prefix != 0)) {
+	if (capacity == 0 || frame_bytes < NTFS_OVERWRITE_MIN_ALIGNMENT ||
+	    frame_bytes > NTFS_OVERWRITE_MAX_BYTES ||
+	    frame_bytes % NTFS_OVERWRITE_MIN_ALIGNMENT != 0 ||
+	    capacity > NTFS_IMAGE_FAULT_STORAGE_BYTES / frame_bytes ||
+	    capacity > NTFS_IMAGE_FAULT_STORAGE_BYTES / sizeof(*fault->event) ||
+	    capacity > NTFS_IMAGE_FAULT_ALLOCATION_BYTES / (frame_bytes + sizeof(*fault->event)) ||
+	    write > capacity || barrier > capacity || (write != 0 && barrier != 0) ||
+	    prefix > frame_bytes || prefix % NTFS_OVERWRITE_MIN_ALIGNMENT != 0 ||
+	    (write == 0 && prefix != 0)) {
 		return EINVAL;
 	}
-	fault->storage = malloc(NTFS_IMAGE_FAULT_EVENTS * NTFS_OVERWRITE_MAX_BYTES);
-	if (fault->storage == NULL) {
+	fault->event = calloc(capacity, sizeof(*fault->event));
+	fault->storage = malloc(capacity * frame_bytes);
+	if (fault->event == NULL || fault->storage == NULL) {
+		ntfs_image_fault_close(fault);
 		return ENOMEM;
 	}
+	fault->event_capacity = capacity;
+	fault->event_bytes = frame_bytes;
 	error = ntfs_overwrite_image_open(path, &fault->image);
 	if (error != 0) {
 		ntfs_image_fault_close(fault);
@@ -165,6 +183,8 @@ ntfs_image_fault_close(struct ntfs_image_fault *fault)
 	ntfs_overwrite_image_close(&fault->image);
 	free(fault->storage);
 	fault->storage = NULL;
+	free(fault->event);
+	fault->event = NULL;
 }
 
 int
@@ -186,9 +206,9 @@ ntfs_image_fault_dump(const struct ntfs_image_fault *fault, const char *director
 	}
 	fprintf(output,
 	    "{\"triggered\":%s,\"native_failure\":%s,\"writes\":%zu,"
-	    "\"barriers\":%zu,\"events\":[",
+	    "\"barriers\":%zu,\"event_capacity\":%zu,\"event_bytes\":%zu,\"events\":[",
 	    fault->triggered ? "true" : "false", fault->native_failure ? "true" : "false",
-	    fault->writes, fault->barriers);
+	    fault->writes, fault->barriers, fault->event_capacity, fault->event_bytes);
 	for (index = 0; index < fault->events; index++) {
 		event = &fault->event[index];
 		fprintf(output,
@@ -220,8 +240,8 @@ ntfs_image_fault_dump(const struct ntfs_image_fault *fault, const char *director
 		if (output == NULL) {
 			return errno;
 		}
-		if (fwrite(fault->storage + index * NTFS_OVERWRITE_MAX_BYTES, 1, event->bytes,
-			output) != event->bytes) {
+		if (fwrite(fault->storage + index * fault->event_bytes, 1, event->bytes, output) !=
+		    event->bytes) {
 			error = EIO;
 		}
 		if (fclose(output) != 0) {

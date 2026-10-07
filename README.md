@@ -81,7 +81,10 @@ composition remains experimental. Settled checkpoint advancement and circular
 journal reuse now pass a complete 196-suite local regression and a real POSIX
 sequence of 640 mutations, 256 checkpoints and 119 wraps with F_FULLFSYNC and
 fresh zero-rewrite recovery. Native snapshot qualification, sustained native
-reuse and FSKit mutation admission still require the connected native acceptance gate. See
+reuse and FSKit mutation admission still require the connected native acceptance gate.
+The separate actual C checkpoint transition and interrupted-recovery gate now passes
+all 196 Windows states, read-only chkdsk and original-event review; this does not
+qualify new FILE/INDX mutation or sustained native ring reuse. See
 [the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

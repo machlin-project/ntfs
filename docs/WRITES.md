@@ -22,9 +22,12 @@ The unit now has experimental complete-operation physical preparation/execution
 alongside the private mutation and journal programs. Original settled history,
 actual predecessor protection and aligned publication lifetime pass local checks,
 including three actual regular-image persistence/reopen cases. The existing
-bounded recovery parser does not accept these new families. General fresh
-journal-derived recovery, MFT bootstrap, interrupted compensation and sustained
-checkpoint reuse still precede native/FSKit admission; see the current
+bounded recovery parser does not accept these new families. A separate experimental
+owner now acquires only reopened media, reconstructs the original/projected metadata,
+recovers torn MFT bootstrap and continues interrupted compensation. Admission is
+the exact quiet origin plus one ordinary-operation lifetime. Mixed and sustained
+history, checkpoint reuse and whole native qualification still precede write-owner
+and FSKit admission; see the current
 [batch evidence](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
 
 One exclusive C owner must prepare all affected FILE/INDX images, mapping pairs,

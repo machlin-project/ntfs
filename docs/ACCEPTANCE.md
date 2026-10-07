@@ -204,11 +204,112 @@ and anchors pass. The generated review is in
 
 The complete FILE Initialize/Initialize inverse and whole-INDX nonresident image
 forms remain experimental substitutions. A new program does not become accepted
-by the preceding bounded history/recovery parser. Fresh journal-derived general
-history, MFT bootstrap/mirror recovery, checkpoint reuse, whole native loser/winner
-replay and open-unlink lifetime remain required before write-owner or FSKit
-admission. The qualified overwrite family is unchanged. These checkpoints do
-not complete the ordinary write batch.
+by the preceding bounded history/recovery parser. The separate private recovery
+owner below now covers one fresh quiet-origin lifetime. Mixed/sustained history,
+checkpoint reuse, whole native loser/winner replay and open-unlink lifetime remain
+required before write-owner or FSKit admission. The qualified overwrite family
+is unchanged. These checkpoints do not complete the ordinary write batch.
+
+### Experimental fresh media recovery
+
+The new opaque recovery owner receives only an exclusively claimed immutable
+backend, not an original mutation plan, program or physical executor. It retains
+the exact quiet origin and one ordinary-operation lifetime, including its completed
+or interrupted compensation. Previous qualified write families, another ordinary
+transaction and checkpoint/ring reuse still refuse. Its private journal-acquisition
+mount/index do not relax public read-only namespace or uncompleted-copy admission.
+The [format chapter](format/10-recovery-and-writing.md#experimental-fresh-ordinary-operation-recovery)
+describes bootstrap, original storage ownership and publication order.
+
+A complete primary or mirror FILE zero supplies temporary journal acquisition;
+the original/projected mount and target proofs precede every publication. OAT
+reference generations, exact metadata snapshots, original initialization/bitmaps,
+both logical mappings and all journal-run exclusions bind reconstruction. Winners
+rebuild complete FILE/INDX/bitmap homes and independent mirror guards; losers retain
+exact original metadata and append only their remaining reverse inverse chain plus
+Forget. Existing complete inverses must match original undo bytes and links.
+Preparation writes/persists nothing and closes every immutable child. Consumed
+execution is read/allocation free and reports sticky poison after uncertain I/O.
+
+The focused local suites pass sixteen complete/loser storage/operation profiles,
+each with a second fresh zero-rewrite reopen. Independent journal checks retain
+all original packet bytes/links, exact compensation, home LSNs and unchanged clean
+restart/client roots. Constructed writer-media sweeps cover 496 create, 721 grow
+and 2,146 real MFT/index-growth states: every whole publication boundary and both
+512-byte-step sector prefix/suffix variants. Original C owners are closed before
+each fresh recovery; test oracles own their separate copied expected bytes.
+
+Preparation refuses every 378 allocation/269 read failure in the loser profile
+and 591 allocation/369 read failure in the winner profile, without writes, leaks
+or a published owner; retry succeeds. Actual recovery callback sweeps cover
+1,056 failed transfers and 352 failed-persistence states across create, grow and
+MFT/index growth, including short success and overreported counts. Both visible
+and durable failure images pass 2,816 fresh retry checks. Invalid backends and
+owner/publication/output aliases refuse before mutation or consumption.
+
+Six actual ordinary-file recovery images, seeded from modeled original interruption
+bytes after the old owners close, pass `pwrite`, `fsync` and mandatory macOS
+`F_FULLFSYNC`. Each whole reopened image agrees with its expected publications,
+complete metadata, requested committed file bytes and independent journal oracle.
+The second actual close/reopen prepares zero rewrites and only confirms persistence.
+These are host offline-image proofs, not actual power cuts or native recovery.
+Focused reports/postimages are retained under
+`artifacts/overwrite/batch-recovery-file-ownership-fixed-20261007/`.
+
+Independent false-snapshot tests exposed an additional ownership gap: matching a
+complete free FILE with its own logged snapshot admitted it as an old object.
+The original initialized extent and MFT allocation bit now prove every old FILE
+slot; fresh initialized slots require a clear bit. Both loser/winner cases refuse
+for a bitmap-clear initialized FREE FILE and an allocated uninitialized MFT tail,
+without publishing an owner or changing media. The first fixture incorrectly set
+IN_USE in a free initialized slot and was already rejected by full validation;
+the corrected FREE fixture demonstrated the actual gap before the fix. Both
+failed results and the corrected counterexample image remain separate from
+successful evidence.
+
+The first connected 183-suite run passed 179 and failed four diagnostic operation
+deadlines under default parallel scheduling. The same four unchanged binaries and
+unchanged inner deadlines pass a two-process run. Its failure and focused scheduling
+check are retained in `batch-recovery-complete-local-20261007/` and
+`batch-recovery-diagnostic-deadlines-20261007/` under `artifacts/overwrite/`;
+the final connected rerun uses two processes and passes all 184 suites, including
+the ownership suite, with assertions enabled and fatal ASan/UBSan. Selected-Xcode
+formatting, 116 freestanding arm64/x86_64 objects and fifteen independent private
+header checks pass. All nine actual regular-image postimages are byte-identical
+before and after the producer-result guard cleanup; the preceding three physical
+writer postimages remain unchanged.
+
+The strict Release audit also passes all 116 core compilations with
+`-Wconditional-uninitialized -Werror`, and all eleven Objective-C modules through
+the actual x86_64 extension compiler configuration. Host FSKit after native
+item-rebind cleanup is 63 PASS / 13 explicit runtime-SDK SKIP / 0 FAIL.
+The unsigned Release app, embedded/standalone extension and product core archive
+have actual arm64 and x86_64 slices. Actual build commands and archive members
+include the five added C modules in both architectures; this does not claim their
+adoption by the installed extension. The diagram passes visual review; 369 local
+documentation destinations/anchors and eighteen SVGs pass checks. Evidence is in
+`batch-recovery-final-local-20261007/`, `batch-recovery-release-liveness-fixed-20261007/`
+and `batch-recovery-native-release-final-20261007/`. The consolidated main review
+is `batch-recovery-main-review-20261007/result.json`, all under `artifacts/overwrite/`.
+
+Initial Release failures retain conditional-initialization warnings in writer
+code and native rebinding. Explicit error guards and retained cleanup sizes
+preserve producer order, error paths and success-only publication. A native
+prototype-discovery attempt compiled no TUs because the failed-build log had no
+arm64 Objective-C command; the successful universal build supplies both native
+architectures. Review wrapper schema errors and unused thin-archive probe refusals
+remain separate from passing test/product evidence. No new installed driver or
+native Windows recovery acceptance follows from these local checks.
+
+Earlier missing-entry-point runtime failure, unsupported unfinished transfer
+handling, torn-first-home and torn-root bootstrap refusals remain retained in
+separate `batch-recovery-*` directories. Read-only diagnosis established each
+failing input before its fix. Actual recovery fault testing also caught a report
+that marked compensation complete after its first inverse copy; completion now
+waits for the copy containing the terminal abort Forget. Malformed available
+unfinished-tail client, transaction, previous/undo links, target, opcode, length
+and LCN refuse without media mutation. Public history and mount refusal policies
+remain covered independently.
 
 The new focused/failure evidence is in `full-program-*` directories under
 `artifacts/overwrite/`. The full local checkpoint is retained in
@@ -250,6 +351,15 @@ and documentation links pass their separate render/review checks. Reports are
 in `artifacts/overwrite/refactor-write-components-*`; the consolidated result is
 `refactor-write-components-main-review-20261007/result.json`. No VM or installed
 driver operation is added.
+
+A subsequent focused cleanup makes producer guards explicit across nine preceding
+writer modules and the image-item rebind method. Fourteen C functions retain their
+ordered calls; the native method retains producer/ancestry order, failure node
+close and successful field publication. Directory cleanup retains the exact root
+allocation size. The connected 184-suite recovery regression, strict compiler
+checks, host components and unsigned universal app described above qualify this
+cleanup without expanding write admission. Further mutation-construction separation
+and FSKit responsibility extraction remain open.
 
 ## Resident ordinary-file overwrite continuation
 

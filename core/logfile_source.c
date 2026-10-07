@@ -27,6 +27,7 @@ struct index_builder {
 	uint64_t first_offset;
 	uint32_t copy_pages;
 	struct ntfs_logfile *source;
+	bool admit_uncompleted_legacy_copies;
 };
 
 struct ntfs_logfile {
@@ -1042,6 +1043,24 @@ retained_fast_target(
 	return target;
 }
 
+static bool
+index_uncompleted_copy(
+    const struct index_builder *builder, const struct ntfs_logfile_page_view *view)
+{
+	const struct ntfs_logfile_restart *restart = builder->restart;
+	const struct ntfs_logfile_page *page = &view->page;
+
+	return builder->admit_uncompleted_legacy_copies &&
+	    restart->major == NTFS_LFS_MAJOR_LEGACY && restart->minor == NTFS_LFS_MINOR_LEGACY &&
+	    restart->system_page_bytes == NTFS_LFS_FAST_PAGE_BYTES &&
+	    restart->log_page_bytes == NTFS_LFS_FAST_PAGE_BYTES &&
+	    restart->record_header_bytes == sizeof(struct ntfs_disk_log_record) &&
+	    restart->page_data_offset == sizeof(struct ntfs_disk_log_fast_page) &&
+	    view->storage == NTFS_LOGFILE_LEGACY_TAIL && page->flags == 0 &&
+	    page->last_end_lsn == 0 && page->next_record_offset == restart->page_data_offset &&
+	    page->page_count == 1 && page->page_position == 1;
+}
+
 static enum ntfs_result
 index_collect(void *context, const struct ntfs_logfile_page_observation *observation)
 {
@@ -1180,6 +1199,13 @@ index_compare(struct ntfs_logfile *source, struct index_builder *builder,
 	if (entry->page.result != NTFS_OK) {
 		return NTFS_OK;
 	}
+	/* The experimental serializer persists every segment separately. A copy
+	 * without a complete prefix can supersede a torn uncompleted home, but it
+	 * cannot supply an endpoint or complete-prefix comparison authority. The
+	 * private recovery owner must bind the whole retained history independently. */
+	if (index_uncompleted_copy(builder, &entry->page.selected)) {
+		return NTFS_OK;
+	}
 	if (entry->page.selected.storage != NTFS_LOGFILE_CIRCULAR &&
 	    ((entry->page.selected.page.flags & NTFS_LOGFILE_PAGE_RECORD_END) == 0 ||
 		entry->page.selected.page.last_end_lsn == 0 ||
@@ -1296,9 +1322,9 @@ ntfs_logfile_clear_page_index(struct ntfs_logfile *source)
 	}
 }
 
-enum ntfs_result
-ntfs_logfile_prepare_page_index(
-    struct ntfs_logfile *source, uint64_t max_bytes, struct ntfs_logfile_page_index_report *out)
+static enum ntfs_result
+prepare_page_index(struct ntfs_logfile *source, uint64_t max_bytes,
+    struct ntfs_logfile_page_index_report *out, bool admit_uncompleted_legacy_copies)
 {
 	struct ntfs_logfile_report work = {0};
 	struct index_builder builder;
@@ -1357,7 +1383,8 @@ ntfs_logfile_prepare_page_index(
 		entry->page.result = NTFS_NOT_FOUND;
 	}
 	builder = (struct index_builder){index, restart,
-	    (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes, copies, source};
+	    (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes, copies, source,
+	    admit_uncompleted_legacy_copies};
 	comparison = (uint8_t *)(index->entries + targets);
 	result =
 	    ntfs_logfile_visit_pages(source, index_collect, &builder, &index->report.inventory);
@@ -1417,6 +1444,20 @@ ntfs_logfile_prepare_page_index(
 		    source->environment.context, index, index->allocation_bytes);
 	}
 	return result;
+}
+
+enum ntfs_result
+ntfs_logfile_prepare_page_index(
+    struct ntfs_logfile *source, uint64_t max_bytes, struct ntfs_logfile_page_index_report *out)
+{
+	return prepare_page_index(source, max_bytes, out, false);
+}
+
+enum ntfs_result
+ntfs_logfile_prepare_write_page_index(
+    struct ntfs_logfile *source, uint64_t max_bytes, struct ntfs_logfile_page_index_report *out)
+{
+	return prepare_page_index(source, max_bytes, out, true);
 }
 
 enum ntfs_result

@@ -250,9 +250,9 @@ checkpoint operation.
 
 This is experimental execution through test and regular-image backends. It does
 not make a new program acceptable to the existing bounded history/recovery
-parser. Fresh journal-derived general recovery, torn MFT bootstrap, interrupted
-compensation, checkpoint reuse, open-unlink lifetime and native Windows acceptance
-remain open before writable-owner or FSKit admission.
+parser. The separate private recovery owner described below covers one reopened
+ordinary lifetime. Mixed/sustained history, checkpoint reuse, open-unlink lifetime
+and native Windows acceptance remain open before writable-owner or FSKit admission.
 
 The implementation separates complete metadata compilation/private application
 from journal packet/page and compensation composition. Both use one retained
@@ -263,6 +263,101 @@ boundary exposes entry points and durable reports instead of private preparation
 workspaces. These module boundaries add no native operation semantics or writable
 admission; the [refactoring plan](../REFACTORING.md#applied-cleanup) records their
 verification and remaining review.
+
+## Experimental fresh ordinary-operation recovery
+
+The [private recovery contract](../../core/write_batch_recover.h) takes an exclusively
+claimed immutable media backend. It receives no original mutation plan, program
+or physical executor. Admission is deliberately narrower than generic NTFS recovery:
+the exact quiet checkpoint/bootstrap pair, one ordinary metadata transaction and
+its optional interrupted compensation. The preceding qualified overwrite family,
+a second ordinary transaction, checkpoint advancement and ring reuse are outside
+this contract. Geometry remains 512-byte sectors, 4-KiB clusters/INDX buffers and
+1-KiB modern FILE records under LFS 1.1.
+
+### Bootstrap and original ownership
+
+[Bootstrap preparation](../../core/write_batch_restore.c) validates the boot-bound
+primary and mirror FILE zero separately. At least one must be complete. A private
+reader temporarily supplies that complete replica at both FILE-zero locations to
+acquire the unchanged `$LogFile` mapping. A private journal mount defers namespace
+admission while reading the log; it cannot publish a mounted volume. The public
+mount still rejects a torn root directory, and public page-index policy still
+rejects uncompleted transfer copies.
+
+The private writer index retains a protected unfinished legacy copy as a physical
+candidate when its circular home is torn. Such a copy supplies no completed-prefix
+comparison or endpoint authority. The owning history must independently establish
+the completed records and their successor. If a protected unfinished first circular
+segment is available, its actual record/header prefix must match the selected
+client, transaction, preceding record, undo successor, OAT target and exact spanning
+INDX form. A pending inverse must match the available bytes of the next original
+inverse. Unavailable continuation bytes are never fabricated into a payload. No
+unfinished payload contributes a metadata image, undo record or completed endpoint.
+
+[Retained packet binding](../../core/write_batch_capture.c) owns exact completed
+payloads, OAT identities and transaction links. Every OAT open carries a sequence-bearing
+reference to an existing original metadata owner. FILE snapshots/replacements,
+retirement, whole INDX images and disjoint bitmap ranges reconstruct private before
+and after views. Logical VCN/physical LCN correspondence is checked in both views;
+original MFT initialization and MFT/index/volume bitmaps prove previously unused
+storage. Stale or torn bytes in free storage do not establish ownership. Every
+metadata home is excluded from all journal runs, and MFT mirror publication has
+its own exact raw predecessor guard.
+
+An old full-FILE snapshot must belong entirely to the original initialized MFT
+extent and have a set original MFT bitmap bit. A new initialized slot must have
+a clear bit; a newly exposed slot has no initialized predecessor object. Matching
+a syntactically valid free FILE to its own logged full snapshot cannot replace
+this proof. The [independent false-predecessor tests](../../tests/write_batch_recovery_ownership.h)
+author that claim outside the mutation compiler for both a bitmap-clear initialized
+slot and an allocated uninitialized MFT tail.
+
+Both projected views must pass ordinary mount admission before publication; full
+metadata validation always checks the original view and additionally the committed
+after view. An unfinished transaction's after view supplies mapping proofs, without
+claiming that an incomplete metadata prefix is a valid finished namespace. A winner
+may reconstruct a torn logged FILE/INDX predecessor only when its identity/header
+and original/committed provenance agree. A complete unrelated predecessor refuses.
+All immutable children close before the prepared owner is returned.
+
+### Loser, winner and interrupted recovery
+
+This experimental physical protocol publishes no metadata homes before durable
+terminal Forget. A loser therefore preserves exact original metadata bytes. It
+appends the remaining inverses in reverse order, retaining the original undo LSNs,
+then closes the transaction with Forget. Reopening interrupted compensation verifies
+the already completed inverse prefix and continues from its actual persisted end;
+it does not recreate the original in-memory program. A winner reconstructs complete
+metadata after images with each home LSN bound to its actual retained update.
+Existing exact committed home bytes are preserved.
+
+| Recovery publication | Persistence boundary |
+| --- | --- |
+| Dirty both original RSTR roots | After each copy |
+| Repair each complete retained log record's circular page as needed | After every repaired home, before reusing transfer slots |
+| Loser: each remaining inverse/Forget page, alternating transfer copy then home | After each copy and home |
+| Winner: each changed complete metadata home and mirror | After every home |
+| Clean both original RSTR roots | After each copy |
+
+Recovery preserves original client roots, `CurrentLsn` and retained floor. The
+completion report marks compensation durable only after the copy containing the
+terminal abort Forget is persisted. Preparation copies and aligns all output,
+performs no writes or persistence, and closes all readers. Execution reads and
+allocates nothing, consumes the owner once and poisons uncertain transfers/barriers.
+A second fresh recovery of the complete clean result prepares zero rewrites and
+only confirms persistence. This is metadata recovery; unlogged user DATA follows
+the existing pre-Forget ordering and retains its separate atomicity contract.
+
+The [fresh recovery tests](../../tests/write_batch_recovery.h) close all original
+C owners before constructing recovery from crash bytes. Independent
+[journal oracles](../../tests/write_batch_recovery_journal.h) verify original packets,
+exact inverse contents/links, terminal Forget, unchanged roots and actual home LSNs.
+[Callback fault tests](../../tests/write_batch_recovery_faults.h) reopen both visible
+and durable bytes after failed writes and barriers, including interrupted recovery.
+Regular-image cases exercise actual `pwrite`, `fsync` and macOS `F_FULLFSYNC`, then
+close/reopen and compare the complete image. These local proofs do not qualify
+the experimental snapshot forms for Windows replay or enable new FSKit operations.
 
 ## Checkpoint advancement and ring reuse
 

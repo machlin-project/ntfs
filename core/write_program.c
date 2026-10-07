@@ -167,8 +167,7 @@ program_update_encode(struct ntfs_write_program *program, struct program_workspa
 	uint32_t bytes;
 	enum ntfs_result result;
 
-	result =
-	    ntfs_write_program_payload_encode(input, work->payload, sizeof(work->payload), &bytes);
+	result = ntfs_write_payload_encode(input, work->payload, sizeof(work->payload), &bytes);
 	if (result == NTFS_OK) {
 		result = program_update_append(program, region, flags, work->payload, bytes);
 	}

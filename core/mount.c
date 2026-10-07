@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
+#include "mount_internal.h"
 
 static enum ntfs_result
 record_size(uint8_t code, uint32_t cluster, uint32_t *size)
@@ -180,9 +181,9 @@ mount_boot_read(void *context, uint64_t offset, void *bytes, size_t size)
 				 : result;
 }
 
-enum ntfs_result
-ntfs_mount(
-    const struct ntfs_environment *env, const struct ntfs_limits *limits, struct ntfs_volume **out)
+static enum ntfs_result
+mount_source(const struct ntfs_environment *env, const struct ntfs_limits *limits,
+    struct ntfs_volume **out, bool namespace_admission)
 {
 	struct ntfs_volume *v;
 	struct ntfs_limits configured;
@@ -351,9 +352,11 @@ ntfs_mount(
 	}
 	ntfs_node_close(node);
 	node = NULL;
-	result = ntfs_root(v, &node);
-	if (result == NTFS_OK) {
-		result = ntfs_directory_open(node, &directory);
+	if (namespace_admission) {
+		result = ntfs_root(v, &node);
+		if (result == NTFS_OK) {
+			result = ntfs_directory_open(node, &directory);
+		}
 	}
 finish:
 	ntfs_directory_close(directory);
@@ -370,6 +373,20 @@ finish:
 	}
 	*out = v;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_mount(
+    const struct ntfs_environment *env, const struct ntfs_limits *limits, struct ntfs_volume **out)
+{
+	return mount_source(env, limits, out, true);
+}
+
+enum ntfs_result
+ntfs_mount_journal(
+    const struct ntfs_environment *env, const struct ntfs_limits *limits, struct ntfs_volume **out)
+{
+	return mount_source(env, limits, out, false);
 }
 
 enum ntfs_result

@@ -20,6 +20,12 @@ enum ntfs_result ntfs_logfile_checkpoint_anchor(const struct ntfs_logfile_restar
 enum ntfs_result ntfs_logfile_environment(const struct ntfs_logfile *, struct ntfs_environment *,
     struct ntfs_logfile_limits *, struct ntfs_volume **);
 
+/* Experimental physical-writer recovery only. A protected legacy transfer with
+ * no complete record can supersede its torn home, but supplies no completed end
+ * witness. This does not change public reader policy. */
+enum ntfs_result ntfs_logfile_prepare_write_page_index(
+    struct ntfs_logfile *, uint64_t max_bytes, struct ntfs_logfile_page_index_report *);
+
 /* Tightened whole-walk credits, including the unfinished successor probe. */
 enum ntfs_result ntfs_logfile_visit_records_limited(struct ntfs_logfile *, uint64_t first_lsn,
     uint32_t max_records, const struct ntfs_logfile_checkpoint_capture_limits *, void *workspace,

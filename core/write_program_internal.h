@@ -2,6 +2,7 @@
 #ifndef MACHLIN_NTFS_WRITE_PROGRAM_INTERNAL_H
 #define MACHLIN_NTFS_WRITE_PROGRAM_INTERNAL_H
 #include "write_program.h"
+#include "write_payload.h"
 
 /* One retained program owner shared only by metadata compilation/application
  * and packet/page composition. Payloads and region storage have one lifetime. */
@@ -23,8 +24,5 @@ struct ntfs_write_program {
 	struct program_target *target;
 	struct ntfs_write_program_update *update;
 };
-
-enum ntfs_result ntfs_write_program_payload_encode(
-    const struct ntfs_logfile_update_input *, void *, size_t capacity, uint32_t *bytes);
 
 #endif

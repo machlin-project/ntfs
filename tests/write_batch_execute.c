@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "write_batch_execute.h"
+#include "write_batch_recover.h"
 #include "../adapters/posix/overwrite_image.h"
 #include <ntfs/record.h>
 #include <assert.h>
@@ -48,6 +49,7 @@ struct device {
 	uint32_t alignment;
 	size_t fail_allocation, fail_read, fail_write, fail_barrier, failure_bytes;
 	const struct ntfs_write_batch_execution *expected;
+	const struct ntfs_write_batch_recovery *recovering;
 	bool executing, overreport, short_success, persist_on_failure;
 };
 
@@ -134,14 +136,21 @@ write_image(void *context, uint64_t physical, const void *data, size_t bytes, si
 {
 	struct device *device = context;
 	const struct ntfs_write_batch_publication *expected;
+	const struct ntfs_write_batch_recovery_publication *recovery;
 	size_t count;
 
 	assert(device->executing && bytes == NTFS_WRITE_CLUSTER_BYTES &&
 	    physical % device->alignment == 0 && (uintptr_t)data % device->alignment == 0 &&
 	    ntfs_bounds(physical, bytes, device->bytes));
-	expected = ntfs_write_batch_execution_get(device->expected, device->writes);
-	assert(expected != NULL && expected->physical == physical &&
-	    memcmp(expected->image, data, bytes) == 0);
+	if (device->recovering != NULL) {
+		recovery = ntfs_write_batch_recovery_get(device->recovering, device->writes);
+		assert(recovery != NULL && recovery->physical == physical &&
+		    memcmp(recovery->image, data, bytes) == 0);
+	} else {
+		expected = ntfs_write_batch_execution_get(device->expected, device->writes);
+		assert(expected != NULL && expected->physical == physical &&
+		    memcmp(expected->image, data, bytes) == 0);
+	}
 	device->writes++;
 	if (device->writes == device->fail_write) {
 		count = device->failure_bytes;
@@ -1276,9 +1285,22 @@ faults(const char *directory, enum ntfs_write_mutation_kind kind)
 	finish(test);
 }
 
+#include "write_batch_recovery.h"
+
 int
 main(int argc, char **argv)
 {
+	if (argc == 4) {
+		if (strcmp(argv[3], "recovery") == 0) {
+			batch_recovery_tests(argv[1], argv[2]);
+		} else if (strcmp(argv[3], "recovery-ownership") == 0) {
+			batch_recovery_ownership_tests(argv[1], argv[2]);
+		} else {
+			assert(strcmp(argv[3], "recovery-faults") == 0);
+			batch_recovery_callback_tests(argv[1], argv[2]);
+		}
+		return 0;
+	}
 	assert(argc == 3);
 	complete(argv[1], "source.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
 	complete(argv[1], "source.img", NTFS_WRITE_CREATE_DIRECTORY, TEST_DEFAULT);

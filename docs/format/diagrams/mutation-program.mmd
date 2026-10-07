@@ -15,11 +15,13 @@ flowchart TB
     D --> E
     E --> V["Complete metadata overlay validation\nClose all private immutable children"]
     V --> X["Experimental physical execution\nWAL → DATA → Forget → metadata homes"]
-    X --> R["Fresh journal-derived general recovery\nBootstrap · loser/winner · interrupted compensation"]
-    U --> R
-    R --> G["Connected native qualification\nCheckpoint reuse · Windows recovery"]
+    X --> K["Close original C owners\nReopen immutable media only"]
+    K --> R["Experimental fresh journal recovery\nQuiet origin + one ordinary lifetime\nBootstrap · loser/winner · interrupted compensation"]
+    R --> Q["Private before/after ownership proofs\nComplete metadata · exact journal links"]
+    Q --> Z["Preallocated recovery execution\nLog homes → inverse/Forget or metadata → clean roots"]
+    Z --> G["Connected native qualification\nMixed/sustained history · checkpoint reuse\nWindows recovery"]
     G -. "Still required" .-> A["Writable owner and FSKit admission"]
     classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
     classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
-    class O,S,C,F,I,B,P,J,U,D,H,E,V,X private
-    class R,G,A gate
+    class O,S,C,F,I,B,P,J,U,D,H,E,V,X,K,R,Q,Z private
+    class G,A gate

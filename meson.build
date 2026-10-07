@@ -7,6 +7,8 @@ core_sources += files('core/write_metadata.c', 'core/write_journal.c', 'core/wri
 core_sources += files('core/write_mutation.c', 'core/write_record.c', 'core/write_allocation.c', 'core/write_growth.c', 'core/write_directory.c', 'core/write_inherit.c', 'core/write_namespace.c')
 core_sources += files('core/write_batch_pages.c', 'core/write_bitmap.c', 'core/write_retirement.c', 'core/write_program.c', 'core/write_program_packets.c')
 core_sources += files('core/write_batch_execute.c')
+core_sources += files('core/write_batch_capture.c', 'core/write_batch_tail.c', 'core/write_batch_restore.c', 'core/write_batch_recover.c')
+core_sources += files('core/write_payload.c')
 core_flags = ['-ffreestanding', '-fno-builtin', '-Wdeclaration-after-statement', '-Wframe-larger-than=2048']
 core = static_library('ntfs', core_sources, include_directories: inc, c_args: core_flags, install: false)
 posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directories: inc, c_args: ['-D_POSIX_C_SOURCE=200809L'], install: false)
@@ -38,6 +40,9 @@ write_mutation_plan_test = executable('ntfs-write-mutation-plan-tests', 'tests/w
 test('write-mutation-plan', write_mutation_plan_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir() / 'write-mutation-cases'], depends: write_mutation_fixture, timeout: 600)
 write_batch_execute_test = executable('ntfs-write-batch-execute-tests', ['tests/write_batch_execute.c', 'adapters/posix/overwrite_image.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-D_POSIX_C_SOURCE=200809L', '-D_DARWIN_C_SOURCE', '-Wdeclaration-after-statement'])
 test('write-batch-execute', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir()], depends: write_mutation_fixture, timeout: 600)
+test('write-batch-recovery', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery'], depends: write_mutation_fixture, timeout: 1800)
+test('write-batch-recovery-faults', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery-faults'], depends: write_mutation_fixture, timeout: 1800)
+test('write-batch-recovery-ownership', write_batch_execute_test, args: [meson.current_build_dir() / 'write-mutation-cases', meson.current_build_dir(), 'recovery-ownership'], depends: write_mutation_fixture, timeout: 600)
 write_batch_pages_fixture = custom_target('write-batch-pages-fixtures', output: 'write-batch-pages-fixtures.stamp', command: [python, files('tests/write_batch_pages_fixtures.py'), meson.current_build_dir() / 'write-batch-pages-fixtures', '@OUTPUT@'], depend_files: files('tests/logfile_fixtures.py'), build_by_default: true)
 write_batch_pages_test = executable('ntfs-write-batch-pages-tests', 'tests/write_batch_pages.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('write-batch-pages', write_batch_pages_test, args: [meson.current_build_dir() / 'write-batch-pages-fixtures'], depends: write_batch_pages_fixture, timeout: 300)

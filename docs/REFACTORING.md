@@ -60,6 +60,26 @@ locking, authorization, transfers and reply code are unchanged, so this cleanup
 adds no installed VM acceptance. Functional recovery/write admission retains
 its original native gate.
 
+The next focused cleanup makes successful producer outputs explicit before use
+in nine existing writer modules and the native image-item rebind method. The
+directory constructor retains its exact root allocation size for cleanup; recovery
+selects the last retained transaction only after proving the array is nonempty.
+Fourteen C functions preserve ordered calls and errors. Native item rebinding
+preserves metadata/stat/link/ancestry order, its failure node close and successful
+field publication. Locking, authenticated rights and native replies retain their
+existing code. This is consistent control flow, not the planned FSKit extraction.
+
+The connected recovery working set passes all 184 fatal-ASan/UBSan suites with
+assertions enabled, both freestanding architectures and fifteen standalone headers.
+All nine regular-image writer/recovery postimages are byte-identical before/after
+the C guard changes. Strict Release compilation passes 116 core checks and eleven
+native x86_64 frontend checks; actual unsigned app/extension/archive builds supply
+both architectures. Host FSKit after native guard cleanup remains 63 PASS /
+13 runtime-SDK SKIP / 0 FAIL. Initial compiler refusals remain retained separately.
+The main equivalence and final evidence review is under
+`artifacts/overwrite/batch-recovery-main-review-20261007/`; current acceptance is
+recorded in the existing recovery section of ACCEPTANCE.md.
+
 ## Concrete findings
 
 | Area | Current finding | Proposed change |

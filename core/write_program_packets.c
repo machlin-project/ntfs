@@ -14,35 +14,6 @@ struct packet_workspace {
 	size_t count, packet_bytes, payload_bytes, stride;
 };
 
-enum ntfs_result
-ntfs_write_program_payload_encode(
-    const struct ntfs_logfile_update_input *input, void *memory, size_t capacity, uint32_t *bytes)
-{
-	struct ntfs_disk_log_update_storage *stored = memory;
-	enum ntfs_result result;
-
-	result = ntfs_logfile_update_measure(input, bytes);
-	if (result == NTFS_OK) {
-		result = ntfs_logfile_update_encode(input, memory, capacity);
-	}
-	if (result != NTFS_OK) {
-		return result;
-	}
-	if (input->redo.bytes == 0) {
-		ntfs_put_u16(stored->header.redo_offset, sizeof(*stored));
-	}
-	if (input->undo.bytes == 0) {
-		ntfs_put_u16(stored->header.undo_offset, (uint16_t)*bytes);
-	}
-	if (input->undo_operation == NTFS_LOG_OP_COMPENSATION && input->redo.bytes != 0) {
-		ntfs_put_u16(stored->header.undo_bytes, (uint16_t)input->redo.bytes);
-	}
-	if (input->lcns.bytes == 0) {
-		ntfs_put_u64(stored->first_lcn, UINT64_MAX);
-	}
-	return NTFS_OK;
-}
-
 static enum ntfs_result
 packet_workspace_allocate(const struct ntfs_environment *source, size_t count, size_t stride,
     struct packet_workspace *work)
@@ -90,7 +61,7 @@ program_packet_encode(struct packet_workspace *work, size_t ordinal,
 	uint32_t bytes;
 	enum ntfs_result result;
 
-	result = ntfs_write_program_payload_encode(update, payload, work->stride, &bytes);
+	result = ntfs_write_payload_encode(update, payload, work->stride, &bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}

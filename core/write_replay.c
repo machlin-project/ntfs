@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_internal.h"
 #include <ntfs/record.h>
 
@@ -15,16 +16,6 @@ enum {
 	REPLAY_COMMIT_BYTES =
 	    sizeof(struct ntfs_disk_log_record) + sizeof(struct ntfs_disk_log_update_storage)
 };
-
-static bool
-separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
-{
-	uintptr_t a = (uintptr_t)left, b = (uintptr_t)right;
-
-	return (left != NULL || left_bytes == 0) && (right != NULL || right_bytes == 0) &&
-	    left_bytes <= UINTPTR_MAX - a && right_bytes <= UINTPTR_MAX - b &&
-	    (left_bytes == 0 || right_bytes == 0 || a + left_bytes <= b || b + right_bytes <= a);
-}
 
 static const uint8_t *
 body(const struct ntfs_write_replay_input *input, const struct ntfs_write_replay_workspace *work,
@@ -646,28 +637,30 @@ ntfs_write_replay_prepare(struct ntfs_volume *volume, const struct ntfs_write_re
 	enum ntfs_result result;
 
 	if (volume == NULL || input == NULL || work == NULL || out == NULL ||
-	    !separate(volume, sizeof(*volume), out, sizeof(*out)) ||
-	    !separate(volume, sizeof(*volume), work, sizeof(*work)) ||
-	    !separate(input, sizeof(*input), out, sizeof(*out)) ||
-	    !separate(input, sizeof(*input), work, sizeof(*work)) ||
-	    !separate(work, sizeof(*work), out, sizeof(*out))) {
+	    !ntfs_pointer_ranges_separate(volume, sizeof(*volume), out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(volume, sizeof(*volume), work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(input, sizeof(*input), out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(input, sizeof(*input), work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(work, sizeof(*work), out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	for (index = 0; index < NTFS_WRITE_REPLAY_PACKETS; index++) {
 		if ((input->packet[index].bytes == 0 && index != NTFS_WRITE_REPLAY_COMMIT) ||
 		    (input->packet[index].bytes == 0 && input->packet[index].data != NULL) ||
-		    !separate(
+		    !ntfs_pointer_ranges_separate(
 			input->packet[index].data, input->packet[index].bytes, out, sizeof(*out)) ||
-		    !separate(input->packet[index].data, input->packet[index].bytes, work,
-			sizeof(*work))) {
+		    !ntfs_pointer_ranges_separate(input->packet[index].data,
+			input->packet[index].bytes, work, sizeof(*work))) {
 			return NTFS_INVALID;
 		}
 	}
 	if ((input->abort.bytes == 0 && input->abort.data != NULL) ||
 	    (input->abort.bytes != 0 && input->packet[NTFS_WRITE_REPLAY_COMMIT].bytes == 0) ||
 	    input->abort.bytes > REPLAY_COMMIT_BYTES ||
-	    !separate(input->abort.data, input->abort.bytes, out, sizeof(*out)) ||
-	    !separate(input->abort.data, input->abort.bytes, work, sizeof(*work))) {
+	    !ntfs_pointer_ranges_separate(
+		input->abort.data, input->abort.bytes, out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(
+		input->abort.data, input->abort.bytes, work, sizeof(*work))) {
 		return NTFS_INVALID;
 	}
 	if ((input->resident.bytes == 0 && input->resident.data != NULL) ||
@@ -677,12 +670,14 @@ ntfs_write_replay_prepare(struct ntfs_volume *volume, const struct ntfs_write_re
 		(input->resident.bytes == 0 || input->abort.bytes == 0)) ||
 	    (input->resident.bytes != 0 && input->abort.bytes != 0 &&
 		input->resident_compensation.bytes == 0) ||
-	    !separate(input->resident.data, input->resident.bytes, out, sizeof(*out)) ||
-	    !separate(input->resident.data, input->resident.bytes, work, sizeof(*work)) ||
-	    !separate(input->resident_compensation.data, input->resident_compensation.bytes, out,
-		sizeof(*out)) ||
-	    !separate(input->resident_compensation.data, input->resident_compensation.bytes, work,
-		sizeof(*work))) {
+	    !ntfs_pointer_ranges_separate(
+		input->resident.data, input->resident.bytes, out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(
+		input->resident.data, input->resident.bytes, work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(input->resident_compensation.data,
+		input->resident_compensation.bytes, out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(input->resident_compensation.data,
+		input->resident_compensation.bytes, work, sizeof(*work))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));

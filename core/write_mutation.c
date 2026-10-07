@@ -1,18 +1,9 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_mutation_internal.h"
 #include <ntfs/record.h>
 
 const uint16_t ntfs_mutation_index_name[4] = {'$', 'I', '3', '0'};
-
-static bool
-separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
-{
-	uintptr_t left = (uintptr_t)a, right = (uintptr_t)b;
-
-	return (a != NULL || a_bytes == 0) && (b != NULL || b_bytes == 0) &&
-	    a_bytes <= UINTPTR_MAX - left && b_bytes <= UINTPTR_MAX - right &&
-	    (a_bytes == 0 || b_bytes == 0 || left + a_bytes <= right || right + b_bytes <= left);
-}
 
 enum ntfs_result
 ntfs_mutation_work(struct ntfs_write_mutation_plan *plan, uint64_t count)
@@ -479,8 +470,10 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 	enum ntfs_result result;
 
 	if (out == NULL || sizeof(*out) > UINTPTR_MAX - (uintptr_t)out ||
-	    (source != NULL && !separate(source, sizeof(*source), out, sizeof(*out))) ||
-	    (request != NULL && !separate(request, sizeof(*request), out, sizeof(*out)))) {
+	    (source != NULL &&
+		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out))) ||
+	    (request != NULL &&
+		!ntfs_pointer_ranges_separate(request, sizeof(*request), out, sizeof(*out)))) {
 		return NTFS_INVALID;
 	}
 	if (source == NULL || request == NULL || source->api_version != NTFS_API_VERSION ||
@@ -492,13 +485,13 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 	/* Admit every borrowed range before clearing output. Caller mistakes cannot
 	 * overwrite the request, name, payload or source capability being inspected. */
 	if ((request->kind != NTFS_WRITE_RESIZE_FILE && request->kind != NTFS_WRITE_GROWING_RANGE &&
-		!separate(request->source.units, request->source.count * NTFS_UTF16_UNIT_BYTES, out,
-		    sizeof(*out))) ||
+		!ntfs_pointer_ranges_separate(request->source.units,
+		    request->source.count * NTFS_UTF16_UNIT_BYTES, out, sizeof(*out))) ||
 	    (request->kind == NTFS_WRITE_RENAME &&
-		!separate(request->destination.units,
+		!ntfs_pointer_ranges_separate(request->destination.units,
 		    request->destination.count * NTFS_UTF16_UNIT_BYTES, out, sizeof(*out))) ||
 	    (request->kind == NTFS_WRITE_GROWING_RANGE &&
-		!separate(request->data, request->bytes, out, sizeof(*out)))) {
+		!ntfs_pointer_ranges_separate(request->data, request->bytes, out, sizeof(*out)))) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;
@@ -548,21 +541,26 @@ plan_output_separate(const struct ntfs_write_mutation_plan *plan, const void *ou
 {
 	size_t index;
 
-	if (!separate(plan, sizeof(*plan), out, bytes) ||
-	    !separate(plan->patches, plan->patch_capacity * sizeof(*plan->patches), out, bytes) ||
-	    !separate(plan->records, plan->record_capacity * sizeof(*plan->records), out, bytes) ||
-	    !separate(plan->scratch, NTFS_WRITE_CLUSTER_BYTES, out, bytes) ||
-	    !separate(plan->protected_record, NTFS_WRITE_CLUSTER_BYTES, out, bytes) ||
-	    !separate(plan->guard, sizeof(*plan->guard), out, bytes)) {
+	if (!ntfs_pointer_ranges_separate(plan, sizeof(*plan), out, bytes) ||
+	    !ntfs_pointer_ranges_separate(
+		plan->patches, plan->patch_capacity * sizeof(*plan->patches), out, bytes) ||
+	    !ntfs_pointer_ranges_separate(
+		plan->records, plan->record_capacity * sizeof(*plan->records), out, bytes) ||
+	    !ntfs_pointer_ranges_separate(plan->scratch, NTFS_WRITE_CLUSTER_BYTES, out, bytes) ||
+	    !ntfs_pointer_ranges_separate(
+		plan->protected_record, NTFS_WRITE_CLUSTER_BYTES, out, bytes) ||
+	    !ntfs_pointer_ranges_separate(plan->guard, sizeof(*plan->guard), out, bytes)) {
 		return false;
 	}
 	for (index = 0; index < plan->patch_count; index++) {
-		if (!separate(plan->patches[index], sizeof(*plan->patches[index]), out, bytes)) {
+		if (!ntfs_pointer_ranges_separate(
+			plan->patches[index], sizeof(*plan->patches[index]), out, bytes)) {
 			return false;
 		}
 	}
 	for (index = 0; index < plan->record_count; index++) {
-		if (!separate(plan->records[index], sizeof(*plan->records[index]), out, bytes)) {
+		if (!ntfs_pointer_ranges_separate(
+			plan->records[index], sizeof(*plan->records[index]), out, bytes)) {
 			return false;
 		}
 	}

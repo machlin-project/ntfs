@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_batch_pages.h"
 
 enum { NTFS_WRITE_BATCH_DATA_BYTES = NTFS_WRITE_CLUSTER_BYTES - NTFS_WRITE_LOG_DATA_OFFSET };
@@ -26,27 +27,11 @@ struct batch_workspace {
 _Static_assert(_Alignof(struct ntfs_write_batch_page) <= _Alignof(uint64_t),
     "batch page storage follows the scalar LSN array");
 
-static bool
-valid_range(const void *pointer, size_t bytes)
-{
-	return bytes == 0 || (pointer != NULL && bytes <= UINTPTR_MAX - (uintptr_t)pointer);
-}
-
-static bool
-separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
-{
-	uintptr_t a = (uintptr_t)left, b = (uintptr_t)right;
-
-	return valid_range(left, left_bytes) && valid_range(right, right_bytes) &&
-	    (left_bytes == 0 || right_bytes == 0 ||
-		(a <= b ? b - a >= left_bytes : a - b >= right_bytes));
-}
-
 bool
 ntfs_write_batch_pages_output_separate(
     const struct ntfs_write_batch_pages *owner, const void *output, size_t bytes)
 {
-	return owner != NULL && separate(owner, owner->bytes, output, bytes);
+	return owner != NULL && ntfs_pointer_ranges_separate(owner, owner->bytes, output, bytes);
 }
 
 enum ntfs_result
@@ -82,7 +67,7 @@ ntfs_write_batch_pages_packet_copy(const struct ntfs_write_batch_pages *owner, s
 		return NTFS_CORRUPT;
 	}
 	if (!ntfs_write_batch_pages_output_separate(owner, output, bytes) ||
-	    !separate(output, bytes, actual, sizeof(*actual))) {
+	    !ntfs_pointer_ranges_separate(output, bytes, actual, sizeof(*actual))) {
 		return NTFS_INVALID;
 	}
 	*actual = 0;
@@ -149,9 +134,11 @@ admit_output(const struct ntfs_environment *source,
 {
 	size_t index, array_bytes;
 
-	if (!valid_range(out, sizeof(*out)) ||
-	    (source != NULL && !separate(source, sizeof(*source), out, sizeof(*out))) ||
-	    (input != NULL && !separate(input, sizeof(*input), out, sizeof(*out)))) {
+	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
+	    (source != NULL &&
+		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out))) ||
+	    (input != NULL &&
+		!ntfs_pointer_ranges_separate(input, sizeof(*input), out, sizeof(*out)))) {
 		return NTFS_INVALID;
 	}
 	if (source == NULL || input == NULL) {
@@ -162,7 +149,7 @@ admit_output(const struct ntfs_environment *source,
 		return NTFS_INVALID;
 	}
 	array_bytes = input->packets * sizeof(*input->packet);
-	if (!separate(input->packet, array_bytes, out, sizeof(*out))) {
+	if (!ntfs_pointer_ranges_separate(input->packet, array_bytes, out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	if (input->packets > NTFS_WRITE_BATCH_MAX_PACKETS) {
@@ -170,8 +157,8 @@ admit_output(const struct ntfs_environment *source,
 		return NTFS_RANGE;
 	}
 	for (index = 0; index < input->packets; index++) {
-		if (!separate(input->packet[index].payload.data, input->packet[index].payload.bytes,
-			out, sizeof(*out))) {
+		if (!ntfs_pointer_ranges_separate(input->packet[index].payload.data,
+			input->packet[index].payload.bytes, out, sizeof(*out))) {
 			return NTFS_INVALID;
 		}
 	}

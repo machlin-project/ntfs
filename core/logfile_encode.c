@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "internal.h"
 #include <ntfs/logfile_encode.h>
 #include <ntfs/record.h>
@@ -12,25 +13,6 @@ struct update_layout {
 _Static_assert(NTFS_LOGFILE_RECORD_HEADER_BYTES == sizeof(struct ntfs_disk_log_record),
     "encoded LFS common header");
 
-static bool
-valid_range(const void *data, size_t bytes)
-{
-	return bytes == 0 || (data != NULL && bytes <= UINTPTR_MAX - (uintptr_t)data);
-}
-
-static bool
-separate(const void *input, size_t input_bytes, const void *output, size_t output_bytes)
-{
-	uintptr_t source = (uintptr_t)input, destination = (uintptr_t)output;
-
-	if (!valid_range(input, input_bytes) || !valid_range(output, output_bytes)) {
-		return false;
-	}
-	return input_bytes == 0 || output_bytes == 0 ||
-	    (source <= destination ? destination - source >= input_bytes
-				   : source - destination >= output_bytes);
-}
-
 enum ntfs_result
 ntfs_logfile_record_encode(const struct ntfs_logfile_record *record, const void *payload,
     size_t payload_bytes, void *output, size_t capacity)
@@ -38,7 +20,7 @@ ntfs_logfile_record_encode(const struct ntfs_logfile_record *record, const void 
 	struct ntfs_disk_log_record *header = output;
 	size_t bytes;
 
-	if (output == NULL || !valid_range(record, sizeof(*record))) {
+	if (output == NULL || !ntfs_pointer_range_valid(record, sizeof(*record))) {
 		return NTFS_INVALID;
 	}
 	if (payload_bytes > NTFS_LOGFILE_MAX_RECORD_BYTES - sizeof(*header)) {
@@ -48,8 +30,8 @@ ntfs_logfile_record_encode(const struct ntfs_logfile_record *record, const void 
 	if (capacity < bytes) {
 		return NTFS_RANGE;
 	}
-	if (!separate(record, sizeof(*record), output, bytes) ||
-	    !separate(payload, payload_bytes, output, bytes) ||
+	if (!ntfs_pointer_ranges_separate(record, sizeof(*record), output, bytes) ||
+	    !ntfs_pointer_ranges_separate(payload, payload_bytes, output, bytes) ||
 	    record->data.length != payload_bytes || record->lsn == 0 ||
 	    record->previous_lsn >= record->lsn || record->undo_next_lsn >= record->lsn ||
 	    record->client_index == NTFS_LOGFILE_NO_CLIENT ||
@@ -126,10 +108,10 @@ static bool
 update_inputs_separate(
     const struct ntfs_logfile_update_input *input, const void *output, size_t bytes)
 {
-	return separate(input, sizeof(*input), output, bytes) &&
-	    separate(input->lcns.data, input->lcns.bytes, output, bytes) &&
-	    separate(input->redo.data, input->redo.bytes, output, bytes) &&
-	    separate(input->undo.data, input->undo.bytes, output, bytes);
+	return ntfs_pointer_ranges_separate(input, sizeof(*input), output, bytes) &&
+	    ntfs_pointer_ranges_separate(input->lcns.data, input->lcns.bytes, output, bytes) &&
+	    ntfs_pointer_ranges_separate(input->redo.data, input->redo.bytes, output, bytes) &&
+	    ntfs_pointer_ranges_separate(input->undo.data, input->undo.bytes, output, bytes);
 }
 
 enum ntfs_result
@@ -138,7 +120,7 @@ ntfs_logfile_update_measure(const struct ntfs_logfile_update_input *input, uint3
 	struct update_layout layout = {0};
 	enum ntfs_result result;
 
-	if (bytes == NULL || !valid_range(input, sizeof(*input))) {
+	if (bytes == NULL || !ntfs_pointer_range_valid(input, sizeof(*input))) {
 		return NTFS_INVALID;
 	}
 	result = update_layout(input, &layout);
@@ -162,7 +144,7 @@ ntfs_logfile_update_encode(
 	size_t redo_end;
 	enum ntfs_result result;
 
-	if (output == NULL || !valid_range(input, sizeof(*input))) {
+	if (output == NULL || !ntfs_pointer_range_valid(input, sizeof(*input))) {
 		return NTFS_INVALID;
 	}
 	result = update_layout(input, &layout);
@@ -217,7 +199,8 @@ page_encode(const struct ntfs_logfile_page_input *input, const void *description
 	size_t bytes, data_offset, usa_count, usa_bytes, prefix;
 	uint32_t known_flags;
 
-	if (!valid_range(description, description_bytes) || workspace == NULL || output == NULL) {
+	if (!ntfs_pointer_range_valid(description, description_bytes) || workspace == NULL ||
+	    output == NULL) {
 		return NTFS_INVALID;
 	}
 	known_flags = NTFS_LOGFILE_PAGE_RECORD_END | NTFS_LOGFILE_PAGE_CLIENT_RESTART;
@@ -255,11 +238,11 @@ page_encode(const struct ntfs_logfile_page_input *input, const void *description
 		    input->page.next_record_offset % NTFS_WIRE_ALIGNMENT != 0))) {
 		return NTFS_INVALID;
 	}
-	if (!separate(description, description_bytes, output, bytes) ||
-	    !separate(input->data.data, input->data.bytes, output, bytes) ||
-	    !separate(description, description_bytes, workspace, bytes) ||
-	    !separate(input->data.data, input->data.bytes, workspace, bytes) ||
-	    !separate(workspace, bytes, output, bytes)) {
+	if (!ntfs_pointer_ranges_separate(description, description_bytes, output, bytes) ||
+	    !ntfs_pointer_ranges_separate(input->data.data, input->data.bytes, output, bytes) ||
+	    !ntfs_pointer_ranges_separate(description, description_bytes, workspace, bytes) ||
+	    !ntfs_pointer_ranges_separate(input->data.data, input->data.bytes, workspace, bytes) ||
+	    !ntfs_pointer_ranges_separate(workspace, bytes, output, bytes)) {
 		return NTFS_INVALID;
 	}
 	/* These size limits place the canonical USA wholly before the first stride
@@ -294,7 +277,7 @@ enum ntfs_result
 ntfs_logfile_fast_page_encode(const struct ntfs_logfile_fast_page_input *input, void *workspace,
     size_t workspace_bytes, void *output, size_t capacity)
 {
-	if (!valid_range(input, sizeof(*input))) {
+	if (!ntfs_pointer_range_valid(input, sizeof(*input))) {
 		return NTFS_INVALID;
 	}
 	return page_encode(&input->common, input, sizeof(*input), true, input->file_offset,

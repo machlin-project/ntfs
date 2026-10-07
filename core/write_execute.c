@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_internal.h"
 
 enum {
@@ -11,16 +12,6 @@ enum {
 	FRAME_CLEAN_FIRST,
 	FRAME_CLEAN_SECOND
 };
-
-static bool
-separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
-{
-	uintptr_t left = (uintptr_t)a, right = (uintptr_t)b;
-
-	return (a != NULL || a_bytes == 0) && (b != NULL || b_bytes == 0) &&
-	    a_bytes <= UINTPTR_MAX - left && b_bytes <= UINTPTR_MAX - right &&
-	    (a_bytes == 0 || b_bytes == 0 || left + a_bytes <= right || right + b_bytes <= left);
-}
 
 static bool
 physical_separate(uint64_t a, uint64_t a_bytes, uint64_t b, uint64_t b_bytes)
@@ -41,11 +32,13 @@ admit(const struct ntfs_overwrite_environment *backend,
 
 	if (backend == NULL || input == NULL || work == NULL || input->file == NULL ||
 	    input->journal == NULL || input->spans > NTFS_WRITE_EXECUTE_MAX_SPANS ||
-	    !separate(backend, sizeof(*backend), work, sizeof(*work)) ||
-	    !separate(input, sizeof(*input), work, sizeof(*work)) ||
-	    !separate(input->file, sizeof(*input->file), work, sizeof(*work)) ||
-	    !separate(input->journal, sizeof(*input->journal), work, sizeof(*work)) ||
-	    !separate(input->data, input->spans * sizeof(*input->data), work, sizeof(*work))) {
+	    !ntfs_pointer_ranges_separate(backend, sizeof(*backend), work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(input, sizeof(*input), work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(input->file, sizeof(*input->file), work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(
+		input->journal, sizeof(*input->journal), work, sizeof(*work)) ||
+	    !ntfs_pointer_ranges_separate(
+		input->data, input->spans * sizeof(*input->data), work, sizeof(*work))) {
 		return NTFS_INVALID;
 	}
 	alignment = backend->alignment;
@@ -86,7 +79,7 @@ admit(const struct ntfs_overwrite_environment *backend,
 		}
 	}
 	for (index = 0; index < NTFS_LFS_RESTART_PAGES; index++) {
-		if (!separate(
+		if (!ntfs_pointer_ranges_separate(
 			input->restart[index], NTFS_WRITE_CLUSTER_BYTES, work, sizeof(*work))) {
 			return NTFS_INVALID;
 		}
@@ -97,7 +90,7 @@ admit(const struct ntfs_overwrite_environment *backend,
 		    span->physical % alignment != 0 || span->bytes % alignment != 0 ||
 		    (uintptr_t)span->image % alignment != 0 ||
 		    !ntfs_bounds(span->physical, span->bytes, backend->reader.size_bytes) ||
-		    !separate(span->image, span->bytes, work, sizeof(*work)) ||
+		    !ntfs_pointer_ranges_separate(span->image, span->bytes, work, sizeof(*work)) ||
 		    !physical_separate(span->physical, span->bytes, file->cluster_physical,
 			NTFS_WRITE_CLUSTER_BYTES)) {
 			return NTFS_INVALID;
@@ -297,18 +290,18 @@ ntfs_write_execute(struct ntfs_write_execution_workspace *work, bool *poisoned,
 	enum ntfs_result result = NTFS_OK;
 
 	if (work == NULL || poisoned == NULL || report == NULL ||
-	    !separate(work, sizeof(*work), poisoned, sizeof(*poisoned)) ||
-	    !separate(work, sizeof(*work), report, sizeof(*report)) ||
-	    !separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
+	    !ntfs_pointer_ranges_separate(work, sizeof(*work), poisoned, sizeof(*poisoned)) ||
+	    !ntfs_pointer_ranges_separate(work, sizeof(*work), report, sizeof(*report)) ||
+	    !ntfs_pointer_ranges_separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
 		return NTFS_INVALID;
 	}
 	if (work->spans > NTFS_WRITE_EXECUTE_MAX_SPANS) {
 		return NTFS_INVALID;
 	}
 	for (span = 0; span < work->spans; span++) {
-		if (!separate(work->data[span].image, work->data[span].bytes, poisoned,
-			sizeof(*poisoned)) ||
-		    !separate(
+		if (!ntfs_pointer_ranges_separate(work->data[span].image, work->data[span].bytes,
+			poisoned, sizeof(*poisoned)) ||
+		    !ntfs_pointer_ranges_separate(
 			work->data[span].image, work->data[span].bytes, report, sizeof(*report))) {
 			return NTFS_INVALID;
 		}

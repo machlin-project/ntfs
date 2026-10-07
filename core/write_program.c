@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_program.h"
 #include "write_bitmap.h"
 #include "write_retirement.h"
@@ -48,22 +49,6 @@ struct packet_workspace {
 	uint8_t *payload;
 	size_t count, packet_bytes, payload_bytes, stride;
 };
-
-static bool
-range(const void *pointer, size_t bytes)
-{
-	return bytes == 0 || (pointer != NULL && bytes <= UINTPTR_MAX - (uintptr_t)pointer);
-}
-
-static bool
-separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
-{
-	uintptr_t left = (uintptr_t)a, right = (uintptr_t)b;
-
-	return range(a, a_bytes) && range(b, b_bytes) &&
-	    (a_bytes == 0 || b_bytes == 0 ||
-		(left <= right ? right - left >= a_bytes : left - right >= b_bytes));
-}
 
 static void *
 allocate(struct ntfs_write_program *program, size_t bytes)
@@ -464,9 +449,11 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 	uint64_t logical;
 	enum ntfs_result result;
 
-	if (!range(out, sizeof(*out)) ||
-	    (source != NULL && !separate(source, sizeof(*source), out, sizeof(*out))) ||
-	    (plan != NULL && !separate(plan, sizeof(*plan), out, sizeof(*out)))) {
+	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
+	    (source != NULL &&
+		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out))) ||
+	    (plan != NULL &&
+		!ntfs_pointer_ranges_separate(plan, sizeof(*plan), out, sizeof(*out)))) {
 		return NTFS_INVALID;
 	}
 	if (source == NULL || plan == NULL) {
@@ -477,8 +464,8 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
 	for (index = 0; index < count; index++) {
 		result = ntfs_write_mutation_plan_region(plan, index, &region);
 		if (result != NTFS_OK ||
-		    !separate(region.before, region.bytes, out, sizeof(*out)) ||
-		    !separate(region.after, region.bytes, out, sizeof(*out))) {
+		    !ntfs_pointer_ranges_separate(region.before, region.bytes, out, sizeof(*out)) ||
+		    !ntfs_pointer_ranges_separate(region.after, region.bytes, out, sizeof(*out))) {
 			return NTFS_INVALID;
 		}
 	}
@@ -598,15 +585,18 @@ ntfs_write_program_output_separate(
 {
 	size_t index;
 
-	if (program == NULL || !range(out, bytes) ||
-	    !separate(program, sizeof(*program), out, bytes) ||
-	    !separate(program->region, program->regions * sizeof(*program->region), out, bytes) ||
-	    !separate(program->target, program->regions * sizeof(*program->target), out, bytes) ||
-	    !separate(program->update, program->capacity * sizeof(*program->update), out, bytes)) {
+	if (program == NULL || !ntfs_pointer_range_valid(out, bytes) ||
+	    !ntfs_pointer_ranges_separate(program, sizeof(*program), out, bytes) ||
+	    !ntfs_pointer_ranges_separate(
+		program->region, program->regions * sizeof(*program->region), out, bytes) ||
+	    !ntfs_pointer_ranges_separate(
+		program->target, program->regions * sizeof(*program->target), out, bytes) ||
+	    !ntfs_pointer_ranges_separate(
+		program->update, program->capacity * sizeof(*program->update), out, bytes)) {
 		return false;
 	}
 	for (index = 0; index < program->count; index++) {
-		if (!separate(program->update[index].payload.data,
+		if (!ntfs_pointer_ranges_separate(program->update[index].payload.data,
 			program->update[index].payload.bytes, out, bytes)) {
 			return false;
 		}
@@ -798,11 +788,14 @@ pages_admit(const struct ntfs_environment *source, const struct ntfs_write_progr
     const struct ntfs_logfile_client *client, const struct ntfs_write_batch_pages_input *input,
     struct ntfs_write_batch_pages **out)
 {
-	if (!range(out, sizeof(*out)) ||
+	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
 	    (program != NULL && !ntfs_write_program_output_separate(program, out, sizeof(*out))) ||
-	    (source != NULL && !separate(source, sizeof(*source), out, sizeof(*out))) ||
-	    (client != NULL && !separate(client, sizeof(*client), out, sizeof(*out))) ||
-	    (input != NULL && !separate(input, sizeof(*input), out, sizeof(*out)))) {
+	    (source != NULL &&
+		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out))) ||
+	    (client != NULL &&
+		!ntfs_pointer_ranges_separate(client, sizeof(*client), out, sizeof(*out))) ||
+	    (input != NULL &&
+		!ntfs_pointer_ranges_separate(input, sizeof(*input), out, sizeof(*out)))) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;

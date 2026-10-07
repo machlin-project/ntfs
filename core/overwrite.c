@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_internal.h"
 #include "logfile_tables_disk.h"
 #include <ntfs/overwrite.h>
@@ -38,18 +39,6 @@ struct overwrite_journal_workspace {
 static enum ntfs_result reject_change_journal(struct ntfs_volume *);
 static enum ntfs_result transaction_write(void *, uint64_t, const void *, size_t, size_t *);
 static enum ntfs_result transaction_persist(void *);
-
-static bool
-separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
-{
-	uintptr_t left = (uintptr_t)a, right = (uintptr_t)b;
-
-	if ((a == NULL && a_bytes != 0) || (b == NULL && b_bytes != 0) ||
-	    a_bytes > UINTPTR_MAX - left || b_bytes > UINTPTR_MAX - right) {
-		return false;
-	}
-	return a_bytes == 0 || b_bytes == 0 || left + a_bytes <= right || right + b_bytes <= left;
-}
 
 static void *
 overwrite_allocate(void *context, size_t bytes)
@@ -250,9 +239,10 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 	enum ntfs_result result, closed;
 
 	if (environment == NULL || admission == NULL || out == NULL ||
-	    !separate(environment, sizeof(*environment), admission, sizeof(*admission)) ||
-	    !separate(environment, sizeof(*environment), out, sizeof(*out)) ||
-	    !separate(admission, sizeof(*admission), out, sizeof(*out))) {
+	    !ntfs_pointer_ranges_separate(
+		environment, sizeof(*environment), admission, sizeof(*admission)) ||
+	    !ntfs_pointer_ranges_separate(environment, sizeof(*environment), out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(admission, sizeof(*admission), out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;
@@ -367,12 +357,15 @@ ntfs_write_owner_open(const struct ntfs_overwrite_environment *environment,
     struct ntfs_overwrite **out)
 {
 	if (environment == NULL || admission == NULL || recovery == NULL || out == NULL ||
-	    !separate(environment, sizeof(*environment), admission, sizeof(*admission)) ||
-	    !separate(environment, sizeof(*environment), out, sizeof(*out)) ||
-	    !separate(admission, sizeof(*admission), out, sizeof(*out)) ||
-	    !separate(environment, sizeof(*environment), recovery, sizeof(*recovery)) ||
-	    !separate(admission, sizeof(*admission), recovery, sizeof(*recovery)) ||
-	    !separate(out, sizeof(*out), recovery, sizeof(*recovery))) {
+	    !ntfs_pointer_ranges_separate(
+		environment, sizeof(*environment), admission, sizeof(*admission)) ||
+	    !ntfs_pointer_ranges_separate(environment, sizeof(*environment), out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(admission, sizeof(*admission), out, sizeof(*out)) ||
+	    !ntfs_pointer_ranges_separate(
+		environment, sizeof(*environment), recovery, sizeof(*recovery)) ||
+	    !ntfs_pointer_ranges_separate(
+		admission, sizeof(*admission), recovery, sizeof(*recovery)) ||
+	    !ntfs_pointer_ranges_separate(out, sizeof(*out), recovery, sizeof(*recovery))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(recovery, sizeof(*recovery));
@@ -406,9 +399,10 @@ ntfs_overwrite_resolve(
 
 	if (owner == NULL || reference == NULL || path == NULL || units == 0 ||
 	    units > NTFS_OVERWRITE_MAX_PATH_UNITS ||
-	    !separate(path, units * sizeof(*path), reference, sizeof(*reference)) ||
-	    !separate(owner, sizeof(*owner), reference, sizeof(*reference)) ||
-	    !separate(path, units * sizeof(*path), owner, sizeof(*owner))) {
+	    !ntfs_pointer_ranges_separate(
+		path, units * sizeof(*path), reference, sizeof(*reference)) ||
+	    !ntfs_pointer_ranges_separate(owner, sizeof(*owner), reference, sizeof(*reference)) ||
+	    !ntfs_pointer_ranges_separate(path, units * sizeof(*path), owner, sizeof(*owner))) {
 		return NTFS_INVALID;
 	}
 	*reference = 0;
@@ -557,9 +551,9 @@ ntfs_overwrite_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t 
 	enum ntfs_result result;
 
 	if (owner == NULL || report == NULL ||
-	    !separate(owner, sizeof(*owner), report, sizeof(*report)) ||
-	    !separate(data, bytes, report, sizeof(*report)) ||
-	    !separate(data, bytes, owner, sizeof(*owner))) {
+	    !ntfs_pointer_ranges_separate(owner, sizeof(*owner), report, sizeof(*report)) ||
+	    !ntfs_pointer_ranges_separate(data, bytes, report, sizeof(*report)) ||
+	    !ntfs_pointer_ranges_separate(data, bytes, owner, sizeof(*owner))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(report, sizeof(*report));
@@ -713,9 +707,9 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 	enum ntfs_result result, closed;
 
 	if (owner == NULL || report == NULL ||
-	    !separate(owner, sizeof(*owner), report, sizeof(*report)) ||
-	    !separate(data, bytes, report, sizeof(*report)) ||
-	    !separate(data, bytes, owner, sizeof(*owner))) {
+	    !ntfs_pointer_ranges_separate(owner, sizeof(*owner), report, sizeof(*report)) ||
+	    !ntfs_pointer_ranges_separate(data, bytes, report, sizeof(*report)) ||
+	    !ntfs_pointer_ranges_separate(data, bytes, owner, sizeof(*owner))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(report, sizeof(*report));

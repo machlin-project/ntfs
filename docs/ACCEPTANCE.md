@@ -219,6 +219,18 @@ correct default-target build. The format book describes the experimental forms,
 prefix ordering, explicit remaining ownership questions and a rendered program
 diagram separately from native format facts.
 
+## Driver refactoring
+
+The first behavior-preserving cleanup shares equivalent pointer-range arithmetic
+across ten writer/encoder modules. NULL/empty-range admission, overflow rejection,
+output aliases and callback order are unchanged; stricter local policies remain
+separate. Fourteen affected fatal-ASan/UBSan suites pass. The three regular-image
+postimages agree with the preceding physical-execution checkpoint. This is focused
+cleanup evidence, not a new write capability or completed driver refactoring.
+The [current plan](REFACTORING.md#applied-cleanup) retains C module/header separation
+and native FSKit review. Reports are under
+`artifacts/overwrite/refactor-pointer-ranges-focused-20261007/`.
+
 ## Resident ordinary-file overwrite continuation
 
 The new C implementation admits unchanged-size resident DATA in an ordinary

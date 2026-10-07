@@ -11,11 +11,28 @@ core and FSKit. Formatting already passes the selected-Xcode profile. The larger
 problems are repeated helpers, inconsistent internal names and files that combine
 several responsibilities.
 
+## Applied cleanup
+
+Ten writer/encoder modules now share the private
+[pointer-range helpers](../core/pointer_range.h). Their equivalent arithmetic
+checks preserve NULL/zero-length admission, overflow refusal and alias behavior.
+Required-pointer rules and failed-output publication remain at each operation's
+owning boundary. Helpers with stricter empty-range/NULL rules, including the
+bounded journal/history/recovery interfaces, retain their existing local policy.
+No allocator, operation governor or native transport policy is combined.
+
+All fourteen affected writer/encoder suites pass with fatal ASan/UBSan; their
+existing byte, fault, lifetime and alias oracles are retained. This is the first
+cleanup unit, not completed driver refactoring. Complete-program/private-header
+separation and the full connected regression follow; FSKit extraction remains a
+separate native review. Evidence is in
+`artifacts/overwrite/refactor-pointer-ranges-focused-20261007/`.
+
 ## Concrete findings
 
 | Area | Current finding | Proposed change |
 | --- | --- | --- |
-| Pointer/range checks | Writer modules repeat `separate`, `valid_range` and `range`. They differ in zero-length and NULL admission, so they are not interchangeable merely because their names match. | Introduce a small checked-range helper for proven equivalent cases. Preserve explicit caller-specific NULL/output rules and audit each conversion. |
+| Pointer/range checks | Ten modules now use one checked-arithmetic helper; remaining local policies differ in zero-length and NULL admission. | Preserve explicit caller-specific NULL/output rules and audit each further conversion. |
 | Complete program | `write_program.c` combines retained storage, FILE/INDX compilation, private application, OAT/transaction serialization, source-packet binding and compensation placement. | Separate metadata compilation/application from packet binding and page composition behind one private owner. Keep public opaque getters and lifetime unchanged. |
 | Writer contracts | `write_internal.h` collects overwrite metadata, journal layout, history, replay, execution, recovery and owner entry points. Most modules receive more declarations than they use. | Split private contracts by owning component and include only the required interfaces. Preserve wire structures and public declarations. |
 | Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |

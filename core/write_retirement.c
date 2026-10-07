@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_retirement.h"
 
 enum {
@@ -26,22 +27,6 @@ struct retirement_workspace {
 	uint8_t expected[NTFS_WRITE_RECORD_BYTES];
 	bool retire[NTFS_WRITE_RETIREMENT_RECORDS];
 };
-
-static bool
-valid_range(const void *pointer, size_t bytes)
-{
-	return bytes == 0 || (pointer != NULL && bytes <= UINTPTR_MAX - (uintptr_t)pointer);
-}
-
-static bool
-separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
-{
-	uintptr_t a = (uintptr_t)left, b = (uintptr_t)right;
-
-	return valid_range(left, left_bytes) && valid_range(right, right_bytes) &&
-	    (left_bytes == 0 || right_bytes == 0 ||
-		(a <= b ? b - a >= left_bytes : a - b >= right_bytes));
-}
 
 static uint16_t
 retired_sequence(uint16_t sequence)
@@ -79,12 +64,15 @@ static enum ntfs_result
 admit_output(const struct ntfs_environment *source, const struct ntfs_write_mutation_region *region,
     struct ntfs_write_retirement_program **out)
 {
-	if (!valid_range(out, sizeof(*out)) ||
-	    (source != NULL && !separate(source, sizeof(*source), out, sizeof(*out))) ||
-	    (region != NULL && !separate(region, sizeof(*region), out, sizeof(*out))) ||
+	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
+	    (source != NULL &&
+		!ntfs_pointer_ranges_separate(source, sizeof(*source), out, sizeof(*out))) ||
 	    (region != NULL &&
-		(!separate(region->before, region->bytes, out, sizeof(*out)) ||
-		    !separate(region->after, region->bytes, out, sizeof(*out))))) {
+		!ntfs_pointer_ranges_separate(region, sizeof(*region), out, sizeof(*out))) ||
+	    (region != NULL &&
+		(!ntfs_pointer_ranges_separate(region->before, region->bytes, out, sizeof(*out)) ||
+		    !ntfs_pointer_ranges_separate(
+			region->after, region->bytes, out, sizeof(*out))))) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;
@@ -359,7 +347,8 @@ ntfs_write_retirement_apply(
 	enum ntfs_result result;
 
 	if (lsn == 0 || record_bytes != NTFS_WRITE_RECORD_BYTES ||
-	    !valid_range(memory, record_bytes) || !separate(payload, bytes, memory, record_bytes)) {
+	    !ntfs_pointer_range_valid(memory, record_bytes) ||
+	    !ntfs_pointer_ranges_separate(payload, bytes, memory, record_bytes)) {
 		return NTFS_INVALID;
 	}
 	result = ntfs_logfile_update_decode(payload, bytes, &update);

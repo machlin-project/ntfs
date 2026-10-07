@@ -1,4 +1,5 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
+#include "pointer_range.h"
 #include "write_batch_execute.h"
 #include <ntfs/record.h>
 
@@ -25,17 +26,6 @@ struct batch_home {
 	size_t publication;
 	uint8_t changed_slots;
 };
-
-static bool
-separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
-{
-	uintptr_t a = (uintptr_t)left, b = (uintptr_t)right;
-
-	return (left != NULL || left_bytes == 0) && (right != NULL || right_bytes == 0) &&
-	    left_bytes <= UINTPTR_MAX - a && right_bytes <= UINTPTR_MAX - b &&
-	    (left_bytes == 0 || right_bytes == 0 ||
-		(a <= b ? b - a >= left_bytes : a - b >= right_bytes));
-}
 
 static void *
 batch_allocate(void *context, size_t bytes)
@@ -621,8 +611,9 @@ ntfs_write_batch_execute_prepare(const struct ntfs_overwrite_environment *backen
 	struct ntfs_write_batch_execution *owner;
 	enum ntfs_result result;
 
-	if (!separate(out, sizeof(*out), out, 0) ||
-	    (backend != NULL && !separate(backend, sizeof(*backend), out, sizeof(*out))) ||
+	if (!ntfs_pointer_ranges_separate(out, sizeof(*out), out, 0) ||
+	    (backend != NULL &&
+		!ntfs_pointer_ranges_separate(backend, sizeof(*backend), out, sizeof(*out))) ||
 	    (program != NULL && !ntfs_write_program_output_separate(program, out, sizeof(*out)))) {
 		return NTFS_INVALID;
 	}
@@ -661,10 +652,10 @@ ntfs_write_batch_execute_prepare(const struct ntfs_overwrite_environment *backen
 static bool
 output_separate(const struct ntfs_write_batch_execution *owner, const void *out, size_t bytes)
 {
-	return separate(owner, sizeof(*owner), out, bytes) &&
-	    separate(
+	return ntfs_pointer_ranges_separate(owner, sizeof(*owner), out, bytes) &&
+	    ntfs_pointer_ranges_separate(
 		owner->publication, owner->capacity * sizeof(*owner->publication), out, bytes) &&
-	    separate(owner->allocation, owner->allocation_bytes, out, bytes);
+	    ntfs_pointer_ranges_separate(owner->allocation, owner->allocation_bytes, out, bytes);
 }
 
 enum ntfs_result
@@ -678,7 +669,7 @@ ntfs_write_batch_execute(struct ntfs_write_batch_execution *owner, bool *poisone
 	if (owner == NULL || poisoned == NULL || report == NULL ||
 	    !output_separate(owner, poisoned, sizeof(*poisoned)) ||
 	    !output_separate(owner, report, sizeof(*report)) ||
-	    !separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
+	    !ntfs_pointer_ranges_separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(report, sizeof(*report));

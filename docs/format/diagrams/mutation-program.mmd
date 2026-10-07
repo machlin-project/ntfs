@@ -8,13 +8,18 @@ flowchart TB
     I --> P
     B --> P
     P --> J["Owned protected LFS pages\nExplicit proved floor / tail / successor"]
+    H["Original settled qualified history\nExact completed extent and successor"] --> J
     P --> U["Bound complete metadata prefix\nCompensation in reverse → Forget"]
-    J --> G["Native execution qualification\nPhysical guards · ordering · Windows recovery"]
-    U --> G
+    J --> E["Private physical preparation\nCopied aligned output · actual predecessor guards"]
     C -. "Separate initialization" .-> D["User DATA\nInitialized bytes and zero gaps"]
-    D --> G
+    D --> E
+    E --> V["Complete metadata overlay validation\nClose all private immutable children"]
+    V --> X["Experimental physical execution\nWAL → DATA → Forget → metadata homes"]
+    X --> R["Fresh journal-derived general recovery\nBootstrap · loser/winner · interrupted compensation"]
+    U --> R
+    R --> G["Connected native qualification\nCheckpoint reuse · Windows recovery"]
     G -. "Still required" .-> A["Writable owner and FSKit admission"]
     classDef private fill:#edf4ff,stroke:#4774af,color:#203e68
     classDef gate fill:#fff1dd,stroke:#bd8130,color:#684718
-    class O,S,C,F,I,B,P,J,U,D private
-    class G,A gate
+    class O,S,C,F,I,B,P,J,U,D,H,E,V,X private
+    class R,G,A gate

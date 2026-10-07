@@ -2,10 +2,11 @@
 
 ## Ordinary mutation planning and complete LFS placement
 
-The active connected write batch now has a pure ordinary mutation planner and a
-pure LFS 1.1 packet-placement owner. These are local planning components; general
-WAL execution, interrupted recovery, checkpoint advancement and writable FSKit
-namespace/resize admission remain open.
+The active connected write batch now has pure ordinary mutation/program/page
+preparation and an experimental complete-operation physical executor. Local
+regular-image execution is covered separately below. General journal-derived
+recovery, checkpoint advancement and writable FSKit namespace/resize admission
+remain open.
 
 Independent LFS fixtures pass 24 placement profiles, 16 complete projected
 journals and 4,167 exact pages. The tests cover old tail continuations, circular
@@ -29,10 +30,10 @@ deliberately makes the old mirror counter equal to the proposed primary counter
 and checks every changed FILE's mixed sector pairs. Bootstrap compares both
 fully restored MFT zero images except for their independent two-byte USA counters;
 every other byte remains required, and a differing FILE LSN still refuses mount.
-The focused fatal-ASan/UBSan mutation suite and the basic core unit both pass.
-The missing test declaration and the initial bootstrap-counter failure are
-retained separately from the corrected passes. A broader batch regression and
-native execution have not run for these changes.
+The focused fatal-ASan/UBSan mutation suite and the basic core unit both pass;
+the complete local checkpoints below include these changes. The missing test
+declaration and the initial bootstrap-counter failure are retained separately
+from the corrected passes. Native execution of the new families remains open.
 
 A read-only metadata-mapped inventory of the frozen Windows journal preserves
 70 original packet samples from 1,238 complete local updates across 24 opcode-pair
@@ -145,13 +146,69 @@ both freestanding architectures with the same frame ceiling. Host FSKit remains
 preview are retained in `unused-metadata-complete-local-20261007/`; main checks
 the original result rows, sanitizer settings and rendered layout independently.
 
+The new private physical executor owns every aligned publication after all
+fallible preparation and closes its internal immutable readers before writing.
+It acquires the original settled bounded history, derives the exact completed
+successor and binds every region's before bytes. It prevents overlap with every
+original journal run, applies actual generated metadata LSNs and gives primary
+and mirror slots their own predecessor guards. Original RSTR client roots and
+CurrentLsn are preserved; every nonterminal log page receives tail-copy/home
+persistence before DATA and terminal Forget. Metadata homes and both clean
+restart copies follow. Execute performs no reads or allocations, consumes its
+preparation and poisons after uncertain I/O.
+
+The caller keeps the exact immutable claimed source used by the sealed mutation
+planner through execution, or supplies a byte-identical copy. Logical/physical
+target mapping is the planner's proof; this executor rechecks every changed
+physical before image and validates the complete projected metadata. It does
+not independently re-resolve every logical target against an unrelated source.
+
+Eighteen focused physical profiles pass creation, removal, rename, grow/shrink,
+resident conversion, real MFT initialization/index growth, independent mirror
+protection, all seven unused-storage inputs and 512/4096-byte output alignment.
+Independent reopened journal checks bind original roots, all OAT identities,
+payloads/links and actual metadata-home LSNs. Every mixed sector prefix refuses
+USA; requested file sizes/content and complete metadata agree independently.
+The private source/program may close before execution. Source changes, aliases
+and invalid backends refuse before writes. The sweeps pass 512 required
+allocation and 443 read failures with exact retry, 486 transfer failures and
+130 failed-persistence states with precise durable reports and sticky poison.
+
+Growth coverage initially mistook resident MFT bitmap/mirror updates for MFT
+initialization growth and populated resize requests with unrelated range data.
+The corrected tests measure source/projected initialization and separately verify
+requested stream size/content. Real growth exceeds the retained capacity of the
+256-KiB authored journal and refuses before I/O on repeated attempts. Independent
+1-MiB quiet journal predecessors rebuild LSN width, roots, allocation and mirror
+bytes for the positive cases; this is fixture construction, not driver journal
+growth or checkpoint reuse. Prior compile/fixture/coverage results remain retained.
+
+Three actual ordinary-file backend clones pass create, growing range and real
+MFT/index growth using pwrite, fsync and mandatory macOS F_FULLFSYNC. The writer
+closes; a fresh ordinary-file read agrees with the complete expected image,
+reopened journal receipts, metadata and requested file bytes. These are host
+offline-image tests. No volume mount, driver installation, VM run or Windows
+recovery is added. Evidence and retained postimages are under
+`artifacts/overwrite/batch-execute-complete-local-20261007/`; preceding
+focused/failed reports use separate `batch-execute-*` directories.
+
+The complete physical-execution checkpoint passes all 181 fatal-ASan/UBSan
+Meson suites, selected-Xcode formatting and 104 freestanding objects across
+arm64/x86_64 (52 core sources per target), under the same 2-KiB frame ceiling.
+Host FSKit components remain 63 PASS / 13 explicit runtime-SDK SKIP / 0 FAIL.
+Main independently checks all raw result rows, fatal sanitizer settings,
+retained objects, fixture bytes and the three actual postimages. The updated
+program diagram is rendered and visually reviewed; local documentation links
+and anchors pass. The generated review is in
+`artifacts/overwrite/batch-execute-main-review-20261007/`.
+
 The complete FILE Initialize/Initialize inverse and whole-INDX nonresident image
-forms remain experimental substitutions. Physical execution of the retained
-new/free-storage ownership, original owning history, MFT bootstrap/mirror recovery,
-checkpoint reuse
-and whole native loser/winner replay remain required before these preparations
-can be admitted by the write owner or FSKit. The existing qualified overwrite
-family is unchanged. Component checkpoints do not complete the ordinary write batch.
+forms remain experimental substitutions. A new program does not become accepted
+by the preceding bounded history/recovery parser. Fresh journal-derived general
+history, MFT bootstrap/mirror recovery, checkpoint reuse, whole native loser/winner
+replay and open-unlink lifetime remain required before write-owner or FSKit
+admission. The qualified overwrite family is unchanged. These checkpoints do
+not complete the ordinary write batch.
 
 The new focused/failure evidence is in `full-program-*` directories under
 `artifacts/overwrite/`. The full local checkpoint is retained in

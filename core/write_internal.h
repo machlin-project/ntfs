@@ -115,6 +115,10 @@ enum ntfs_result ntfs_write_journal_encode(const struct ntfs_write_journal_input
  * supplies complete old bytes under exclusive ownership before any write. */
 enum ntfs_result ntfs_write_guard_frame(
     const void *before, size_t bytes, void *protected_after, struct ntfs_write_journal_workspace *);
+/* Encode the established LFS 1.1 tail-copy route from a complete protected home.
+ * Actual physical predecessor protection remains the publication owner's job. */
+enum ntfs_result ntfs_write_tail_copy_encode(
+    struct ntfs_write_journal_workspace *, const void *home, uint64_t target, void *out);
 /* Pure binding of the exact retained quiet packet family. The supplied origin
  * describes its stored client restart, independently of a later LFS endpoint.
  * Complete history ownership and physical recovery remain caller obligations. */
@@ -260,7 +264,8 @@ enum ntfs_write_execution_stage {
 	NTFS_WRITE_EXECUTION_COMMIT_HOME,
 	NTFS_WRITE_EXECUTION_FILE_HOME,
 	NTFS_WRITE_EXECUTION_CLEAN_FIRST,
-	NTFS_WRITE_EXECUTION_CLEAN_SECOND
+	NTFS_WRITE_EXECUTION_CLEAN_SECOND,
+	NTFS_WRITE_EXECUTION_METADATA_HOME
 };
 
 struct ntfs_write_data_span {

@@ -592,12 +592,14 @@ ntfs_write_program_get(const struct ntfs_write_program *program, size_t index)
 	return program == NULL || index >= program->count ? NULL : &program->update[index];
 }
 
-static bool
-output_separate(const struct ntfs_write_program *program, const void *out, size_t bytes)
+bool
+ntfs_write_program_output_separate(
+    const struct ntfs_write_program *program, const void *out, size_t bytes)
 {
 	size_t index;
 
-	if (!range(out, bytes) || !separate(program, sizeof(*program), out, bytes) ||
+	if (program == NULL || !range(out, bytes) ||
+	    !separate(program, sizeof(*program), out, bytes) ||
 	    !separate(program->region, program->regions * sizeof(*program->region), out, bytes) ||
 	    !separate(program->target, program->regions * sizeof(*program->target), out, bytes) ||
 	    !separate(program->update, program->capacity * sizeof(*program->update), out, bytes)) {
@@ -616,7 +618,7 @@ enum ntfs_result
 ntfs_write_program_region(
     const struct ntfs_write_program *program, size_t index, struct ntfs_write_mutation_region *out)
 {
-	if (program == NULL || !output_separate(program, out, sizeof(*out))) {
+	if (program == NULL || !ntfs_write_program_output_separate(program, out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
@@ -643,7 +645,7 @@ ntfs_write_program_apply(const struct ntfs_write_program *program, size_t index,
 	size_t offset;
 	enum ntfs_result result;
 
-	if (program == NULL || !output_separate(program, cluster, bytes)) {
+	if (program == NULL || !ntfs_write_program_output_separate(program, cluster, bytes)) {
 		return NTFS_INVALID;
 	}
 	if (index >= program->count || bytes != NTFS_WRITE_CLUSTER_BYTES || lsn == 0) {
@@ -797,7 +799,7 @@ pages_admit(const struct ntfs_environment *source, const struct ntfs_write_progr
     struct ntfs_write_batch_pages **out)
 {
 	if (!range(out, sizeof(*out)) ||
-	    (program != NULL && !output_separate(program, out, sizeof(*out))) ||
+	    (program != NULL && !ntfs_write_program_output_separate(program, out, sizeof(*out))) ||
 	    (source != NULL && !separate(source, sizeof(*source), out, sizeof(*out))) ||
 	    (client != NULL && !separate(client, sizeof(*client), out, sizeof(*out))) ||
 	    (input != NULL && !separate(input, sizeof(*input), out, sizeof(*out)))) {

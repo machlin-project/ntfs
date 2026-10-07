@@ -69,13 +69,12 @@ separates reused transaction lifetimes and binds checkpoint roots. Owned packets
 survive source close while keeping volume memory and lifetime accounting. This
 prepares native recovery execution; it adds no write capability.
 
-The connected ordinary-mutation batch now prepares complete private create,
-resize, rename and remove images, logical journal targets, bitmap and retirement
-programs, full LFS pages and bound compensation for complete metadata prefixes.
-All 180 fatal-sanitizer suites and both freestanding architectures pass at this
-local checkpoint. Whole FILE/INDX image composition remains experimental;
-device execution, general recovery, journal reuse and FSKit mutation admission
-still require the connected native acceptance gate. See
+The connected ordinary-mutation batch now prepares complete create/resize/rename/
+remove images, native metadata programs, LFS pages and bound inverse prefixes.
+Its experimental physical executor also passes complete test-backend operations
+and three actual ordinary-image write/persistence/reopen cases. Whole FILE/INDX
+composition remains experimental; general fresh journal recovery, reuse and FSKit
+mutation admission still require the connected native acceptance gate. See
 [the current batch evidence](docs/ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement)
 and [its format and recovery scope](docs/format/10-recovery-and-writing.md).
 

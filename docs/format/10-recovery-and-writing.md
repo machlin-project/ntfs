@@ -184,7 +184,7 @@ exercise failed allocations, exact retries, client/history mismatches and damage
 page protection. The generated opens and inverse links are real prepared bytes;
 they have not been accepted as an executed native transaction.
 
-![Private complete-operation preparation and its separate native execution gate](diagrams/mutation-program.svg)
+![Complete-operation preparation, experimental physical execution and its remaining recovery gate](diagrams/mutation-program.svg)
 
 [Diagram source](diagrams/mutation-program.mmd)
 
@@ -195,9 +195,64 @@ FSKit mutation callback is added by this compiler. Full native image substitutio
 and newly exposed/free storage still require Windows replay/rollback
 qualification of the retained ownership rules before executable admission.
 
-General execution must bind all regions to qualified native operations, close
-immutable owners, preserve open-unlink lifetime, and recover every transfer/barrier
-prefix. Those requirements remain open alongside FSKit callback integration.
+### Experimental physical execution
+
+The separate [batch executor](../../core/write_batch_execute.h) now acquires an
+original settled history accepted by the preceding bounded writer. It derives
+`floor_lsn` from the selected client's oldest record, `tail_lsn` from the proved
+completed endpoint, and `next_lsn` from that endpoint's complete measured extent.
+It passes those values to whole-program placement; it does not estimate a
+successor from a start page or infer a new floor from observed maximum LSNs.
+
+The caller retains the planner's exact immutable claimed source through
+execution, or supplies a byte-identical copy. The sealed planner proves logical
+target mappings; the executor does not independently resolve every logical
+target against a different source. Every changed physical region is reread and
+must equal its original before image. None
+can overlap any original `$LogFile` run, including journal allocations outside
+the new batch. The executor creates copied, aligned publications and applies
+metadata using the actual generated update LSNs. Changed FILE slots retain their
+own output protection; untouched neighboring slots retain exact raw bytes.
+MFTMirr copies the changed primary slots and their LSNs, then receives protection
+against its own physical predecessor. The complete metadata overlay is validated
+before the internal volume, nodes, streams and page preparation owner close.
+The sealed mutation and program can also close before execution.
+
+| Ordered publication | Persistence boundary |
+| --- | --- |
+| Dirty original RSTR copy zero, then copy one | After each copy |
+| Every nonterminal program page: alternating legacy tail copy, then its circular home | After each copy and home, including continuation pages |
+| All prepared user DATA clusters | After the final DATA cluster |
+| Terminal Forget: tail copy, then circular home | After each; successful copy persistence is the experimental commit boundary |
+| All complete metadata homes, including FILE, INDX, bitmap and MFT mirror | After every home |
+| Clean original RSTR copy zero, then copy one | After each copy |
+
+Original client roots and RSTR `CurrentLsn` remain intact. There is no new empty
+checkpoint or journal reuse in this executor. Each alternating tail slot is
+guarded against its actual preceding queued publication, rather than repeatedly
+using its original bytes. All guards and allocations precede the first write;
+execution forwards only writes and persistence callbacks. A short transfer,
+overreported count, callback error or failed barrier consumes preparation and
+poisons its caller state. Reports distinguish transferred bytes from the last
+successfully persisted stage.
+
+The [connected physical tests](../../tests/write_batch_execute.c) independently
+reopen the resulting journal, bind OAT identities and complete payloads/links,
+and compare metadata-home LSNs with their actual log records. They check original
+restart bytes, mixed-sector rejection, requested stream sizes/content, copied
+lifetime and exact allocation/read failure retry. Actual MFT initialization
+growth is measured from checked source/projected streams; a mirror patch alone
+would also occur when a resident MFT bitmap changes. The small journal refuses
+the complete growth operation before I/O; independently authored larger quiet
+journals provide capacity for the positive test. Their LSN widths, owning roots,
+allocation and mirror bytes are rebuilt as test inputs, not through a driver
+checkpoint operation.
+
+This is experimental execution through test and regular-image backends. It does
+not make a new program acceptable to the existing bounded history/recovery
+parser. Fresh journal-derived general recovery, torn MFT bootstrap, interrupted
+compensation, checkpoint reuse, open-unlink lifetime and native Windows acceptance
+remain open before writable-owner or FSKit admission.
 
 ## Checkpoint advancement and ring reuse
 
@@ -231,6 +286,10 @@ Clearing flags or introducing a private journal cannot substitute for this gate.
   [write_program.c](../../core/write_program.c), [contract](../../core/write_program.h)
   and [connected private prefix tests](../../tests/write_mutation.c).
 - Physical preflight and execution: [write_execute.c](../../core/write_execute.c).
+- Experimental complete-operation physical execution:
+  [write_batch_execute.c](../../core/write_batch_execute.c),
+  [connected transfer/journal/regular-image tests](../../tests/write_batch_execute.c)
+  and [authored capacity/storage inputs](../../tests/write_mutation_cases.py).
 - Bound family replay: [write_replay.c](../../core/write_replay.c).
 - Complete retained family history: [write_history.c](../../core/write_history.c).
 - Fresh overlay validation: [write_overlay.c](../../core/write_overlay.c).

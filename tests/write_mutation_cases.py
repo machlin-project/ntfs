@@ -43,6 +43,115 @@ INDEX_BLOCK_PREFIX = struct.Struct('<4sHHQQ')
 INDEX_BLOCK_FIELDS = ('magic', 'usa_offset', 'usa_count', 'lsn', 'vcn')
 UNUSED_STORAGE_PROFILES = ('file-stale', 'file-torn', 'index-stale', 'index-torn',
                            'index-unused-slot', 'mft-tail-stale', 'mft-tail-torn')
+EXPANDED_JOURNAL_BYTES = 1024 * 1024
+
+
+def expanded_journal_image(original):
+    """Independently enlarge the authored quiet journal, preserving its two roots.
+
+    Changing file size changes LSN offset width. Rebind each meaningful stored
+    LSN, keep opaque Noop words intact, and protect the complete authored pages.
+    This is a test predecessor, not a driver checkpoint/reuse operation.
+    """
+    import fixtures as f
+    import filename_storage as storage
+    import logfile_fixtures as w
+    import validation_fixtures as v
+    from secure_store_fixtures import resident_value
+    from write_journal_fixtures import restore_page, protect_page
+    from logfile_checkpoint_fixtures import CLIENT_RESTART
+
+    image = bytearray(original)
+    first = f.MFT_LCN * f.CLUSTER + v.LOGFILE_RECORD * f.RECORD
+    header, attributes = storage.record_parts(image[first:first + f.RECORD])
+    slot = next(index for index, attribute in enumerate(attributes)
+                if storage.attr_header(attribute)['type'] == f.DATA)
+    attribute = attributes[slot]
+    stream, runs = storage.mapping(attribute)
+    assert len(runs) == 1 and stream['initialized'] == stream['size']
+    assert stream['size'] < EXPANDED_JOURNAL_BYTES
+    clusters, lcn = runs[0]
+    log_first = lcn * f.CLUSTER
+    old = bytes(image[log_first:log_first + stream['size']])
+    restart, rh, _ = restore_page(old[:w.PAGE_BYTES], w.RESTART_HEADER)
+    area = {name: struct.unpack_from('<' + form, restart,
+            rh['area_offset'] + w.RESTART_AREA.offsets[name])[0]
+            for name, form in w.RESTART_AREA.fields}
+    client_first = rh['area_offset'] + area['clients_offset']
+    roots = {name: struct.unpack_from('<Q', restart,
+            client_first + w.CLIENT.offsets[name])[0]
+            for name in ('oldest_lsn', 'restart_lsn')}
+    old_offset_bits = w.LSN_BITS - area['sequence_bits']
+    new_sequence_bits = w.LSN_BITS + w.OFFSET_SHIFT - EXPANDED_JOURNAL_BYTES.bit_length()
+
+    def old_offset(lsn):
+        return (lsn & ((1 << old_offset_bits) - 1)) << w.OFFSET_SHIFT
+
+    def rebound(lsn):
+        if not lsn:
+            return 0
+        offset = old_offset(lsn)
+        assert offset < len(old)
+        return w.lsn_at(offset, EXPANDED_JOURNAL_BYTES,
+                        sequence=lsn >> old_offset_bits, sequence_bits=new_sequence_bits)
+
+    home = old_offset(roots['oldest_lsn']) // w.PAGE_BYTES * w.PAGE_BYTES
+    assert old_offset(roots['restart_lsn']) // w.PAGE_BYTES * w.PAGE_BYTES == home
+    quiet, qh, sequence = restore_page(old[home:home + w.PAGE_BYTES], w.PAGE)
+    for name in ('copy_value', 'last_end_lsn'):
+        w.PAGE.put(quiet, name, rebound(qh[name]))
+    for root in roots.values():
+        packet_first = old_offset(root) - home
+        fields = {name: struct.unpack_from('<' + form, quiet,
+                  packet_first + w.RECORD.offsets[name])[0]
+                  for name, form in w.RECORD.fields}
+        for name in ('lsn', 'previous_lsn', 'undo_next_lsn'):
+            w.RECORD.put(quiet, name, rebound(fields[name]), packet_first)
+        if fields['type'] == w.RESTART_TYPE:
+            payload_first = packet_first + w.RECORD.size
+            analysis, = struct.unpack_from('<Q', quiet,
+                payload_first + CLIENT_RESTART.offsets['analysis_lsn'])
+            CLIENT_RESTART.put(quiet, 'analysis_lsn', rebound(analysis), payload_first)
+            retained_first = payload_first + fields['data_bytes'] - w.LSN_BYTES
+            retained, = struct.unpack_from('<Q', quiet, retained_first)
+            assert retained == roots['oldest_lsn']
+            struct.pack_into('<Q', quiet, retained_first, rebound(retained))
+        else:
+            assert fields['type'] == w.UPDATE_TYPE
+    journal = bytearray(EXPANDED_JOURNAL_BYTES)
+    journal[home:home + w.PAGE_BYTES] = protect_page(quiet, w.PAGE, sequence)
+    for page in range(w.RESTART_PAGES):
+        restart, rh, sequence = restore_page(old[page * w.PAGE_BYTES:(page + 1) * w.PAGE_BYTES],
+                                              w.RESTART_HEADER)
+        area_first = rh['area_offset']
+        client_first = area_first + area['clients_offset']
+        w.RESTART_AREA.put(restart, 'current_lsn', rebound(area['current_lsn']), area_first)
+        w.RESTART_AREA.put(restart, 'sequence_bits', new_sequence_bits, area_first)
+        w.RESTART_AREA.put(restart, 'file_bytes', EXPANDED_JOURNAL_BYTES, area_first)
+        for name, lsn in roots.items():
+            w.CLIENT.put(restart, name, rebound(lsn), client_first)
+        journal[page * w.PAGE_BYTES:(page + 1) * w.PAGE_BYTES] = protect_page(restart, w.RESTART_HEADER, sequence)
+    attributes[slot] = f.nonresident(f.DATA,
+        [(EXPANDED_JOURNAL_BYTES // f.CLUSTER, lcn)], EXPANDED_JOURNAL_BYTES,
+        storage.attr_header(attribute)['instance'])
+    f.put_record(image, v.LOGFILE_RECORD,
+                 storage.encoded_record(v.LOGFILE_RECORD, attributes, header))
+    bitmap_first = f.MFT_LCN * f.CLUSTER + f.BITMAP_RECORD * f.RECORD
+    header, attributes = storage.record_parts(image[bitmap_first:bitmap_first + f.RECORD])
+    slot = next(index for index, attribute in enumerate(attributes)
+                if storage.attr_header(attribute)['type'] == f.DATA)
+    attribute = attributes[slot]
+    bitmap = bytearray(resident_value(attribute))
+    for cluster in range(lcn + clusters, lcn + EXPANDED_JOURNAL_BYTES // f.CLUSTER):
+        assert not bitmap[cluster // f.BYTE_BITS] & (1 << (cluster % f.BYTE_BITS))
+        bitmap[cluster // f.BYTE_BITS] |= 1 << (cluster % f.BYTE_BITS)
+    attributes[slot] = f.resident(f.DATA, bitmap, storage.attr_header(attribute)['instance'])
+    f.put_record(image, f.BITMAP_RECORD,
+                 storage.encoded_record(f.BITMAP_RECORD, attributes, header))
+    f.put_data(image, lcn, journal)
+    mft_first = f.MFT_LCN * f.CLUSTER
+    f.put_data(image, f.MIRROR_LCN, image[mft_first:mft_first + v.MIRROR_RECORDS * f.RECORD])
+    return image
 
 
 def sid(authority, *subauthorities):
@@ -261,6 +370,9 @@ def author(directory, source=None):
                      storage.encoded_record(f.ROOT_RECORD, attributes, header))
         (directory / 'source.img').write_bytes(image)
         unused_storage_images(directory, image)
+        for name in ('source', *(f'unused-{profile}' for profile in UNUSED_STORAGE_PROFILES)):
+            original = (directory / f'{name}.img').read_bytes()
+            (directory / f'large-{name}.img').write_bytes(expanded_journal_image(original))
     manifest = dict(writeOffset=WRITE_OFFSET, payloadBytes=PAYLOAD_BYTES,
                     growBytes=GROW_BYTES, shrinkBytes=SHRINK_BYTES,
                     regrowBytes=REGROW_BYTES, children=CHILDREN,

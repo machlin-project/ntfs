@@ -18,6 +18,15 @@ namespace mutation and journal reuse. These are required behavior, not current
 acceptance. The existing signed resident image build remains an independent
 checkpoint while this unit is developed.
 
+The unit now has experimental complete-operation physical preparation/execution
+alongside the private mutation and journal programs. Original settled history,
+actual predecessor protection and aligned publication lifetime pass local checks,
+including three actual regular-image persistence/reopen cases. The existing
+bounded recovery parser does not accept these new families. General fresh
+journal-derived recovery, MFT bootstrap, interrupted compensation and sustained
+checkpoint reuse still precede native/FSKit admission; see the current
+[batch evidence](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
+
 One exclusive C owner must prepare all affected FILE/INDX images, mapping pairs,
 volume/MFT/index bitmaps and native redo/undo before mutation. New immutable views
 must observe one complete operation. Preparation failures, collisions and ENOSPC

@@ -34,6 +34,7 @@ const struct ntfs_write_program_update *ntfs_write_program_get(
 enum ntfs_result ntfs_write_program_region(
     const struct ntfs_write_program *, size_t, struct ntfs_write_mutation_region *);
 void ntfs_write_program_close(struct ntfs_write_program *);
+bool ntfs_write_program_output_separate(const struct ntfs_write_program *, const void *, size_t);
 
 /* Apply an owned operation to disjoint private RESTORED cluster bytes. LSN is
  * supplied by the journal/compensation owner; this does not select replay state.

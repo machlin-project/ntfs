@@ -542,8 +542,9 @@ encode_checkpoint(const struct ntfs_write_journal_input *input,
 	return result;
 }
 
-static enum ntfs_result
-encode_copy(struct ntfs_write_journal_workspace *work, const void *home, uint64_t target, void *out)
+enum ntfs_result
+ntfs_write_tail_copy_encode(
+    struct ntfs_write_journal_workspace *work, const void *home, uint64_t target, void *out)
 {
 	struct ntfs_disk_log_page *page;
 	enum ntfs_result result;
@@ -707,7 +708,8 @@ ntfs_write_abort_encode(const struct ntfs_logfile_restart *restart, uint16_t seq
 		result = encode_page(work, out->end_lsn, (uint16_t)next, false, out->page);
 	}
 	if (result == NTFS_OK) {
-		result = encode_copy(work, out->page, reservation->commit_offset, out->copy);
+		result = ntfs_write_tail_copy_encode(
+		    work, out->page, reservation->commit_offset, out->copy);
 	}
 	if (result == NTFS_OK) {
 		out->offset = reservation->commit_offset;
@@ -907,11 +909,11 @@ ntfs_write_journal_encode(const struct ntfs_write_journal_input *input,
 	}
 	result = encode_updates(input, work, out);
 	if (result == NTFS_OK) {
-		result = encode_copy(
+		result = ntfs_write_tail_copy_encode(
 		    work, out->prepare, out->reservation.prepare_offset, out->prepare_copy);
 	}
 	if (result == NTFS_OK) {
-		result = encode_copy(
+		result = ntfs_write_tail_copy_encode(
 		    work, out->commit, out->reservation.commit_offset, out->commit_copy);
 	}
 	if (result == NTFS_OK) {

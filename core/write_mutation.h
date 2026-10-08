@@ -24,7 +24,9 @@ enum ntfs_write_mutation_kind {
 	NTFS_WRITE_GROWING_RANGE,
 	NTFS_WRITE_REMOVE_FILE,
 	NTFS_WRITE_REMOVE_DIRECTORY,
-	NTFS_WRITE_RENAME
+	NTFS_WRITE_RENAME,
+	/* Experimental private storage preparation only; execution refuses. */
+	NTFS_WRITE_SET_TIMES
 };
 
 enum ntfs_write_creation_time_field {
@@ -44,11 +46,31 @@ struct ntfs_write_creation_times {
 	uint32_t fields;
 };
 
+enum ntfs_write_time_field {
+	NTFS_WRITE_TIME_CREATED = 1u << 0,
+	NTFS_WRITE_TIME_MODIFIED = 1u << 1,
+	NTFS_WRITE_TIME_CHANGED = 1u << 2,
+	NTFS_WRITE_TIME_ACCESSED = 1u << 3,
+	NTFS_WRITE_TIME_ALL = NTFS_WRITE_TIME_CREATED | NTFS_WRITE_TIME_MODIFIED |
+	    NTFS_WRITE_TIME_CHANGED | NTFS_WRITE_TIME_ACCESSED
+};
+
+/* Exact SI storage values in unsigned 100-ns ticks since 1601. Selected zero
+ * means the epoch; unselected fields are preserved. This is not a Windows
+ * handle/API sentinel contract. No implicit timestamp, archive or filename/index
+ * cache update occurs. Ordinary FILE admission applies. The private planner and
+ * redo/undo compiler support this shape; the execution owner and FSKit do not. */
+struct ntfs_write_times {
+	uint64_t created, modified, changed, accessed;
+	uint32_t fields;
+};
+
 struct ntfs_write_mutation_request {
 	enum ntfs_write_mutation_kind kind;
 	struct ntfs_write_name source, destination;
 	uint64_t reference, offset, size, filetime;
 	struct ntfs_write_creation_times creation_times;
+	struct ntfs_write_times times;
 	const void *data;
 	size_t bytes;
 	bool replace;

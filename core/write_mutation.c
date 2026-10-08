@@ -382,7 +382,7 @@ ntfs_write_mutation_request_valid(const struct ntfs_write_mutation_request *requ
 {
 	const struct ntfs_write_creation_times *times;
 
-	if (request == NULL || request->filetime > INT64_MAX || request->kind > NTFS_WRITE_RENAME ||
+	if (request == NULL || request->filetime > INT64_MAX || request->kind > NTFS_WRITE_SET_TIMES ||
 	    request->kind < NTFS_WRITE_CREATE_FILE) {
 		return false;
 	}
@@ -396,7 +396,21 @@ ntfs_write_mutation_request_valid(const struct ntfs_write_mutation_request *requ
 	    ((times->fields & NTFS_WRITE_CREATION_ACCESSED) != 0 && times->accessed > INT64_MAX)) {
 		return false;
 	}
+	if ((request->times.fields & ~NTFS_WRITE_TIME_ALL) != 0 ||
+	    (request->times.fields != 0 && request->kind != NTFS_WRITE_SET_TIMES) ||
+	    ((request->times.fields & NTFS_WRITE_TIME_CREATED) != 0 &&
+		request->times.created > INT64_MAX) ||
+	    ((request->times.fields & NTFS_WRITE_TIME_MODIFIED) != 0 &&
+		request->times.modified > INT64_MAX) ||
+	    ((request->times.fields & NTFS_WRITE_TIME_CHANGED) != 0 &&
+		request->times.changed > INT64_MAX) ||
+	    ((request->times.fields & NTFS_WRITE_TIME_ACCESSED) != 0 &&
+		request->times.accessed > INT64_MAX)) {
+		return false;
+	}
 	switch (request->kind) {
+	case NTFS_WRITE_SET_TIMES:
+		return request->reference >> NTFS_REFERENCE_SEQUENCE_SHIFT != 0;
 	case NTFS_WRITE_RESIZE_FILE:
 		return request->reference >> NTFS_REFERENCE_SEQUENCE_SHIFT != 0 &&
 		    request->size <= INT64_MAX;
@@ -416,6 +430,52 @@ ntfs_write_mutation_request_valid(const struct ntfs_write_mutation_request *requ
 		return mutation_valid_name(&request->source);
 	}
 	return false;
+}
+
+static enum ntfs_result
+mutation_set_times(struct ntfs_mutation_record *record, const struct ntfs_write_times *times)
+{
+	struct ntfs_attr_view attribute;
+	struct ntfs_disk_standard *standard;
+	const uint8_t *value;
+	size_t bytes;
+	bool changed = false;
+	enum ntfs_result result;
+
+	result = ntfs_attr_find(record->bytes, sizeof(record->bytes), NTFS_ATTR_STANDARD, NULL, 0,
+	    UINT16_MAX, &attribute);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_attr_value(&attribute, &value, &bytes);
+	if (result != NTFS_OK || attribute.flags != 0 || bytes != NTFS_WRITE_STANDARD_BYTES) {
+		return result == NTFS_OK ? NTFS_UNSUPPORTED : result;
+	}
+	standard = (void *)value;
+	if ((times->fields & NTFS_WRITE_TIME_CREATED) != 0 &&
+	    ntfs_u64(standard->created) != times->created) {
+		ntfs_put_u64(standard->created, times->created);
+		changed = true;
+	}
+	if ((times->fields & NTFS_WRITE_TIME_MODIFIED) != 0 &&
+	    ntfs_u64(standard->modified) != times->modified) {
+		ntfs_put_u64(standard->modified, times->modified);
+		changed = true;
+	}
+	if ((times->fields & NTFS_WRITE_TIME_CHANGED) != 0 &&
+	    ntfs_u64(standard->changed) != times->changed) {
+		ntfs_put_u64(standard->changed, times->changed);
+		changed = true;
+	}
+	if ((times->fields & NTFS_WRITE_TIME_ACCESSED) != 0 &&
+	    ntfs_u64(standard->accessed) != times->accessed) {
+		ntfs_put_u64(standard->accessed, times->accessed);
+		changed = true;
+	}
+	if (changed) {
+		ntfs_mutation_record_changed(record);
+	}
+	return NTFS_OK;
 }
 
 static enum ntfs_result
@@ -568,6 +628,8 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 {
 	struct ntfs_write_mutation_plan *plan;
 	struct ntfs_mutation_record *record;
+	const struct ntfs_disk_record *header;
+	bool directory;
 	enum ntfs_result result;
 
 	if (out == NULL || sizeof(*out) > UINTPTR_MAX - (uintptr_t)out ||
@@ -586,6 +648,7 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 	/* Admit every borrowed range before clearing output. Caller mistakes cannot
 	 * overwrite the request, name, payload or source capability being inspected. */
 	if ((request->kind != NTFS_WRITE_RESIZE_FILE && request->kind != NTFS_WRITE_GROWING_RANGE &&
+		request->kind != NTFS_WRITE_SET_TIMES &&
 		!ntfs_pointer_ranges_separate(request->source.units,
 		    request->source.count * NTFS_UTF16_UNIT_BYTES, out, sizeof(*out))) ||
 	    (request->kind == NTFS_WRITE_RENAME &&
@@ -607,14 +670,19 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 	result = mutation_initialize(plan);
 	if (result == NTFS_OK &&
 	    (request->kind == NTFS_WRITE_RESIZE_FILE ||
-		request->kind == NTFS_WRITE_GROWING_RANGE)) {
+		request->kind == NTFS_WRITE_GROWING_RANGE || request->kind == NTFS_WRITE_SET_TIMES)) {
 		result = ntfs_mutation_record_get(plan, request->reference, false, &record);
 		if (result == NTFS_OK) {
-			result = ntfs_mutation_record_admit(record, false, false);
+			header = (const void *)record->bytes;
+			directory = request->kind == NTFS_WRITE_SET_TIMES &&
+			    (ntfs_u16(header->flags) & NTFS_RECORD_DIRECTORY) != 0;
+			result = ntfs_mutation_record_admit(record, directory, false);
 		}
 		if (result == NTFS_OK) {
 			plan->reference = record->reference;
-			if (request->kind != NTFS_WRITE_GROWING_RANGE || request->bytes != 0) {
+			if (request->kind == NTFS_WRITE_SET_TIMES) {
+				result = mutation_set_times(record, &request->times);
+			} else if (request->kind != NTFS_WRITE_GROWING_RANGE || request->bytes != 0) {
 				result = ntfs_mutation_resize(plan, record, request->size,
 				    request->offset, request->data, request->bytes);
 			}

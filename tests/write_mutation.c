@@ -1426,6 +1426,8 @@ mutate(struct test_case *test, const struct ntfs_write_mutation_request *request
 	case NTFS_WRITE_RENAME:
 		return ntfs_write_rename(test->owner, &request->source, &request->destination,
 		    request->replace, request->filetime, report);
+	case NTFS_WRITE_SET_TIMES:
+		return NTFS_UNSUPPORTED;
 	}
 	return NTFS_INVALID;
 #endif

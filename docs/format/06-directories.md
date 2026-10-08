@@ -236,6 +236,59 @@ multiple links. Retaining only the parent through which a file was opened loses
 other stored relationships. Replacement and nonempty-directory rejection must
 be resolved before any physical mutation.
 
+## Incremental mutation of an admitted tree
+
+The current C planner retains the validated original nodes and edits their
+packed entries locally. This is locally verified implementation behavior;
+the preceding native growth evidence covers the earlier full-tree construction.
+New physical layouts require their own Windows qualification.
+
+![Local split preserves the other subtree and couples changed nodes to allocation and recovery](diagrams/directory-mutation.svg)
+
+[Diagram source](diagrams/directory-mutation.mmd)
+
+A split selects a median by encoded byte occupancy, including the terminating
+entry and optional child VCN. The promoted filename is a real directory entry
+present only in its parent. Its former left child becomes the left node's
+terminal child; the following range belongs to the right node. Child VCNs remain
+in the selected writer's 4-KiB cluster units. Deleting an internal key substitutes
+a predecessor or successor and removes that entry from its original subtree.
+Adjacent nodes merge when their entries and separator fit; an empty node can
+receive a sibling entry. Empty chains and the root's sole-child transition retain
+the same ordered key inventory.
+
+Deletion can increase an internal node's encoded size: its replacement name may
+be longer, and a child rotation can itself force a split. A parent can therefore
+temporarily need space for both a larger replacement and a promoted child key
+before splitting. The private buffer reserves two maximum entries beyond the
+block size. A deliberately full nested tree reproduces the preceding one-entry
+buffer overflow under ASan and checks the corrected ordered result.
+
+Unchanged external nodes retain their VCNs and bytes. New nodes take a free
+index slot; live bits in `$BITMAP:$I30` describe exactly the reachable nodes,
+including holes between them. Allocation can shrink past retired trailing slots.
+When every key fits the resident root, the planner retires external storage.
+When external allocation grows, it can move the root's keys to one external node
+to reserve FILE space for the named allocation and bitmap attributes. These
+attribute changes and node images belong to one complete mutation plan.
+
+The journal still carries complete images for each changed INDX block. Predecessor
+admission uses original allocation and original index-bitmap ownership, including
+reused slots; it never infers a predecessor from the private final bitmap. FILE
+and bitmap changes retain their existing forward/inverse ordering. A change to
+cached filename size/time updates its owning node without rewriting every leaf.
+
+Full input traversal, malformed-entry checks, reachability and the ordered flat
+key inventory remain mandatory. Consequently complete admission still takes
+linear work and memory. The improvement reduces changed regions, journal size
+and repeated encoding; it does not claim path-only input validation.
+[Tree models](../../tests/directory_tree.c),
+[complete mutation tests](../../tests/write_mutation.c) and
+[fresh-owner interrupted recovery](../../tests/write_batch_recovery.h) establish
+the local contract. [Performance](../PERFORMANCE.md#incremental-directory-and-journal-preparation)
+and [acceptance](../ACCEPTANCE.md#incremental-directory-and-journal-preparation)
+separate those results from native validation.
+
 ## Implementation and evidence
 
 - Traversal and lookup: [directory.c](../../core/directory.c), [index.c](../../core/index.c).

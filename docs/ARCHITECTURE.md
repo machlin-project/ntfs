@@ -84,9 +84,37 @@ patches. Growth reserves storage before publishing a representation change;
 close releases the stream, window, page directory and every snapshot. This
 state never survives the plan. [Allocation](../core/write_allocation.c) keeps
 first-fit and retirement semantics, and sealing keeps logical page order and
-content-only attribute preservation. The separate
+content-only attribute preservation. The original window starts at 4 KiB and
+expands to 64 KiB only for sequential scans. A 128-byte summary per bitmap marks
+fully occupied original pages; private retirement cannot invalidate that proof
+because original allocations remain excluded for the entire plan. The separate
 [native bitmap program compiler](../core/write_bitmap.c) retains journal range
 encoding and inverse semantics. See [performance contracts](PERFORMANCE.md#paged-mutation-bitmaps).
+
+Directory mutation retains the fully admitted `$I30` tree alongside its ordered
+key inventory. [Tree editing](../core/write_directory_tree.c) owns local insertion,
+deletion, byte-weighted split, merge and root transitions;
+[storage](../core/write_directory_store.c) emits dirty nodes and couples their
+live-slot bitmap to allocation and FILE attributes. Unchanged nodes keep their
+VCNs and physical bytes. Full input validation and the flat key inventory remain
+linear in directory size; local publication does not imply logarithmic complete
+preparation. Original allocation/bitmap snapshots still establish predecessors
+for journal redo and compensation.
+
+Each plan also owns an eight-entry [stream-description cache](../core/write_stream.c).
+Its key includes the private FILE record, record revision, attribute type and
+complete name. Every private record edit advances its revision. Eviction drops
+the cache's reference; an outstanding borrower retains its immutable resident
+value or parsed runlist until close. Failure cannot publish a partial description.
+The cache dies with the plan and grants no reuse across mutations or mounts.
+Public read-only stream ownership remains separate.
+
+Journal preparation fills OAT `open_lsn` while placing the already-owned packet,
+using the selected preceding LSN. This removes a temporary full page program.
+Forward payloads borrow admitted program bytes; inverse payload storage is sized
+to actual undo spans. Sector-tail reconstruction copies bounded ranges between
+USA replacements. Publication order, durability barriers and recovery ownership
+are unchanged. See [the connected measurements](PERFORMANCE.md#incremental-directory-and-journal-preparation).
 
 FSKit retains one volume owner across four private implementation components.
 [NTFSVolume.m](../adapters/fskit/NTFSVolume.m) owns native lifecycle, request

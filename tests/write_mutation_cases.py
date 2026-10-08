@@ -280,7 +280,7 @@ def wrapped_free_file_image(original):
 
 
 def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
-    """Independently enlarge the authored quiet journal, preserving its two roots.
+    """Independently resize the authored quiet journal, preserving its two roots.
 
     Changing file size changes LSN offset width. Rebind each meaningful stored
     LSN, keep opaque Noop words intact, and protect the complete authored pages.
@@ -302,7 +302,7 @@ def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
     attribute = attributes[slot]
     stream, runs = storage.mapping(attribute)
     assert len(runs) == 1 and stream['initialized'] == stream['size']
-    assert stream['size'] < journal_bytes
+    assert journal_bytes >= (w.RESTART_PAGES + w.MIN_RECORD_PAGES) * w.PAGE_BYTES
     clusters, lcn = runs[0]
     log_first = lcn * f.CLUSTER
     old = bytes(image[log_first:log_first + stream['size']])
@@ -378,6 +378,9 @@ def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
     for cluster in range(lcn + clusters, lcn + journal_bytes // f.CLUSTER):
         assert not bitmap[cluster // f.BYTE_BITS] & (1 << (cluster % f.BYTE_BITS))
         bitmap[cluster // f.BYTE_BITS] |= 1 << (cluster % f.BYTE_BITS)
+    for cluster in range(lcn + journal_bytes // f.CLUSTER, lcn + clusters):
+        assert bitmap[cluster // f.BYTE_BITS] & (1 << (cluster % f.BYTE_BITS))
+        bitmap[cluster // f.BYTE_BITS] &= ~(1 << (cluster % f.BYTE_BITS))
     attributes[slot] = f.resident(f.DATA, bitmap, storage.attr_header(attribute)['instance'])
     f.put_record(image, f.BITMAP_RECORD,
                  storage.encoded_record(f.BITMAP_RECORD, attributes, header))
@@ -735,6 +738,9 @@ def author(directory, source=None):
         f.put_record(image, f.ROOT_RECORD,
                      storage.encoded_record(f.ROOT_RECORD, attributes, header))
         (directory / 'source.img').write_bytes(image)
+        import logfile_fixtures as w
+        (directory / 'minimum-journal.img').write_bytes(expanded_journal_image(
+            image, (w.RESTART_PAGES + w.MIN_RECORD_PAGES) * w.PAGE_BYTES))
         (directory / 'history-source.img').write_bytes(
             expanded_journal_image(image, HISTORY_JOURNAL_BYTES))
         directory_ancestor_images(directory, image, bodies['parent-security.bin'])

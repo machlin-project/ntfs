@@ -1,10 +1,10 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
-#include "write_mutation_internal.h"
+#include "write_directory_internal.h"
 #include <ntfs/record.h>
 
-static int
-mutation_key_compare(struct ntfs_write_mutation_plan *plan, const struct ntfs_mutation_key *left,
-    const struct ntfs_mutation_key *right)
+int
+ntfs_mutation_key_compare(struct ntfs_write_mutation_plan *plan,
+    const struct ntfs_mutation_key *left, const struct ntfs_mutation_key *right)
 {
 	const struct ntfs_disk_filename *left_name = (const void *)left->value;
 	const struct ntfs_disk_filename *right_name = (const void *)right->value;
@@ -86,7 +86,7 @@ mutation_directory_key_append(struct ntfs_write_mutation_plan *plan,
 	key->bytes = (uint16_t)bytes;
 	ntfs_copy(key->value, filename, bytes);
 	if (directory->count != 0 &&
-	    mutation_key_compare(plan, &directory->keys[directory->count - 1u], key) >= 0) {
+	    ntfs_mutation_key_compare(plan, &directory->keys[directory->count - 1u], key) >= 0) {
 		return NTFS_CORRUPT;
 	}
 	directory->count++;
@@ -97,7 +97,7 @@ static enum ntfs_result
 mutation_directory_walk(struct ntfs_write_mutation_plan *plan,
     struct ntfs_mutation_directory *directory, const uint8_t *buffer, size_t bytes,
     size_t header_offset, struct ntfs_stream *allocation, struct ntfs_stream *bitmap,
-    struct ntfs_index_visited *visited, unsigned depth)
+    struct ntfs_index_visited *visited, unsigned depth, uint64_t node_vcn)
 {
 	const struct ntfs_disk_index_header *header;
 	const struct ntfs_disk_index_entry *entry;
@@ -120,6 +120,11 @@ mutation_directory_walk(struct ntfs_write_mutation_plan *plan,
 	    ntfs_u32(header->allocated) > bytes - header_offset ||
 	    (header->flags & ~NTFS_INDEX_LARGE) != 0) {
 		return NTFS_CORRUPT;
+	}
+	result = ntfs_mutation_index_load(
+	    plan, directory, node_vcn, buffer + header_offset, bytes - header_offset);
+	if (result != NTFS_OK) {
+		return result;
 	}
 	position += header_offset;
 	end += header_offset;
@@ -177,7 +182,7 @@ mutation_directory_walk(struct ntfs_write_mutation_plan *plan,
 				result = mutation_directory_walk(plan, directory, child,
 				    NTFS_WRITE_CLUSTER_BYTES,
 				    offsetof(struct ntfs_disk_index_block, header), allocation,
-				    bitmap, visited, depth + 1u);
+				    bitmap, visited, depth + 1u, vcn);
 			}
 			ntfs_mutation_release(plan, child, NTFS_WRITE_CLUSTER_BYTES);
 			child = NULL;
@@ -304,7 +309,7 @@ ntfs_mutation_directory_open(struct ntfs_write_mutation_plan *plan,
 	}
 	if (result == NTFS_OK) {
 		result = mutation_directory_walk(plan, directory, value, bytes, sizeof(*header),
-		    allocation, bitmap, &visited, 0);
+		    allocation, bitmap, &visited, 0, NTFS_MUTATION_INDEX_ROOT_VCN);
 	}
 	if (result == NTFS_OK) {
 		result = mutation_directory_bitmap_check(plan, allocation, bitmap, &visited);
@@ -322,60 +327,71 @@ void
 ntfs_mutation_directory_close(
     struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_directory *directory)
 {
+	ntfs_mutation_index_close(plan, directory->tree);
 	ntfs_mutation_release(
 	    plan, directory->keys, directory->capacity * sizeof(*directory->keys));
 	ntfs_zero(directory, sizeof(*directory));
+}
+
+static int
+mutation_directory_name_compare(struct ntfs_write_mutation_plan *plan,
+    const struct ntfs_mutation_key *key, const struct ntfs_write_name *name, bool exact)
+{
+	const struct ntfs_disk_filename *filename = (const void *)key->value;
+	size_t unit, count = filename->length < name->count ? filename->length : name->count;
+	uint16_t left, right, folded_left, folded_right;
+	int tie = 0;
+
+	for (unit = 0; unit < count; unit++) {
+		left = ntfs_u16(key->value + sizeof(*filename) + unit * NTFS_UTF16_UNIT_BYTES);
+		right = name->units[unit];
+		if (tie == 0 && left != right) {
+			tie = left < right ? -1 : 1;
+		}
+		folded_left = ntfs_u16(plan->volume->upcase + (size_t)left * NTFS_UTF16_UNIT_BYTES);
+		folded_right =
+		    ntfs_u16(plan->volume->upcase + (size_t)right * NTFS_UTF16_UNIT_BYTES);
+		if (folded_left != folded_right) {
+			return folded_left < folded_right ? -1 : 1;
+		}
+	}
+	return filename->length == name->count ? (exact ? tie : 0)
+	    : filename->length < name->count   ? -1
+					       : 1;
 }
 
 enum ntfs_result
 ntfs_mutation_directory_find(struct ntfs_write_mutation_plan *plan,
     struct ntfs_mutation_directory *directory, const struct ntfs_write_name *name, size_t *out)
 {
-	const struct ntfs_mutation_key *key;
-	const struct ntfs_disk_filename *filename;
-	size_t index, unit, found = SIZE_MAX;
-	uint16_t left, right;
-	bool same;
+	size_t first = 0, end = directory->count, middle;
 	enum ntfs_result result;
 
 	*out = 0;
-	result = ntfs_mutation_work(plan, directory->count * name->count);
-	if (result != NTFS_OK) {
-		return result;
-	}
-	for (index = 0; index < directory->count; index++) {
-		key = &directory->keys[index];
-		filename = (const void *)key->value;
-		if (filename->length != name->count) {
-			continue;
+	while (first < end) {
+		result = ntfs_mutation_work(plan, name->count);
+		if (result != NTFS_OK) {
+			return result;
 		}
-		same = true;
-		for (unit = 0; unit < name->count; unit++) {
-			left =
-			    ntfs_u16(key->value + sizeof(*filename) + unit * NTFS_UTF16_UNIT_BYTES);
-			right = name->units[unit];
-			if (!directory->case_sensitive) {
-				left = ntfs_u16(
-				    plan->volume->upcase + (size_t)left * NTFS_UTF16_UNIT_BYTES);
-				right = ntfs_u16(
-				    plan->volume->upcase + (size_t)right * NTFS_UTF16_UNIT_BYTES);
-			}
-			if (left != right) {
-				same = false;
-				break;
-			}
-		}
-		if (same) {
-			if (found != SIZE_MAX) {
-				return NTFS_CORRUPT;
-			}
-			found = index;
+		middle = first + (end - first) / 2;
+		if (mutation_directory_name_compare(
+			plan, &directory->keys[middle], name, directory->case_sensitive) < 0) {
+			first = middle + 1;
+		} else {
+			end = middle;
 		}
 	}
-	if (found == SIZE_MAX) {
+	if (first == directory->count ||
+	    mutation_directory_name_compare(
+		plan, &directory->keys[first], name, directory->case_sensitive) != 0) {
 		return NTFS_NOT_FOUND;
 	}
-	*out = found;
+	if (first + 1 < directory->count &&
+	    mutation_directory_name_compare(
+		plan, &directory->keys[first + 1], name, directory->case_sensitive) == 0) {
+		return NTFS_CORRUPT;
+	}
+	*out = first;
 	return NTFS_OK;
 }
 
@@ -384,7 +400,7 @@ ntfs_mutation_directory_add(struct ntfs_write_mutation_plan *plan,
     struct ntfs_mutation_directory *directory, uint64_t reference, const void *value, size_t bytes)
 {
 	struct ntfs_mutation_key key = {0};
-	size_t position, index;
+	size_t position, index, end, middle;
 	enum ntfs_result result;
 
 	if (bytes > sizeof(key.value) || bytes < sizeof(struct ntfs_disk_filename)) {
@@ -393,16 +409,25 @@ ntfs_mutation_directory_add(struct ntfs_write_mutation_plan *plan,
 	key.reference = reference;
 	key.bytes = (uint16_t)bytes;
 	ntfs_copy(key.value, value, bytes);
-	for (position = 0; position < directory->count; position++) {
-		if (mutation_key_compare(plan, &directory->keys[position], &key) >= 0) {
-			break;
+	position = 0;
+	end = directory->count;
+	while (position < end) {
+		middle = position + (end - position) / 2;
+		if (ntfs_mutation_key_compare(plan, &directory->keys[middle], &key) < 0) {
+			position = middle + 1;
+		} else {
+			end = middle;
 		}
 	}
 	if (position < directory->count &&
-	    mutation_key_compare(plan, &directory->keys[position], &key) == 0) {
+	    ntfs_mutation_key_compare(plan, &directory->keys[position], &key) == 0) {
 		return NTFS_EXISTS;
 	}
 	result = mutation_directory_keys_reserve(plan, directory);
+	if (result != NTFS_OK) {
+		return result;
+	}
+	result = ntfs_mutation_index_edit(plan, directory, &key, false);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -414,13 +439,45 @@ ntfs_mutation_directory_add(struct ntfs_write_mutation_plan *plan,
 	return NTFS_OK;
 }
 
-void
-ntfs_mutation_directory_remove(struct ntfs_mutation_directory *directory, size_t position)
+enum ntfs_result
+ntfs_mutation_directory_remove(struct ntfs_write_mutation_plan *plan,
+    struct ntfs_mutation_directory *directory, size_t position)
 {
 	size_t index;
+	enum ntfs_result result;
 
+	if (position >= directory->count) {
+		return NTFS_RANGE;
+	}
+	result = ntfs_mutation_index_edit(plan, directory, &directory->keys[position], true);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	for (index = position + 1u; index < directory->count; index++) {
 		directory->keys[index - 1u] = directory->keys[index];
 	}
 	directory->count--;
+	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_mutation_directory_update(struct ntfs_write_mutation_plan *plan,
+    struct ntfs_mutation_directory *directory, size_t position, const void *value, size_t bytes)
+{
+	struct ntfs_mutation_key key;
+	enum ntfs_result result;
+
+	if (position >= directory->count || bytes != directory->keys[position].bytes) {
+		return NTFS_RANGE;
+	}
+	key = directory->keys[position];
+	ntfs_copy(key.value, value, bytes);
+	if (ntfs_mutation_key_compare(plan, &key, &directory->keys[position]) != 0) {
+		return NTFS_INVALID;
+	}
+	result = ntfs_mutation_index_edit(plan, directory, &key, false);
+	if (result == NTFS_OK) {
+		directory->keys[position] = key;
+	}
+	return result;
 }

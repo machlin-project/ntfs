@@ -7,14 +7,14 @@ The owner intends a later open-source release; no open-source license is granted
 today. See LICENSE and docs/PROVENANCE.md.
 
 The implementation provides bounded read-only extraction and experimental editing
-of ordinary files in offline images. The C core passes a bounded native Windows
-gate for create, allocation, resize, rename, removal and interrupted recovery.
+of ordinary files in offline images. A preceding C checkpoint passed a bounded
+native Windows gate for create, allocation, resize, rename, removal and interrupted recovery.
 The larger native-source sequence passes 891 actual C operations and 234
 checkpoints, including MFT growth, large directories and 30 journal ring wraps.
 All six retained pressure/reuse states pass independent Windows namespace,
 metadata, read-only chkdsk and original healthy-event review.
 
-The current C core passes 211 sanitized suites. The preceding general-owner
+The current C core passes 213 sanitized suites. The preceding general-owner
 acceptance includes 64 host FSKit groups and a universal Release build.
 The personally signed build 19 is installed and
 all 81 native component groups pass. Actual create, growth with zero gaps,
@@ -74,7 +74,7 @@ near parity. Fresh-node WOF reopening improves 27.62×/20.32×. All 209 sanitize
 suites, 45 exact whole images, 308 strict objects and six portable/GPR checks
 pass. There is no FSKit/app/VM stage; installed build 19 remains unchanged.
 
-The latest [paged bitmap batch](docs/PERFORMANCE.md#paged-mutation-bitmaps) retains
+The preceding [paged bitmap batch](docs/PERFORMANCE.md#paged-mutation-bitmaps) retains
 before/after snapshots only for modified pages of large volume/MFT bitmaps.
 Complete metadata preparation on the 2-MiB bitmap with early free space improves
 5.07–7.14× across userspace/GPR host contexts, with peak core allocation falling
@@ -83,6 +83,15 @@ from roughly 4.3 MiB to 0.27–0.38 MiB. A 1-MiB growing write improves
 the performance contract records that tradeoff. All 211 sanitized suites,
 45 exact whole images, 312 strict objects and six portable/GPR checks pass.
 No FSKit/app/VM stage runs; these are preparation and compilation results.
+
+The latest [connected preparation batch](docs/PERFORMANCE.md#incremental-directory-and-journal-preparation)
+adds local directory split/merge, adaptive bitmap read-ahead and summaries,
+record-revision stream/runlist reuse, and one-pass journal framing with smaller
+payload storage. All 213 sanitized suites, 316 strict objects and six portable/GPR
+checks pass. New fresh-owner recovery tests cover 736 split and 766 merge writer
+states. Complete directory validation and durable ordering remain unchanged.
+The new physical layouts have local C acceptance; Windows/FSKit qualification is
+still separate, and installed build 19 retains its earlier native baseline.
 
 The separate growth recovery matrix now passes all 264 actual current-C states:
 181 MFT-extension and 83 large-index states, each with full validation and a

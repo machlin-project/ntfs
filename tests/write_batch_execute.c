@@ -36,6 +36,9 @@ enum test_profile {
 	TEST_RESIDENT_GROWTH,
 	TEST_EMPTY_DIRECTORY,
 	TEST_MFT_GROWTH,
+	TEST_JOURNAL_PRESSURE,
+	TEST_INDEX_SPLIT,
+	TEST_INDEX_MERGE,
 	TEST_PAGE_ALIGNMENT,
 	TEST_RENAMED_FILE,
 	TEST_CREATED_FILE
@@ -213,11 +216,14 @@ seed_source(struct test_case *test, struct ntfs_write_mutation_plan *plan)
 }
 
 static struct ntfs_write_mutation_plan *
-growth_predecessor(struct test_case *test, uint64_t parent)
+growth_predecessor(struct test_case *test, uint64_t parent, bool capacity_pressure)
 {
 	struct ntfs_write_mutation_plan *plan = NULL;
 	struct ntfs_write_mutation_request request = {0};
 	struct ntfs_volume *volume = NULL;
+	struct ntfs_write_program *program = NULL;
+	struct ntfs_write_batch_execution *execution = NULL;
+	enum ntfs_result result;
 	struct ntfs_environment projected;
 	uint16_t name[TEST_SEED_NAME_UNITS];
 	uint64_t original_initialized;
@@ -245,15 +251,107 @@ growth_predecessor(struct test_case *test, uint64_t parent)
 		initialized_growth = volume->mft->initialized > original_initialized;
 		assert(ntfs_unmount(volume) == NTFS_OK);
 		volume = NULL;
+		if (capacity_pressure) {
+			assert(ntfs_write_program_prepare(&test->backend.reader, plan, &program) ==
+			    NTFS_OK);
+			result =
+			    ntfs_write_batch_execute_prepare(&test->backend, program, &execution);
+			assert(result == NTFS_OK || result == NTFS_NO_SPACE);
+			ntfs_write_batch_execution_close(execution);
+			execution = NULL;
+			ntfs_write_program_close(program);
+			program = NULL;
+			initialized_growth = result == NTFS_NO_SPACE;
+		}
 		if (initialized_growth) {
 			validate(test);
-			printf("PASS: prepared MFT initialization growth after %zu predecessor "
+			printf("PASS: prepared growth/capacity boundary after %zu predecessor "
 			       "files\n",
 			    index);
 			return plan;
 		}
 		seed_source(test, plan);
 		plan = NULL;
+	}
+	assert(false);
+	return NULL;
+}
+
+static size_t
+index_population(const struct ntfs_environment *environment, uint64_t parent)
+{
+	static const uint16_t name[] = {'$', 'I', '3', '0'};
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_node *directory = NULL;
+	struct ntfs_stream *bitmap = NULL;
+	uint8_t bytes[NTFS_WRITE_CLUSTER_BYTES];
+	size_t offset, take, actual, index, total = 0;
+	enum ntfs_result result;
+
+	assert(ntfs_mount(environment, NULL, &volume) == NTFS_OK);
+	assert(ntfs_node_open(volume, parent, &directory) == NTFS_OK);
+	result = ntfs_attribute_open(
+	    directory, NTFS_ATTR_BITMAP, name, sizeof(name) / sizeof(*name), &bitmap);
+	assert(result == NTFS_OK || result == NTFS_NOT_FOUND);
+	if (bitmap != NULL) {
+		for (offset = 0; offset < bitmap->size; offset += take) {
+			take = bitmap->size - offset < sizeof(bytes)
+			    ? (size_t)(bitmap->size - offset)
+			    : sizeof(bytes);
+			assert(ntfs_stream_read(bitmap, offset, bytes, take, &actual) == NTFS_OK &&
+			    actual == take);
+			for (index = 0; index < take; index++) {
+				total += (unsigned)__builtin_popcount(bytes[index]);
+			}
+		}
+	}
+	ntfs_stream_close(bitmap);
+	ntfs_node_close(directory);
+	assert(ntfs_unmount(volume) == NTFS_OK);
+	return total;
+}
+
+static struct ntfs_write_mutation_plan *
+index_predecessor(struct test_case *test, uint64_t parent, bool merge)
+{
+	struct ntfs_write_mutation_request request = {
+	    .kind = NTFS_WRITE_CREATE_FILE, .filetime = TEST_TIME};
+	struct ntfs_write_mutation_plan *plan = NULL;
+	struct ntfs_environment projected;
+	uint16_t name[TEST_SEED_NAME_UNITS];
+	size_t index, unit, before, after;
+
+	request.source = (struct ntfs_write_name){parent, name, TEST_SEED_NAME_UNITS};
+	for (index = 0; index < TEST_PRESSURE_LIMIT; index++) {
+		for (unit = 0; unit < TEST_SEED_NAME_UNITS; unit++) {
+			name[unit] = 'n';
+		}
+		name[0] = 'a' + (uint16_t)(index / TEST_ALPHABET_LETTERS);
+		name[1] = 'a' + (uint16_t)(index % TEST_ALPHABET_LETTERS);
+		before = index_population(&test->backend.reader, parent);
+		assert(
+		    ntfs_write_mutation_prepare(&test->backend.reader, &request, &plan) == NTFS_OK);
+		assert(ntfs_write_mutation_plan_view(plan, &projected) == NTFS_OK);
+		after = index_population(&projected, parent);
+		if (!merge && before >= 3 && after > before) {
+			return plan;
+		}
+		seed_source(test, plan);
+	}
+	assert(merge);
+	request.kind = NTFS_WRITE_REMOVE_FILE;
+	for (index = 0; index < TEST_PRESSURE_LIMIT; index++) {
+		name[0] = 'a' + (uint16_t)(index / TEST_ALPHABET_LETTERS);
+		name[1] = 'a' + (uint16_t)(index % TEST_ALPHABET_LETTERS);
+		before = index_population(&test->backend.reader, parent);
+		assert(
+		    ntfs_write_mutation_prepare(&test->backend.reader, &request, &plan) == NTFS_OK);
+		assert(ntfs_write_mutation_plan_view(plan, &projected) == NTFS_OK);
+		after = index_population(&projected, parent);
+		if (after < before) {
+			return plan;
+		}
+		seed_source(test, plan);
 	}
 	assert(false);
 	return NULL;
@@ -358,8 +456,12 @@ prepare_profile(const char *directory, const char *image, enum ntfs_write_mutati
 		    ntfs_write_mutation_prepare(&test->backend.reader, &request, &seed) == NTFS_OK);
 		seed_source(test, seed);
 		request.kind = kind;
-	} else if (profile == TEST_MFT_GROWTH) {
-		test->plan = growth_predecessor(test, metadata.reference);
+	} else if (profile == TEST_INDEX_SPLIT || profile == TEST_INDEX_MERGE) {
+		test->plan =
+		    index_predecessor(test, metadata.reference, profile == TEST_INDEX_MERGE);
+	} else if (profile == TEST_MFT_GROWTH || profile == TEST_JOURNAL_PRESSURE) {
+		test->plan =
+		    growth_predecessor(test, metadata.reference, profile == TEST_JOURNAL_PRESSURE);
 	}
 	memcpy(test->before, test->device.visible, test->device.bytes);
 	memcpy(test->after, test->before, test->device.bytes);
@@ -1099,13 +1201,15 @@ journal_capacity(const char *directory)
 	struct test_case *test;
 	struct ntfs_write_batch_execution *owner = NULL;
 	size_t baseline;
+	enum ntfs_result result;
 
-	test = prepare_profile(directory, "source.img", NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH);
+	test = prepare_profile(
+	    directory, "minimum-journal.img", NTFS_WRITE_CREATE_FILE, TEST_JOURNAL_PRESSURE);
 	baseline = test->device.live;
-	assert(ntfs_write_batch_execute_prepare(&test->backend, test->program, &owner) ==
-		NTFS_NO_SPACE &&
-	    owner == NULL && test->device.live == baseline && test->device.writes == 0 &&
-	    test->device.barriers == 0);
+	result = ntfs_write_batch_execute_prepare(&test->backend, test->program, &owner);
+
+	assert(result == NTFS_NO_SPACE && owner == NULL && test->device.live == baseline &&
+	    test->device.writes == 0 && test->device.barriers == 0);
 	assert(memcmp(test->before, test->device.visible, test->device.bytes) == 0 &&
 	    memcmp(test->before, test->device.durable, test->device.bytes) == 0);
 	assert(ntfs_write_batch_execute_prepare(&test->backend, test->program, &owner) ==
@@ -1338,6 +1442,8 @@ main(int argc, char **argv)
 	complete(argv[1], "source.img", NTFS_WRITE_RESIZE_FILE, TEST_RESIDENT_GROWTH);
 	complete(argv[1], "source.img", NTFS_WRITE_REMOVE_DIRECTORY, TEST_EMPTY_DIRECTORY);
 	complete(argv[1], "large-source.img", NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH);
+	complete(argv[1], "large-source.img", NTFS_WRITE_CREATE_FILE, TEST_INDEX_SPLIT);
+	complete(argv[1], "large-source.img", NTFS_WRITE_REMOVE_FILE, TEST_INDEX_MERGE);
 	complete(argv[1], "unused-index-torn.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
 	complete(argv[1], "unused-index-stale.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);
 	complete(argv[1], "unused-index-unused-slot.img", NTFS_WRITE_CREATE_FILE, TEST_DEFAULT);

@@ -137,6 +137,24 @@ record assembly through a projected journal. This is local framing/placement
 evidence. Actual physical mapping, predecessor USA guards, native update meaning,
 publication, floor advancement and Windows recovery remain separate obligations.
 
+### OAT predecessor assignment during placement
+
+The complete-program encoder places an open-attribute packet's `open_lsn` in its
+owned payload while the packet's actual preceding LSN is known. The first open
+uses the admitted input tail; subsequent opens use the preceding packet's placed
+LSN. This is the same predecessor relation as the earlier two-pass encoder.
+The private flag permitting this substitution is admitted only for an ordinary
+`OpenNonresidentAttribute` update with the exact open-entry redo layout and
+`Noop` undo. Caller payloads stay unchanged.
+
+One placement pass now suffices. Forward update payloads borrow the admitted
+program, and compensation scratch is sized to the actual undo spans. Reading
+back a framed packet copies bounded byte ranges between MST sector tails and
+restores the two saved bytes at each tail. These implementation changes retain
+wire fields, USA protection, publication order and persistence barriers. Independent
+packet goldens and complete prefix compensation tests remain the byte oracle;
+this optimization introduces no new native recovery interpretation.
+
 ## RCRD page
 
 The common page header is 40 bytes. Offsets are relative to the page:

@@ -15,6 +15,10 @@ enum {
 	NTFS_MUTATION_HASH_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
 	NTFS_MUTATION_MAX_BITMAP_BYTES = 4 * 1024 * 1024,
 	NTFS_MUTATION_BITMAP_PAGE_BYTES = NTFS_WRITE_CLUSTER_BYTES,
+	NTFS_MUTATION_BITMAP_WINDOW_BYTES = 16 * NTFS_MUTATION_BITMAP_PAGE_BYTES,
+	NTFS_MUTATION_BITMAP_SUMMARY_BYTES =
+	    NTFS_MUTATION_MAX_BITMAP_BYTES / NTFS_MUTATION_BITMAP_PAGE_BYTES / NTFS_BITS_PER_BYTE,
+	NTFS_MUTATION_STREAM_CACHE_ENTRIES = 8,
 	NTFS_MUTATION_INITIAL_KEYS = 16,
 	NTFS_MUTATION_MAX_KEYS = 65536,
 	NTFS_MUTATION_MAX_RUNS = 4096,
@@ -45,7 +49,7 @@ struct ntfs_mutation_patch {
 };
 
 struct ntfs_mutation_record {
-	uint64_t number, reference, physical;
+	uint64_t number, reference, physical, revision;
 	bool changed;
 	uint8_t bytes[NTFS_WRITE_RECORD_BYTES];
 };
@@ -67,7 +71,8 @@ struct ntfs_mutation_bitmap {
 	uint8_t *before, *after;
 	size_t bytes, original_bytes;
 	struct ntfs_mutation_bitmap_page **pages;
-	size_t page_capacity, window_index;
+	size_t page_capacity, window_index, window_bytes, window_capacity;
+	uint8_t full_pages[NTFS_MUTATION_BITMAP_SUMMARY_BYTES];
 	uint8_t *window;
 	bool window_valid;
 };
@@ -78,11 +83,23 @@ struct ntfs_mutation_key {
 	uint8_t value[NTFS_MUTATION_FILENAME_BYTES];
 };
 
+struct ntfs_mutation_index_tree;
+
 struct ntfs_mutation_directory {
 	struct ntfs_mutation_record *record;
 	struct ntfs_mutation_key *keys;
+	struct ntfs_mutation_index_tree *tree;
 	size_t count, capacity;
 	bool case_sensitive;
+};
+
+struct ntfs_mutation_stream_entry {
+	struct ntfs_mutation_record *record;
+	struct ntfs_stream *stream;
+	uint64_t revision;
+	uint32_t type;
+	size_t name_count;
+	uint16_t name[NTFS_WRITE_MUTATION_TARGET_NAME_UNITS];
 };
 
 struct ntfs_write_mutation_plan {
@@ -99,6 +116,8 @@ struct ntfs_write_mutation_plan {
 	struct ntfs_write_journal_workspace *guard;
 	uint8_t *scratch, *protected_record;
 	bool sealed, operation_active;
+	struct ntfs_mutation_stream_entry streams[NTFS_MUTATION_STREAM_CACHE_ENTRIES];
+	size_t stream_cursor;
 };
 
 /* Insertion order owns the public region order. A half-full, power-of-two hash
@@ -132,6 +151,25 @@ static inline size_t
 ntfs_mutation_align_bytes(size_t bytes)
 {
 	return (bytes + NTFS_WIRE_ALIGNMENT - 1u) & ~(size_t)(NTFS_WIRE_ALIGNMENT - 1u);
+}
+
+/* A revision invalidates every description of this private record. Borrowers
+ * retain immutable snapshots until close; reuse never survives a record edit. */
+static inline void
+ntfs_mutation_record_changed(struct ntfs_mutation_record *record)
+{
+	record->changed = true;
+	record->revision++;
+}
+
+static inline bool
+ntfs_mutation_bitmap_full(const struct ntfs_mutation_bitmap *bitmap, size_t offset)
+{
+	size_t page = offset / NTFS_MUTATION_BITMAP_PAGE_BYTES;
+
+	return bitmap->after == NULL && page / NTFS_BITS_PER_BYTE < sizeof(bitmap->full_pages) &&
+	    (bitmap->full_pages[page / NTFS_BITS_PER_BYTE] & (1u << (page % NTFS_BITS_PER_BYTE))) !=
+	    0;
 }
 
 extern const uint16_t ntfs_mutation_index_name[4];
@@ -202,7 +240,10 @@ enum ntfs_result ntfs_mutation_directory_find(struct ntfs_write_mutation_plan *,
     struct ntfs_mutation_directory *, const struct ntfs_write_name *, size_t *);
 enum ntfs_result ntfs_mutation_directory_add(struct ntfs_write_mutation_plan *,
     struct ntfs_mutation_directory *, uint64_t, const void *, size_t);
-void ntfs_mutation_directory_remove(struct ntfs_mutation_directory *, size_t);
+enum ntfs_result ntfs_mutation_directory_remove(
+    struct ntfs_write_mutation_plan *, struct ntfs_mutation_directory *, size_t);
+enum ntfs_result ntfs_mutation_directory_update(struct ntfs_write_mutation_plan *,
+    struct ntfs_mutation_directory *, size_t, const void *, size_t);
 enum ntfs_result ntfs_mutation_directory_store(
     struct ntfs_write_mutation_plan *, struct ntfs_mutation_directory *, bool);
 enum ntfs_result ntfs_mutation_security_inherit(

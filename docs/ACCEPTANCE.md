@@ -1,5 +1,84 @@
 # Acceptance
 
+## Incremental directory and journal preparation
+
+The four-part C batch is complete: incremental `$I30` editing with split/merge,
+adaptive bitmap read-ahead and original-page summaries, revision-bound parsed
+stream reuse, and reduced journal framing/copy storage. The complete directory
+still undergoes admission and ordering validation. Only dirty nodes are encoded;
+unchanged nodes retain their VCNs and bytes. First-fit allocation, original
+ownership exclusion and durable publication/barrier ordering remain unchanged.
+See the [performance contracts](PERFORMANCE.md#incremental-directory-and-journal-preparation)
+for cache invalidation, bounded storage and measurement scope.
+
+The final connected run passes **213 suites, zero failures and zero SKIPs** with
+assertions and fatal ASan/UBSan. The new tree model compares every ordered key
+and reachable live node during ascending, descending and permuted insertion,
+metadata updates and complete deletion. Complete image tests cover directory/MFT
+growth, unchanged leaves, journal-capacity refusal and filename metadata updates.
+Fresh owners recover **736 index-split and 766 index-merge writer states**, including
+every publication and its sector-prefix/suffix transfers, to the old or committed
+complete metadata. Those sweeps close the original planner/program/executor
+before recovery. Existing independent packet goldens and prefix compensation
+oracles also pass.
+
+All **45 frozen images** are compared: **39 remain byte-exact**. The six growth
+images have intentionally different directory allocation/journal histories.
+Their recursive namespace and stat snapshots match the original baseline,
+including the same unavailable ordinary-stat result for authored system FILEs.
+The full mutation/recovery suites separately validate allocation consistency,
+requested data, old/committed metadata and preservation outside managed regions.
+The old image hashes are preserved; no new layout was accepted by replacing a
+golden image.
+
+Stream-cache tests cover record edits, resident/nonresident conversion, changed
+mapping pairs, attribute removal, allocation failures/retry and eviction with an
+outstanding old snapshot. Bitmap tests preserve exact first-fit and partial-error
+results, exercise eviction/read failure/retry and ensure private retirement never
+invalidates an original-full-page proof. All caches die with their plan.
+
+All **316 strict objects** pass across 79 core sources in userspace arm64/x86_64
+and kernel arm64e/x86_64. The 158 kernel objects contain no SIMD/FP registers;
+all contexts meet the 2-KiB frame ceiling. Six portable/GPR memory, codec and
+endian checks pass. This is compiler and host-execution evidence, not a kernel
+filesystem adapter or kernel load.
+
+Initial harness/fixture errors and the preceding failed runs are retained. A
+new metadata-update test initially requested size 0 to 0 and received the correct
+empty plan; it now requests a real change. The earlier journal-capacity example
+fits after reducing changed directory nodes, so the pressure fixture now reaches
+an actual admitted journal boundary before checking refusal without publication.
+No capacity or malformed-input admission was weakened to satisfy either test.
+A final review added a full nested-tree deletion case: replacing a short key
+and receiving a promoted child key exposed an ASan overflow in the first draft's
+temporary node buffer. The retained regression requires space for both transient
+entries and checks every ordered key after the cascade. Its failing run remains
+under `cascade-red/`; the corrected complete run is separate.
+
+Nine alternating pairs cover **52 short configurations**, with **22 prolonged
+controls** using the same binaries. Large-directory plan preparation improves
+1.62×/2.04×, program compilation 19.16×/18.10×, and execution preparation
+1.60×/1.84× in userspace/GPR host contexts. Prepared publications drop from
+463 to 29. Near-full growth improves 3.79×/2.81× with source callbacks reduced
+from 529 to 50 and unchanged bytes. Early-free plans retain small reads.
+Descriptor reuse improves 16.59–32.90× across the measured contexts and sources.
+The prolonged GPR hot-record microbenchmark remains 0.888×, about 0.22 ns extra
+per hit; other prolonged controls are 0.982–1.127×. No mounted or durable-device
+speedup is claimed. [Performance](PERFORMANCE.md#incremental-directory-and-journal-preparation)
+records memory costs and all workload boundaries.
+
+**No FSKit tests, app build/install, VM/UTM operation, Windows candidate or kernel
+load runs in this batch.** Signed installed build 19 remains the earlier native
+baseline. New physical split/merge layouts still require their own Windows
+recovery and read-only chkdsk gate; earlier full-tree native acceptance does not
+qualify these changed layouts. Durable transport batching and parallel execution
+remain separate work.
+
+Evidence: `artifacts/core-write-optimization-20261008/completed-core/`, `completed-cpu/`,
+`write-bench-complete/`, `late/`, `early/`, `controls-complete/` and
+`completed-measurements/` and `reviewed-image-comparison/` beneath the same batch root. Initial candidates and
+their complete passing/failed runs remain in the preceding directories.
+
 ## Paged mutation bitmaps
 
 The C-only paged-bitmap batch is complete. Volume and MFT bitmaps larger than
@@ -49,8 +128,9 @@ long-control probe that exceeded the existing read-call budget remain retained.
 
 **No FSKit tests, app build/install, VM/UTM operation, Windows candidate or
 kernel load runs in this batch.** Installed signed build 19 remains the prior
-native baseline. Incremental directory editing and native transport/parallelism
-remain separate work.
+native baseline. This preceding batch left incremental directory editing open;
+the later C implementation above closes that local work. Native transport and
+parallelism remain separate.
 
 Evidence: `artifacts/bitmap-focused-20261008/`,
 `artifacts/bitmap-optimization-20261008/`,

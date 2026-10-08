@@ -1,0 +1,11 @@
+flowchart TB
+    R["Admitted parent: separator M"] --> L["Left subtree<br/>same VCN and bytes"]
+    R --> Q["Right node overflows<br/>new name belongs here"]
+    Q --> S["Split by encoded bytes<br/>promote real key T to parent"]
+    S --> A["Existing right VCN<br/>keys between M and T"]
+    S --> B["New free VCN<br/>keys after T"]
+    S --> P["Parent now contains M and T<br/>each key exists once"]
+    A --> W["Dirty INDX images + parent FILE/INDX<br/>live-slot bitmap + allocation"]
+    B --> W
+    P --> W
+    W --> J["One mutation and journal program<br/>original ownership supplies undo proof"]

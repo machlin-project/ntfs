@@ -107,6 +107,12 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 	for (cluster = 0; cluster < plan->info.cluster_count && clusters != 0;
 	    cluster += MUTATION_BITMAP_WORD_BITS) {
 		byte = (size_t)(cluster / NTFS_BITS_PER_BYTE);
+		if (ntfs_mutation_bitmap_full(bitmap, byte)) {
+			cluster = (byte / NTFS_MUTATION_BITMAP_PAGE_BYTES + 1) *
+				NTFS_MUTATION_BITMAP_PAGE_BYTES * NTFS_BITS_PER_BYTE -
+			    MUTATION_BITMAP_WORD_BITS;
+			continue;
+		}
 		if (byte - base >= view.bytes) {
 			base = byte;
 			result = ntfs_mutation_bitmap_view(plan, bitmap, base, false, &view);
@@ -380,6 +386,11 @@ mutation_allocation_first_record(struct ntfs_write_mutation_plan *plan,
 	}
 	for (byte = 0; byte < bitmap->bytes && byte * NTFS_BITS_PER_BYTE < records;
 	    byte += view.bytes) {
+		if (ntfs_mutation_bitmap_full(bitmap, byte)) {
+			view.bytes = NTFS_MUTATION_BITMAP_PAGE_BYTES;
+			first = 0;
+			continue;
+		}
 		result = ntfs_mutation_bitmap_view(plan, bitmap, byte, false, &view);
 		if (result != NTFS_OK) {
 			return result;

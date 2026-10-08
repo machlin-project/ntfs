@@ -599,6 +599,9 @@ bad_inputs(struct batch_case *test)
 	packet.record.client_index = input.restart.client_count;
 	refused(&source, &input, NTFS_INVALID);
 	packet = test->packets[0];
+	packet.open_predecessor = true;
+	refused(&source, &input, NTFS_INVALID);
+	packet.open_predecessor = false;
 	packet.previous = 0;
 	refused(&source, &input, NTFS_INVALID);
 	packet.previous = SIZE_MAX;

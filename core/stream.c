@@ -128,6 +128,10 @@ ntfs_stream_close(struct ntfs_stream *stream)
 	if (stream == NULL) {
 		return;
 	}
+	if (stream->shared_references != 0) {
+		stream->shared_references--;
+		return;
+	}
 	volume = stream->volume;
 	if (stream->external) {
 		volume->children--;

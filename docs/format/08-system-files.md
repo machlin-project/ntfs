@@ -101,6 +101,15 @@ Original bytes come from the immutable original stream, including when other
 plan patches already cover that physical location. EOF growth synthesizes zero
 bits, while initialization bounds still exclude uninitialized MFT records and
 padding. All page state dies with the plan; it is not a volume-wide cache.
+The first or random original read uses 4 KiB; a sequential continuation reads
+up to 64 KiB, capped at original EOF. Changed-page before/after snapshots remain
+4 KiB regardless of read-ahead. A 128-byte summary covers all complete pages
+within the existing 4-MiB bitmap limit. A bit is published only after a successful
+exact original read proves every occupancy bit in that page is set. Partial
+original tail pages are never summarized. Private frees cannot make original
+ownership reusable, so these immutable proofs need no mutation invalidation.
+Private-only full pages are deliberately not summarized. Allocation errors leave
+the previous window intact; a failed I/O invalidates its destination before retry.
 [Page tests](../../tests/bitmap_pages.c) cover cross-page first-fit/retirement,
 original ownership, failed partial reads, allocation failures and the one-page
 to multiple-page transition. [Virtual fixtures](../../tests/bitmap_page_fixtures.py)

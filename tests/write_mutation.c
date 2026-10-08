@@ -1910,6 +1910,30 @@ generic_inheritance(const char *cases)
 	     "rights for files, directories and descendants");
 }
 
+#if defined(NTFS_TEST_MUTATION_PLAN)
+static void
+local_index_update(struct test_case *test, uint64_t reference)
+{
+	struct ntfs_write_mutation_request request = {.kind = NTFS_WRITE_RESIZE_FILE,
+	    .reference = reference,
+	    .size = 1,
+	    .filetime = TEST_FILETIME + 1};
+	struct ntfs_write_mutation_plan *plan = NULL;
+	struct ntfs_write_mutation_region region;
+	size_t index, changed = 0;
+
+	assert(ntfs_write_mutation_prepare(&test->backend.reader, &request, &plan) == NTFS_OK);
+	assert(ntfs_write_mutation_plan_count(plan) != 0);
+	for (index = 0; index < ntfs_write_mutation_plan_count(plan); index++) {
+		assert(ntfs_write_mutation_plan_region(plan, index, &region) == NTFS_OK);
+		changed += region.kind == NTFS_WRITE_MUTATION_INDEX;
+	}
+	assert(changed <= 1);
+	verify_program(test, plan);
+	ntfs_write_mutation_plan_close(plan);
+}
+#endif
+
 static void
 index_and_MFT_growth_image(const char *source, const char *cases, const char *image, bool root)
 {
@@ -1942,6 +1966,9 @@ index_and_MFT_growth_image(const char *source, const char *cases, const char *im
 		references[index] = create(test, directory, text, false);
 	}
 	assert(fgetc(rows) == EOF && !ferror(rows));
+#if defined(NTFS_TEST_MUTATION_PLAN)
+	local_index_update(test, references[TEST_CHILDREN / 2]);
+#endif
 	validate(test);
 	assert(fseek(rows, 0, SEEK_SET) == 0);
 	for (index = 0; index < TEST_CHILDREN; index++) {

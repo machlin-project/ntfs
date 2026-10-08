@@ -6,9 +6,25 @@ ntfs_mutation_stream(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation
     uint32_t type, const uint16_t *name, size_t count, struct ntfs_stream **out)
 {
 	struct ntfs_attr_view attribute;
+	struct ntfs_mutation_stream_entry *entry;
+	size_t index;
 	enum ntfs_result result;
 
 	*out = NULL;
+	if (count > NTFS_WRITE_MUTATION_TARGET_NAME_UNITS || (count != 0 && name == NULL)) {
+		return NTFS_INVALID;
+	}
+	for (index = 0; index < NTFS_MUTATION_STREAM_CACHE_ENTRIES; index++) {
+		entry = &plan->streams[index];
+		if (entry->stream != NULL && entry->record == record &&
+		    entry->revision == record->revision && entry->type == type &&
+		    entry->name_count == count &&
+		    ntfs_equal(entry->name, name, count * sizeof(*name))) {
+			entry->stream->shared_references++;
+			*out = entry->stream;
+			return NTFS_OK;
+		}
+	}
 	result = ntfs_attr_find(
 	    record->bytes, sizeof(record->bytes), type, name, count, UINT16_MAX, &attribute);
 	if (result == NTFS_OK) {
@@ -18,6 +34,19 @@ ntfs_mutation_stream(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation
 		ntfs_stream_close(*out);
 		*out = NULL;
 		result = NTFS_UNSUPPORTED;
+	}
+	if (result == NTFS_OK) {
+		entry = &plan->streams[plan->stream_cursor];
+		ntfs_stream_close(entry->stream);
+		*entry = (struct ntfs_mutation_stream_entry){.record = record,
+		    .stream = *out,
+		    .revision = record->revision,
+		    .type = type,
+		    .name_count = count};
+		ntfs_copy(entry->name, name, count * sizeof(*name));
+		(*out)->shared_references++;
+		plan->stream_cursor =
+		    (plan->stream_cursor + 1) % NTFS_MUTATION_STREAM_CACHE_ENTRIES;
 	}
 	return result;
 }

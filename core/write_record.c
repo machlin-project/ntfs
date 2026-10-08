@@ -132,7 +132,7 @@ ntfs_mutation_record_get(struct ntfs_write_mutation_plan *plan, uint64_t referen
 	header = (void *)record->bytes;
 	if (number * NTFS_WRITE_RECORD_BYTES >= plan->volume->mft->initialized) {
 		mutation_record_initialize_empty(record, 1);
-		record->changed = true;
+		ntfs_mutation_record_changed(record);
 	} else if (free_slot) {
 		if (!ntfs_equal(header->mst.magic, "FILE", sizeof(header->mst.magic))) {
 			mutation_record_initialize_empty(record, 1);
@@ -261,7 +261,7 @@ ntfs_mutation_record_replace(struct ntfs_write_mutation_plan *plan,
 	}
 	ntfs_copy(record->bytes + offset, plan->scratch, bytes);
 	ntfs_put_u32(header->used, (uint32_t)next_used);
-	record->changed = true;
+	ntfs_mutation_record_changed(record);
 	return NTFS_OK;
 }
 
@@ -290,6 +290,6 @@ ntfs_mutation_touch(struct ntfs_mutation_record *record, uint64_t filetime, bool
 		ntfs_put_u32(
 		    standard->attributes, ntfs_u32(standard->attributes) | NTFS_FILE_ARCHIVE);
 	}
-	record->changed = true;
+	ntfs_mutation_record_changed(record);
 	return NTFS_OK;
 }

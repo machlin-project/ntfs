@@ -17,6 +17,9 @@ struct ntfs_write_batch_packet {
 	struct ntfs_logfile_record record;
 	struct ntfs_logfile_buffer payload;
 	size_t previous, undo_next;
+	/* Bind the private OpenAttribute redo open_lsn to the preceding packet
+	 * (or retained tail), after placement and before page framing. */
+	bool open_predecessor;
 };
 
 struct ntfs_write_batch_pages_input {

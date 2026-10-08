@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "pointer_range.h"
 #include "write_batch_pages.h"
+#include "logfile_tables_disk.h"
 
 enum { NTFS_WRITE_BATCH_DATA_BYTES = NTFS_WRITE_CLUSTER_BYTES - NTFS_WRITE_LOG_DATA_OFFSET };
 
@@ -42,7 +43,7 @@ ntfs_write_batch_pages_packet_copy(const struct ntfs_write_batch_pages *owner, s
 	const struct ntfs_disk_log_record *record;
 	const struct ntfs_disk_mst *mst;
 	uint8_t *destination = output;
-	size_t index, first, end, bytes, copied, count, offset, sector, tail, usa, byte;
+	size_t index, first, end, bytes, copied, count, offset, sector, tail, usa, byte, take;
 	uint16_t marker;
 
 	if (owner == NULL ||
@@ -113,14 +114,27 @@ ntfs_write_batch_pages_packet_copy(const struct ntfs_write_batch_pages *owner, s
 		if (count > NTFS_WRITE_BATCH_DATA_BYTES) {
 			count = NTFS_WRITE_BATCH_DATA_BYTES;
 		}
-		for (byte = 0; byte < count; byte++) {
+		for (byte = 0; byte < count; byte += take) {
 			offset = NTFS_WRITE_LOG_DATA_OFFSET + byte;
 			tail = offset % NTFS_MST_STRIDE;
-			destination[copied + byte] = tail >= NTFS_MST_STRIDE - sizeof(uint16_t)
-			    ? page->protected_bytes[usa +
-				  (offset / NTFS_MST_STRIDE + 1) * sizeof(uint16_t) + tail -
-				  (NTFS_MST_STRIDE - sizeof(uint16_t))]
-			    : page->protected_bytes[offset];
+			if (tail < NTFS_MST_STRIDE - sizeof(uint16_t)) {
+				take = NTFS_MST_STRIDE - sizeof(uint16_t) - tail;
+				if (take > count - byte) {
+					take = count - byte;
+				}
+				ntfs_copy(destination + copied + byte,
+				    page->protected_bytes + offset, take);
+			} else {
+				take = NTFS_MST_STRIDE - tail;
+				if (take > count - byte) {
+					take = count - byte;
+				}
+				ntfs_copy(destination + copied + byte,
+				    page->protected_bytes + usa +
+					(offset / NTFS_MST_STRIDE + 1) * sizeof(uint16_t) + tail -
+					(NTFS_MST_STRIDE - sizeof(uint16_t)),
+				    take);
+			}
 		}
 		copied += count;
 	}
@@ -312,6 +326,7 @@ batch_pages_packets_admit(
     const struct ntfs_write_batch_pages_input *input, struct ntfs_batch_page_window *window)
 {
 	const struct ntfs_write_batch_packet *packet;
+	struct ntfs_logfile_update update;
 	uint16_t known_flags;
 	size_t index, total, pages;
 	enum ntfs_result result;
@@ -323,6 +338,15 @@ batch_pages_packets_admit(
 		if (packet->payload.bytes >
 		    NTFS_WRITE_BATCH_MAX_PACKET_BYTES - sizeof(struct ntfs_disk_log_record)) {
 			return NTFS_RANGE;
+		}
+		if (packet->open_predecessor &&
+		    (packet->record.type != NTFS_LOGFILE_RECORD_UPDATE ||
+			ntfs_logfile_update_decode(
+			    packet->payload.data, packet->payload.bytes, &update) != NTFS_OK ||
+			update.redo_operation != NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE ||
+			update.undo_operation != NTFS_LOG_OP_NOOP ||
+			update.redo.length != sizeof(struct ntfs_disk_log_open_attribute))) {
+			return NTFS_INVALID;
 		}
 		total = sizeof(struct ntfs_disk_log_record) + packet->payload.bytes;
 		pages = (total + NTFS_WRITE_BATCH_DATA_BYTES - 1) / NTFS_WRITE_BATCH_DATA_BYTES;
@@ -401,6 +425,8 @@ batch_pages_pages_encode(const struct ntfs_write_batch_pages_input *input,
 	struct ntfs_write_batch_page *pages = batch_pages_page_storage(plan);
 	const struct ntfs_write_batch_packet *packet;
 	struct ntfs_logfile_record record;
+	struct ntfs_logfile_update update;
+	struct ntfs_disk_log_open_attribute *entry;
 	struct ntfs_logfile_page_input frame = {0};
 	uint64_t page = window->page, sequence = window->sequence;
 	size_t ordinal, output = 0, bytes, copied, take, next;
@@ -433,6 +459,24 @@ batch_pages_pages_encode(const struct ntfs_write_batch_pages_input *input,
 		    packet->payload.bytes, work->packet, sizeof(work->packet));
 		if (result != NTFS_OK) {
 			return result;
+		}
+		if (packet->open_predecessor) {
+			result = ntfs_logfile_update_decode(
+			    work->packet + sizeof(struct ntfs_disk_log_record),
+			    packet->payload.bytes, &update);
+			if (result != NTFS_OK) {
+				return result;
+			}
+			if (record.type != NTFS_LOGFILE_RECORD_UPDATE ||
+			    update.redo_operation != NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE ||
+			    update.undo_operation != NTFS_LOG_OP_NOOP ||
+			    update.redo.length != sizeof(*entry)) {
+				return NTFS_INVALID;
+			}
+			entry = (void *)(work->packet + sizeof(struct ntfs_disk_log_record) +
+			    update.redo.offset);
+			ntfs_put_u64(entry->open_lsn,
+			    ordinal == 0 ? input->tail_lsn : plan->lsn[ordinal - 1]);
 		}
 		copied = 0;
 		while (copied != bytes) {

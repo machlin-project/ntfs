@@ -1,6 +1,27 @@
 # Handoff to Sol
 
-The latest C-only optimization batch is complete: large volume/MFT bitmaps now
+The latest C-only batch implements all four requested preparation optimizations:
+local directory split/merge and dirty-node storage, adaptive bitmap read-ahead
+with immutable original-page summaries, record-revision stream/runlist reuse,
+and one-pass journal framing with smaller payload storage. All **213 sanitized
+suites**, **316 strict objects** and **six portable/GPR checks** pass. New fresh-owner
+recovery sweeps cover **736 split and 766 merge writer states**. Of 45 frozen
+images, 39 remain exact and six changed growth layouts retain matching namespace
+and metadata snapshots. Large-directory planning improves 1.62×/2.04× in
+userspace/GPR host contexts; journal compilation improves 19.16×/18.10×.
+The GPR record-lookup control retains a disclosed 0.888× result. The reproduced
+cascading-deletion overflow is fixed and retained as a regression. See
+[current acceptance](ACCEPTANCE.md#incremental-directory-and-journal-preparation)
+and [measured scope](PERFORMANCE.md#incremental-directory-and-journal-preparation).
+
+The user still defers FSKit work. No VM is assigned to a worker, and this batch
+runs no VM/UTM, Windows, FSKit/app or kernel-load stage. Installed signed build 19
+retains its earlier native baseline. The changed directory layouts need a future
+Windows recovery/chkdsk gate before inheriting native qualification. Do not start
+that gate or repeat completed local checks from this handoff. Generated evidence
+is under `artifacts/core-write-optimization-20261008/`.
+
+The preceding paged-bitmap C-only optimization batch is complete: large volume/MFT bitmaps now
 use a plan-local original window and before/after snapshots of modified pages.
 All 211 fatal-sanitizer suites, 45 exact whole images, 312 strict compiler objects
 and six portable/GPR checks pass. Five large virtual prefixes cover 25 complete
@@ -16,7 +37,7 @@ The user still defers FSKit work. There is no app build/install, native test,
 VM/UTM operation or kernel load in this batch. Installed build 19 retains its
 prior native baseline. Do not rerun completed checks or start VM work from this
 handoff. Evidence is under `artifacts/bitmap-regression-20261008/` and the linked
-acceptance paths. Incremental directory editing remains a separate design.
+acceptance paths. Incremental directory editing was still open at that checkpoint.
 
 The preceding C-only optimization batch is complete: bounded region/MFT lookup
 indexes, wordwise cluster retirement/MFT first-fit and volume-lifetime WOF table

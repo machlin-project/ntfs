@@ -182,21 +182,21 @@ snapshot_and_faults(void)
 	size_t fault, allocations;
 	bool bit;
 
-	open_fixture(&f, TEST_PAGE_BYTES * 2 + 1);
+	open_fixture(&f, NTFS_MUTATION_BITMAP_WINDOW_BYTES + TEST_PAGE_BYTES + 1);
 	f.source[0] = 0x12;
-	f.source[TEST_PAGE_BYTES] = 0x34;
+	f.source[NTFS_MUTATION_BITMAP_WINDOW_BYTES] = 0x34;
 	assert(ntfs_mutation_bitmap_view(f.plan, &f.plan->allocation, 0, false, &view) == NTFS_OK);
 	assert(view.before[0] == 0x12 && view.before == view.after);
 	f.device.fail_read = f.device.reads + 1;
-	assert(ntfs_mutation_bitmap_view(
-		   f.plan, &f.plan->allocation, TEST_PAGE_BYTES, false, &view) == NTFS_IO);
+	assert(ntfs_mutation_bitmap_view(f.plan, &f.plan->allocation,
+		   NTFS_MUTATION_BITMAP_WINDOW_BYTES, false, &view) == NTFS_IO);
 	f.device.fail_read = 0;
 	assert(ntfs_mutation_bitmap_view(f.plan, &f.plan->allocation, 0, false, &view) == NTFS_OK);
 	assert(view.before[0] == 0x12 && f.device.reads == 3);
 	assert(ntfs_mutation_patch(f.plan, 0, NTFS_WRITE_MUTATION_BITMAP, &patch) == NTFS_OK);
 	memset(patch->after, 0x99, sizeof(patch->after));
-	assert(ntfs_mutation_bitmap_view(
-		   f.plan, &f.plan->allocation, TEST_PAGE_BYTES, false, &view) == NTFS_OK);
+	assert(ntfs_mutation_bitmap_view(f.plan, &f.plan->allocation,
+		   NTFS_MUTATION_BITMAP_WINDOW_BYTES, false, &view) == NTFS_OK);
 	assert(ntfs_mutation_bitmap_view(f.plan, &f.plan->allocation, 0, true, &view) == NTFS_OK);
 	assert(view.before[0] == 0x12 && view.after[0] == 0x12);
 	view.after[0] = 0;
@@ -226,6 +226,35 @@ snapshot_and_faults(void)
 		    view.after[0] == UINT8_MAX);
 		close_fixture(&f);
 	}
+}
+
+static void
+read_ahead_summary(void)
+{
+	struct fixture f;
+	struct ntfs_run *runs;
+	struct ntfs_mutation_bitmap_view view;
+	size_t count, reads;
+	uint64_t first;
+
+	open_fixture(&f, 4 * NTFS_MUTATION_BITMAP_WINDOW_BYTES + 3);
+	first = 3 * NTFS_MUTATION_BITMAP_WINDOW_BYTES * NTFS_BITS_PER_BYTE + 5;
+	ntfs_mutation_set_bit(f.source, first, false);
+	ntfs_mutation_set_bit(f.source, first + 1, false);
+	assert(ntfs_mutation_allocate_runs(f.plan, 0, 1, &runs, &count) == NTFS_OK);
+	assert(count == 1 && runs[0].lcn == first);
+	ntfs_mutation_release(f.plan, runs, NTFS_MUTATION_MAX_RUNS * sizeof(*runs));
+	assert(f.device.reads == 4);
+	/* Evict the search window. Known full original pages remain unavailable
+	 * even after private frees; first-fit still finds the earliest free bit. */
+	assert(ntfs_mutation_bitmap_view(f.plan, &f.plan->allocation,
+		   4 * NTFS_MUTATION_BITMAP_WINDOW_BYTES, false, &view) == NTFS_OK);
+	assert(ntfs_mutation_bitmap_set(f.plan, &f.plan->allocation, 0, false) == NTFS_OK);
+	reads = f.device.reads;
+	assert(ntfs_mutation_allocate_runs(f.plan, 0, 1, &runs, &count) == NTFS_OK);
+	assert(count == 1 && runs[0].lcn == first + 1 && f.device.reads == reads);
+	ntfs_mutation_release(f.plan, runs, NTFS_MUTATION_MAX_RUNS * sizeof(*runs));
+	close_fixture(&f);
 }
 
 static void
@@ -445,6 +474,7 @@ main(void)
 {
 	scan_cases();
 	snapshot_and_faults();
+	read_ahead_summary();
 	allocation_failures();
 	growth_cases();
 	mft_cases();

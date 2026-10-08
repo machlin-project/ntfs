@@ -370,6 +370,8 @@ recovery_profiles(const char *directory)
 	    {NTFS_WRITE_RESIZE_FILE, TEST_RESIDENT_GROWTH, "source.img"},
 	    {NTFS_WRITE_REMOVE_DIRECTORY, TEST_EMPTY_DIRECTORY, "source.img"},
 	    {NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH, "large-source.img"},
+	    {NTFS_WRITE_CREATE_FILE, TEST_INDEX_SPLIT, "large-source.img"},
+	    {NTFS_WRITE_REMOVE_FILE, TEST_INDEX_MERGE, "large-source.img"},
 	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT, "unused-index-torn.img"},
 	    {NTFS_WRITE_CREATE_FILE, TEST_DEFAULT, "unused-index-stale.img"},
 	    {NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH, "large-unused-file-torn.img"},
@@ -521,6 +523,10 @@ batch_recovery_tests(const char *directory, const char *output)
 	recovery_writer_states(directory, NTFS_WRITE_GROWING_RANGE, TEST_DEFAULT, "source.img");
 	recovery_writer_states(
 	    directory, NTFS_WRITE_CREATE_FILE, TEST_MFT_GROWTH, "large-source.img");
+	recovery_writer_states(
+	    directory, NTFS_WRITE_CREATE_FILE, TEST_INDEX_SPLIT, "large-source.img");
+	recovery_writer_states(
+	    directory, NTFS_WRITE_REMOVE_FILE, TEST_INDEX_MERGE, "large-source.img");
 	free(recovery_output);
 }
 

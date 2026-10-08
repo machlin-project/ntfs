@@ -61,6 +61,8 @@ struct ntfs_unit_cache {
 
 struct ntfs_stream {
 	struct ntfs_volume *volume;
+	/* Extra private immutable owners; external handles are never shared. */
+	size_t shared_references;
 	uint64_t size, initialized, allocated, physical_size, clusters;
 	uint16_t flags, compression_unit;
 	bool external, resident;

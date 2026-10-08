@@ -1,15 +1,124 @@
 # Performance contracts
 
+## Incremental directory and journal preparation
+
+This connected C batch changes four preparation paths: local `$I30` editing,
+near-full bitmap scans, private attribute/runlist reuse and journal packet
+construction. It preserves first-fit allocation, original ownership exclusion,
+public read-only capability and all durable publication/barrier ordering.
+
+The [directory tree](../core/write_directory_tree.c) retains original VCNs and
+writes only dirty nodes, with byte-weighted splits, deletion/merge and resident
+root transitions. Complete input validation and the sorted flat key inventory
+remain linear. This is not a path-only directory reader. The retained node
+buffers add bounded memory during admission; fewer before/after patches and
+journal updates can more than offset that cost on large directories. Small
+operations do not have a universal memory or throughput improvement.
+
+[Bitmap reads](../core/write_mutation_bitmap.c) start with one 4-KiB window and
+promote sequential scanning to 64 KiB. Summaries cover fully occupied original
+pages only. Because original allocations stay excluded for the whole plan,
+private frees cannot make those summaries stale. An initially free page keeps
+the small-read path; fragmented mappings can still require multiple backend
+callbacks for one logical window.
+
+The eight-entry [stream cache](../core/write_stream.c) reuses an immutable
+resident value or parsed runlist only for the same private record revision,
+attribute type and full name. Every record edit advances the revision; eviction
+and plan close release owned references. Existing borrowers retain their original
+snapshot. Failures publish no cache entry, and no cache crosses a plan or mount.
+
+[Journal framing](../core/write_batch_pages.c) assigns each open-attribute
+predecessor LSN during placement, eliminating the draft complete page program.
+[Payload storage](../core/write_program_packets.c) uses actual open/undo lengths
+instead of maximum packet capacity per entry. MST reconstruction copies whole
+ranges between sector tails. This reduces preparation and copies; it does not
+coalesce device writes or weaken persistence barriers.
+
+### Matched workload scope
+
+The frozen reference is the preceding accepted paged-bitmap implementation.
+Both versions use the same Xcode compiler/SDK, `-O2`, source images and benchmark
+harness. Nine pairs alternate execution order; GPR-only programs run on the host.
+A reference-created volume containing 256 names of 200 UTF-16 units supplies the
+large-directory workload. Separate phases measure complete plan preparation,
+journal-program compilation, execution preparation and repeated stream opens.
+Full-volume validation and a sorted namespace digest run outside timing.
+Directory layouts may differ while namespace results must agree.
+
+The near-full and early-free virtual prefixes retain complete region-byte
+checksums. Counts describe core allocator bytes and backend callbacks, not RSS,
+mounted throughput or storage latency. Execution preparation performs no writes
+or persistence calls. The additional local split/merge recovery matrices are
+correctness evidence, separate from these timings and from native Windows tests.
+
+### Paired results
+
+Ratios above one mean faster. Each directory phase starts from the same frozen
+source; improvements across phases must not be multiplied.
+
+| Workload | Userspace | GPR-only host |
+| --- | ---: | ---: |
+| Large-directory complete mutation plan | 1.62× | 2.04× |
+| Large-directory journal-program compilation | 19.16× | 18.10× |
+| Large-directory execution preparation | 1.60× | 1.84× |
+| Repeated stream descriptions, small source | 16.59× | 19.70× |
+| Repeated stream descriptions, large source | 32.90× | 32.56× |
+| Near-full bitmap: grow allocation by 1 MiB | 3.79× | 2.81× |
+| Near-full bitmap: growing write with 1-MiB payload | 2.03× | 1.67× |
+
+On the large directory, changed regions and journal updates fall from 67 to five;
+prepared publications fall from 463 to 29. Complete-plan source callbacks fall
+from 147 to 85, and peak core allocation falls from 1,345,432 to 975,880 bytes.
+Program compilation falls from 75 to ten allocations per preparation. Execution
+preparation retains 1,161,999 peak bytes instead of 5,260,023. The larger temporary
+node buffer needed for cascading deletion is included in these final numbers.
+The retained tree and full admission are still linear in input size.
+
+Across 16,384 descriptor acquisitions, the small case falls from 32,768 allocations
+to two; the larger runlist falls from 49,152 to three. These are descriptor reuse
+rates, not file-read throughput. Small-source program compilation remains near
+parity, 0.987×/0.996×; execution preparation is 1.030×/1.054×. Its temporary allocated
+bytes fall from 1,956,509 to 1,864,653 per preparation, while peak memory increases
+by 1,281 bytes. Journal storage changes therefore do not imply a large standalone
+speedup for every small operation.
+
+Near-full growth reads the same 2,256,384 bytes with 50 callbacks instead of 529;
+growing writes use 562 instead of 1,041 callbacks with unchanged byte counts.
+Peak allocation for near-full growth increases from 396,088 to 432,296 bytes:
+read-ahead trades roughly 35 KiB of peak core storage for fewer callbacks.
+Early-free growth keeps its original 18 callbacks and 163,328 read bytes.
+Across early-free complete plans, ratios range 0.989–1.076×; their peak allocations
+remain below the preceding implementation. The summaries also prevent repeated
+scans of known originally full pages within one plan.
+
+All 52 short paired configurations retain their exact region-byte or namespace
+checksums. Longer controls use the same binaries with 32 times as many iterations
+(eight times for projected reads). Apart from record lookup, these 22 configurations
+range 0.982–1.035×. Hot record lookup improves 1.127× in userspace but remains
+**0.888× in GPR-only code**, approximately 0.22 ns additional time per hit on this
+fixture. Moving the cold descriptor cache behind the plan's lookup fields did not
+remove that primitive regression. It is retained and disclosed; complete small
+plans in the same prolonged run remain 1.000–1.035×. These are measured medians,
+not confidence intervals or universal device predictions.
+
+[Acceptance](ACCEPTANCE.md#incremental-directory-and-journal-preparation) records
+the complete regression and compiler boundary. Final reports are in the
+`completed/` comparison directories and `completed-measurements/` beneath
+`artifacts/core-write-optimization-20261008/`. Earlier candidates, the reproduced
+cascading-deletion overflow and initial test/harness failures remain retained.
+
 ## Paged mutation bitmaps
 
 The planner retains contiguous before/after buffers for bitmaps up to 4 KiB.
-Larger `$Bitmap::$DATA` and `$MFT::$BITMAP` streams use one 4-KiB read window and
-an optional directory of changed pages. Each changed page owns independent
+Larger `$Bitmap::$DATA` and `$MFT::$BITMAP` streams use one adaptive original
+read window and an optional directory of changed pages. The window starts at
+4 KiB and grows to 64 KiB for sequential scanning, as described above. Each changed page owns independent
 4-KiB before/after bytes. At the unchanged 4-MiB bitmap limit, the directory
 contains at most 1,024 pointers (8 KiB on the measured hosts). Unchanged pages
 need no retained snapshots; a bitmap that is never accessed needs no window.
-The plan itself grows by 80 bytes on these hosts. All allocations remain charged
-to the existing plan budgets and are released when that plan closes.
+All allocations remain charged to the existing plan budgets and are released
+when that plan closes.
 
 The [bitmap component](../core/write_mutation_bitmap.c) reads through its saved
 original stream, never through projected plan patches. A failed read invalidates
@@ -29,6 +138,9 @@ content-only change preserves the complete existing attribute and allocation
 tail. Growth/conversion still goes through the existing mapping owner.
 
 ### Complete-plan measurements
+
+The following measurements describe the preceding one-page-window batch, before
+the read-ahead and summary optimization above.
 
 Frozen reference sources, harness and fixture bytes use the same selected Xcode
 compiler/SDK, `-O2`, and nine alternating pairs. Five synthetic virtual-volume
@@ -61,13 +173,12 @@ process RSS, fixture storage or the harness's payload/seed buffers. Large-MFT
 profiles show 4.48–7.45× metadata preparation and 1.53–1.64× growing writes across
 both contexts; the two-page transition retains byte-exact placement and output.
 
-There is a real I/O tradeoff for a nearly full map. Late-space growth still reads
+The original one-page-window implementation has an I/O tradeoff for a nearly full map. Late-space growth still reads
 2,256,384 bytes, but page reads raise callback count from 18 to 529; growing writes
 rise from 530 to 1,041 callbacks with unchanged bytes. Userspace ratios there are
 0.969×/0.999× for growth/growing-write, versus 1.191×/1.119× with GPR-only code.
-The memory reduction remains. A device with expensive small reads may need
-separate read-ahead or page-search summaries; host results do not establish its
-latency. Small multi-page maps can also cost more memory: the boundary shrink
+The memory reduction remains. The subsequent batch above adds read-ahead and original-page summaries; host
+results still do not establish device latency. Small multi-page maps can also cost more memory: the boundary shrink
 case retains an additional 4,194 bytes. This is not a universal speed or memory
 improvement for every geometry.
 

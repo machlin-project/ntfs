@@ -72,6 +72,26 @@ memory/codecs. C tests and compiler objects remain separate from FSKit builds,
 installed mounts and native Windows acceptance. The current core-only batch does
 not run any FSKit/app/VM stage.
 
+For local directory edits and journal preparation, freeze the same complete
+small/large volumes for both implementations:
+
+```sh
+python3 scripts/benchmark_write.py prepare --reference HEAD --output artifacts/write-next
+python3 scripts/benchmark_write.py compare --output artifacts/write-next --comparison candidate --repetitions 9
+```
+
+This harness requires `.build/write-mutation-cases/history-source.img`. The
+reference seeds 256 long names before timing. Independent phases measure complete
+mutation planning, program compilation, execution preparation and repeated stream
+description acquisition. Every result undergoes full-volume validation and a
+sorted namespace digest outside timing. Local tree edits intentionally change
+physical layout, so their oracle is logical equivalence, not a refreshed golden
+image. Preserve exact byte comparisons for workloads whose physical output is
+unchanged. The model tests also check ordered keys, reachable live nodes, split/
+merge and root transitions; fresh-owner recovery tests interrupt every publication
+at whole and sector-prefix/suffix boundaries. Neither benchmark transfers writes
+nor persistence calls, and neither establishes native Windows acceptance.
+
 ## CPU optimization checks
 
 `cpu-memory`, `cpu-codecs` and `huffman` are part of the regular sanitized Meson suite.

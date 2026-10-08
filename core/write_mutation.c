@@ -736,6 +736,9 @@ ntfs_write_mutation_plan_close(struct ntfs_write_mutation_plan *plan)
 		ntfs_operation_leave(plan->volume);
 		plan->operation_active = false;
 	}
+	for (index = 0; index < NTFS_MUTATION_STREAM_CACHE_ENTRIES; index++) {
+		ntfs_stream_close(plan->streams[index].stream);
+	}
 	ntfs_mutation_bitmap_close(plan, &plan->allocation);
 	ntfs_mutation_bitmap_close(plan, &plan->mft_bitmap);
 	if (plan->mft != NULL && plan->volume != NULL && plan->mft != plan->volume->mft) {

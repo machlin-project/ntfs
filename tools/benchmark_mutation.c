@@ -373,7 +373,9 @@ main(int argc, char **argv)
 		assert(device.backing_bytes >= sizeof(*boot));
 		boot = (const void *)device.data;
 		device.size = ntfs_u64(boot->sectors) * ntfs_u16(boot->sector_size);
-		assert(device.size >= device.backing_bytes);
+		if (device.size < device.backing_bytes) {
+			device.size = device.backing_bytes;
+		}
 		if (argc == 5) {
 			device.maximum_live = (size_t)strtoull(argv[4], NULL, 10);
 		}

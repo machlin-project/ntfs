@@ -21,7 +21,7 @@ mutation_namespace_changed(struct ntfs_mutation_record *record, uint64_t filetim
 	}
 	standard = (void *)value;
 	ntfs_put_u64(standard->changed, filetime);
-	record->changed = true;
+	ntfs_mutation_record_changed(record);
 	return NTFS_OK;
 }
 
@@ -96,7 +96,7 @@ mutation_namespace_create(struct ntfs_write_mutation_plan *plan,
 	ntfs_put_u16(header->links, 1);
 	ntfs_put_u16(header->flags, NTFS_RECORD_IN_USE | (directory ? NTFS_RECORD_DIRECTORY : 0));
 	ntfs_put_u64(header->base_reference, 0);
-	record->changed = true;
+	ntfs_mutation_record_changed(record);
 	ntfs_zero(standard_bytes, sizeof(standard_bytes));
 	standard = (void *)standard_bytes;
 	mutation_namespace_creation_time_bytes(standard->created, standard->modified,
@@ -229,7 +229,7 @@ mutation_namespace_free_record(
 	ntfs_put_u16(header->sequence, sequence);
 	ntfs_put_u16(header->flags, 0);
 	record->reference = record->number | (uint64_t)sequence << NTFS_REFERENCE_SEQUENCE_SHIFT;
-	record->changed = true;
+	ntfs_mutation_record_changed(record);
 	return NTFS_OK;
 }
 
@@ -277,7 +277,7 @@ mutation_namespace_unlink_key(struct ntfs_write_mutation_plan *plan,
 		}
 	}
 	if (result == NTFS_OK) {
-		ntfs_mutation_directory_remove(parent, position);
+		result = ntfs_mutation_directory_remove(plan, parent, position);
 	}
 	return result;
 }
@@ -523,7 +523,9 @@ mutation_namespace_rename_entry(struct ntfs_write_mutation_plan *plan,
 		result = mutation_namespace_changed(record, plan->filetime);
 	}
 	if (result == NTFS_OK) {
-		ntfs_mutation_directory_remove(source, position);
+		result = ntfs_mutation_directory_remove(plan, source, position);
+	}
+	if (result == NTFS_OK) {
 		result =
 		    ntfs_mutation_directory_add(plan, destination, record->reference, value, bytes);
 	}
@@ -635,9 +637,12 @@ ntfs_mutation_filename_sizes(struct ntfs_write_mutation_plan *plan,
 			ntfs_put_u64(filename->changed, plan->filetime);
 			ntfs_put_u32(filename->attributes,
 			    ntfs_u32(filename->attributes) | NTFS_FILE_ARCHIVE);
-			record->changed = true;
-			ntfs_copy(directory.keys[found].value, value, bytes);
-			result = ntfs_mutation_directory_store(plan, &directory, false);
+			ntfs_mutation_record_changed(record);
+			result =
+			    ntfs_mutation_directory_update(plan, &directory, found, value, bytes);
+			if (result == NTFS_OK) {
+				result = ntfs_mutation_directory_store(plan, &directory, false);
+			}
 		}
 		ntfs_mutation_directory_close(plan, &directory);
 		if (result != NTFS_OK) {

@@ -935,6 +935,119 @@ image_volume_case(NSString *path, NSData *source, NSData *payload, NSData *expec
 }
 
 static void
+image_lazy_view_drain_case(
+    NSString *path, NSData *source, NSData *payload, NSData *expected, ImageVolumeCase mode,
+    BOOL overlappingUnmount)
+{
+	__attribute__((objc_precise_lifetime)) ImageVolumeTransport *transport;
+	__weak ImageVolumeTransport *callbackTransport;
+	ImageVolumePathResource *peer;
+	NTFSVolume *volume;
+	FSItem *root, *file;
+	NSError *error = nil;
+	size_t completed;
+	NSUInteger writes, barriers, index, expectedReplies = overlappingUnmount ? 2 : 1;
+	__block NSUInteger callbacks = 0, replies = 0, mountReplies = 0;
+	dispatch_semaphore_t drained = dispatch_semaphore_create(0);
+
+	assert([NSFileManager.defaultManager createFileAtPath:path
+						     contents:source
+						   attributes:@{
+							   NSFilePosixPermissions : @0600
+						   }]);
+	peer = [[ImageVolumePathResource alloc] initWithURL:[NSURL fileURLWithPath:path]
+						   writable:YES];
+	transport = [[ImageVolumeTransport alloc] initWithResource:peer error:&error];
+	assert(transport != nil && error == nil);
+	callbackTransport = transport;
+	volume = ntfs_image_volume_create(transport, &error);
+	assert(volume != nil && error == nil && transport.isClaimed);
+	root = [volume activateExtraction:&error];
+	assert(root != nil && error == nil);
+	file = lookup_item(volume, root, @"fragmented.bin");
+	assert([volume overwriteImageItem:file
+				     offset:TEST_IMAGE_FILE_OFFSET
+				      bytes:payload.bytes
+				     length:payload.length
+				   fileTime:TEST_IMAGE_FILE_TIME
+				  completed:&completed] == NTFS_OK &&
+	    completed == payload.length);
+	assert([[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
+	writes = transport.nativeWrites;
+	barriers = transport.nativeBarriers;
+	/* No immutable view exists after the committed write. This first native
+	 * read belongs to an unpublished ntfs_mount, before a read scope exists.
+	 * Teardown must neither reply nor release ownership inside that call. */
+	transport.nextRead = ^{
+	  void (^completedReply)(void) = ^{
+	    @synchronized(volume) {
+		    replies++;
+	    }
+	    dispatch_semaphore_signal(drained);
+	  };
+
+	  callbacks++;
+	  assert(callbackTransport.isClaimed);
+	  if (overlappingUnmount) {
+		  assert(mode == ImageVolumeReentrantDeactivate);
+		  [volume unmountWithReplyHandler:^{
+		    assert(volume.lifecycle != NTFSVolumeActive);
+		    completedReply();
+		  }];
+		  assert(replies == 0 && volume.lifecycle == NTFSVolumeDraining);
+	  }
+	  if (mode == ImageVolumeReentrantUnmount) {
+		  [volume unmountWithReplyHandler:^{
+		    assert(volume.lifecycle == NTFSVolumeUnmounted);
+		    completedReply();
+		  }];
+		  assert(volume.lifecycle == NTFSVolumeDraining);
+	  } else if (mode == ImageVolumeReentrantDeactivate) {
+		  deactivate_volume(volume, ^(NSError *failure) {
+		    assert(failure == nil && volume.lifecycle == NTFSVolumeInvalidated);
+		    completedReply();
+		  });
+		  assert(volume.lifecycle == NTFSVolumeInvalidating);
+	  } else {
+		  assert(mode == ImageVolumeReentrantInvalidate);
+		  [volume invalidateWithReplyHandler:^{
+		    assert(volume.lifecycle == NTFSVolumeInvalidated);
+		    completedReply();
+		  }];
+		  assert(volume.lifecycle == NTFSVolumeInvalidating);
+	  }
+	  assert(replies == 0 && callbackTransport.isClaimed);
+	};
+	assert([volume attributes:file error:&error] == nil && error.code == ESTALE);
+	assert(callbacks == 1 && transport.nextRead == nil);
+	for (index = 0; index < expectedReplies; index++) {
+		assert(dispatch_semaphore_wait(drained,
+			   dispatch_time(DISPATCH_TIME_NOW,
+			       TEST_IMAGE_DRAIN_WAIT_SECONDS * NSEC_PER_SEC)) == 0);
+	}
+	assert(replies == expectedReplies);
+	if (mode == ImageVolumeReentrantUnmount) {
+		assert(transport.isClaimed && transport.isAvailable);
+		[volume mountWithOptions:nil
+			    replyHandler:^(NSError *failure) {
+			      assert(failure == nil);
+			      mountReplies++;
+			    }];
+		assert(mountReplies == 1 && volume.lifecycle == NTFSVolumeActive);
+		assert([volume attributes:file error:&error] != nil && error == nil);
+	} else {
+		assert(volume.lifecycle == NTFSVolumeInvalidated && !transport.isClaimed);
+		assert([volume attributes:file error:&error] == nil && error.code == ESTALE);
+	}
+	assert(transport.nativeWrites == writes && transport.nativeBarriers == barriers &&
+	    [[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
+	[volume invalidate];
+	assert(volume.lifecycle == NTFSVolumeInvalidated && !transport.isClaimed &&
+	    replies == expectedReplies);
+	assert([NSFileManager.defaultManager removeItemAtPath:path error:&error]);
+}
+
+static void
 image_access_reply_case(
     NSString *path, NSData *source, NSData *payload, NSData *expected, BOOL lateAllocationFailure)
 {
@@ -1282,6 +1395,15 @@ ntfs_test_fskit_image_volume(NSString *fixtures)
 			    mode);
 		}
 	}
+	for (mode = ImageVolumeReentrantUnmount; mode <= ImageVolumeReentrantDeactivate; mode++) {
+		@autoreleasepool {
+			image_lazy_view_drain_case(path, source, payload, expected, mode, NO);
+		}
+	}
+	image_lazy_view_drain_case(
+	    path, source, payload, expected, ImageVolumeReentrantDeactivate, YES);
+	puts("PASS: lazy image view acquisition drains reentrant and overlapping teardown "
+	     "before replies, with unchanged bytes and remount retry");
 	image_access_reply_case(path, source, payload, expected, NO);
 	image_access_reply_case(path, source, payload, expected, YES);
 	image_metadata_authority_case(path, source);

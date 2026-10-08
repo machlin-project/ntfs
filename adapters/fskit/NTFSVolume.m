@@ -698,13 +698,20 @@ native_access_selection(NSArray<NSString *> *arguments, NTFSNativeAccessMode cur
 		_lifecycle = NTFSVolumeInvalidating;
 	}
 	[_lifecycleLock unlock];
+	/* Reentry already owns this monitor. Do not wait for publication while a
+	 * deferred teardown on another thread may be waiting for this same call. */
+	@synchronized(self) {
+		if (_imageMutationActive || _imageViewOpening) {
+			return;
+		}
+	}
 	/* This method also runs from dealloc; do not capture the owner in a block. */
 	[_publicationLock lock];
 	@try {
 		@synchronized(self) {
-			if (_imageMutationActive) {
-				/* A native transfer can reenter the owner. Admission is already
-				 * closed; release the C owner only after its call has returned. */
+			if (_imageMutationActive || _imageViewOpening) {
+				/* A native transfer or unpublished mount can reenter the owner.
+				 * Admission is closed; release ownership after that call returns. */
 				return;
 			}
 			[_readCachePolicy stop];
@@ -743,7 +750,7 @@ native_access_selection(NSArray<NSString *> *arguments, NTFSNativeAccessMode cur
 
 	[self invalidate];
 	@synchronized(self) {
-		deferred = _imageMutationActive;
+		deferred = _imageMutationActive || _imageViewOpening;
 	}
 	if (deferred) {
 		/* Reentrant native deactivation cannot wait on its own C call. The
@@ -982,28 +989,33 @@ native_access_selection(NSArray<NSString *> *arguments, NTFSNativeAccessMode cur
 {
 	__block BOOL deferred = NO;
 
-	[self performItemPublication:^{
-	  NTFSItem *item;
+	@synchronized(self) {
+		deferred = _imageMutationActive || _imageViewOpening;
+	}
+	if (!deferred) {
+		[self performItemPublication:^{
+		  NTFSItem *item;
 
-	  @synchronized(self) {
-		  if (self->_imageMutationActive) {
-			  deferred = YES;
-			  return;
+		  @synchronized(self) {
+			  if (self->_imageMutationActive || self->_imageViewOpening) {
+				  deferred = YES;
+				  return;
+			  }
+			  [self->_readCachePolicy stop];
+			  for (item in self->_items.objectEnumerator.allObjects) {
+				  [self clearItemCaches:item];
+			  }
+			  [self->_lifecycleLock lock];
+			  self->_pendingUnmounts--;
+			  if (self->_pendingUnmounts == 0 && self->_lifecycle == NTFSVolumeDraining) {
+				  self->_lifecycle = NTFSVolumeUnmounted;
+			  }
+			  [self->_lifecycleLock unlock];
 		  }
-		  [self->_readCachePolicy stop];
-		  for (item in self->_items.objectEnumerator.allObjects) {
-			  [self clearItemCaches:item];
-		  }
-		  [self->_lifecycleLock lock];
-		  self->_pendingUnmounts--;
-		  if (self->_pendingUnmounts == 0 && self->_lifecycle == NTFSVolumeDraining) {
-			  self->_lifecycle = NTFSVolumeUnmounted;
-		  }
-		  [self->_lifecycleLock unlock];
-	  }
-	}];
+		}];
+	}
 	if (deferred) {
-		/* A reentrant unmount cannot wait on its own mutation. A different
+		/* Reentrant unmount cannot wait on its own acquisition or mutation. A different
 		 * execution context drains publication before completing the reply. */
 		dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
 		  [self finishUnmountWithReplyHandler:reply];

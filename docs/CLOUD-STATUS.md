@@ -17,24 +17,42 @@ Ordinary fixtures retain their full peer; compact fixtures retain a multi-chunk
 peer and the primary's multi-page validation table. No assertion or sanitizer
 policy was removed.
 
-The interactive Linux environment lacks Meson, Ninja and Clang. Official PyPI
-installation encountered a proxy timeout; a privileged distro install is not
-available. Its fresh ordinary build therefore stopped before compilation.
-Direct GCC/Python checks are narrower evidence, not a full suite pass. Hosted CI
-provides the complete toolchains and is pending at this checkpoint.
+The interactive Linux environment initially lacked Meson, Ninja and Clang.
+Official PyPI installation encountered a proxy timeout; a privileged distro
+install was unavailable. Pinned official Meson and Ninja Git sources then
+bootstrapped successfully under ignored vendor storage. A full GCC sanitized
+build now passes with the unchanged 2-KiB frame ceiling. Journal traversals use
+small I/O counters instead of discovery inventories; catalog, validation,
+directory editing and rename reuse their owning bounded scratch.
+
+Local LeakSanitizer cannot run under the sandbox's ptrace instrumentation.
+Supplementary ASan/UBSan runs explicitly disable only leak scanning; allocation
+balance assertions remain. They pass the new journal/governor, timestamp,
+reparse, sparse, catalog and Unicode-directory checks. These are not a full
+native sanitizer-suite verdict. The recorded original failed attempts remain.
+
+The [first continuation Actions run](https://github.com/machlin-project/ntfs/actions/runs/37842836097)
+passes image and logfile fuzzing and short directory stress. Linux Clang passes
+219 of 221 tests, 79 strict objects and eight-product Release reproducibility;
+macOS passes 220 of 221 tests, 158 strict objects and the same reproducibility
+boundary. The failures identify an original empty-resident-read null-pointer
+offset, a new restart-fixture expected-field omission, GCC stack/diagnostic
+failures, a directory oracle replay timeout and an upstream archive HTTP 403.
+Corrections are prepared without relaxing sanitizer, stack, timeout or checksum
+limits. Wider qualification of the corrected source is still pending.
 
 ## Workstreams
 
 | Stream | Current source work | Remaining verification/work |
 | --- | --- | --- |
-| Pipeline | Fixed enum/signedness compilation; explicit isolated compiler selection; GCC/Clang/Xcode matrix | Exact-revision full hosted suites, strict objects and style |
-| Directory | Existing independent tree/stress/fault harness retained; short and broad CI gates wired | 256 deterministic cases, 900-second campaign, synthetic/native complete-image qualification |
-| Core/recovery | Restart payload arithmetic widened before addition, with exact-limit/over-limit/UINT32_MAX vectors | Full malformed, allocation, WAL and fresh-owner recovery boundaries |
-| Remaining features | Owning contracts under active review | Reconcile the complete feature matrix; new families remain gated until qualified |
-| Independent oracles | Existing external-tool and Windows interfaces retained | Native AccessCheck, guarded fresh VHD bootstrap and independent directory/recovery comparisons |
-| FSKit | Hosted component, selected SDK, unsigned universal app and strict-context gates prepared | Actual hosted outcomes; installed behavior still needs signed native environment |
-| Fuzz/performance/reproducibility | Complete fuzz inventory discovered from source; explicit compiler reproducibility route | All campaigns, matched performance, relocated/packaging checks |
-| Tooling/docs | Current status separates evidence levels; failures retained | Final clean-clone instructions, release preparation and per-contract residual handoff |
+| Pipeline | Full GCC sanitized build; isolated compiler selection; x86/ARM GCC/Clang/Xcode matrix | Exact-revision full hosted suites, strict objects and selected-Xcode style |
+| Directory | Unicode/case-policy queries added; independent expected keys cached without dropping any complete flat/wire/reachability check | 256 deterministic cases, 900-second campaign, synthetic/native complete-image qualification |
+| Core/recovery | Checked restart payload limits, small journal counters, scratch ownership, zero-byte resident reads; 32-ancestor/five-dimension governor regression | Full malformed, allocation, WAL and fresh-owner recovery boundaries |
+| Remaining features | [Timestamp, reparse and sparse preparation; retirement model](PORTABLE-FEATURES.md) pass local focused checks | Complete coupled media operations and precise independent/native facts remain explicit; no admission widened |
+| Independent oracles | [Guarded Windows bootstrap/replay](WINDOWS-CLOUD.md), AccessCheck and [pinned external tools](EXTERNAL-ORACLES.md) prepared; portable contracts pass | Actual Windows and standalone-tool results, fresh C/native recovery inputs |
+| FSKit | Lazy immutable-view teardown/reply ordering fixed with four prepared deterministic cases; suitable legacy SDK work kept separate from modern SDK requirement | Hosted component/app outcomes; installed behavior still needs signed native environment |
+| Fuzz/performance/reproducibility | All-target fixed seed replay, explicit Linux/Xcode matched benchmark tooling, relocated Release path; 18 helper/six reproducibility regressions pass | All campaigns, measured comparisons, relocated/packaging results |
+| Tooling/docs | Bounded commands, provenance, original failure/input retention and current capability map | Final clean-clone/release preparation and per-contract residual handoff |
 
 This is an intermediate checkpoint. All feasible cloud work is **not complete**.
 Portable, external-tool, Windows API/VHD, macOS component, unsigned-app, installed

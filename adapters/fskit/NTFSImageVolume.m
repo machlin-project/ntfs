@@ -234,6 +234,7 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 	struct ntfs_info info;
 	enum ntfs_result result;
 	NTFSVolumeLifecycle state;
+	BOOL drained = NO;
 
 	if (!_imageViewPending) {
 		return NTFS_OK;
@@ -268,19 +269,42 @@ ntfs_image_editing_volume_create(NTFSImageTransport *transport, NSError **error)
 				result = NTFS_STALE;
 			}
 		}
+		if (result == NTFS_OK && !resource.isAvailable) {
+			result = NTFS_IO;
+		}
 		if (result == NTFS_OK) {
-			_core = core;
-			_resource = resource;
-			_imageViewPending = NO;
-		} else {
+			/* Teardown can close admission while this unpublished mount reads,
+			 * including by reentry before a native operation scope exists. */
+			[_lifecycleLock lock];
+			if (_lifecycle == NTFSVolumeLoaded || _lifecycle == NTFSVolumeActive ||
+			    _lifecycle == NTFSVolumeUnmounted) {
+				_core = core;
+				_resource = resource;
+				_imageViewPending = NO;
+			} else {
+				result = NTFS_STALE;
+				drained = YES;
+			}
+			[_lifecycleLock unlock];
+		}
+		if (result != NTFS_OK) {
 			(void)ntfs_unmount(core);
-			if (result != NTFS_NO_MEMORY) {
+			resource = nil;
+			if (result != NTFS_NO_MEMORY && !drained) {
 				[_imageTransport invalidate];
 			}
 		}
 		return result;
 	} @finally {
 		_imageViewOpening = NO;
+		if (self.lifecycle == NTFSVolumeInvalidating) {
+			/* Ordinary read callers hold only the operation monitor. Drain on
+			 * another context to preserve publication-lock-before-monitor order,
+			 * including a bare reentrant invalidate with no pending reply. */
+			dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+			  [self invalidate];
+			});
+		}
 	}
 }
 

@@ -29,6 +29,19 @@ reopen while one of those requests still needs to drain the operation monitor.
 Invalidation overrides unmount and is terminal. Replies run outside the monitor,
 including replies that inspect the owner from another thread.
 
+Lazy immutable-view replacement has the same drain boundary. Its unpublished
+`ntfs_mount` retains the image claim until acquisition and cleanup return, even
+though an ordinary native read scope has not begun yet. Reentrant and overlapping
+unmount/invalidation close admission immediately but defer their replies. A final
+admission check under the lifecycle lock prevents publishing the acquired view
+after drain. Ordinary unmount cancellation releases that private view without
+poisoning the image, so a later remount can retry acquisition. Terminal cleanup
+uses another execution context to preserve publication-lock/operation-monitor
+order. Four deterministic `image_lazy_view_drain_case` component scenarios cover
+these contracts, including exact unchanged post-write bytes and once-only replies.
+These cloud-authored regressions still require actual macOS compilation and
+component execution; source review is not a native test verdict.
+
 A separate recursive publication lock covers activation/lookup through their
 actual item-result replies, and serializes that interval against reclaim and
 teardown. Attribute snapshots still populate under the operation monitor. The

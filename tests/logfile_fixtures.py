@@ -325,6 +325,14 @@ def author(output):
     data = bytearray(base)
     RESTART_AREA.put(data, 'last_data_bytes', FILE_BYTES, RESTART_OFFSET)
     add('record-policy', 'restart', data, RANGE, header=RESTART_HEADER)
+    for label, payload, result in (
+        ('record-policy-exact', FILE_BYTES - RECORD.size, SUCCESS),
+        ('record-policy-over', FILE_BYTES - RECORD.size + 1, RANGE),
+        ('record-policy-u32', (1 << 32) - 1, RANGE),
+    ):
+        data = bytearray(base)
+        RESTART_AREA.put(data, 'last_data_bytes', payload, RESTART_OFFSET)
+        add(label, 'restart', data, result, header=RESTART_HEADER)
     raw, _ = protect(base, RESTART_HEADER)
     for name, change in (
         ('torn-first', lambda packet: struct.pack_into('<H', packet, USA_STRIDE - WORD_BYTES, USA_SEQUENCE + 1)),

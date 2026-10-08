@@ -1,5 +1,9 @@
 # Acceptance
 
+See [current cloud development status](CLOUD-STATUS.md) for the ongoing cloud-only
+continuation. Earlier local/native checkpoints below retain their original scope;
+they do not automatically qualify new source changes.
+
 ## Initial cloud CI and Dots handoff
 
 The [first private Actions run](https://github.com/machlin-project/ntfs/actions/runs/37830205767)

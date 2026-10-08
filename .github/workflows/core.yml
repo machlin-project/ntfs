@@ -4,17 +4,34 @@ on:
     branches: [development]
   pull_request:
   workflow_dispatch:
+    inputs:
+      broad:
+        description: Run every fuzz target, deeper directory stress, and native cloud gates
+        type: boolean
+        default: false
+      fuzz_seconds:
+        description: Seconds of exploration per fuzz target (seed replay is additional)
+        type: choice
+        options: ['60', '300', '900']
+        default: '60'
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 concurrency:
-  group: ntfs-core-${{ github.ref }}
-  cancel-in-progress: true
+  group: ntfs-core-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   core:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - {os: ubuntu-24.04, name: linux-gcc, compiler: gcc}
+          - {os: ubuntu-24.04, name: linux-clang, compiler: clang}
+          - {os: macos-latest, name: macos-xcode, compiler: ''}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -22,53 +39,175 @@ jobs:
         with:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
-      - run: make test
-      - name: Compare isolated release products
-        run: python3 scripts/check_reproducible.py --output artifacts/reproducibility
-      - name: Record results
+      - name: Isolated build-tool regressions
+        run: python3 -m unittest discover -s tests -p 'test_environment.py'
+      - name: Build assertions and fatal sanitizers
+        run: python3 scripts/build.py .build --compiler '${{ matrix.compiler }}'
+      - name: Run actual Meson test inventory
+        run: python3 scripts/test.py .build
+      - name: Compile strict freestanding objects
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_core.py --compiler '${{ matrix.compiler }}'
+      - name: Check selected-Xcode formatting
+        if: ${{ !cancelled() && runner.os == 'macOS' }}
+        run: python3 scripts/format.py --check
+      - name: Compare isolated Release products
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_reproducible.py --compiler '${{ matrix.compiler }}' --output artifacts/reproducibility
+      - name: Retain selected diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: core-${{ matrix.os }}
+          name: core-${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 14
           path: |
+            .build/meson-info/intro-compilers.json
+            .build/meson-info/intro-tests.json
             .build/meson-logs/testlog.json
+            .build/meson-logs/meson-log.txt
+            artifacts/freestanding/report.json
             artifacts/reproducibility/report.json
             artifacts/reproducibility/*-setup.log
             artifacts/reproducibility/*-compile.log
   interoperability:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
-      - run: make build
+      - run: python3 scripts/build.py .build --compiler clang
       - run: python3 scripts/bootstrap_test_tools.py
       - run: python3 tests/interoperability.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: independent-oracle
+          if-no-files-found: error
+          retention-days: 14
           path: |
             artifacts/interoperability/report.json
             artifacts/interoperability/commands.log
+            .build/meson-logs/meson-log.txt
+  fuzz-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: targets
+        env:
+          # Explicit push opt-in supports integrations without workflow-dispatch.
+          BROAD: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]')) }}
+        run: |
+          python3 - <<'PY'
+          import ast, json, os
+          from pathlib import Path
+          tree = ast.parse(Path('scripts/fuzz.py').read_text())
+          inventories = [ast.literal_eval(node.value) for node in tree.body
+                         if isinstance(node, ast.Assign)
+                         and any(isinstance(item, ast.Name) and item.id == 'TARGETS' for item in node.targets)]
+          assert len(inventories) == 1 and inventories[0]
+          all_targets = inventories[0]
+          targets = all_targets if os.environ['BROAD'] == 'true' else ('image', 'logfile', 'directory-mutation')
+          assert len(set(all_targets)) == len(all_targets) and set(targets) <= set(all_targets)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              print('targets=' + json.dumps(list(targets)), file=output)
+          PY
   fuzz:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    needs: fuzz-plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        target: ${{ fromJSON(needs.fuzz-plan.outputs.targets) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: python3 scripts/fuzz.py --seconds 60
-      - run: python3 scripts/fuzz.py --target logfile --seconds 60 --output artifacts/fuzz-logfile
+      - name: Replay authored seeds and run bounded exploration
+        env:
+          SECONDS_PER_TARGET: ${{ inputs.fuzz_seconds || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]') && matrix.target == 'directory-mutation' && '900') || '60' }}
+        run: python3 scripts/fuzz.py --target '${{ matrix.target }}' --compiler clang --seconds "$SECONDS_PER_TARGET" --output artifacts/fuzz
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bounded-fuzz
+          name: fuzz-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
           path: |
             artifacts/fuzz/report.json
-            artifacts/fuzz/run-*/image/run.log
-            artifacts/fuzz-logfile/report.json
-            artifacts/fuzz-logfile/run-*/logfile/run.log
+            artifacts/fuzz/run-*/report.json
+            artifacts/fuzz/run-*/*/run.log
+            artifacts/fuzz/run-*/*/seed-replay.log
+            artifacts/fuzz/run-*/*/crash-*
+            artifacts/fuzz/run-*/*/timeout-*
+            artifacts/fuzz/run-*/*/oom-*
+            artifacts/fuzz/run-*/*/leak-*
+  directory-stress:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
+      - run: python3 scripts/build.py .build --compiler clang
+      - name: Independent ordered-key directory stress
+        env:
+          CASES: ${{ ((github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]'))) && '256' || '16' }}
+        run: python3 scripts/stress_directory.py --cases "$CASES" --seed 20261008 --output artifacts/directory-stress
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: directory-stress
+          if-no-files-found: error
+          retention-days: 14
+          path: artifacts/directory-stress
+  macos-components:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]')) }}
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
+      - name: Record selected Xcode and SDK capability
+        run: |
+          mkdir -p artifacts/cloud-macos
+          { xcodebuild -version; xcrun --show-sdk-path; xcrun --show-sdk-version; sw_vers; } | tee artifacts/cloud-macos/toolchain.txt
+          command -v xcodegen || brew install xcodegen
+      - name: Build sanitized core and component fixtures
+        id: core
+        run: python3 scripts/build.py .build
+      - name: Run actual FSKit components (runtime skips remain explicit)
+        if: ${{ !cancelled() && steps.core.outcome == 'success' }}
+        run: python3 scripts/test_fskit.py 2>&1 | tee artifacts/cloud-macos/components.log
+      - name: Compile unsigned universal Release app
+        if: ${{ !cancelled() }}
+        run: python3 scripts/build_fskit.py --configuration Release --derived-data artifacts/cloud-macos/DerivedData 2>&1 | tee artifacts/cloud-macos/unsigned-build.log
+      - name: Strict compiler-context and portable/GPR checks
+        if: ${{ !cancelled() && steps.core.outcome == 'success' }}
+        run: python3 scripts/check_cpu.py --output artifacts/cloud-macos/cpu --fixtures .build/cpu-fixtures
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-components-unsigned
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/cloud-macos/*.txt
+            artifacts/cloud-macos/*.log
+            artifacts/cloud-macos/cpu/*.json
+            artifacts/cloud-macos/cpu/*.stderr
+            artifacts/cloud-macos/DerivedData/Logs/Build

@@ -12,7 +12,11 @@ enum {
 	TEST_SEQUENCE = 7,
 	TEST_TABLE_READS = 2,
 	TEST_PATH_BYTES = 4096,
-	TEST_DATA_BYTES = 16
+	TEST_DATA_BYTES = 16,
+	TEST_PEER_BUFFER_BYTES = 1024,
+	TEST_PEER_UNIT_BYTES = 4096,
+	TEST_PEER_FINAL_BYTES = 777,
+	TEST_PEER_ALPHABET_BYTES = 26
 };
 
 static struct ntfs_node *
@@ -71,6 +75,33 @@ work_limit(struct ntfs_volume *volume, struct fuzz_device *device, size_t expect
 	ntfs_node_close(node);
 	reads = open_stream(volume, device, TEST_FILE, NTFS_OK, NULL);
 	assert(reads == expected_reads);
+}
+
+static void
+peer_contents(struct ntfs_volume *volume)
+{
+	struct ntfs_node *node = open_node(volume, TEST_PEER);
+	struct ntfs_stream *stream = NULL;
+	struct ntfs_stat stat;
+	uint8_t output[TEST_PEER_BUFFER_BYTES];
+	uint64_t offset = 0;
+	size_t done, index;
+
+	assert(ntfs_node_stat(node, &stat) == NTFS_OK);
+	assert(stat.size > TEST_PEER_UNIT_BYTES);
+	assert(stat.size % TEST_PEER_UNIT_BYTES == TEST_PEER_FINAL_BYTES);
+	assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+	ntfs_node_close(node);
+	while (offset < stat.size) {
+		assert(ntfs_stream_read(stream, offset, output, sizeof(output), &done) == NTFS_OK);
+		assert(done > 0 && done <= sizeof(output) && done <= stat.size - offset);
+		for (index = 0; index < done; index++) {
+			assert(output[index] ==
+			    'A' + ((offset + index) / TEST_PEER_UNIT_BYTES) % TEST_PEER_ALPHABET_BYTES);
+		}
+		offset += done;
+	}
+	ntfs_stream_close(stream);
 }
 
 static void
@@ -147,6 +178,9 @@ exercise(const char *directory, uint32_t entries, bool bad_peer)
 		assert(output[before] == 'A');
 	}
 	ntfs_stream_close(stream);
+	if (!bad_peer) {
+		peer_contents(volume);
+	}
 	assert(ntfs_unmount(volume) == NTFS_OK && device.memory == 0);
 	free(image);
 }

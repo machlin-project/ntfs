@@ -6,6 +6,10 @@ lifecycle and I/O. There is no kernel adapter or LXNU integration in this scope.
 The owner intends a later open-source release; no open-source license is granted
 today. See LICENSE and docs/PROVENANCE.md.
 
+The repository is intentionally public for CI; its proprietary license remains
+unchanged. [Current cloud status](docs/CLOUD-STATUS.md) records the ongoing
+cloud-only continuation and distinguishes verified results from pending gates.
+
 The [Dots cloud handoff](docs/HANDOFF-DOTS.md) defines the complete cloud
 continuation. Initial private CI passes 220 core tests and eight-product Release
 reproducibility on macOS; Linux compilation and compact image-fuzz fixture

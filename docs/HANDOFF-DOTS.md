@@ -3,6 +3,11 @@
 Prepared on 2026-10-08 for the private `machlin-project/ntfs` repository.
 Work on the existing `development` branch.
 
+The owner subsequently confirmed intentional public visibility for hosted CI.
+Preserve the proprietary license and never publish credentials or owner artifacts.
+References below to private repository access describe the original handoff;
+[current cloud status](CLOUD-STATUS.md) owns the continuation's actual results.
+
 ## Assignment and completion boundary
 
 The owner requests **all project work that can be completed in a cloud environment**.

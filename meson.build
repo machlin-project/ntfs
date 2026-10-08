@@ -283,6 +283,7 @@ foreach target : ['mapping-pairs', 'attribute-list', 'index-root', 'index-block'
   test('fuzz-' + target, structure_fuzz, args: [meson.current_build_dir() / 'fuzz-seeds' / target / (seed_name + '.seed')], depends: fuzz_seeds, timeout: 120)
 endforeach
 test('tool-environment', python, args: [files('tests/test_environment.py')])
+test('wof-fixture-geometry', python, args: [files('tests/test_wof_geometry.py')], timeout: 120)
 access_fuzz = executable('ntfs-fuzz-access', 'tests/fuzz_access.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
 test('fuzz-access', access_fuzz, args: [meson.current_build_dir() / 'fuzz-seeds/access/allow-group.seed'], depends: fuzz_seeds, timeout: 120)
 wof_fuzz = executable('ntfs-fuzz-wof', 'tests/fuzz_wof.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])

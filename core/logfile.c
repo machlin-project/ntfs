@@ -349,7 +349,8 @@ ntfs_logfile_restart_decode(const void *input, size_t size, uint64_t available_f
 		ntfs_logfile_lsn_decode(&info, info.current_lsn, &lsn) != NTFS_OK)) {
 		return NTFS_CORRUPT;
 	}
-	if (info.last_data_bytes > NTFS_LOGFILE_MAX_RECORD_BYTES - info.record_header_bytes) {
+	if ((uint64_t)info.last_data_bytes + info.record_header_bytes >
+	    NTFS_LOGFILE_MAX_RECORD_BYTES) {
 		return NTFS_RANGE;
 	}
 	result = logfile_client_lists(scratch, &info);

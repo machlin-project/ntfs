@@ -15,7 +15,7 @@ import sys
 import time
 
 from bounded_tool import run_tool
-from environment import tool_environment
+from environment import selected_toolchain
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTS = ('libntfs.a', 'libntfs-posix.a', 'ntfs-inspect', 'ntfs-validate',
@@ -112,6 +112,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New ignored artifact directory')
     parser.add_argument('--jobs', type=int, default=DEFAULT_JOBS)
+    parser.add_argument('--compiler', help='One explicit compiler executable; ambient CC is ignored')
     parser.add_argument('--timeout', type=int, default=DEFAULT_TIMEOUT_SECONDS,
                         help='Deadline in seconds for each setup/compile invocation')
     args = parser.parse_args()
@@ -131,19 +132,13 @@ def main():
     try:
         clean_product_sources()
         report['git_head_before'] = run_tool(['git', 'rev-parse', 'HEAD']).decode().strip()
-        environment = tool_environment()
+        environment = selected_toolchain(args.compiler)
+        compiler = environment['CC']
         report['archive_environment'] = {'ZERO_AR_DATE': environment['ZERO_AR_DATE']}
         if sys.platform == 'darwin':
-            compiler = run_tool(['xcrun', '--find', 'clang']).decode().strip()
-            sdk = run_tool(['xcrun', '--show-sdk-path']).decode().strip()
-            environment.update({'CC': compiler, 'SDKROOT': sdk})
+            sdk = environment['SDKROOT']
             report['sdk_path'] = sdk
             report['sdk_version'] = run_tool(['xcrun', '--show-sdk-version']).decode().strip()
-        else:
-            compiler = shutil.which('cc', path=environment.get('PATH'))
-            if compiler is None:
-                raise ValueError('A native C compiler is required')
-            environment['CC'] = compiler
         report['compiler_path'] = compiler
         report['compiler_version'] = run_tool([compiler, '--version']).decode().splitlines()[0]
         for name in ('first', 'second'):

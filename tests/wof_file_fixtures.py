@@ -14,6 +14,7 @@ BACKING_NAME = 'WofCompressedData'
 BACKING_FIRST_LCN, BACKING_SECOND_LCN = 160, 208
 CACHE_PEER_RECORD = f.FILE_RECORDS['fragmented.bin']
 CACHE_PEER_LCN = 512
+CACHE_PEER_COMPACT_CHUNKS = 20
 REPARSE_LCN, LIST_LCN = 154, 156
 TABLE_PAGE_BYTES = 4096
 PAGE_SPILL_CHUNKS = 76
@@ -37,6 +38,21 @@ UNIT_8K, UNIT_16K = 8192, 16384
 CALL_POSITION, CALL_ENCODED_TARGET = 7, 15
 UNITS = {x.WOF_XPRESS_4K: x.UNIT_4K, x.WOF_LZX_32K: x.UNIT_32K,
          x.WOF_XPRESS_8K: UNIT_8K, x.WOF_XPRESS_16K: UNIT_16K}
+
+
+def cache_peer_lcn(image_bytes, primary_clusters, peer_clusters):
+    """Keep the ordinary placement, or use a checked free compact-image gap."""
+    clusters = image_bytes // f.CLUSTER
+    first_count = primary_clusters // 2
+    occupied = ((0, f.ALLOCATED_CLUSTERS),
+                (BACKING_FIRST_LCN, BACKING_FIRST_LCN + first_count),
+                (BACKING_SECOND_LCN, BACKING_SECOND_LCN + primary_clusters - first_count))
+    for first in (CACHE_PEER_LCN, *(end for _, end in occupied)):
+        end = first + peer_clusters
+        if (peer_clusters > 0 and end <= clusters and
+                all(end <= low or first >= high for low, high in occupied)):
+            return first
+    return None
 
 
 def call_chunk(size, raw):
@@ -243,6 +259,17 @@ def author(output, source):
     # validation memo. The malformed peer must never inherit the first proof.
     peer_original, peer_packed = contents(x.WOF_XPRESS_4K, PAGE_CHUNKS, mixed=False)
     peer_clusters = (len(peer_packed) + f.CLUSTER - 1) // f.CLUSTER
+    primary_clusters = peer_clusters
+    peer_lcn = cache_peer_lcn(len(source), primary_clusters, peer_clusters)
+    if peer_lcn is None:
+        # The primary still crosses a table page. A distinct, multi-chunk peer
+        # keeps cache collision/eviction and failed-proof coverage in the compact
+        # fuzzer geometry without two large physical packet inventories.
+        peer_original, peer_packed = contents(
+            x.WOF_XPRESS_4K, CACHE_PEER_COMPACT_CHUNKS, mixed=False)
+        peer_clusters = (len(peer_packed) + f.CLUSTER - 1) // f.CLUSTER
+        peer_lcn = cache_peer_lcn(len(source), primary_clusters, peer_clusters)
+    assert peer_lcn is not None, 'WOF cache-peer storage does not fit fixture geometry'
     peer_payload = x.WOF_FILE.pack(x.WOF_VERSION, x.WOF_PROVIDER_FILE,
                                   x.WOF_FILE_VERSION, x.WOF_XPRESS_4K)
     peer_reparse = x.REPARSE.pack(x.WOF_TAG, len(peer_payload), 0) + peer_payload
@@ -254,17 +281,18 @@ def author(output, source):
         attributes = [f.standard(f.FILE_ATTRIBUTE_REPARSE | f.FILE_ATTRIBUTE_SPARSE),
             f.nonresident(f.DATA, [((len(peer_original) + f.CLUSTER - 1) // f.CLUSTER, None)],
                 len(peer_original), DATA_INSTANCE, initialized=0, flags=f.SPARSE),
-            f.nonresident(f.DATA, [(peer_clusters, CACHE_PEER_LCN)], len(packed),
+            f.nonresident(f.DATA, [(peer_clusters, peer_lcn)], len(packed),
                 BACKING_INSTANCE, BACKING_NAME),
             f.resident(f.REPARSE_POINT, peer_reparse, REPARSE_INSTANCE)]
         f.put_record(image, CACHE_PEER_RECORD, f.file_record(CACHE_PEER_RECORD, attributes))
-        f.put_data(image, CACHE_PEER_LCN, packed)
+        f.put_data(image, peer_lcn, packed)
         bitmap = bytearray((len(image) // f.CLUSTER + f.BYTE_BITS - 1) // f.BYTE_BITS)
         for first, count in ((0, f.ALLOCATED_CLUSTERS),
-                             (BACKING_FIRST_LCN, peer_clusters // 2),
-                             (BACKING_SECOND_LCN, peer_clusters - peer_clusters // 2),
-                             (CACHE_PEER_LCN, peer_clusters)):
-            for cluster in range(first, min(first + count, len(image) // f.CLUSTER)):
+                             (BACKING_FIRST_LCN, primary_clusters // 2),
+                             (BACKING_SECOND_LCN, primary_clusters - primary_clusters // 2),
+                             (peer_lcn, peer_clusters)):
+            assert first + count <= len(image) // f.CLUSTER
+            for cluster in range(first, first + count):
                 bitmap[cluster // f.BYTE_BITS] |= 1 << (cluster % f.BYTE_BITS)
         f.put_record(image, f.BITMAP_RECORD, f.file_record(f.BITMAP_RECORD,
             [f.standard(), f.resident(f.DATA, bitmap)]))

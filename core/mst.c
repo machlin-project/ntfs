@@ -4,8 +4,8 @@
 
 enum { NTFS_MST_FIRST_SEQUENCE = 1 };
 
-_Static_assert(
-    NTFS_PROTECTED_RECORD_MAX_BYTES == NTFS_MAX_RECORD_BYTES, "private protected-record policy");
+_Static_assert((size_t)NTFS_PROTECTED_RECORD_MAX_BYTES == (size_t)NTFS_MAX_RECORD_BYTES,
+    "private protected-record policy");
 
 static bool
 mst_supported_magic(const struct ntfs_disk_mst *header)

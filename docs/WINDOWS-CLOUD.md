@@ -5,6 +5,18 @@ identity. They do not inherit the earlier native acceptance. Record each actual
 hosted run, its first failure, source revision and retained reports separately.
 No native execution is established merely by adding these commands.
 
+The [first completed scratch capture](https://github.com/machlin-project/ntfs/actions/runs/37854379914)
+now passes native creation, read-only chkdsk, ordinary detach and unchanged
+read-only acquisition. Offline corpus and complete-validation consumers reject
+the original NTFS 3.1 `$Volume::$VOLUME_INFORMATION` flags value `0x0080` before
+namespace checks. The core retains its existing fail-closed flag policy.
+`scripts/probe_windows_volume_flags.ps1` prepares a fresh guarded per-volume
+short-name-policy experiment, preserving a baseline and separate detached
+original/enabled/disabled/reenabled VHD/raw-corpus snapshots. It uses only the
+documented per-volume `fsutil 8dot3name` form and never changes the machine policy.
+That probe's native result must establish the relationship before any admission
+change; scratch acquisition alone does not establish flag semantics or recovery.
+
 ## Independent AccessCheck
 
 On Windows CPython:

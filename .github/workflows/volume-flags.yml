@@ -1,0 +1,39 @@
+name: Native volume flags
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: powershell
+jobs:
+  windows-volume-flags:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[volume-flags]') }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check scratch guards and script parsing
+        run: |
+          & tests/windows_scratch_guard.ps1
+          $tokens = $null; $errors = $null
+          [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/probe_windows_volume_flags.ps1'), [ref]$tokens, [ref]$errors)
+          if (@($errors).Count) { throw ($errors -join '; ') }
+      - name: Observe per-volume policy changes on fresh native media
+        run: |
+          & scripts/probe_windows_volume_flags.ps1 -Output "$env:RUNNER_TEMP\MachlinNTFSFlags-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - name: Retain original diagnostics and detached snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-volume-flags
+          path: ${{ runner.temp }}/MachlinNTFSFlags-${{ github.run_id }}-${{ github.run_attempt }}/evidence
+          if-no-files-found: error
+          retention-days: 14

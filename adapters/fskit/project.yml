@@ -72,6 +72,13 @@ targets:
         HEADER_SEARCH_PATHS: $(SRCROOT)/../../include
         OTHER_CFLAGS: -Wdeclaration-after-statement -Wno-deprecated-declarations
         SKIP_INSTALL: YES
+      configs:
+        Release:
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          DEPLOYMENT_POSTPROCESSING: YES
+          STRIP_INSTALLED_PRODUCT: YES
+          STRIP_STYLE: debugging
+          STRIP_SWIFT_SYMBOLS: NO
   NTFSApp:
     type: application
     platform: macOS
@@ -95,6 +102,13 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: NTFSAppSupport.h
         OTHER_CFLAGS: -Wdeclaration-after-statement
         INFOPLIST_KEY_CFBundleDisplayName: Machlin NTFS
+      configs:
+        Release:
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+          DEPLOYMENT_POSTPROCESSING: YES
+          STRIP_INSTALLED_PRODUCT: YES
+          STRIP_STYLE: debugging
+          STRIP_SWIFT_SYMBOLS: NO
 schemes:
   NTFSApp:
     build:

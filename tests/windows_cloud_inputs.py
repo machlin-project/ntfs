@@ -61,7 +61,9 @@ class CloudInputContracts(unittest.TestCase):
 
     def test_artifact_containment_type_and_hash(self):
         with tempfile.TemporaryDirectory() as temporary:
-            directory = Path(temporary)
+            # Darwin's temporary directory may start with the /var symlink.
+            # Admission deliberately requires a canonical artifact root.
+            directory = Path(temporary).resolve()
             plain = directory / 'plain.bin'
             plain.write_bytes(b'original bytes')
             self.assertEqual(cloud.plain_file(directory, 'plain.bin'), plain)
@@ -72,6 +74,9 @@ class CloudInputContracts(unittest.TestCase):
             (directory / 'alias').symlink_to(plain)
             with self.assertRaises(ValueError):
                 cloud.plain_file(directory, 'alias')
+            (directory / 'directory-alias').symlink_to(directory, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'symbolic-link ancestor'):
+                cloud.plain_file(directory / 'directory-alias', 'plain.bin')
             with self.assertRaises(ValueError):
                 cloud.checked_hash(plain, '0' * 64)
             (directory / 'hardlink').hardlink_to(plain)

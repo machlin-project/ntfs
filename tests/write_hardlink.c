@@ -118,8 +118,8 @@ program_equal(const struct ntfs_write_mutation_region *region, uint8_t *actual, 
 		for (offset = 0; offset < region->bytes; offset += NTFS_WRITE_RECORD_BYTES) {
 			if ((region->predecessor.file_slots &
 				(1u << (offset / NTFS_WRITE_RECORD_BYTES))) != 0) {
-				normalize(actual + offset, expected + offset, NTFS_WRITE_RECORD_BYTES,
-				    true);
+				normalize(actual + offset, expected + offset,
+				    NTFS_WRITE_RECORD_BYTES, true);
 			}
 		}
 	} else if (region->kind == NTFS_WRITE_MUTATION_INDEX) {
@@ -177,8 +177,10 @@ check_program(struct test_device *test, const struct ntfs_environment *env,
 		}
 		if (prefix == count) {
 			for (index = 0; index < regions; index++) {
-				assert(ntfs_write_program_region(program, index, &region) == NTFS_OK);
-				program_equal(&region, bytes + index * NTFS_WRITE_CLUSTER_BYTES, false);
+				assert(
+				    ntfs_write_program_region(program, index, &region) == NTFS_OK);
+				program_equal(
+				    &region, bytes + index * NTFS_WRITE_CLUSTER_BYTES, false);
 			}
 		}
 		for (index = prefix; index != 0; index--) {
@@ -228,8 +230,8 @@ collect_keys(struct ntfs_stream *allocation, const uint8_t *value, size_t length
 			vcn = ntfs_u64(value + position + bytes - sizeof(vcn));
 			child = malloc(NTFS_WRITE_CLUSTER_BYTES);
 			assert(child != NULL);
-			assert(ntfs_stream_exact(allocation, vcn * NTFS_WRITE_CLUSTER_BYTES,
-				   child, NTFS_WRITE_CLUSTER_BYTES) == NTFS_OK);
+			assert(ntfs_stream_exact(allocation, vcn * NTFS_WRITE_CLUSTER_BYTES, child,
+				   NTFS_WRITE_CLUSTER_BYTES) == NTFS_OK);
 			assert(ntfs_fixup(child, NTFS_WRITE_CLUSTER_BYTES, "INDX") == NTFS_OK);
 			collect_keys(allocation, child, NTFS_WRITE_CLUSTER_BYTES,
 			    offsetof(struct ntfs_disk_index_block, header), depth + 1, keys);
@@ -264,8 +266,8 @@ keys_at(const struct ntfs_environment *env, uint64_t reference, struct test_keys
 	assert(ntfs_attr_find(node->record, NTFS_WRITE_RECORD_BYTES, NTFS_ATTR_INDEX_ROOT,
 		   ntfs_mutation_index_name, 4, UINT16_MAX, &root) == NTFS_OK);
 	assert(ntfs_attr_value(&root, &value, &bytes) == NTFS_OK);
-	result = ntfs_attribute_open(node, NTFS_ATTR_INDEX_ALLOCATION, ntfs_mutation_index_name,
-	    4, &allocation);
+	result = ntfs_attribute_open(
+	    node, NTFS_ATTR_INDEX_ALLOCATION, ntfs_mutation_index_name, 4, &allocation);
 	assert(result == NTFS_OK || result == NTFS_NOT_FOUND);
 	collect_keys(allocation, value, bytes, sizeof(struct ntfs_disk_index_root), 0, keys);
 	ntfs_stream_close(allocation);
@@ -309,8 +311,8 @@ check_keys(const struct ntfs_environment *source, const struct ntfs_environment 
 }
 
 static void
-check_parent_attributes(const struct ntfs_environment *source,
-    const struct ntfs_environment *view, uint64_t reference)
+check_parent_attributes(
+    const struct ntfs_environment *source, const struct ntfs_environment *view, uint64_t reference)
 {
 	struct ntfs_volume *old_volume = NULL, *new_volume = NULL;
 	struct ntfs_node *old_node = NULL, *new_node = NULL;
@@ -327,8 +329,8 @@ check_parent_attributes(const struct ntfs_environment *source,
 	assert(ntfs_node_open(new_volume, reference, &new_node) == NTFS_OK);
 	header = (const void *)old_node->record;
 	position = ntfs_u16(header->attrs_offset);
-	while ((result = ntfs_attr_at(old_node->record, ntfs_u32(header->used), &position,
-		    &old)) == NTFS_OK) {
+	while ((result = ntfs_attr_at(old_node->record, ntfs_u32(header->used), &position, &old)) ==
+	    NTFS_OK) {
 		if (old.type == NTFS_ATTR_INDEX_ROOT || old.type == NTFS_ATTR_INDEX_ALLOCATION ||
 		    old.type == NTFS_ATTR_BITMAP) {
 			continue;
@@ -397,20 +399,13 @@ check_count_boundaries(void)
 	static const struct {
 		struct ntfs_link_counts counts;
 		enum ntfs_result result;
-	} vectors[] = {
-		{{1, 1, 0}, NTFS_OK},
-		{{2, 1, 1}, NTFS_OK},
-		{{1023, 1023, 0}, NTFS_OK},
-		{{1024, 1023, 1}, NTFS_OK},
-		{{1024, 1024, 0}, NTFS_TOO_MANY_LINKS},
-		{{1025, 1024, 1}, NTFS_TOO_MANY_LINKS},
-		{{UINT16_MAX, 1023, UINT16_MAX - 1023}, NTFS_TOO_MANY_LINKS},
-		{{UINT16_MAX, UINT16_MAX, 0}, NTFS_TOO_MANY_LINKS},
-		{{0, 0, 0}, NTFS_CORRUPT},
-		{{1, 0, 1}, NTFS_CORRUPT},
-		{{1, 1, 1}, NTFS_CORRUPT},
-		{{UINT16_MAX, UINT16_MAX, UINT16_MAX}, NTFS_CORRUPT}
-	};
+	} vectors[] = {{{1, 1, 0}, NTFS_OK}, {{2, 1, 1}, NTFS_OK}, {{1023, 1023, 0}, NTFS_OK},
+	    {{1024, 1023, 1}, NTFS_OK}, {{1024, 1024, 0}, NTFS_TOO_MANY_LINKS},
+	    {{1025, 1024, 1}, NTFS_TOO_MANY_LINKS},
+	    {{UINT16_MAX, 1023, UINT16_MAX - 1023}, NTFS_TOO_MANY_LINKS},
+	    {{UINT16_MAX, UINT16_MAX, 0}, NTFS_TOO_MANY_LINKS}, {{0, 0, 0}, NTFS_CORRUPT},
+	    {{1, 0, 1}, NTFS_CORRUPT}, {{1, 1, 1}, NTFS_CORRUPT},
+	    {{UINT16_MAX, UINT16_MAX, UINT16_MAX}, NTFS_CORRUPT}};
 	struct ntfs_link_counts counts, saved;
 	size_t index;
 
@@ -435,15 +430,18 @@ check_admission(const struct ntfs_environment *env, struct test_device *test,
 	size_t reads = test->device.reads, allocations = test->device.allocations;
 	uint16_t source[NTFS_NAME_MAX], destination[NTFS_NAME_MAX];
 
-	assert(ntfs_write_mutation_execution_prepare(&owner, request, &execution) == NTFS_UNSUPPORTED);
+	assert(
+	    ntfs_write_mutation_execution_prepare(&owner, request, &execution) == NTFS_UNSUPPORTED);
 	assert(execution == NULL && owner.mutation == NULL);
 	invalid.replace = true;
 	assert(ntfs_write_mutation_prepare(env, &invalid, &plan) == NTFS_INVALID && plan == NULL);
 	assert(ntfs_write_mutation_prepare(env, request, (void *)request) == NTFS_INVALID);
 	assert(memcmp(request, &saved, sizeof(saved)) == 0);
 	memcpy(source, request->source.units, request->source.count * sizeof(*source));
-	memcpy(destination, request->destination.units, request->destination.count * sizeof(*destination));
-	assert(ntfs_write_mutation_prepare(env, request, (void *)request->source.units) == NTFS_INVALID);
+	memcpy(destination, request->destination.units,
+	    request->destination.count * sizeof(*destination));
+	assert(ntfs_write_mutation_prepare(env, request, (void *)request->source.units) ==
+	    NTFS_INVALID);
 	assert(ntfs_write_mutation_prepare(env, request, (void *)request->destination.units) ==
 	    NTFS_INVALID);
 	assert(memcmp(source, request->source.units, request->source.count * sizeof(*source)) == 0);
@@ -457,7 +455,8 @@ check_case(const char *directory, const char *label, unsigned code,
     const struct ntfs_write_mutation_request *request, uint64_t physical, const char *golden)
 {
 	char name[TEST_LABEL_BYTES];
-	uint8_t *image, *saved, *expected, *filename, *projected, *actual, record[NTFS_WRITE_RECORD_BYTES];
+	uint8_t *image, *saved, *expected, *filename, *projected, *actual,
+	    record[NTFS_WRITE_RECORD_BYTES];
 	struct test_device test;
 	struct ntfs_environment env, view;
 	struct ntfs_write_mutation_plan *plan = (void *)(uintptr_t)1;
@@ -519,13 +518,18 @@ check_case(const char *directory, const char *label, unsigned code,
 			assert(ntfs_bounds(region.physical, region.bytes, bytes));
 			assert(memcmp(region.before, image + region.physical, region.bytes) == 0);
 			if (region.kind == NTFS_WRITE_MUTATION_FILE) {
-				for (offset = 0; offset < region.bytes; offset += NTFS_WRITE_RECORD_BYTES) {
+				for (offset = 0; offset < region.bytes;
+				    offset += NTFS_WRITE_RECORD_BYTES) {
 					number = (region.target.logical_offset + offset) /
 					    NTFS_WRITE_RECORD_BYTES;
-					if (number != (request->reference & NTFS_REFERENCE_RECORD_MASK) &&
-					    number != (request->destination.parent_reference &
-						NTFS_REFERENCE_RECORD_MASK) && number != NTFS_BITMAP_RECORD) {
-						assert(memcmp(region.before + offset, region.after + offset,
+					if (number !=
+						(request->reference & NTFS_REFERENCE_RECORD_MASK) &&
+					    number !=
+						(request->destination.parent_reference &
+						    NTFS_REFERENCE_RECORD_MASK) &&
+					    number != NTFS_BITMAP_RECORD) {
+						assert(memcmp(region.before + offset,
+							   region.after + offset,
 							   NTFS_WRITE_RECORD_BYTES) == 0);
 					}
 				}
@@ -579,8 +583,8 @@ main(int argc, char **argv)
 		   &request.destination.parent_reference, destination, &physical, golden) == 9) {
 		assert(ntfs_utf8_to_utf16(source, strlen(source), source_units, NTFS_NAME_MAX,
 			   &request.source.count) == NTFS_OK);
-		assert(ntfs_utf8_to_utf16(destination, strlen(destination), destination_units, NTFS_NAME_MAX,
-			   &request.destination.count) == NTFS_OK);
+		assert(ntfs_utf8_to_utf16(destination, strlen(destination), destination_units,
+			   NTFS_NAME_MAX, &request.destination.count) == NTFS_OK);
 		request.source.units = source_units;
 		request.destination.units = destination_units;
 		check_case(argv[1], label, code, &request, physical, golden);

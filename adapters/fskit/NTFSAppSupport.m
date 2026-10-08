@@ -29,16 +29,22 @@ NTFSAppMountImageResource(FSPathURLResource *resource, NSString *bundleID,
 {
 #if defined(__MAC_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_27_0
 	if (@available(macOS 27.0, *)) {
-		[FSClient.sharedInstance mountSingleVolumeForResource:resource
-						   bundleID:bundleID
-						    options:@[ @"-o", @"rw,owners,ntfs-access=image-edit" ]
-						  completionHandler:completionHandler];
+		[FSClient.sharedInstance
+		    mountSingleVolumeForResource:resource
+					bundleID:bundleID
+					 options:@[ @"-o", @"rw,owners,ntfs-access=image-edit" ]
+			       completionHandler:completionHandler];
 		return;
 	}
 #else
 	(void)resource;
 	(void)bundleID;
 #endif
-	completionHandler(nil, [NSError errorWithDomain:NSPOSIXErrorDomain code:ENOTSUP
-	    userInfo:@{NSLocalizedDescriptionKey: @"Image editing requires a macOS 27 SDK build and macOS 27."}]);
+	completionHandler(nil,
+	    [NSError errorWithDomain:NSPOSIXErrorDomain
+				code:ENOTSUP
+			    userInfo:@{
+				    NSLocalizedDescriptionKey :
+					@"Image editing requires a macOS 27 SDK build and macOS 27."
+			    }]);
 }

@@ -7,8 +7,8 @@ ntfs_mutation_hardlink_count_admit(const struct ntfs_link_counts *counts)
 	if (counts == NULL) {
 		return NTFS_INVALID;
 	}
-	if (counts->primary_names == 0 || counts->physical_names !=
-		(uint32_t)counts->primary_names + counts->dos_aliases) {
+	if (counts->primary_names == 0 ||
+	    counts->physical_names != (uint32_t)counts->primary_names + counts->dos_aliases) {
 		return NTFS_CORRUPT;
 	}
 	if (counts->primary_names >= NTFS_MUTATION_MAX_PRIMARY_LINKS ||
@@ -21,8 +21,8 @@ ntfs_mutation_hardlink_count_admit(const struct ntfs_link_counts *counts)
 /* Select a primary filename by its complete stored edge. Cache fields can differ
  * from the index, so the existing FILE_NAME supplies the copied cache bytes. */
 static enum ntfs_result
-mutation_hardlink_filename(struct ntfs_mutation_record *record,
-    const struct ntfs_mutation_key *key, struct ntfs_attr_view *out)
+mutation_hardlink_filename(struct ntfs_mutation_record *record, const struct ntfs_mutation_key *key,
+    struct ntfs_attr_view *out)
 {
 	const struct ntfs_disk_record *header = (const void *)record->bytes;
 	const struct ntfs_disk_filename *wanted = (const void *)key->value, *name;
@@ -64,8 +64,8 @@ mutation_hardlink_filename(struct ntfs_mutation_record *record,
 /* Append after the existing unnamed FILE_NAME attributes. The ordinary helper
  * replaces a unique attribute, so it must not be used for this additional edge. */
 static enum ntfs_result
-mutation_hardlink_append(struct ntfs_write_mutation_plan *plan,
-    struct ntfs_mutation_record *record, const uint8_t *value, size_t bytes)
+mutation_hardlink_append(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record *record,
+    const uint8_t *value, size_t bytes)
 {
 	struct ntfs_disk_record *header = (void *)record->bytes;
 	struct ntfs_disk_attr *disk;
@@ -211,7 +211,8 @@ ntfs_mutation_hardlink(
 	}
 	result = mutation_hardlink_append(plan, record, value, bytes);
 	if (result == NTFS_OK) {
-		result = ntfs_mutation_directory_add(plan, destination, record->reference, value, bytes);
+		result =
+		    ntfs_mutation_directory_add(plan, destination, record->reference, value, bytes);
 	}
 	if (result == NTFS_OK) {
 		/* Exact storage preparation leaves all implicit timestamp policy open. */

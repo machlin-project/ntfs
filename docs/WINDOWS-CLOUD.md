@@ -9,13 +9,21 @@ The [first completed scratch capture](https://github.com/machlin-project/ntfs/ac
 now passes native creation, read-only chkdsk, ordinary detach and unchanged
 read-only acquisition. Offline corpus and complete-validation consumers reject
 the original NTFS 3.1 `$Volume::$VOLUME_INFORMATION` flags value `0x0080` before
-namespace checks. The core retains its existing fail-closed flag policy.
-`scripts/probe_windows_volume_flags.ps1` prepares a fresh guarded per-volume
+namespace checks. `scripts/probe_windows_volume_flags.ps1` runs a fresh guarded per-volume
 short-name-policy experiment, preserving a baseline and separate detached
 original/enabled/disabled/reenabled VHD/raw-corpus snapshots. It uses only the
 documented per-volume `fsutil 8dot3name` form and never changes the machine policy.
-That probe's native result must establish the relationship before any admission
-change; scratch acquisition alone does not establish flag semantics or recovery.
+The [completed probe](https://github.com/machlin-project/ntfs/actions/runs/37858557415)
+observes `0x0080` with short-name creation disabled and `0x0000` with it enabled,
+including a second enable transition. All five original/baseline/phase corpus
+inventories retain equal identities, namespace, payload hashes, timestamps and
+geometry. The core now admits only this additional flag on NTFS 3.1, retains its
+raw value, preserves dirty-bit priority and refuses every other unknown bit.
+The current-source corpus comparison passes all 28 checks on the unchanged first
+scratch image and independently on all five baseline/phase images; the 78
+synthetic version/flag profiles also pass. Full-volume validation and writable
+admission remain separate from these native format and namespace/content facts;
+scratch acquisition and policy observation do not establish recovery.
 
 ## Independent AccessCheck
 

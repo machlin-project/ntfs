@@ -18,8 +18,9 @@ an authenticated mount initiator or a Windows-to-native mapping.
 The independent [AccessCheck observation pipeline](ACCESS-ORACLE.md) captures
 Windows token fields and original descriptors, then compares decisions offline.
 The first complete hosted capture contains 144 native decisions. Its original
-comparison exposes six zero-request mismatches, one in each token context;
-unsupported probes and mandatory/privilege boundaries remain explicit gaps.
+comparison exposes six zero-request mismatches, one in each token context.
+After correction, comparison of that unchanged capture passes all 117 supported
+decisions; 21 probes and six mandatory-plane observations remain explicit gaps.
 
 ## Implemented decision contract
 
@@ -173,7 +174,11 @@ The [first hosted AccessCheck run](https://github.com/machlin-project/ntfs/actio
 captures 144 original decisions using six queried Windows token contexts. Windows
 denies all six original zero-mask requests against an empty DACL; the preceding
 core instead reports allowed with zero granted rights. The correction retains
-complete descriptor/ACE validation and denies an original zero request. The v2
+complete descriptor/ACE validation and denies an original zero request. The
+unchanged native capture now passes 117 supported decisions with zero mismatches;
+the transport suite passes 476 checks. Local child diagnostics use a retained
+wrapper disabling only LeakSanitizer because this executor traces children;
+the fatal AddressSanitizer/UBSan settings and hosted gate are unchanged. The v2
 native matrix adds NULL, absent, allow, deny, owner and OWNER RIGHTS zero-mask
 controls; those additional observations remain pending. The verifier still
 accepts the unchanged v1 matrix, preserving replay of the exact first failure.

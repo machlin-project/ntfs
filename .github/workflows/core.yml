@@ -352,6 +352,11 @@ jobs:
         if: ${{ !cancelled() && steps.unsigned_second.outcome == 'success' }}
         run: |
           python3 scripts/package_unsigned.py \
+            --app 'artifacts/cloud-macos/DerivedData-comparison/Build/Products/Release/Machlin NTFS.app' \
+            --build-report artifacts/cloud-macos/DerivedData-comparison/build-report.json \
+            --output artifacts/cloud-macos/package-second \
+            2>&1 | tee artifacts/cloud-macos/package-second.log
+          python3 scripts/package_unsigned.py \
             --app 'artifacts/cloud-macos/DerivedData/Build/Products/Release/Machlin NTFS.app' \
             --build-report artifacts/cloud-macos/DerivedData/build-report.json \
             --compare-app 'artifacts/cloud-macos/DerivedData-comparison/Build/Products/Release/Machlin NTFS.app' \
@@ -379,6 +384,7 @@ jobs:
             artifacts/cloud-macos/cpu/*.json
             artifacts/cloud-macos/cpu/*.stderr
             artifacts/cloud-macos/package
+            artifacts/cloud-macos/package-second
             artifacts/cloud-macos/package-comparison
             artifacts/cloud-macos/app-support
             artifacts/cloud-macos/DerivedData*/build-report.json
@@ -388,6 +394,7 @@ jobs:
             artifacts/cloud-macos/DerivedData*/xcodegen.stdout
             artifacts/cloud-macos/DerivedData*/xcodegen.stderr
             artifacts/cloud-macos/DerivedData*/Logs/Build
+            artifacts/cloud-macos/DerivedData*/Build/Products/Release/*.dSYM
   windows-transport-contracts:
     runs-on: windows-latest
     timeout-minutes: 10

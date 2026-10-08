@@ -29,6 +29,15 @@ under `$Extend` require checked namespace ownership, not a guessed fixed record
 number. The table follows [original MFT research](https://flatcap.github.io/linux-ntfs/ntfs/files/mft.html)
 and the named identities in [disk.h](../../core/disk.h).
 
+`$Volume::$VOLUME_INFORMATION` also stores the per-volume short-name policy.
+The [controlled native experiment](../../scripts/probe_windows_volume_flags.ps1)
+observes bit `0x0080` set when short-name creation is disabled and clear when
+enabled on NTFS 3.1. Reader admission preserves that bit and its full original
+record, while dirty and unsupported-state checks remain independent. The
+[volume chapter](01-volume.md#volume-information) records the
+observation and version boundary. This is not a request to synthesize DOS names
+or change the volume's policy during ordinary namespace operations.
+
 ### Ordinary allocation and the extension reserve
 
 The first sixteen bootstrap identities and an ordinary allocation floor are
@@ -195,7 +204,10 @@ uses these volume-owned entries rather than the host's locale tables.
 not a license for ordinary DATA to ignore sparse framing. Our validator includes
 bad-cluster reservations in physical ownership accounting.
 
-`$UsnJrnl` is the change journal, distinct from `$LogFile`. The current bounded
+`$UsnJrnl` is the change journal, distinct from `$LogFile`. The private
+[USN record helper](../USN-RECORDS.md) frames and encodes the published V2/V3
+records with bounded filename/identity handling and an explicit reason-bit union.
+It does not select native events, coalesce handles or own `$Max`/`$J` allocation. The current bounded
 writer refuses an active unsupported change-journal profile rather than silently
 pretending to maintain it. Hibernation and unsupported volume features also
 prevent writable admission. Detailed extended-metadata coverage is recorded in

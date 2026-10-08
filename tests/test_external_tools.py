@@ -82,7 +82,9 @@ class ExternalToolContracts(unittest.TestCase):
 
     def test_unexpected_git_tag_stops_before_checkout_or_execution(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            # Match the production ROOT's canonical spelling, including Darwin's
+            # /var -> /private/var temporary-directory alias.
+            root = Path(temporary).resolve()
             args = SimpleNamespace(output=root / 'reports', prefix=root / 'vendor/tools',
                                    compiler='cc', source='git-pinned')
             calls = []

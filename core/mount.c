@@ -138,7 +138,9 @@ mount_load_information(struct ntfs_volume *volume)
 			result = NTFS_UNSUPPORTED;
 		} else if ((volume->info.volume_flags & NTFS_VOLUME_DIRTY) != 0) {
 			result = NTFS_DIRTY;
-		} else if (volume->info.volume_flags != 0) {
+		} else if ((volume->info.volume_flags & ~NTFS_VOLUME_DISABLE_SHORT_NAMES) != 0 ||
+		    (volume->info.volume_flags != 0 &&
+			info->minor != NTFS_VOLUME_SHORT_NAMES_MINOR_VERSION)) {
 			result = NTFS_UNSUPPORTED;
 		}
 	}

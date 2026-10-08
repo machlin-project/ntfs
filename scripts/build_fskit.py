@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
 import sys
 
 from benchmark_toolchain import command
@@ -20,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 QUERY_SECONDS = 30
 DEFAULT_BUILD_SECONDS = 1200
 MAX_BUILD_SECONDS = 1800
+UUID_LINE = re.compile(r'UUID: ([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}) '
+                       r'\((arm64|x86_64)\) .+')
 
 
 def arguments(argv=None):
@@ -82,6 +85,32 @@ def selected_spec(args, project):
     return spec
 
 
+def release_debug_symbols(app, products, run):
+    """Bind each separate dSYM to both architectures of the completed executable."""
+    def uuids(path, name):
+        result = {}
+        for line in run(['xcrun', 'dwarfdump', '--uuid', str(path)], name).splitlines():
+            match = UUID_LINE.fullmatch(line)
+            require(match is not None, 'Unexpected dSYM UUID output')
+            value, architecture = match.groups()
+            require(architecture not in result, 'Duplicate debug-symbol architecture')
+            result[architecture] = value.lower()
+        require(set(result) == {'arm64', 'x86_64'}, 'Incomplete universal debug-symbol UUIDs')
+        return result
+
+    result = []
+    for label, binary, symbols in (
+            ('app', app / 'Contents/MacOS/Machlin NTFS', products / 'Machlin NTFS.app.dSYM'),
+            ('extension', app / 'Contents/Extensions/NTFSExtension.appex/Contents/MacOS/NTFSExtension',
+             products / 'NTFSExtension.appex.dSYM')):
+        binary_uuids = uuids(binary, label + '-binary-uuids')
+        symbol_uuids = uuids(symbols, label + '-debug-uuids')
+        require(binary_uuids == symbol_uuids, 'Executable and separate debug-symbol UUIDs differ')
+        result.append({'binary': binary.relative_to(app).as_posix(), 'path': str(symbols),
+                       'uuids': binary_uuids, 'payload': public_inventory(inventory(symbols))})
+    return result
+
+
 def build(args, *, root=ROOT):
     require(sys.platform == 'darwin', 'FSKit builds require an actual macOS Xcode/SDK environment')
     args.derived_data = args.derived_data.absolute()
@@ -129,6 +158,8 @@ def build(args, *, root=ROOT):
         app = output / 'Build/Products' / args.configuration / APP_NAME
         report['app_path'] = str(app)
         report['app_payload'] = public_inventory(inventory(app))
+        if args.configuration == 'Release':
+            report['debug_symbols'] = release_debug_symbols(app, app.parent, run)
         after = committed_source(root)
         after['role'] = 'build-source'
         require(after == source, 'Source checkout changed during build')

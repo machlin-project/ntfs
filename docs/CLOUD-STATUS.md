@@ -96,6 +96,29 @@ with error 1142 while preserving namespace, identity and original DATA/ADS.
 Neither result widens filesystem mutation admission. Compression optimization
 has its own retained baseline, differential tests and subsequent native rerun.
 
+## Native input and packaging continuation
+
+The [next broad run](https://github.com/machlin-project/ntfs/actions/runs/37854379914)
+passes all fourteen fuzz campaigns, Linux matrices and fresh Windows scratch
+acquisition. Its original AccessCheck capture exposes six zero-request decision
+mismatches; the corpus consumer refuses the original NTFS 3.1 volume flag 0x0080.
+Neither failed verdict is converted into acceptance by the successful capture.
+
+The [controlled volume-policy probe](https://github.com/machlin-project/ntfs/actions/runs/37858557415)
+then observes 0x0080 with per-volume short-name creation disabled, 0x0000 when
+enabled, and the same transitions on disable/re-enable. All four native phases
+pass read-only chkdsk, flush, confirmed detach and unchanged read-only capture.
+The original baseline remains unchanged and the machine policy is not modified.
+The narrowly observed flag can now receive its own admission/combination tests.
+
+Hosted macOS passes 65 component groups, 11 app-support checks, 332 compiler
+contexts and six focused checks. Both universal Release app builds and the first
+unsigned package pass. Three of 240 core tests fail in temporary-path or
+case-insensitive-filesystem fixtures. The two-build app comparison differs only
+in executable payloads retaining absolute debug-map paths; normal Release debug
+stripping and separately UUID-bound dSYM retention are prepared for a fresh build.
+SDK 27 coverage and installed signed behavior remain distinct unavailable gates.
+
 ## Reproduce and request the wider gates
 
 Use separate build directories for different compilers:

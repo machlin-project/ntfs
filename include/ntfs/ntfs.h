@@ -243,9 +243,10 @@ void ntfs_get_operation_usage(const struct ntfs_volume *, struct ntfs_operation_
 const char *ntfs_result_string(enum ntfs_result);
 /* Probe decodes only the boot sector; successful probe is not mount acceptance. */
 enum ntfs_result ntfs_probe(const struct ntfs_environment *, struct ntfs_info *);
-/* Mount requires a supported version and zero volume-information flags. A set
- * dirty bit returns DIRTY; other nonzero flags return UNSUPPORTED. Refusal does
- * not interpret those other flags or establish a Windows repair requirement. */
+/* Mount requires a supported version and known volume-information flags. NTFS
+ * 3.1 may carry the observed per-volume short-name-disable flag. A set dirty bit
+ * returns DIRTY; all other nonzero flags return UNSUPPORTED. Original flags are
+ * preserved. Refusal does not establish a Windows repair requirement. */
 enum ntfs_result ntfs_mount(
     const struct ntfs_environment *, const struct ntfs_limits *, struct ntfs_volume **);
 /* Fails BUSY while any caller-owned nodes/streams/iterators exist. */

@@ -154,7 +154,11 @@ matrix add explicit zero-request controls for absent/NULL/populated DACLs and
 ownership. Additional owner/Everyone allow-deny combinations distinguish how
 ownership interacts with the two token contexts; maximum-mask vectors separate
 ACE ordering, mixed required masks, empty/NULL DACLs and ownership. The unchanged
-v1 captures remain verifiable. Additional v2 native
-observations are pending. FSKit has not adopted the evaluator or diagnostic token
+v1 captures remain verifiable. Comparison of the unchanged original v1 capture
+now passes 117 decisions with zero failures, retaining 21 unsupported probes and
+six out-of-plane observations. Local child diagnostics require a retained
+LeakSanitizer-only wrapper under the traced executor; the fatal ASan/UBSan and
+hosted settings remain unchanged. Additional v2 native observations are pending.
+FSKit has not adopted the evaluator or diagnostic token
 projection. Do not use these tools as a native authenticator or expose their
 transport as a product API.

@@ -117,6 +117,26 @@ Differing Mach-O UUID/path/toolchain bytes must be diagnosed at build
 configuration, never patched in completed binaries. Synthetic comparison tests
 are not an actual two-Xcode-build verdict; hosted execution remains separate.
 
+The first hosted comparison reached both universal app builds and passed the
+single-build transport gate, then found differences in both executable files.
+Their debug maps retained absolute source, object and Swift module paths from
+the two distinct DerivedData roots (Mach-O `N_SO`, `N_OSO` and `N_AST` entries).
+Archive/object timestamps were already zero. The other ten payload entries
+matched. This is a diagnosed failed comparison, not reproducibility acceptance.
+
+Release app and extension targets now use Xcode's ordinary separate-dSYM and
+debug-symbol stripping settings. Local/global symbols remain; only the
+debugger's build-location map leaves the payload. Both original dSYMs remain
+outside the app, and the build report requires matching arm64/x86_64 UUIDs
+between each actual executable and its dSYM and retains their inventories.
+Debug builds and the static core retain their existing settings. No completed
+app or package is rewritten by the packaging tool. A fresh hosted comparison
+must establish the resulting bytes; CI also retains the second independent
+transport before comparing, so any subsequent mismatch keeps both executables.
+See Apple's [build-setting descriptions](https://developer.apple.com/documentation/xcode/build-settings-reference)
+for `DEBUG_INFORMATION_FORMAT`, `DEPLOYMENT_POSTPROCESSING`,
+`STRIP_INSTALLED_PRODUCT` and the `debugging` strip style.
+
 
 No packaging result establishes actual SDK compilation, installed/native FSKit,
 Windows image acceptance, authorization mapping, notarization, upgrade/uninstall,

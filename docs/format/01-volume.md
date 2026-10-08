@@ -88,9 +88,29 @@ the OEM string. Its value has this common prefix:
 | `0x0A` | 2 | Volume flags |
 
 The dirty bit is `0x0001`. Our ordinary immutable mount refuses dirty state and
-also refuses other unsupported nonzero flags. An unknown bit is not evidence
+all unsupported nonzero flags. NTFS 3.1 additionally admits the per-volume
+short-name-disable flag `0x0080`, retaining its original value without changing
+policy or source bytes. NTFS 3.0 still refuses that flag. An unknown bit is not evidence
 that Windows requires repair; conversely, a zero volume flag is not proof of a
 quiet, recoverable `$LogFile`. These are independent admission checks.
+
+Microsoft documents that [per-volume short-name policy](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-8dot3name)
+is stored on disk, but does not specify its bit in that command reference.
+Our [controlled native probe](../../scripts/probe_windows_volume_flags.ps1)
+establishes the bit separately on a newly authored Windows NTFS 3.1 VHD:
+the original disabled state has `0x0080`; per-volume enable, disable and re-enable
+produce `0x0000`, `0x0080` and `0x0000`. The machine policy remains unchanged.
+Every phase retains a detached VHD and a read-only native raw-volume/namespace
+capture; all object identities, timestamps, stream hashes, namespace and geometry
+match the baseline, and read-only chkdsk succeeds. This is a native observation of
+short-name policy, not evidence for other flags or journal recovery.
+
+The admission regression includes that exact observed version/flag pair, dirty
+priority with `0x0080`, every other bit alone and in combination, and explicit
+older/unknown-version refusals. It checks original flags after mount and complete
+unchanged input bytes. Ordinary creation still follows its separately admitted
+POSIX filename representation; this change adds no DOS-name synthesis or policy
+mutation.
 
 ## Implementation and evidence
 

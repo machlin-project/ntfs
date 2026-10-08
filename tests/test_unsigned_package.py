@@ -200,8 +200,23 @@ class PackagingTests(unittest.TestCase):
         self.refuse('Special permission')
 
     def test_case_collision_refused(self):
-        (self.app / 'Contents/Resources/Localized').mkdir()
-        self.refuse('Case-folding')
+        resources = self.app / 'Contents/Resources'
+        alternate = resources / 'Localized'
+        alternate.mkdir(exist_ok=True)
+        original = Path.iterdir
+
+        def entries(directory):
+            children = list(original(directory))
+            # Case-insensitive APFS cannot physically contain both spellings.
+            # Supply the second directory entry to exercise the same inventory
+            # refusal there; case-sensitive filesystems use both real entries.
+            if directory == resources and alternate not in children:
+                self.assertTrue(alternate.samefile(resources / 'localized'))
+                children.append(alternate)
+            return iter(children)
+
+        with patch.object(Path, 'iterdir', entries):
+            self.refuse('Case-folding')
 
     def test_foreign_executable_payload_refused_even_without_exec_mode(self):
         write_file(self.app / 'Contents/Resources/renamed.dat', b'\x7fELFrest')

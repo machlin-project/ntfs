@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Original volume-information admission profiles; no flag meaning is inferred."""
+"""Original volume admission profiles with a native short-name-policy witness."""
 from pathlib import Path
 import hashlib
 import json
@@ -10,6 +10,8 @@ import fixtures as f
 IMAGE_BYTES = 1024 * 1024
 VOLUME_INFO = struct.Struct('<QBBH')
 VOLUME_DIRTY = 0x0001
+# Native fsutil per-volume 0/1/0 observations: 0x0000/0x0080/0x0000 on NTFS 3.1.
+VOLUME_DISABLE_SHORT_NAMES = 0x0080
 VOLUME_FLAG_BITS = struct.calcsize('<H') * f.BYTE_BITS
 VOLUME_FLAG_MAX = (1 << VOLUME_FLAG_BITS) - 1
 VOLUME_NAME_INSTANCE, VOLUME_INFO_INSTANCE = 1, 2
@@ -42,10 +44,24 @@ def author(output):
         flag = 1 << bit
         if flag == VOLUME_DIRTY:
             continue
-        add(f'unsupported-flag-{flag:04x}', f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
-            flag, UNSUPPORTED)
+        if flag == VOLUME_DISABLE_SHORT_NAMES:
+            add('native-short-name-disabled', f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
+                flag, SUCCESS)
+        else:
+            add(f'unsupported-flag-{flag:04x}', f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
+                flag, UNSUPPORTED)
+            add(f'short-names-disabled-with-unknown-{flag:04x}',
+                f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
+                flag | VOLUME_DISABLE_SHORT_NAMES, UNSUPPORTED)
+            add(f'dirty-short-names-disabled-with-unknown-{flag:04x}',
+                f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
+                flag | VOLUME_DISABLE_SHORT_NAMES | VOLUME_DIRTY, DIRTY)
         add(f'dirty-with-flag-{flag:04x}', f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
             flag | VOLUME_DIRTY, DIRTY)
+    add('short-names-unqualified-version-0', f.NTFS_MAJOR_VERSION, 0,
+        VOLUME_DISABLE_SHORT_NAMES, UNSUPPORTED)
+    add('dirty-short-names-version-0', f.NTFS_MAJOR_VERSION, 0,
+        VOLUME_DISABLE_SHORT_NAMES | VOLUME_DIRTY, DIRTY)
     add('all-unsupported-flags', f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
         VOLUME_FLAG_MAX ^ VOLUME_DIRTY, UNSUPPORTED)
     add('all-flags-including-dirty', f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION,
@@ -53,7 +69,9 @@ def author(output):
     # Version refusal precedes dirty/unsupported classification, as in the existing API.
     for major, minor, name in ((f.NTFS_MAJOR_VERSION + 1, f.NTFS_MINOR_VERSION, 'major'),
                               (f.NTFS_MAJOR_VERSION, f.NTFS_MINOR_VERSION + 1, 'minor')):
-        for flags in (0, VOLUME_DIRTY, VOLUME_FLAG_MAX ^ VOLUME_DIRTY, VOLUME_FLAG_MAX):
+        for flags in (0, VOLUME_DIRTY, VOLUME_DISABLE_SHORT_NAMES,
+                      VOLUME_DISABLE_SHORT_NAMES | VOLUME_DIRTY,
+                      VOLUME_FLAG_MAX ^ VOLUME_DIRTY, VOLUME_FLAG_MAX):
             add(f'unsupported-{name}-flags-{flags:04x}', major, minor, flags, UNSUPPORTED)
     (output / 'cases.tsv').write_text(''.join(
         f"{case['path']} {case['major']} {case['minor']} {case['flags']} {case['code']}\n"

@@ -131,6 +131,13 @@ class BuildExecutionContracts(unittest.TestCase):
             products = output / 'Build/Products/Release'
             products.mkdir(parents=True)
             fixture(products)
+            for bundle in ('Machlin NTFS.app.dSYM', 'NTFSExtension.appex.dSYM'):
+                directory = products / bundle
+                directory.mkdir()
+                (directory / 'synthetic-debug-evidence').write_text('Not native debug data')
+        if name.endswith('-uuids'):
+            return ('UUID: 11111111-2222-3333-4444-555555555555 (arm64) synthetic\n'
+                    'UUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee (x86_64) synthetic\n')
         return 'synthetic-tool-evidence'
 
     def execute(self, source=None):
@@ -158,6 +165,25 @@ class BuildExecutionContracts(unittest.TestCase):
         self.assertIn('CODE_SIGNING_ALLOWED=NO', command)
         self.assertIn(str(self.output / 'SourceSnapshot/adapters/fskit/NTFSFSKit.xcodeproj'), command)
         self.assertFalse((self.root / 'adapters').exists())
+        self.assertEqual(len(result['debug_symbols']), 2)
+        self.assertTrue(all(set(item['uuids']) == {'arm64', 'x86_64'} and item['payload']
+                            for item in result['debug_symbols']))
+
+    def test_mismatched_or_incomplete_debug_symbols_refuse_build_success(self):
+        original = self.fake_command
+        for corrupt in ('UUID: 00000000-0000-0000-0000-000000000000 (arm64) synthetic\n',
+                        'UUID: 00000000-0000-0000-0000-000000000000 (arm64) synthetic\n'
+                        'UUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee (x86_64) synthetic\n',
+                        'not UUID evidence\n',
+                        'UUID: 11111111-2222-3333-4444-555555555555 (arm64) synthetic\n' * 2):
+            with self.subTest(corrupt=corrupt):
+                self.output = self.root / ('bad-debug-' + str(len(self.calls)))
+                self.args.derived_data = self.output
+                def command(*args, **kwargs):
+                    return corrupt if args[2] == 'app-debug-uuids' else original(*args, **kwargs)
+                with patch.object(self, 'fake_command', side_effect=command), self.assertRaises(ValueError):
+                    self.execute()
+                self.assertEqual(json.loads((self.output / 'build-report.json').read_text())['status'], 'failed')
 
     def test_simulated_xcode_failure_retains_failed_report(self):
         self.fail_build = True

@@ -1,5 +1,96 @@
 # Performance contracts
 
+## Paged mutation bitmaps
+
+The planner retains contiguous before/after buffers for bitmaps up to 4 KiB.
+Larger `$Bitmap::$DATA` and `$MFT::$BITMAP` streams use one 4-KiB read window and
+an optional directory of changed pages. Each changed page owns independent
+4-KiB before/after bytes. At the unchanged 4-MiB bitmap limit, the directory
+contains at most 1,024 pointers (8 KiB on the measured hosts). Unchanged pages
+need no retained snapshots; a bitmap that is never accessed needs no window.
+The plan itself grows by 80 bytes on these hosts. All allocations remain charged
+to the existing plan budgets and are released when that plan closes.
+
+The [bitmap component](../core/write_mutation_bitmap.c) reads through its saved
+original stream, never through projected plan patches. A failed read invalidates
+the window before any callback can overwrite it. Promotion reserves a writable
+page before editing; representation changes during growth publish only after
+every required allocation succeeds. Bytes beyond original EOF start at zero.
+There is no cache shared across plans, mutations, remounts or volume lifetimes.
+
+[Allocation and retirement](../core/write_allocation.c) retain wordwise scans,
+first-fit placement, the record-24 reserve, initialized-MFT and tail-bit bounds,
+run coalescing and the original whole-search work charge. Original ownership
+still excludes reuse after private retirement. MFT acquisition reserves its
+writable bitmap page before publishing a new record; bitmap I/O/allocation
+errors propagate without publishing a record or run vector. Sealing visits
+changed pages in logical order. A reverted page emits no bitmap update, and a
+content-only change preserves the complete existing attribute and allocation
+tail. Growth/conversion still goes through the existing mapping owner.
+
+### Complete-plan measurements
+
+Frozen reference sources, harness and fixture bytes use the same selected Xcode
+compiler/SDK, `-O2`, and nine alternating pairs. Five synthetic virtual-volume
+prefixes cover early and late free space, cross-page/tail geometry, an already
+paged MFT bitmap and MFT growth from one bitmap page to two. The largest logical
+volume is approximately 64 GiB with a 2-MiB allocation bitmap; unstored data
+reads as zero. Artificial occupied space is a planner fixture, not a complete
+volume-consistency or Windows acceptance claim.
+
+These are complete **preparation** times, including temporary mounts, namespace
+work, allocation, zero-gap/payload planning and region sealing. Seed creation
+and final region hashing occur outside timing. The read callback is a host
+memory backend. GPR-only executables also run on the host. The figures do not
+measure durable execution, journal reservation, fsync, device I/O or FSKit.
+
+With free space near the beginning of the large allocation bitmap:
+
+| Complete preparation | Userspace speedup | GPR-only host speedup | Peak core allocation, MiB before → after |
+| --- | ---: | ---: | ---: |
+| Create | 5.07× | 6.21× | 4.27 → 0.27 |
+| Grow allocation by 1 MiB | 5.08× | 6.88× | 4.36 → 0.38 |
+| Shrink to 64 bytes | 5.31× | 7.14× | 4.27 → 0.28 |
+| Unlink | 5.26× | 6.79× | 4.27 → 0.28 |
+| Write 1 MiB after an uninitialized 1-MiB prefix | 1.52× | 1.60× | 8.41 → 4.42 |
+
+For growth, source bytes fall from 2,256,384 to 163,328 per preparation with
+18 callbacks on both sides. Growing-write bytes fall from 4,353,536 to 2,260,480
+with 530 callbacks on both sides. Peak values count core allocator bytes, not
+process RSS, fixture storage or the harness's payload/seed buffers. Large-MFT
+profiles show 4.48–7.45× metadata preparation and 1.53–1.64× growing writes across
+both contexts; the two-page transition retains byte-exact placement and output.
+
+There is a real I/O tradeoff for a nearly full map. Late-space growth still reads
+2,256,384 bytes, but page reads raise callback count from 18 to 529; growing writes
+rise from 530 to 1,041 callbacks with unchanged bytes. Userspace ratios there are
+0.969×/0.999× for growth/growing-write, versus 1.191×/1.119× with GPR-only code.
+The memory reduction remains. A device with expensive small reads may need
+separate read-ahead or page-search summaries; host results do not establish its
+latency. Small multi-page maps can also cost more memory: the boundary shrink
+case retains an additional 4,194 bytes. This is not a universal speed or memory
+improvement for every geometry.
+
+All 72 short paired configurations compare the checksum of every final region
+byte against the frozen reference. A prolonged series uses the exact same
+accepted binaries with 32 times as many iterations (eight times for projected
+reads to stay within the existing callback budget). Small complete-plan and
+boundary ratios range 0.979–1.029×. Moving the page boundary outside the MFT
+word loop improves the flat first-fit control 1.268×/1.247×; retirement controls
+are 0.979×/0.980×. The synthetic hot record-lookup control is 0.887× in userspace
+and 1.026× with GPR-only code, an explicit remaining primitive regression of
+about 0.23 ns per userspace hit in this fixture. The batch does not claim that
+every primitive improves. Raw timings are observations, not confidence intervals.
+
+Initial candidates and prolonged control
+series are retained under `artifacts/bitmap-optimization-20261008/`; accepted
+results live in each profile's `accepted/` directory and `long-controls-accepted/`.
+The regular C tests include
+[page ownership, models and fault sweeps](../tests/bitmap_pages.c) and
+[25 complete plans with memory ceilings](../tests/bitmap_page_cases.py).
+[Development](DEVELOPMENT.md#core-optimization-checks) describes reproduction;
+[acceptance](ACCEPTANCE.md) records the complete C and compiler boundaries.
+
 ## Mutation planning and cross-node WOF
 
 This core batch indexes private mutation state, processes cluster retirement
@@ -95,7 +186,8 @@ Evidence: `artifacts/mutation-optimization-20261008/write/candidate/`,
 `write-range/candidate/`, `core/candidate/` and `core/long-controls/` beneath the
 same optimization directory. [Development instructions](DEVELOPMENT.md#core-optimization-checks)
 describe the frozen harnesses. These measurements exclude journal reservation,
-durable transfer, fsync, mounted FSKit and VM acceptance. Paged bitmap snapshots,
+durable transfer, fsync, mounted FSKit and VM acceptance. The following
+[paged bitmap batch](#paged-mutation-bitmaps) handles snapshot I/O and memory;
 incremental directory updates and native transport/parallelism remain separate
 designs. Full C regression is recorded in [acceptance](ACCEPTANCE.md).
 

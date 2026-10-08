@@ -17,10 +17,17 @@ enum {
 #define BENCH_FILETIME UINT64_C(134357146906613431)
 #define BENCH_VIRTUAL_BYTES (UINT64_C(1) << 34)
 
+struct seed_region {
+	struct seed_region *next;
+	uint64_t physical;
+	uint8_t bytes[NTFS_WRITE_CLUSTER_BYTES];
+};
+
 struct device {
 	uint8_t *data;
+	struct seed_region *seed;
 	uint64_t size, read_bytes, allocation_bytes;
-	size_t live, peak, allocations, reads;
+	size_t backing_bytes, live, peak, allocations, reads, maximum_live;
 };
 
 static void *
@@ -36,6 +43,7 @@ allocate(void *context, size_t size)
 	if (device->live > device->peak) {
 		device->peak = device->live;
 	}
+	assert(device->maximum_live == 0 || device->peak <= device->maximum_live);
 	return bytes;
 }
 
@@ -53,14 +61,31 @@ static enum ntfs_result
 read_bytes(void *context, uint64_t offset, void *bytes, size_t size)
 {
 	struct device *device = context;
+	const struct seed_region *region;
+	uint64_t first, end;
+	size_t take;
 
 	assert(offset <= device->size && size <= device->size - offset);
 	device->reads++;
 	device->read_bytes += size;
-	if (device->data != NULL) {
-		memcpy(bytes, device->data + offset, size);
-	} else {
-		memset(bytes, 0, size);
+	memset(bytes, 0, size);
+	if (device->data != NULL && offset < device->backing_bytes) {
+		take = device->backing_bytes - (size_t)offset;
+		if (take > size) {
+			take = size;
+		}
+		memcpy(bytes, device->data + offset, take);
+	}
+	for (region = device->seed; region != NULL; region = region->next) {
+		first = offset > region->physical ? offset : region->physical;
+		end = offset + size < region->physical + sizeof(region->bytes)
+		    ? offset + size
+		    : region->physical + sizeof(region->bytes);
+		if (first < end) {
+			memcpy((uint8_t *)bytes + (size_t)(first - offset),
+			    region->bytes + (size_t)(first - region->physical),
+			    (size_t)(end - first));
+		}
 	}
 	return NTFS_OK;
 }
@@ -224,6 +249,7 @@ apply_seed(struct device *device, const struct ntfs_write_mutation_request *requ
 	struct ntfs_environment env = environment(device);
 	struct ntfs_write_mutation_plan *plan = NULL;
 	struct ntfs_write_mutation_region region;
+	struct seed_region *seed;
 	size_t index;
 	uint64_t reference;
 
@@ -231,7 +257,24 @@ apply_seed(struct device *device, const struct ntfs_write_mutation_request *requ
 	reference = ntfs_write_mutation_plan_reference(plan);
 	for (index = 0; index < ntfs_write_mutation_plan_count(plan); index++) {
 		assert(ntfs_write_mutation_plan_region(plan, index, &region) == NTFS_OK);
-		memcpy(device->data + region.physical, region.after, region.bytes);
+		if (ntfs_bounds(region.physical, region.bytes, device->backing_bytes)) {
+			memcpy(device->data + region.physical, region.after, region.bytes);
+			continue;
+		}
+		assert(region.bytes == NTFS_WRITE_CLUSTER_BYTES);
+		for (seed = device->seed; seed != NULL; seed = seed->next) {
+			if (seed->physical == region.physical) {
+				break;
+			}
+		}
+		if (seed == NULL) {
+			seed = malloc(sizeof(*seed));
+			assert(seed != NULL);
+			seed->physical = region.physical;
+			seed->next = device->seed;
+			device->seed = seed;
+		}
+		memcpy(seed->bytes, region.after, region.bytes);
 	}
 	ntfs_write_mutation_plan_close(plan);
 	return reference;
@@ -307,24 +350,33 @@ int
 main(int argc, char **argv)
 {
 	struct device device = {.size = BENCH_VIRTUAL_BYTES};
+	struct seed_region *seed;
 	FILE *file;
+	const struct ntfs_disk_boot *boot;
 	long length;
 	unsigned iterations;
 	uint64_t checksum, elapsed;
 
-	assert(argc == 3 || argc == 4);
+	assert(argc == 3 || argc == 4 || argc == 5);
 	iterations = (unsigned)strtoul(argv[2], NULL, 10);
 	assert(iterations != 0);
-	if (argc == 4) {
+	if (argc >= 4) {
 		file = fopen(argv[3], "rb");
 		assert(file != NULL && fseek(file, 0, SEEK_END) == 0);
 		length = ftell(file);
 		assert(length > 0 && fseek(file, 0, SEEK_SET) == 0);
-		device.size = (uint64_t)length;
+		device.backing_bytes = (size_t)length;
 		device.data = malloc((size_t)length);
 		assert(device.data != NULL &&
 		    fread(device.data, 1, (size_t)length, file) == (size_t)length);
 		assert(fclose(file) == 0);
+		assert(device.backing_bytes >= sizeof(*boot));
+		boot = (const void *)device.data;
+		device.size = ntfs_u64(boot->sectors) * ntfs_u16(boot->sector_size);
+		assert(device.size >= device.backing_bytes);
+		if (argc == 5) {
+			device.maximum_live = (size_t)strtoull(argv[4], NULL, 10);
+		}
 		checksum = mutation(&device, argv[1], iterations, &elapsed);
 	} else if (strcmp(argv[1], "free") == 0 || strcmp(argv[1], "mft") == 0) {
 		checksum = bitmap(&device, strcmp(argv[1], "free") == 0, iterations, &elapsed);
@@ -338,5 +390,10 @@ main(int argc, char **argv)
 	    argv[1], elapsed, checksum, device.reads, device.read_bytes, device.allocations,
 	    device.allocation_bytes, device.peak);
 	free(device.data);
+	while (device.seed != NULL) {
+		seed = device.seed;
+		device.seed = seed->next;
+		free(seed);
+	}
 	return 0;
 }

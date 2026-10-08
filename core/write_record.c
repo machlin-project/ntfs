@@ -119,8 +119,16 @@ ntfs_mutation_record_get(struct ntfs_write_mutation_plan *plan, uint64_t referen
 		ntfs_mutation_release(plan, record, sizeof(*record));
 		return result;
 	}
-	free_slot = number >= NTFS_FIRST_USER_RECORD && plan->mft_bitmap.after != NULL &&
-	    !ntfs_mutation_bit(plan->mft_bitmap.after, plan->mft_bitmap.bytes, number);
+	free_slot = false;
+	if (number >= NTFS_FIRST_USER_RECORD && plan->mft_bitmap.bytes != 0) {
+		result =
+		    ntfs_mutation_bitmap_test(plan, &plan->mft_bitmap, number, false, &free_slot);
+		if (result != NTFS_OK) {
+			ntfs_mutation_release(plan, record, sizeof(*record));
+			return result;
+		}
+		free_slot = !free_slot;
+	}
 	header = (void *)record->bytes;
 	if (number * NTFS_WRITE_RECORD_BYTES >= plan->volume->mft->initialized) {
 		mutation_record_initialize_empty(record, 1);

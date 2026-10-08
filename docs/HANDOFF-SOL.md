@@ -1,6 +1,24 @@
 # Handoff to Sol
 
-The latest C-only optimization batch is complete: bounded region/MFT lookup
+The latest C-only optimization batch is complete: large volume/MFT bitmaps now
+use a plan-local original window and before/after snapshots of modified pages.
+All 211 fatal-sanitizer suites, 45 exact whole images, 312 strict compiler objects
+and six portable/GPR checks pass. Five large virtual prefixes cover 25 complete
+plans, including MFT paging/growth. All 72 paired benchmark configurations retain
+final region-byte checksums. Large early-space metadata preparation improves
+5.07–7.14×; a 1-MiB growing write improves 1.52×/1.60× across userspace/GPR host
+contexts. Near-full scans increase callbacks with unchanged read bytes, so no
+general device-latency claim follows. See
+[current acceptance](ACCEPTANCE.md#paged-mutation-bitmaps) and
+[performance scope](PERFORMANCE.md#paged-mutation-bitmaps).
+
+The user still defers FSKit work. There is no app build/install, native test,
+VM/UTM operation or kernel load in this batch. Installed build 19 retains its
+prior native baseline. Do not rerun completed checks or start VM work from this
+handoff. Evidence is under `artifacts/bitmap-regression-20261008/` and the linked
+acceptance paths. Incremental directory editing remains a separate design.
+
+The preceding C-only optimization batch is complete: bounded region/MFT lookup
 indexes, wordwise cluster retirement/MFT first-fit and volume-lifetime WOF table
 proofs. All 209 fatal-sanitizer suites and 45 unchanged whole images pass, with
 308 strict compiler objects and six portable/GPR checks. A 1-MiB growing-write

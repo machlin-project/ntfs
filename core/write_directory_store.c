@@ -151,13 +151,15 @@ mutation_directory_original_streams(struct ntfs_write_mutation_plan *plan,
     struct ntfs_stream **bitmap)
 {
 	struct ntfs_node *node = NULL;
+	bool allocated;
 	enum ntfs_result result;
 
 	*allocation = NULL;
 	*bitmap = NULL;
-	if (!ntfs_mutation_bit(
-		plan->mft_bitmap.before, plan->mft_bitmap.original_bytes, record->number)) {
-		return NTFS_OK;
+	result =
+	    ntfs_mutation_bitmap_test(plan, &plan->mft_bitmap, record->number, true, &allocated);
+	if (result != NTFS_OK || !allocated) {
+		return result;
 	}
 	/* This node and both streams read the immutable original volume, even when
 	 * this directory was already rebuilt earlier in the same mutation. */

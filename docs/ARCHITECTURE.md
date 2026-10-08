@@ -76,6 +76,18 @@ No reuse crosses public calls; failed packets never publish partial caller bytes
 Actual read/allocation charges reflect transfers and buffer growth, while logical
 segment counts retain their original meaning. See [the core optimization contract](PERFORMANCE.md#journal-traversal).
 
+The mutation plan owns its [bitmap storage](../core/write_mutation_bitmap.c).
+Maps up to 4 KiB keep contiguous original/private buffers; larger maps retain
+one original read window and before/after pairs only for changed pages. The
+saved immutable stream supplies original bytes independently of projected plan
+patches. Growth reserves storage before publishing a representation change;
+close releases the stream, window, page directory and every snapshot. This
+state never survives the plan. [Allocation](../core/write_allocation.c) keeps
+first-fit and retirement semantics, and sealing keeps logical page order and
+content-only attribute preservation. The separate
+[native bitmap program compiler](../core/write_bitmap.c) retains journal range
+encoding and inverse semantics. See [performance contracts](PERFORMANCE.md#paged-mutation-bitmaps).
+
 FSKit retains one volume owner across four private implementation components.
 [NTFSVolume.m](../adapters/fskit/NTFSVolume.m) owns native lifecycle, request
 admission, operation/publication serialization and replies.

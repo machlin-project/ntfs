@@ -20,73 +20,6 @@ ntfs_mutation_set_bit(uint8_t *bitmap, uint64_t bit, bool value)
 	}
 }
 
-enum ntfs_result
-ntfs_mutation_bitmap_open(struct ntfs_write_mutation_plan *plan,
-    struct ntfs_mutation_bitmap *bitmap, uint64_t number, uint32_t type)
-{
-	uint64_t required;
-	enum ntfs_result result;
-
-	bitmap->type = type;
-	result = ntfs_mutation_record_get(plan, number, true, &bitmap->record);
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_stream(plan, bitmap->record, type, NULL, 0, &bitmap->stream);
-	}
-	if (result != NTFS_OK) {
-		return result;
-	}
-	if (bitmap->stream->size == 0 || bitmap->stream->size > NTFS_MUTATION_MAX_BITMAP_BYTES ||
-	    bitmap->stream->initialized != bitmap->stream->size) {
-		return NTFS_UNSUPPORTED;
-	}
-	required = number == NTFS_BITMAP_RECORD ? plan->info.cluster_count
-						: plan->mft->initialized / NTFS_WRITE_RECORD_BYTES;
-	if ((required + NTFS_BITS_PER_BYTE - 1u) / NTFS_BITS_PER_BYTE > bitmap->stream->size) {
-		return NTFS_CORRUPT;
-	}
-	bitmap->bytes = (size_t)bitmap->stream->size;
-	bitmap->original_bytes = bitmap->bytes;
-	bitmap->before = ntfs_mutation_allocate(plan, bitmap->bytes);
-	bitmap->after = ntfs_mutation_allocate(plan, bitmap->bytes);
-	if (bitmap->before == NULL || bitmap->after == NULL) {
-		return NTFS_NO_MEMORY;
-	}
-	result = ntfs_mutation_stream_read(plan, bitmap->stream, 0, bitmap->before, bitmap->bytes);
-	if (result == NTFS_OK) {
-		ntfs_copy(bitmap->after, bitmap->before, bitmap->bytes);
-	}
-	return result;
-}
-
-enum ntfs_result
-ntfs_mutation_bitmap_grow(
-    struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_bitmap *bitmap, size_t bytes)
-{
-	uint8_t *before, *after;
-
-	if (bytes <= bitmap->bytes) {
-		return NTFS_OK;
-	}
-	if (bytes > NTFS_MUTATION_MAX_BITMAP_BYTES) {
-		return NTFS_RANGE;
-	}
-	before = ntfs_mutation_allocate(plan, bytes);
-	after = ntfs_mutation_allocate(plan, bytes);
-	if (before == NULL || after == NULL) {
-		ntfs_mutation_release(plan, before, bytes);
-		ntfs_mutation_release(plan, after, bytes);
-		return NTFS_NO_MEMORY;
-	}
-	ntfs_copy(before, bitmap->before, bitmap->bytes);
-	ntfs_copy(after, bitmap->after, bitmap->bytes);
-	ntfs_mutation_release(plan, bitmap->before, bitmap->bytes);
-	ntfs_mutation_release(plan, bitmap->after, bitmap->bytes);
-	bitmap->before = before;
-	bitmap->after = after;
-	bitmap->bytes = bytes;
-	return NTFS_OK;
-}
-
 static enum ntfs_result
 mutation_allocation_append_run(
     struct ntfs_run *runs, size_t *count, uint64_t vcn, uint64_t lcn, uint64_t length)
@@ -149,9 +82,10 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
     struct ntfs_run **out, size_t *count)
 {
 	struct ntfs_mutation_bitmap *bitmap = &plan->allocation;
+	struct ntfs_mutation_bitmap_view view = {0};
 	struct ntfs_run *runs;
 	uint64_t cluster, available, current, shifted, mask;
-	size_t byte, bytes;
+	size_t byte, bytes, base = 0, within;
 	unsigned bits, first, length;
 	enum ntfs_result result = NTFS_OK;
 
@@ -173,15 +107,29 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 	for (cluster = 0; cluster < plan->info.cluster_count && clusters != 0;
 	    cluster += MUTATION_BITMAP_WORD_BITS) {
 		byte = (size_t)(cluster / NTFS_BITS_PER_BYTE);
-		bytes = bitmap->bytes - byte;
+		if (byte - base >= view.bytes) {
+			base = byte;
+			result = ntfs_mutation_bitmap_view(plan, bitmap, base, false, &view);
+			if (result != NTFS_OK) {
+				break;
+			}
+		}
+		within = byte - base;
+		bytes = view.bytes - within;
 		bits = plan->info.cluster_count - cluster < MUTATION_BITMAP_WORD_BITS
 		    ? (unsigned)(plan->info.cluster_count - cluster)
 		    : MUTATION_BITMAP_WORD_BITS;
-		current = mutation_allocation_word(bitmap->after + byte, bytes);
-		available = ~(mutation_allocation_word(bitmap->before + byte, bytes) | current) &
+		current = mutation_allocation_word(view.after + within, bytes);
+		available = ~(mutation_allocation_word(view.before + within, bytes) | current) &
 		    mutation_allocation_mask(bits);
 		if (available == 0) {
 			continue;
+		}
+		if (view.before == view.after) {
+			result = ntfs_mutation_bitmap_view(plan, bitmap, base, true, &view);
+			if (result != NTFS_OK) {
+				break;
+			}
 		}
 		while (available != 0 && clusters != 0) {
 			first = (unsigned)__builtin_ctzll(available);
@@ -202,7 +150,7 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 			vcn += length;
 			clusters -= length;
 		}
-		mutation_allocation_put_word(bitmap->after + byte, bytes, current);
+		mutation_allocation_put_word(view.after + within, bytes, current);
 		if (result != NTFS_OK) {
 			break;
 		}
@@ -220,11 +168,14 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 }
 
 static enum ntfs_result
-mutation_allocation_clear(struct ntfs_mutation_bitmap *bitmap, uint64_t first, uint64_t end)
+mutation_allocation_clear(struct ntfs_write_mutation_plan *plan,
+    struct ntfs_mutation_bitmap *bitmap, uint64_t first, uint64_t end)
 {
+	struct ntfs_mutation_bitmap_view view = {0};
 	uint64_t current, mask, missing;
-	size_t byte, bytes;
+	size_t byte, bytes, base = 0, relative;
 	unsigned within, take;
+	enum ntfs_result result;
 
 	while (first < end) {
 		within = (unsigned)(first % MUTATION_BITMAP_WORD_BITS);
@@ -232,12 +183,20 @@ mutation_allocation_clear(struct ntfs_mutation_bitmap *bitmap, uint64_t first, u
 		if (byte >= bitmap->bytes) {
 			return NTFS_CORRUPT;
 		}
-		bytes = bitmap->bytes - byte;
+		if (byte - base >= view.bytes) {
+			base = byte;
+			result = ntfs_mutation_bitmap_view(plan, bitmap, base, true, &view);
+			if (result != NTFS_OK) {
+				return result;
+			}
+		}
+		relative = byte - base;
+		bytes = view.bytes - relative;
 		take = MUTATION_BITMAP_WORD_BITS - within;
 		if (end - first < take) {
 			take = (unsigned)(end - first);
 		}
-		current = mutation_allocation_word(bitmap->after + byte, bytes);
+		current = mutation_allocation_word(view.after + relative, bytes);
 		mask = mutation_allocation_mask(take) << within;
 		missing = mask & ~current;
 		/* Preserve the bitwise failure state: clear exactly the allocated
@@ -245,7 +204,7 @@ mutation_allocation_clear(struct ntfs_mutation_bitmap *bitmap, uint64_t first, u
 		if (missing != 0) {
 			mask &= mutation_allocation_mask((unsigned)__builtin_ctzll(missing));
 		}
-		mutation_allocation_put_word(bitmap->after + byte, bytes, current & ~mask);
+		mutation_allocation_put_word(view.after + relative, bytes, current & ~mask);
 		if (missing != 0) {
 			return NTFS_CORRUPT;
 		}
@@ -281,7 +240,7 @@ ntfs_mutation_free_runs(
 			continue;
 		}
 		result = mutation_allocation_clear(
-		    &plan->allocation, run->lcn + first, run->lcn + run->length);
+		    plan, &plan->allocation, run->lcn + first, run->lcn + run->length);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -345,56 +304,6 @@ done:
 	return NTFS_OK;
 }
 
-enum ntfs_result
-ntfs_mutation_bitmap_flush(
-    struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_bitmap *bitmap)
-{
-	struct ntfs_run *runs = NULL;
-	struct ntfs_stream *stream = NULL;
-	uint64_t clusters;
-	size_t count = 0, offset, take;
-	enum ntfs_result result;
-
-	if (bitmap->bytes == bitmap->original_bytes &&
-	    ntfs_equal(bitmap->before, bitmap->after, bitmap->bytes)) {
-		return NTFS_OK;
-	}
-	if (bitmap->stream->resident) {
-		result = ntfs_mutation_resident(
-		    plan, bitmap->record, bitmap->type, NULL, 0, bitmap->after, bitmap->bytes, 0);
-		if (result != NTFS_NO_SPACE) {
-			return result;
-		}
-	}
-	/* A bit update does not resize or re-encode its owning bitmap stream. */
-	result = NTFS_OK;
-	if (bitmap->stream->resident || bitmap->bytes != bitmap->original_bytes) {
-		clusters = bitmap->bytes / NTFS_WRITE_CLUSTER_BYTES +
-		    (bitmap->bytes % NTFS_WRITE_CLUSTER_BYTES != 0);
-		result = ntfs_mutation_resize_runs(plan, bitmap->stream, clusters, &runs, &count);
-		if (result == NTFS_OK) {
-			result = ntfs_mutation_nonresident(plan, bitmap->record, bitmap->type, NULL,
-			    0, runs, count, bitmap->bytes, bitmap->bytes, 0);
-		}
-	}
-	if (result == NTFS_OK) {
-		result = ntfs_mutation_stream(plan, bitmap->record, bitmap->type, NULL, 0, &stream);
-	}
-	for (offset = 0; result == NTFS_OK && offset < bitmap->bytes; offset += take) {
-		take = bitmap->bytes - offset < NTFS_WRITE_CLUSTER_BYTES ? bitmap->bytes - offset
-									 : NTFS_WRITE_CLUSTER_BYTES;
-		if (bitmap->stream->resident || offset + take > bitmap->original_bytes ||
-		    !ntfs_equal(bitmap->before + offset, bitmap->after + offset, take)) {
-			result = ntfs_mutation_stream_write(plan, bitmap->record, bitmap->type,
-			    NULL, 0, stream, offset, bitmap->after + offset, take,
-			    NTFS_WRITE_MUTATION_BITMAP);
-		}
-	}
-	ntfs_stream_close(stream);
-	ntfs_mutation_release(plan, runs, NTFS_MUTATION_MAX_RUNS * sizeof(*runs));
-	return result;
-}
-
 static enum ntfs_result
 mutation_allocation_grow_mft(struct ntfs_write_mutation_plan *plan)
 {
@@ -455,37 +364,54 @@ done:
 	return NTFS_OK;
 }
 
-static uint64_t
-mutation_allocation_first_record(const struct ntfs_mutation_bitmap *bitmap, uint64_t records)
+static enum ntfs_result
+mutation_allocation_first_record(struct ntfs_write_mutation_plan *plan,
+    struct ntfs_mutation_bitmap *bitmap, uint64_t records, uint64_t *out)
 {
-	uint64_t number, available;
-	size_t byte, bytes;
-	unsigned bits, first;
+	struct ntfs_mutation_bitmap_view view;
+	uint64_t number, available, limit;
+	size_t byte, bytes, within;
+	unsigned bits, first = NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD;
+	enum ntfs_result result;
 
-	for (number = NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD; number < records;) {
-		first = (unsigned)(number % MUTATION_BITMAP_WORD_BITS);
-		number -= first;
-		byte = (size_t)(number / NTFS_BITS_PER_BYTE);
-		if (byte >= bitmap->bytes) {
-			break;
-		}
-		bytes = bitmap->bytes - byte;
-		bits = records - number < MUTATION_BITMAP_WORD_BITS ? (unsigned)(records - number)
-								    : MUTATION_BITMAP_WORD_BITS;
-		available = ~(mutation_allocation_word(bitmap->before + byte, bytes) |
-				mutation_allocation_word(bitmap->after + byte, bytes)) &
-		    mutation_allocation_mask(bits) & ~mutation_allocation_mask(first);
-		if (available != 0) {
-			return number + (unsigned)__builtin_ctzll(available);
-		}
-		number += MUTATION_BITMAP_WORD_BITS;
+	*out = records;
+	if (records <= first) {
+		return NTFS_OK;
 	}
-	return records;
+	for (byte = 0; byte < bitmap->bytes && byte * NTFS_BITS_PER_BYTE < records;
+	    byte += view.bytes) {
+		result = ntfs_mutation_bitmap_view(plan, bitmap, byte, false, &view);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		limit = records - byte * NTFS_BITS_PER_BYTE;
+		if (limit > view.bytes * NTFS_BITS_PER_BYTE) {
+			limit = view.bytes * NTFS_BITS_PER_BYTE;
+		}
+		for (number = 0; number < limit; number += MUTATION_BITMAP_WORD_BITS) {
+			within = (size_t)(number / NTFS_BITS_PER_BYTE);
+			bytes = view.bytes - within;
+			bits = limit - number < MUTATION_BITMAP_WORD_BITS
+			    ? (unsigned)(limit - number)
+			    : MUTATION_BITMAP_WORD_BITS;
+			available = ~(mutation_allocation_word(view.before + within, bytes) |
+					mutation_allocation_word(view.after + within, bytes)) &
+			    mutation_allocation_mask(bits) & ~mutation_allocation_mask(first);
+			if (available != 0) {
+				*out = byte * NTFS_BITS_PER_BYTE + number +
+				    (unsigned)__builtin_ctzll(available);
+				return NTFS_OK;
+			}
+			first = 0;
+		}
+	}
+	return NTFS_OK;
 }
 
 enum ntfs_result
 ntfs_mutation_new_record(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record **out)
 {
+	struct ntfs_mutation_bitmap_view view;
 	uint64_t number, records;
 	enum ntfs_result result;
 
@@ -496,11 +422,22 @@ ntfs_mutation_new_record(struct ntfs_write_mutation_plan *plan, struct ntfs_muta
 		if (result != NTFS_OK) {
 			return result;
 		}
-		number = mutation_allocation_first_record(&plan->mft_bitmap, records);
+		result =
+		    mutation_allocation_first_record(plan, &plan->mft_bitmap, records, &number);
+		if (result != NTFS_OK) {
+			return result;
+		}
 		if (number < records) {
+			/* Reserve the writable page before publishing an allocated record. */
+			result = ntfs_mutation_bitmap_view(plan, &plan->mft_bitmap,
+			    (size_t)(number / NTFS_BITS_PER_BYTE), true, &view);
+			if (result != NTFS_OK) {
+				return result;
+			}
 			result = ntfs_mutation_record_get(plan, number, true, out);
 			if (result == NTFS_OK) {
-				ntfs_mutation_set_bit(plan->mft_bitmap.after, number, true);
+				ntfs_mutation_set_bit(
+				    view.after, number % NTFS_BITS_PER_BYTE, true);
 			}
 			return result;
 		}

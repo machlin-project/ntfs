@@ -1,5 +1,62 @@
 # Acceptance
 
+## Paged mutation bitmaps
+
+The C-only paged-bitmap batch is complete. Volume and MFT bitmaps larger than
+4 KiB use one original read window and independent before/after pairs only for
+modified pages; smaller maps retain their contiguous path. All state belongs
+to one mutation plan. Original reads bypass projected patches, failed partial
+reads invalidate the window, and growth reserves storage before publishing its
+new representation. First-fit order, the MFT reserve, original ownership
+exclusion, initialized-record and tail-bit bounds, failure prefixes and
+content-only attribute/allocation-tail preservation remain unchanged. The
+[performance contract](PERFORMANCE.md#paged-mutation-bitmaps) records memory
+bounds, exact workload scope and the near-full-map callback tradeoff.
+
+The test-first large-volume harness freezes reference results before the core
+change; the original create exceeds the explicit 2-MiB core-memory ceiling.
+The final implementation passes **211 suites, zero failures and zero SKIPs**
+with assertions and fatal ASan/UBSan. All **45 frozen whole images** remain
+exact. New page tests cover allocation/free models across page boundaries,
+padding, run-cap/no-space partial results, original/private ownership, original
+reads despite projected patches, failed partial reads and retry, every observed
+page acquisition and MFT-allocation failure position, representation-growth
+failures, zero extension and changed-then-reverted pages. Five authored virtual
+prefixes exercise **25 complete plans** under 2-MiB metadata/8-MiB growing-write
+core-memory ceilings, including paged MFT allocation and growth across the
+one-page boundary. Their artificial occupancy is not full-volume validation.
+
+All **312 strict objects** pass across 78 core sources in userspace arm64/x86_64
+and kernel arm64e/x86_64. The 156 kernel objects contain no SIMD/FP registers;
+every context meets the 2-KiB stack-frame ceiling. Six portable/GPR memory,
+codec and endian checks pass, and selected-Xcode formatting passes. No decoder
+algorithm changes or kernel execution are implied.
+
+Nine alternating pairs across **72 configurations** preserve complete final
+region-byte checksums. On the 2-MiB bitmap with early free space, complete
+create/grow/shrink/unlink preparation improves 5.07–7.14× across host contexts,
+with roughly 91–94% lower peak core allocation. A 1-MiB growing write improves
+1.52×/1.60×. Nearly full growth keeps the same read bytes but raises callbacks
+from 18 to 529; its userspace ratio is 0.969×, while GPR is 1.191×. These are
+memory-backend preparation measurements, not mounted or durable throughput.
+The prolonged accepted series resolves noisy short controls: small complete
+plans/boundary cases remain 0.979–1.029×, and MFT first-fit improves
+1.268×/1.247×. One synthetic userspace hot-record lookup remains 0.887× (about
+0.23 ns extra per hit); its GPR counterpart is 1.026×. This scoped primitive
+regression is retained and disclosed, not treated as a whole-plan speedup.
+Original short measurements, rejected/initial integration attempts and the
+long-control probe that exceeded the existing read-call budget remain retained.
+
+**No FSKit tests, app build/install, VM/UTM operation, Windows candidate or
+kernel load runs in this batch.** Installed signed build 19 remains the prior
+native baseline. Incremental directory editing and native transport/parallelism
+remain separate work.
+
+Evidence: `artifacts/bitmap-focused-20261008/`,
+`artifacts/bitmap-optimization-20261008/`,
+`artifacts/bitmap-boundaries-20261008/` and
+`artifacts/bitmap-regression-20261008/`.
+
 ## Mutation lookup, bitmap retirement and WOF reuse
 
 The C-only batch is complete. Bounded indexes accelerate lookup of changed
@@ -45,7 +102,8 @@ All original samples are retained.
 
 **No FSKit tests, app build/install, VM/UTM operation, Windows candidate or kernel
 load runs in this batch.** Installed signed build 19 retains its prior native
-acceptance and does not contain these C changes. Paged bitmap snapshots,
+acceptance and does not contain these C changes. The following
+[paged bitmap batch](#paged-mutation-bitmaps) handles snapshot storage;
 incremental directory editing and native transport/parallelism remain separate.
 
 Evidence: `artifacts/mutation-test-first-20261008/`,

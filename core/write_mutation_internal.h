@@ -14,6 +14,7 @@ enum {
 	NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY = 2,
 	NTFS_MUTATION_HASH_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
 	NTFS_MUTATION_MAX_BITMAP_BYTES = 4 * 1024 * 1024,
+	NTFS_MUTATION_BITMAP_PAGE_BYTES = NTFS_WRITE_CLUSTER_BYTES,
 	NTFS_MUTATION_INITIAL_KEYS = 16,
 	NTFS_MUTATION_MAX_KEYS = 65536,
 	NTFS_MUTATION_MAX_RUNS = 4096,
@@ -49,12 +50,26 @@ struct ntfs_mutation_record {
 	uint8_t bytes[NTFS_WRITE_RECORD_BYTES];
 };
 
+struct ntfs_mutation_bitmap_page {
+	uint8_t before[NTFS_MUTATION_BITMAP_PAGE_BYTES], after[NTFS_MUTATION_BITMAP_PAGE_BYTES];
+};
+
+struct ntfs_mutation_bitmap_view {
+	const uint8_t *before;
+	uint8_t *after;
+	size_t bytes;
+};
+
 struct ntfs_mutation_bitmap {
 	struct ntfs_mutation_record *record;
 	struct ntfs_stream *stream;
 	uint32_t type;
 	uint8_t *before, *after;
 	size_t bytes, original_bytes;
+	struct ntfs_mutation_bitmap_page **pages;
+	size_t page_capacity, window_index;
+	uint8_t *window;
+	bool window_valid;
 };
 
 struct ntfs_mutation_key {
@@ -158,6 +173,15 @@ enum ntfs_result ntfs_mutation_bitmap_grow(
     struct ntfs_write_mutation_plan *, struct ntfs_mutation_bitmap *, size_t);
 enum ntfs_result ntfs_mutation_bitmap_flush(
     struct ntfs_write_mutation_plan *, struct ntfs_mutation_bitmap *);
+void ntfs_mutation_bitmap_close(struct ntfs_write_mutation_plan *, struct ntfs_mutation_bitmap *);
+/* Read-only views may alias a replaceable read window. Acquire a writable view
+ * before changing after bytes; consume a view before acquiring another one. */
+enum ntfs_result ntfs_mutation_bitmap_view(struct ntfs_write_mutation_plan *,
+    struct ntfs_mutation_bitmap *, size_t, bool, struct ntfs_mutation_bitmap_view *);
+enum ntfs_result ntfs_mutation_bitmap_test(
+    struct ntfs_write_mutation_plan *, struct ntfs_mutation_bitmap *, uint64_t, bool, bool *);
+enum ntfs_result ntfs_mutation_bitmap_set(
+    struct ntfs_write_mutation_plan *, struct ntfs_mutation_bitmap *, uint64_t, bool);
 bool ntfs_mutation_bit(const uint8_t *, size_t, uint64_t);
 void ntfs_mutation_set_bit(uint8_t *, uint64_t, bool);
 enum ntfs_result ntfs_mutation_allocate_runs(

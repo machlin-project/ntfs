@@ -218,13 +218,16 @@ mutation_namespace_free_record(
 	if (result != NTFS_END) {
 		return result;
 	}
+	result = ntfs_mutation_bitmap_set(plan, &plan->mft_bitmap, record->number, false);
+	if (result != NTFS_OK) {
+		return result;
+	}
 	sequence = (uint16_t)(ntfs_u16(header->sequence) + 1u);
 	if (sequence == 0) {
 		sequence = 1;
 	}
 	ntfs_put_u16(header->sequence, sequence);
 	ntfs_put_u16(header->flags, 0);
-	ntfs_mutation_set_bit(plan->mft_bitmap.after, record->number, false);
 	record->reference = record->number | (uint64_t)sequence << NTFS_REFERENCE_SEQUENCE_SHIFT;
 	record->changed = true;
 	return NTFS_OK;

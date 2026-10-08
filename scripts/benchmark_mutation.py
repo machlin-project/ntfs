@@ -24,6 +24,8 @@ def main():
     parser.add_argument('--reference', default='HEAD')
     parser.add_argument('--comparison', default='comparison')
     parser.add_argument('--repetitions', type=int, default=9)
+    parser.add_argument('--fixture', type=Path,
+                        help='Freeze this image or virtual-volume prefix for complete mutations')
     parser.add_argument('--case', action='append', choices=(
         'patch', 'overlay', 'record', 'free', 'mft', 'patch-small',
         'create', 'grow', 'shrink', 'unlink', 'grow-write'))
@@ -46,7 +48,7 @@ def main():
         harness = output / 'benchmark_mutation.c'
         shutil.copyfile(ROOT / 'tools/benchmark_mutation.c', harness)
         fixture = output / 'source.img'
-        shutil.copyfile(ROOT / '.build/write-mutation-cases/source.img', fixture)
+        shutil.copyfile(args.fixture or ROOT / '.build/write-mutation-cases/source.img', fixture)
         jobs = {name: [name, '64'] for name in ('patch', 'overlay', 'record', 'free', 'mft')}
         jobs['patch-small'] = ['patch-small', '65536']
         jobs.update({name: [name, '40', str(fixture)] for name in ('create', 'grow', 'shrink', 'unlink', 'grow-write')})

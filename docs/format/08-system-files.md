@@ -94,6 +94,19 @@ at the bitmap's allocation end. Independent bitwise oracles cover these rules in
 [mutation_lookup.c](../../tests/mutation_lookup.c). They are implementation
 contracts, not a new bitmap representation or native observation.
 
+The mutation planner retains bitmaps larger than 4 KiB as original/private
+snapshots of changed pages, plus one replaceable read window. Page size is an
+in-memory policy; bit coordinates and stream mappings above do not change.
+Original bytes come from the immutable original stream, including when other
+plan patches already cover that physical location. EOF growth synthesizes zero
+bits, while initialization bounds still exclude uninitialized MFT records and
+padding. All page state dies with the plan; it is not a volume-wide cache.
+[Page tests](../../tests/bitmap_pages.c) cover cross-page first-fit/retirement,
+original ownership, failed partial reads, allocation failures and the one-page
+to multiple-page transition. [Virtual fixtures](../../tests/bitmap_page_fixtures.py)
+exercise full plans with large volume/MFT maps; their synthetic occupancy is
+not a new native observation or a complete volume-consistency oracle.
+
 ### Changing bits without resizing the stream
 
 A bitmap's logical byte length, initialized prefix and physical allocation are
@@ -120,7 +133,8 @@ write, shrink and removal; their attribute bytes and allocated tail bytes remain
 exact after the correction. This closes the local storage-preservation contract;
 it does not establish the cause of Windows's rejection of the journal.
 
-The owning implementation is [write_allocation.c](../../core/write_allocation.c).
+The owning implementation is [write_mutation_bitmap.c](../../core/write_mutation_bitmap.c),
+with cluster/MFT allocation in [write_allocation.c](../../core/write_allocation.c).
 Independent source attributes and tail oracles are authored in
 [write_mutation_cases.py](../../tests/write_mutation_cases.py) and checked in
 [write_mutation.c](../../tests/write_mutation.c).

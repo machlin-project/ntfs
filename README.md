@@ -14,7 +14,7 @@ checkpoints, including MFT growth, large directories and 30 journal ring wraps.
 All six retained pressure/reuse states pass independent Windows namespace,
 metadata, read-only chkdsk and original healthy-event review.
 
-The current C core passes 209 sanitized suites. The preceding general-owner
+The current C core passes 211 sanitized suites. The preceding general-owner
 acceptance includes 64 host FSKit groups and a universal Release build.
 The personally signed build 19 is installed and
 all 81 native component groups pass. Actual create, growth with zero gaps,
@@ -65,7 +65,7 @@ images, 308 strict compiler-context objects and three decoder differential runs
 pass. This batch runs no FSKit tests, app build, installation or VM operation;
 native acceptance remains attached to the preceding installed app.
 
-The latest [mutation and WOF batch](docs/PERFORMANCE.md#mutation-planning-and-cross-node-wof)
+The preceding [mutation and WOF batch](docs/PERFORMANCE.md#mutation-planning-and-cross-node-wof)
 adds bounded region/MFT lookup indexes, wordwise cluster retirement and MFT
 first-fit, and WOF table-proof reuse across closing/reopening nodes in one
 immutable volume. Complete preparation of a 1-MiB growing write improves
@@ -73,6 +73,16 @@ immutable volume. Complete preparation of a 1-MiB growing write improves
 near parity. Fresh-node WOF reopening improves 27.62×/20.32×. All 209 sanitized
 suites, 45 exact whole images, 308 strict objects and six portable/GPR checks
 pass. There is no FSKit/app/VM stage; installed build 19 remains unchanged.
+
+The latest [paged bitmap batch](docs/PERFORMANCE.md#paged-mutation-bitmaps) retains
+before/after snapshots only for modified pages of large volume/MFT bitmaps.
+Complete metadata preparation on the 2-MiB bitmap with early free space improves
+5.07–7.14× across userspace/GPR host contexts, with peak core allocation falling
+from roughly 4.3 MiB to 0.27–0.38 MiB. A 1-MiB growing write improves
+1.52×/1.60×. Near-full scans retain the byte count but increase read callbacks;
+the performance contract records that tradeoff. All 211 sanitized suites,
+45 exact whole images, 312 strict objects and six portable/GPR checks pass.
+No FSKit/app/VM stage runs; these are preparation and compilation results.
 
 The separate growth recovery matrix now passes all 264 actual current-C states:
 181 MFT-extension and 83 large-index states, each with full validation and a

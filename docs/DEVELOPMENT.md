@@ -45,6 +45,24 @@ are retained for both versions. `--case grow-write` selects the 1-MiB payload
 case; case selection also applies to preparation. These measurements do not
 include journal reservation, durable transfer, fsync or a mounted adapter.
 
+To freeze a large bitmap workload, generate the virtual prefixes and select one:
+
+```sh
+python3 tests/bitmap_page_fixtures.py .build/bitmap-page-fixtures --source .build/write-mutation-cases/source.img
+python3 scripts/benchmark_mutation.py prepare --reference HEAD --output artifacts/bitmap-next --fixture .build/bitmap-page-fixtures/early.img --case create --case grow --case shrink --case unlink --case grow-write
+python3 scripts/benchmark_mutation.py compare --output artifacts/bitmap-next --comparison candidate --repetitions 9
+```
+
+The other prefixes are `late`, `boundary`, `mft-paged` and `mft-grow`. They exercise
+large logical volumes without allocating the whole image. The harness derives
+virtual size from the boot fields, returns zero for unstored data, and retains
+out-of-prefix seed regions separately. These synthetic occupancy maps are not
+native-volume qualification. `bitmap-pages` and `bitmap-page-plans` run with the
+ordinary C regression; the latter checks 25 complete preparations under explicit
+core allocation ceilings. `--fixture` affects preparation only; comparison uses
+the frozen bytes and harness. Retain the short samples when using longer runs
+to resolve scheduling noise, and keep each run within existing operation budgets.
+
 The regular C regression includes independent allocation/endian tests, mutation
 lookup/overlay/failure limits, WOF eviction/cold/warm failures and journal
 packet/read/growth oracles. Whole-image comparisons

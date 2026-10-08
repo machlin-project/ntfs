@@ -722,14 +722,6 @@ ntfs_write_mutation_plan_region(const struct ntfs_write_mutation_plan *plan, siz
 	return NTFS_OK;
 }
 
-static void
-mutation_close_bitmap(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_bitmap *bitmap)
-{
-	ntfs_stream_close(bitmap->stream);
-	ntfs_mutation_release(plan, bitmap->before, bitmap->bytes);
-	ntfs_mutation_release(plan, bitmap->after, bitmap->bytes);
-}
-
 void
 ntfs_write_mutation_plan_close(struct ntfs_write_mutation_plan *plan)
 {
@@ -744,8 +736,8 @@ ntfs_write_mutation_plan_close(struct ntfs_write_mutation_plan *plan)
 		ntfs_operation_leave(plan->volume);
 		plan->operation_active = false;
 	}
-	mutation_close_bitmap(plan, &plan->allocation);
-	mutation_close_bitmap(plan, &plan->mft_bitmap);
+	ntfs_mutation_bitmap_close(plan, &plan->allocation);
+	ntfs_mutation_bitmap_close(plan, &plan->mft_bitmap);
 	if (plan->mft != NULL && plan->volume != NULL && plan->mft != plan->volume->mft) {
 		ntfs_stream_close(plan->mft);
 	}

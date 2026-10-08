@@ -1,5 +1,17 @@
 # Handoff to Sol
 
+The subsequent CPU optimization batch is complete locally: 204 fatal-sanitizer
+C suites, 45 unchanged whole images, 64 host FSKit PASS/13 runtime SKIPs, four
+portable/GPR memory-codec checks, and 308 strict objects across 77 core files.
+All kernel arm64e/x86_64 objects avoid SIMD/FP registers and meet the 2-KiB frame
+ceiling. The new universal Release app is unsigned and uninstalled; installed
+build 19 remains the accepted mounted/Windows baseline. No VM or kernel load
+was needed, and VM ownership remains main idle. See the
+[CPU acceptance](ACCEPTANCE.md#cpu-primitives-and-decoder-acceleration) and
+[measured scope](PERFORMANCE.md#cpu-primitives-and-compression) before making
+native performance claims. Compression encoders, EFS and a kernel adapter remain
+separate feature work.
+
 The requested driver refactoring is complete. Main accepts the whole-source
 equivalence review and one complete local/native boundary: 202 fatal-sanitizer
 C suites, 45 byte-identical images, 152 strict dual-architecture objects,

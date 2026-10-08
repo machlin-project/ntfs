@@ -1,5 +1,96 @@
 # Performance contracts
 
+## CPU primitives and compression
+
+This completed implementation batch follows the separation already used by
+Machlin ext4: portable algorithms, acceleration selected for the execution
+context, independent byte oracles and measurements against a frozen Git baseline.
+It does not add a kernel filesystem adapter or a new encoded-content write family.
+
+The audit found these actual opportunities:
+
+| Area | Current NTFS work | Decision |
+| --- | --- | --- |
+| CRC/SHA | No CRC or SHA implementation/call path in this core. USA fixups compare sector markers; `$Secure` uses a rotate/add DWORD hash. | ext4's CRC32C/SHA acceleration cannot replace these different format operations. No unused checksum backend is added. |
+| Encryption | EFS content is explicitly unsupported; there is no production cipher/key provider to accelerate. | Retain classification/refusal. Future EFS requires its own format, key-lifetime and native-provider contract before AES optimization. |
+| LZNT1, XPRESS-Huffman, WOF LZX | Each expands backward matches byte by byte. | Share checked match expansion, widening short repeating prefixes before wide copies. |
+| LZX CALL translation | Scans every decoded byte for opcode `0xE8`. | Search complete bounded blocks, retaining exact first-opcode order, operand skipping and the excluded final ten bytes. |
+| Copy, zero, equality | Used throughout record/recovery validation and stream buffering. | Preserve compiler-vectorized userspace copies; use wide GPR operations for kernel copies, NEON equality/search, and checked large-range DC ZVA. |
+| `$Secure` hash and Huffman parsing | Serial format-dependent operations remain. | No separate speedup is claimed. Literal-heavy codec controls are retained in the benchmark. |
+
+[memory.c](../core/memory.c) owns the primitives. Wide accesses consume only
+complete spans and impose no caller alignment requirement. Copy retains forward
+byte-loop overlap semantics. A backward match requires an already validated
+nonzero distance and output span; small periods first grow through disjoint
+prefix copies. No wide load reads not-yet-produced bytes. The three decoders keep
+their framing, match bounds, error results, caller workspaces and publication rules.
+Equality is ordinary metadata comparison, not constant-time authentication.
+
+ARM64 userspace uses NEON for equality, byte search and sufficiently long matches.
+Ordinary copy and small zero loops retain Clang's own vectorization, which measured
+better than the initial explicit 16-byte loops. `KERNEL`, `_KERNEL`, `__KERNEL__`
+and `NTFS_NO_SIMD` exclude explicit NEON. A kernel toolchain must also disable
+automatic SIMD/FP generation; the checked Clang profile uses `-mkernel` and
+`-mgeneral-regs-only`. Other targets use bounded word/byte operations.
+`NTFS_MEMORY_PORTABLE` selects byte primitives and excludes both explicit NEON
+and DC ZVA; compiler vectorization remains a toolchain decision.
+
+ARM64 zeroing queries `DCZID_EL0` on each admitted large range and checks the
+prohibition bit and reported block size. Only naturally aligned, completely
+contained normal-RAM blocks use `DC ZVA`; edges use stores. The measured thresholds
+are 16 KiB for userspace and 256 bytes for the GPR profile. The core never receives
+device-register mappings. No mutable feature cache, new allocation, platform
+callback or SIMD-context ownership is introduced.
+
+The GPR kernel compilation also exposed a pre-existing 2,096-byte checkpoint
+capture frame. Keeping packet acquisition in its own non-inlined helper preserves
+its bounded scratch frame without altering checkpoint data, admission, I/O order,
+accounting, errors or publication. Both kernel architectures now meet the 2-KiB
+per-function ceiling; this is not a bound on a complete nested call chain.
+
+### Matched CPU measurements
+
+On the current Apple Silicon host with selected Xcode Clang `-O2`, each of the
+52 comparisons has nine alternating before/after pairs. Both versions use the
+same frozen harness and independent packet/expected-byte files. Untimed pilots
+choose identical operation counts targeting approximately 20 ms for the faster
+sample. Output validation is outside the timed loop; every run also checks exact
+bytes and a retained checksum. Inputs and outputs deliberately have a three-byte
+misalignment. Reports retain actual compiler identity, commands and raw samples.
+
+| Complete operation/profile | Userspace median ratio | GPR-only median ratio |
+| --- | ---: | ---: |
+| LZNT1, four repeated-pattern 4-KiB chunks | 2.03–6.24× | 1.30–31.81× |
+| XPRESS, five repeated-pattern 4-KiB chunks | 1.21–2.48× | 1.09–3.59× |
+| LZX, uniform unit and three raw/CALL profiles | 3.35–7.97× | 2.73–6.21× |
+| Equal 4/64-KiB metadata buffers | 16.96–20.56× | 10.58–11.71× |
+| Zero 64-KiB buffer | 2.19× | 9.56× |
+| Copy 4/64-KiB buffers | 1.01–1.11× | 3.65–4.02× |
+
+Ratios above one mean faster. The literal-heavy LZNT1/XPRESS/LZX controls range
+0.97–1.03× in userspace and 0.98–1.03× in the GPR profile. The 64-byte userspace
+zero control regresses from 4.71 to 5.09 ns per benchmark operation (0.925×);
+the extra large-range decision is retained for the measured large-buffer benefit.
+These timings include loop/dispatch overhead. The original manual-copy/small-zero
+regressions remain recorded and motivated the final implementation.
+
+Individual ratios, especially very compressible LZNT1, vary substantially with
+host scheduling; the table describes these medians, not guaranteed rates or a
+confidence interval. These are CPU microbenchmarks of complete decodes and memory
+operations, not filesystem throughput, mounted FSKit performance, physical-device
+I/O or actual kernel execution. GPR-only measurements execute as host processes.
+No compression encoder, EFS decryption, CRC support or new kernel adapter is implied.
+
+Evidence: `artifacts/cpu-optimization-sdk-20261008/comparison-tuned/result.json`;
+the first candidate remains in `comparison/`. The 46 independent packets at all
+32 alignments, exact allocation ends, byte-loop overlap oracles and protected
+page ends cover the default, portable and GPR implementations. The complete
+compiler/disassembly matrix is in `artifacts/cpu-boundaries-complete-20261008/`:
+308 objects across 77 core files, userspace arm64/x86_64 and kernel arm64e/x86_64.
+All 154 kernel objects are checked for SIMD/FP registers, and every context's
+memory object has no unresolved runtime dependency. Full integration results
+are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md).
+
 ## Selected journal interval costs and optimization plan
 
 The bounded selected-record walker keeps index preparation and record traversal as

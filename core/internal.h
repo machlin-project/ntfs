@@ -135,9 +135,15 @@ uint64_t ntfs_u64(const void *);
 void ntfs_put_u16(void *, uint16_t);
 void ntfs_put_u32(void *, uint32_t);
 void ntfs_put_u64(void *, uint64_t);
+/* Normal RAM spans only. Copy preserves forward byte-loop overlap semantics;
+ * equality is a metadata comparison, not a constant-time authentication API. */
 void ntfs_copy(void *, const void *, size_t);
 void ntfs_zero(void *, size_t);
 bool ntfs_equal(const void *, const void *, size_t);
+/* First matching byte, or the supplied size. No read beyond the span. */
+size_t ntfs_find_byte(const void *, size_t, uint8_t);
+/* Checked nonzero backward distance and writable length in one output object. */
+void ntfs_lz_copy(uint8_t *, size_t, size_t);
 bool ntfs_bounds(uint64_t, uint64_t, uint64_t);
 void *ntfs_alloc(struct ntfs_volume *, size_t);
 /* Optional retention may be omitted without exhausting a call. */

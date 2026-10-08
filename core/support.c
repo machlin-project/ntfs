@@ -56,43 +56,6 @@ ntfs_put_u64(void *output, uint64_t value)
 	    bytes + sizeof(uint32_t), (uint32_t)(value >> (sizeof(uint32_t) * NTFS_BITS_PER_BYTE)));
 }
 
-void
-ntfs_copy(void *destination, const void *source, size_t bytes)
-{
-	uint8_t *destination_bytes = destination;
-	const uint8_t *source_bytes = source;
-	size_t i;
-
-	for (i = 0; i < bytes; i++) {
-		destination_bytes[i] = source_bytes[i];
-	}
-}
-
-void
-ntfs_zero(void *destination, size_t bytes)
-{
-	uint8_t *destination_bytes = destination;
-	size_t i;
-
-	for (i = 0; i < bytes; i++) {
-		destination_bytes[i] = 0;
-	}
-}
-
-bool
-ntfs_equal(const void *left, const void *right, size_t bytes)
-{
-	const uint8_t *left_bytes = left, *right_bytes = right;
-	size_t i;
-
-	for (i = 0; i < bytes; i++) {
-		if (left_bytes[i] != right_bytes[i]) {
-			return false;
-		}
-	}
-	return true;
-}
-
 bool
 ntfs_bounds(uint64_t offset, uint64_t length, uint64_t size)
 {

@@ -1,5 +1,51 @@
 # Acceptance
 
+## CPU primitives and decoder acceleration
+
+The current connected CPU batch is complete. A private memory component owns
+bounded forward-overlap copying, zeroing, equality, byte search and backward-match
+expansion. LZNT1, XPRESS-Huffman and WOF LZX retain all existing framing/match checks,
+workspaces, error results and output publication. LZX CALL translation retains
+first-opcode/operand order and its excluded tail. Userspace NEON and kernel GPR
+paths are selected at compilation; normal-RAM DC ZVA checks permissions, block
+geometry and full-span containment. CRC/SHA and EFS are not implemented by this
+batch. See the [audit and measurements](PERFORMANCE.md#cpu-primitives-and-compression).
+
+The complete regression passes **204 C suites**, zero failures and zero C SKIPs,
+with assertions and fatal ASan/UBSan. All **45 whole images** match the frozen
+pre-optimization evidence. New byte-loop/canary/protected-page oracles and
+46 independent codec packets at 32 alignments pass with default, portable and
+GPR-only primitives. Existing malformed-packet, fuzz, operation-budget, mutation
+and interrupted-recovery suites remain part of the full regression.
+
+All **308 strict objects** pass: 77 core files in userspace arm64/x86_64 and kernel
+arm64e/x86_64, with 2-KiB per-function frames. Every kernel object's disassembly
+is checked for SIMD/FP registers, and the memory object in each context has no
+undefined runtime symbol. The baseline's 2,096-byte kernel checkpoint frame is
+independently reproduced and corrected by retaining the packet helper boundary.
+The continuation reuses 164 unaffected passing objects and the four completed
+fallback tests; only changed or unexecuted compiler checks run afterward.
+
+Host FSKit passes **64 groups with 13 explicit runtime SKIPs**. The unsigned
+universal Release app, both extension copies and all 77 core archive members are
+verified. The app is not installed; signed build 19 retains its prior mounted and
+Windows acceptance. No VM, mounted mutation, new Windows candidate or kernel
+load occurs in this CPU batch. Kernel object compilation and a GPR executable
+running in userspace do not establish native kernel execution.
+
+The retained 52-profile paired benchmark compares nine alternating pairs per
+profile. Most repeated-pattern decode profiles improve substantially; literal-heavy
+controls remain near parity. The final 64-byte userspace zero control costs an
+additional 0.38 ns per measured operation. Initial slower manual copy/zero paths
+are removed or retuned, with their unfavorable measurements retained. Absolute
+rates and ratios are host microbenchmarks, not mounted-filesystem claims.
+
+Evidence is in `artifacts/cpu-optimization-sdk-20261008/`,
+`artifacts/cpu-focused-tuned-20261008/`, `artifacts/cpu-boundaries-complete-20261008/`
+and `artifacts/cpu-regression-20261008/`. The first launcher/SDK setup failures,
+initial timing regressions and original kernel frame refusal remain preserved.
+None is relabeled as a successful acceptance stage.
+
 ## Completed driver refactoring
 
 The agreed structural/style scope is complete across the C reader/writer,

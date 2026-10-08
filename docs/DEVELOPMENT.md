@@ -16,6 +16,38 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+## CPU optimization checks
+
+`cpu-memory` and `cpu-codecs` are part of the regular sanitized Meson suite.
+They use byte/period oracles, 46 independently authored packets, all 32 small
+alignments, exact allocation ends and protected pages. The broader existing
+malformed/fault tests continue to own decoder and filesystem refusals.
+
+The explicit compiler-context check also runs portable and GPR-only memory/codec
+tests, then builds every core source for userspace arm64/x86_64 and kernel
+arm64e/x86_64. It enforces 2-KiB frames, inspects kernel disassembly for SIMD/FP
+registers and verifies that the memory component has no runtime dependencies:
+
+```sh
+python3 scripts/check_cpu.py --output artifacts/cpu-check-next --fixtures .build/cpu-fixtures
+```
+
+Prepare the matched Release benchmark **before** changing core sources. It
+exports the chosen Git revision and freezes the benchmark harness and independent
+fixtures. Compare after implementation, retaining each candidate under a distinct
+comparison name:
+
+```sh
+python3 scripts/benchmark_cpu.py prepare --reference HEAD --output artifacts/cpu-next
+python3 scripts/benchmark_cpu.py compare --output artifacts/cpu-next --comparison candidate --repetitions 9
+```
+
+The same frozen reference/harness/inputs serve subsequent candidates; the script
+refuses to overwrite a completed comparison. Keep other builds/tests serialized
+while timing. `ntfs-cpu-benchmark` can also measure one explicit codec or memory
+case; its assertions must remain enabled. CPU gains do not qualify native mount
+throughput. See [the measured scope](PERFORMANCE.md#cpu-primitives-and-compression).
+
 ## Completed driver refactoring
 
 The final connected batch closes the audit of all 76 core C files, 14 native

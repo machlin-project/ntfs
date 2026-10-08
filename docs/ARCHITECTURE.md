@@ -17,6 +17,17 @@ required header tail. Both header layouts have complete synthetic image tests.
 The environment supplies allocation, deallocation and bounded exact reads.
 It has no write method. Media must remain immutable for an entire mounted owner.
 
+The private [memory component](../core/memory.c) owns forward-overlap copies,
+zeroing, equality, bounded byte search and checked backward-match expansion.
+ARM64 userspace uses NEON only where measured; kernel/GPR builds exclude explicit
+SIMD and compile with native register restrictions. DC ZVA zeroes only permitted,
+fully contained aligned blocks of normal RAM after querying the current block
+size. Portable fallbacks preserve alignment, exact bounds and byte semantics.
+No native owner, allocation or format-specific authority enters this component.
+[PERFORMANCE.md](PERFORMANCE.md#cpu-primitives-and-compression) describes selection,
+thresholds, verification and measured limits. Kernel object compilation is
+separate from a kernel adapter, loading or mounted acceptance.
+
 Read-only streams have three private implementation components. `stream.c` owns
 ordinary attribute-derived construction and final release. `stream_mapping.c`
 owns mapping-pair assembly, run lookup and the distinct metadata-only `$Bad`
@@ -351,6 +362,11 @@ precede publication. There is no global file-data cache or speculative read-ahea
 Direct LZNT1 decoding distinguishes
 insufficient output capacity from corrupt input. A decoded unit exceeding its
 on-disk unit size is corrupt at the stream boundary.
+All three codecs expand already-validated backward matches through the shared
+memory primitive. Short distances build a valid wider repeated prefix before
+wide copies; decoder workspace sizes, stream credits and publication stay the
+same. LZX searches for the next CALL opcode in bounded blocks, then applies the
+existing operand conversion and skips its four operand bytes in order.
 
 A live node caches standard-information metadata and the checked reparse-presence
 result only after that complete operation succeeds. The cache has no separate

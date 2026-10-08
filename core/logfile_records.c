@@ -209,7 +209,9 @@ ntfs_logfile_read_indexed_record(struct ntfs_logfile *source, uint64_t requested
 	    source, requested_lsn, bytes, capacity, out, &work, &route, NULL);
 }
 
-static enum ntfs_result
+/* Keep packet acquisition scratch separate from the complete checkpoint
+ * snapshot: inlining it exceeds the 2-KiB general-register-only kernel frame. */
+static __attribute__((noinline)) enum ntfs_result
 ntfs_logfile_capture_packet(struct ntfs_logfile *source, uint64_t lsn, uint8_t *workspace,
     size_t capacity, struct ntfs_logfile_span *span, struct ntfs_logfile_report *work,
     const struct ntfs_logfile_checkpoint_capture_limits *limits,

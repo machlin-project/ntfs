@@ -7,7 +7,7 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 	const uint8_t *source_bytes = input;
 	uint8_t *destination_bytes = output;
 	size_t input_offset = 0, output_offset = 0, end, base, chunk, displacement, length,
-	       position, i;
+	       position;
 	uint16_t header, token, mask;
 	unsigned bit, shift;
 	uint8_t flags;
@@ -85,12 +85,9 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 						if (length > capacity - output_offset) {
 							return NTFS_RANGE;
 						}
-						for (i = 0; i < length; i++) {
-							destination_bytes[output_offset] =
-							    destination_bytes[output_offset -
-								displacement];
-							output_offset++;
-						}
+						ntfs_lz_copy(destination_bytes + output_offset,
+						    displacement, length);
+						output_offset += length;
 					}
 				}
 			}

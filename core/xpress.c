@@ -182,7 +182,7 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 	uint8_t *dst = output;
 	struct ntfs_xpress_workspace *tree = workspace;
 	struct ntfs_xpress_reader reader;
-	size_t position = 0, i;
+	size_t position = 0;
 	uint32_t distance, low, length;
 	unsigned symbol, distance_bits;
 	enum ntfs_result result;
@@ -239,10 +239,8 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 		if (distance > position || length > expected - position) {
 			return NTFS_CORRUPT;
 		}
-		for (i = 0; i < length; i++) {
-			dst[position] = dst[position - distance];
-			position++;
-		}
+		ntfs_lz_copy(dst + position, distance, length);
+		position += length;
 	}
 	/* An EOF symbol is optional if the final words have already been consumed.
 	 * Otherwise one EOF must exhaust the input. Lookahead/padding bits are not

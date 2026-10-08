@@ -8,6 +8,18 @@ and independent tests. Consulted NTFS-3G layout comments remain attributed below
 the reference does not claim source-isolated clean-room work. Mermaid is used
 only as a diagram-rendering tool, not as a filesystem implementation dependency.
 
+The CPU optimization work compares this implementation with the same owner's
+Machlin ext4 memory, CRC and SHA design. It reuses the checked DCZID/DC ZVA
+strategy for normal RAM, while preserving NTFS-specific compression and metadata
+contracts. CRC32C, SHA and AES implementations are not imported into NTFS.
+NEON feature selection and intrinsic semantics follow the primary
+[Arm C Language Extensions](https://arm-software.github.io/acle/main/acle.html)
+and [Arm Neon Intrinsics Reference](https://arm-software.github.io/acle/neon_intrinsics/advsimd.html).
+The common match-expansion helper, bounded byte search and measurement/boundary
+tests are original repository work; the existing independent LZNT1/XPRESS/LZX
+format authors remain their packet sources. No external filesystem or codec
+implementation is linked into the driver by this batch.
+
 The general mutation owner, preallocated FSKit replies, held-descendant path
 publication and mounted syscall scenario are original repository work. The
 generic-rights/creator inheritance correction follows Microsoft's

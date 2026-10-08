@@ -44,6 +44,7 @@ owner; a private component does not introduce a second allocator or governor.
 
 | Responsibility | Owning components and preserved boundary |
 | --- | --- |
+| Byte primitives and format decoding | [memory.c](../core/memory.c) (added by the subsequent CPU optimization batch) owns bounded copies, zeroing, comparisons and LZ expansion; [support.c](../core/support.c) retains wire integers, allocator/I/O helpers and diagnostics. Execution-context selection stays outside filesystem admission. |
 | Admission and immutable metadata | [api.c](../core/api.c), [mount.c](../core/mount.c), [record.c](../core/record.c), [attribute.c](../core/attribute.c), [node.c](../core/node.c), [catalog.c](../core/catalog.c): public admission, complete reachable-prefix bootstrap, sequence/instance checks and borrowed attribute lifetime. |
 | Stream content | [stream.c](../core/stream.c), [stream_mapping.c](../core/stream_mapping.c), [stream_read.c](../core/stream_read.c), [wof_stream.c](../core/wof_stream.c): construction/release, mapping pairs, run lookup, sparse/VDL reads and provider-owned decoding/cache lifetime. |
 | Names, indexes and links | [directory.c](../core/directory.c), [index.c](../core/index.c), [links.c](../core/links.c), [reparse.c](../core/reparse.c), [unicode.c](../core/unicode.c): persistent filename cursors, physical allocation inventory, original link provenance and Unicode collation. |

@@ -14,6 +14,8 @@ diagrams, field maps, examples and a research register.
   ownership conventions and complete local/native regression evidence.
 - [Current VM handoff](HANDOFF-SOL.md): execution paths and operating constraints.
 - [Provenance](PROVENANCE.md): sources, consulted layouts and dependency attribution.
+- [CPU optimizations](PERFORMANCE.md#cpu-primitives-and-compression): compression,
+  memory operations, userspace/kernel selection and measured tradeoffs.
 
 ## Detailed contracts
 

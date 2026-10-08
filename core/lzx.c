@@ -356,9 +356,12 @@ lzx_inverse_calls(uint8_t *output, size_t size)
 		return;
 	}
 	while (index < size - NTFS_LZX_E8_TAIL_BYTES) {
-		if (output[index++] != NTFS_LZX_E8_OPCODE) {
-			continue;
+		index += ntfs_find_byte(
+		    output + index, size - NTFS_LZX_E8_TAIL_BYTES - index, NTFS_LZX_E8_OPCODE);
+		if (index == size - NTFS_LZX_E8_TAIL_BYTES) {
+			break;
 		}
+		index++;
 		word = ntfs_u32(output + index);
 		value = word;
 		if (word > INT32_MAX) {
@@ -471,10 +474,8 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 			if (distance == 0 || distance > position || length > limit - position) {
 				return NTFS_CORRUPT;
 			}
-			for (index = 0; index < length; index++) {
-				bytes[position] = bytes[position - distance];
-				position++;
-			}
+			ntfs_lz_copy(bytes + position, distance, length);
+			position += length;
 		}
 	}
 	/* A producer may reserve one zero lookahead word after the final word.

@@ -12,6 +12,7 @@ import tempfile
 from environment import sanitizer_environment
 from fuzz_seeds import generate, journal_volume_images
 from directory_fuzz_seeds import generate as generate_directory
+from usn_fuzz_seeds import generate as generate_usn
 
 DEFAULT_SECONDS = 60
 MAX_SECONDS = 3600
@@ -33,7 +34,7 @@ SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
 ENCODER_INPUT_BYTES = 16 * 4096
 LOGFILE_INPUT_BYTES = 2 * 1024 * 1024
-TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'directory-mutation', 'lznt1', 'lznt1-encode', 'reparse', 'security', 'access', 'wof', 'logfile')
+TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'directory-mutation', 'lznt1', 'lznt1-encode', 'reparse', 'security', 'access', 'wof', 'logfile', 'usn')
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -69,7 +70,7 @@ try:
         maximum = MAX_INPUT_BYTES if target in ('image', 'validation') else STRUCTURE_INPUT_BYTES
         if target in ('security', 'access'):
             maximum = SECURITY_INPUT_BYTES
-        if target == 'wof':
+        if target in ('wof', 'usn'):
             maximum = COMPRESSION_INPUT_BYTES
         if target == 'lznt1-encode':
             maximum = ENCODER_INPUT_BYTES
@@ -101,6 +102,10 @@ try:
         elif target == 'directory-mutation':
             paths = generate_directory(seeds / target)
             sources = [root / 'tests/fuzz_directory.c']
+            flags = []
+        elif target == 'usn':
+            paths = generate_usn(seeds)
+            sources = [root / 'tests/fuzz_usn.c']
             flags = []
         elif target == 'lznt1-encode':
             seeds.mkdir()

@@ -9,29 +9,20 @@ import argparse
 import io
 import json
 from pathlib import Path
-import platform
 import statistics
 import subprocess
 import sys
 import tarfile
 
-from environment import sanitizer_environment, tool_environment
+from environment import sanitizer_environment
+from benchmark_toolchain import (command, PROFILES, select, sdk_flags, host_flags,
+                                 section_flags, linker_flags, identity, matching,
+                                 validate_comparison, retained_hashes, verify_hashes)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 from cpu_fixtures import author
 from huffman_fixtures import author as author_huffman
-
-PROFILES = {'userspace': [], 'general-registers': ['-DKERNEL', '-mgeneral-regs-only']}
-
-
-def command(argv, output, name, env):
-    result = subprocess.run(list(map(str, argv)), cwd=ROOT, env=env, capture_output=True)
-    (output / f'{name}.stdout').write_bytes(result.stdout)
-    (output / f'{name}.stderr').write_bytes(result.stderr)
-    if result.returncode:
-        raise RuntimeError(f'{name} exited {result.returncode}; see retained stderr')
-    return result.stdout.decode()
 
 
 def build(source, output, harness, flags, label, clang, env):
@@ -39,11 +30,10 @@ def build(source, output, harness, flags, label, clang, env):
     if (source / 'core/memory.c').exists():
         sources.append(source / 'core/memory.c')
     target = output / label
-    sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], env=env, text=True).strip()
-    argv = [clang, '-isysroot', sdk, '-std=c11', '-O2', '-g', '-UNDEBUG', '-ffreestanding', '-fno-builtin',
+    argv = [clang, *sdk_flags(env), *host_flags(), *section_flags(), '-std=c11', '-O2', '-g', '-UNDEBUG', '-ffreestanding', '-fno-builtin',
             '-Wall', '-Wextra', '-Werror', '-Wdeclaration-after-statement',
             '-I', source / 'include', '-I', source / 'core', *flags, *sources,
-            harness, '-Wl,-dead_strip', '-o', target]
+            harness, *linker_flags(), '-o', target]
     command(argv, output, f'{label}-build', env)
     return target, list(map(str, argv))
 
@@ -53,6 +43,7 @@ def main():
     parser.add_argument('stage', choices=('prepare', 'compare'))
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--reference', default='HEAD')
+    parser.add_argument('--compiler', help='Explicit compiler executable; defaults to selected Xcode or cc')
     parser.add_argument('--repetitions', type=int, default=9)
     parser.add_argument('--sample-ms', type=int, default=20,
                         help='Minimum pilot-calibrated sample duration; increase for noisy controls')
@@ -60,19 +51,20 @@ def main():
     parser.add_argument('--case', action='append', default=[],
                         help='Measure only this named workload (repeatable); default: all')
     args = parser.parse_args()
-    assert 10 <= args.sample_ms <= 1000
+    if not 10 <= args.sample_ms <= 1000:
+        parser.error('--sample-ms must be from 10 to 1000')
+    validate_comparison(args.comparison, args.repetitions)
     output = args.output.resolve()
-    env = tool_environment()
-    clang = subprocess.check_output(['xcrun', '--find', 'clang'], env=env, text=True).strip()
-    compiler = subprocess.check_output([clang, '--version'], env=env, text=True)
-    if platform.system() != 'Darwin' or platform.machine() != 'arm64':
-        parser.error('This paired instruction experiment targets macOS arm64')
+    env = select(args.compiler)
+    clang = env['CC']
+    toolchain = identity(env)
+    compiler = toolchain['compiler_version']
     if args.stage == 'prepare':
         output.mkdir(parents=True, exist_ok=False)
         revision = subprocess.check_output(['git', 'rev-parse', args.reference], cwd=ROOT,
-                                           env=env, text=True).strip()
+                                           env=env, text=True, timeout=15).strip()
         archive = subprocess.check_output(['git', 'archive', revision, 'core', 'include'],
-                                         cwd=ROOT, env=env)
+                                         cwd=ROOT, env=env, timeout=30)
         source = output / 'reference'
         source.mkdir()
         with tarfile.open(fileobj=io.BytesIO(archive)) as package:
@@ -94,15 +86,19 @@ def main():
         binary, _ = build(source, output, ROOT / 'tests/huffman.c',
                           ['-fsanitize=address,undefined'], 'before-huffman', clang, env)
         command([binary, boundary_fixtures], output, 'before-huffman-check', sanitizer_environment())
-        report = dict(reference=revision, compiler=compiler, machine=platform.machine(),
+        hashes = retained_hashes(output, [harness, *fixtures.iterdir(),
+                                          *boundary_fixtures.iterdir(),
+                                          *(output / f'before-{name}' for name in PROFILES)])
+        report = dict(reference=revision, compiler=compiler, toolchain=toolchain, hashes=hashes,
                       profiles=profiles, buildCommands=commands, prepared=True)
         (output / 'prepared.json').write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(dict(prepared=True, codecProfiles=len(profiles), output=str(output))))
         return
     prepared = json.loads((output / 'prepared.json').read_text())
-    assert prepared['prepared'] and compiler == prepared['compiler']
-    assert args.repetitions >= 5
-    assert Path(args.comparison).name == args.comparison and args.comparison not in ('.', '..')
+    if not prepared.get('prepared'):
+        raise ValueError('Reference preparation is incomplete')
+    matching(prepared, toolchain)
+    verify_hashes(output, prepared['hashes'])
     current = output / args.comparison
     current.mkdir(exist_ok=False)
     commands, binaries = {}, {}
@@ -146,7 +142,8 @@ def main():
             results.append(dict(context=context, name=name, bytes=rows[0][0]['bytes'],
                                 iterations=iterations, medianNs=medians,
                                 speedup=medians[0] / medians[1], samples=rows))
-    report = dict(complete=True, reference=prepared['reference'], compiler=compiler,
+    verify_hashes(output, prepared['hashes'])
+    report = dict(complete=True, reference=prepared['reference'], compiler=compiler, toolchain=toolchain,
                   repetitions=args.repetitions, sampleMilliseconds=args.sample_ms, selectedCases=args.case,
                   buildCommands=commands, results=results)
     (current / 'result.json').write_text(json.dumps(report, indent=2) + '\n')

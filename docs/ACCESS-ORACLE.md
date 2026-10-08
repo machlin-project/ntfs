@@ -103,6 +103,13 @@ input. This qualifies only this matrix. Synthetic provenance keeps it false.
 `full_authorization_qualified` remains false. Provenance metadata states how the
 capture was acquired; it is not a cryptographic attestation of an external run.
 
+Hosted CI may select `--require-native-dacl`. This requires complete native
+acquisition and supported DACL agreement while allowing only the explicitly
+declared unsupported probes and mandatory-plane boundaries. It retains the
+original `gaps` report, rejects every API/comparison error and cannot pass a
+synthetic capture. See [fresh cloud execution](WINDOWS-CLOUD.md) for the exact
+commands, scratch-VHD guards and independent native input continuation.
+
 ## Bounds and transport
 
 SDK information is capped at 1 MiB. SID packets preserve their six-byte authority

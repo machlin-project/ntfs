@@ -68,6 +68,32 @@ Implementation: [write_namespace.c](../../core/write_namespace.c),
 Tests: [write_mutation_owner.c](../../tests/write_mutation_owner.c) and
 [fskit_image_volume.m](../../tests/fskit_image_volume.m).
 
+### Later SI storage preparation
+
+The private `NTFS_WRITE_SET_TIMES` request selects exact `created`, `modified`,
+`changed` and `accessed` values in the existing resident SI. A separate mask
+distinguishes an omitted field from the valid zero/1601-epoch value. The current
+signed FILETIME ceiling and ordinary base-record admission still apply. The
+planner preserves all other SI bytes, every FILE_NAME copy, directory index,
+stream, security attribute and allocation byte. This is an explicit storage
+contract, not a claim about Windows later-setter cache behavior.
+
+Microsoft's [FILE_BASIC_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_file_basic_information)
+defines absolute timestamp units and separate zero/-1/-2 API/handle behavior.
+Those API sentinels are not raw disk timestamps. Published public SI/FN devnotes
+leave the timestamp/cache fields reserved; they do not settle cache refresh,
+automatic ChangeTime/archive changes or delayed handle updates. The general
+execution owner therefore refuses this private operation before allocation/I/O.
+
+[write_mutation.c](../../core/write_mutation.c) prepares the owned FILE;
+[write_times_fixtures.py](../../tests/write_times_fixtures.py) independently authors
+all sixteen masks for resident data with ADS, fragmented data and a directory.
+[write_times.c](../../tests/write_times.c) checks exact restored FILEs, unchanged
+neighbors/source, private redo/undo lifetime, no-ops, stale identities, selected
+bounds, allocation/read failures and execution refusal. Native cache observations
+and durable later-setter qualification remain separate in the
+[research register](13-research-and-coverage.md).
+
 ## Important type codes
 
 | Type | Name | Role |

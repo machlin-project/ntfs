@@ -85,6 +85,15 @@ refuse until deferred retirement and recovery have an owning contract. Block
 resources, sparse/compressed/named-stream writes, hard-link/symlink creation,
 xattr/ACL mutation and general metadata setters remain outside this route.
 
+The private planner additionally supports exact selected SI timestamp storage
+preparation, with complete FILE regions and generic redo/undo compilation.
+`NTFS_WRITE_SET_TIMES` preserves all filename/index caches and unselected bytes;
+it has no implicit ChangeTime/archive or Windows handle-sentinel semantics.
+The execution owner explicitly returns UNSUPPORTED before allocation or I/O,
+and no CLI/FSKit setter is enabled. Later-setter cache and native recovery
+observations remain required. See the current
+[portable capability and completion map](PORTABLE-FEATURES.md).
+
 ## Ordinary mutation implementation batch
 
 The next implementation unit combines storage allocation, file-size changes,

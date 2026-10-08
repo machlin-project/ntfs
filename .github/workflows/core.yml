@@ -14,6 +14,10 @@ on:
         type: choice
         options: ['60', '300', '900']
         default: '60'
+      benchmark_reference:
+        description: Retained Git revision used for matched Release benchmarks
+        type: string
+        default: '35136fa'
 permissions:
   contents: read
 defaults:
@@ -31,29 +35,67 @@ jobs:
         include:
           - {os: ubuntu-24.04, name: linux-gcc, compiler: gcc}
           - {os: ubuntu-24.04, name: linux-clang, compiler: clang}
+          - {os: ubuntu-24.04-arm, name: linux-arm64-gcc, compiler: gcc}
+          - {os: ubuntu-24.04-arm, name: linux-arm64-clang, compiler: clang}
           - {os: macos-latest, name: macos-xcode, compiler: ''}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ matrix.name == 'linux-clang' && '0' || '1' }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
       - name: Isolated build-tool regressions
-        run: python3 -m unittest discover -s tests -p 'test_environment.py'
+        run: |
+          mkdir -p artifacts/ci
+          python3 -m unittest discover -s tests -p 'test_environment.py' 2>&1 | tee artifacts/ci/environment.log
+          python3 -m unittest discover -s tests -p 'test_reproducible.py' 2>&1 | tee artifacts/ci/reproducibility-contract.log
+          python3 -m unittest discover -s tests -p 'test_benchmark_tools.py' 2>&1 | tee artifacts/ci/benchmark-contract.log
       - name: Build assertions and fatal sanitizers
-        run: python3 scripts/build.py .build --compiler '${{ matrix.compiler }}'
+        run: python3 scripts/build.py .build --compiler '${{ matrix.compiler }}' 2>&1 | tee artifacts/ci/build.log
       - name: Run actual Meson test inventory
-        run: python3 scripts/test.py .build
+        run: python3 scripts/test.py .build 2>&1 | tee artifacts/ci/tests.log
+      - name: Prove empty-stream regression against retained component and current code
+        if: ${{ !cancelled() && matrix.name == 'linux-clang' }}
+        run: python3 scripts/check_empty_stream.py --compiler clang --reference 35136fa055d83928b27f5e7238fa289fb5a9cc0c --output artifacts/empty-stream-regression 2>&1 | tee artifacts/ci/empty-stream-regression.log
       - name: Compile strict freestanding objects
         if: ${{ !cancelled() }}
-        run: python3 scripts/check_core.py --compiler '${{ matrix.compiler }}'
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/check_core.py --compiler '${{ matrix.compiler }}' 2>&1 | tee artifacts/ci/freestanding.log
       - name: Check selected-Xcode formatting
         if: ${{ !cancelled() && runner.os == 'macOS' }}
-        run: python3 scripts/format.py --check
+        run: |
+          mkdir -p artifacts/ci
+          set +e
+          python3 scripts/format.py --check 2>&1 | tee artifacts/ci/format.log
+          status=${PIPESTATUS[0]}
+          printf 'check_exit_code=%s\n' "$status" > artifacts/ci/format-status.log
+          if [ "$status" -ne 0 ]; then
+            # Only a disposable clone receives formatter edits. Later compiler
+            # and reproducibility gates retain the original committed source.
+            original="$GITHUB_WORKSPACE"
+            revision=$(git rev-parse HEAD)
+            if scratch=$(mktemp -d "$RUNNER_TEMP/ntfs-style.XXXXXX") &&
+               git clone --no-hardlinks --no-checkout . "$scratch/repository" > artifacts/ci/format-prepare.log 2>&1 &&
+               git -C "$scratch/repository" checkout --detach "$revision" >> artifacts/ci/format-prepare.log 2>&1; then
+              (
+                cd "$scratch/repository" || exit 1
+                python3 scripts/format.py > "$original/artifacts/ci/format-apply.log" 2>&1
+                printf 'formatter_exit_code=%s\n' "$?" >> "$original/artifacts/ci/format-status.log"
+                git diff --binary --no-ext-diff -- core include adapters tests tools > "$original/artifacts/style.patch"
+              )
+            fi
+          fi
+          exit "$status"
       - name: Compare isolated Release products
         if: ${{ !cancelled() }}
         run: python3 scripts/check_reproducible.py --compiler '${{ matrix.compiler }}' --output artifacts/reproducibility
+      - name: Compare relocated committed Release products
+        if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]'))) }}
+        run: python3 scripts/check_reproducible.py --compiler '${{ matrix.compiler }}' --relocated --output artifacts/reproducibility-relocated
       - name: Retain selected diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -62,6 +104,9 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
+            artifacts/ci/*.log
+            artifacts/style.patch
+            artifacts/empty-stream-regression
             .build/meson-info/intro-compilers.json
             .build/meson-info/intro-tests.json
             .build/meson-logs/testlog.json
@@ -70,6 +115,21 @@ jobs:
             artifacts/reproducibility/report.json
             artifacts/reproducibility/*-setup.log
             artifacts/reproducibility/*-compile.log
+            artifacts/reproducibility-relocated/report.json
+            artifacts/reproducibility-relocated/*-setup.log
+            artifacts/reproducibility-relocated/*-compile.log
+      - name: Retain failing sanitized executables and compiler inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-build-${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            artifacts/ci/*.log
+            .build/compile_commands.json
+            .build/ntfs-*
+            .build/libntfs*.a
   interoperability:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -79,9 +139,16 @@ jobs:
         with:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
-      - run: python3 scripts/build.py .build --compiler clang
-      - run: python3 scripts/bootstrap_test_tools.py
-      - run: python3 tests/interoperability.py
+      - run: |
+          mkdir -p artifacts/ci
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
+      - name: Install official build prerequisites for the explicit pinned Git route
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y autoconf automake libtool pkg-config
+      - name: Build independently pinned external tools (first archive-fetch failure retained)
+        run: python3 scripts/bootstrap_test_tools.py --source git-pinned --compiler clang 2>&1 | tee artifacts/ci/bootstrap.log
+      - run: python3 tests/interoperability.py 2>&1 | tee artifacts/ci/oracle.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -89,9 +156,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
+            artifacts/ci/*.log
+            artifacts/test-tools
             artifacts/interoperability/report.json
             artifacts/interoperability/commands.log
+            artifacts/interoperability/command-*.command.json
+            artifacts/interoperability/*.stderr
+            vendor/ntfs-tools/source-provenance.json
             .build/meson-logs/meson-log.txt
+      - name: Retain original failed external-oracle images and outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-independent-oracle-inputs
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/ci/*.log
+            artifacts/interoperability
+            artifacts/test-tools
   fuzz-plan:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -135,7 +218,9 @@ jobs:
       - name: Replay authored seeds and run bounded exploration
         env:
           SECONDS_PER_TARGET: ${{ inputs.fuzz_seconds || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]') && matrix.target == 'directory-mutation' && '900') || '60' }}
-        run: python3 scripts/fuzz.py --target '${{ matrix.target }}' --compiler clang --seconds "$SECONDS_PER_TARGET" --output artifacts/fuzz
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/fuzz.py --target '${{ matrix.target }}' --compiler clang --seconds "$SECONDS_PER_TARGET" --output artifacts/fuzz 2>&1 | tee artifacts/ci/fuzz-build.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -143,6 +228,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
+            artifacts/ci/*.log
             artifacts/fuzz/report.json
             artifacts/fuzz/run-*/report.json
             artifacts/fuzz/run-*/*/run.log
@@ -151,6 +237,7 @@ jobs:
             artifacts/fuzz/run-*/*/timeout-*
             artifacts/fuzz/run-*/*/oom-*
             artifacts/fuzz/run-*/*/leak-*
+            artifacts/fuzz/run-*/*/ntfs-fuzzer
   directory-stress:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -160,18 +247,23 @@ jobs:
         with:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
-      - run: python3 scripts/build.py .build --compiler clang
+      - run: |
+          mkdir -p artifacts/ci
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
       - name: Independent ordered-key directory stress
         env:
           CASES: ${{ ((github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]'))) && '256' || '16' }}
-        run: python3 scripts/stress_directory.py --cases "$CASES" --seed 20261008 --output artifacts/directory-stress
+        run: python3 scripts/stress_directory.py --cases "$CASES" --seed 20261008 --output artifacts/directory-stress 2>&1 | tee artifacts/ci/stress.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: directory-stress
           if-no-files-found: error
           retention-days: 14
-          path: artifacts/directory-stress
+          path: |
+            artifacts/directory-stress
+            artifacts/ci/*.log
+            .build/ntfs-fuzz-directory-mutation
   macos-components:
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]')) }}
     runs-on: macos-latest
@@ -182,23 +274,71 @@ jobs:
         with:
           python-version: '3.13'
       - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
+      - name: Select an installed Xcode and record exact FSKit coverage
+        id: sdk
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from environment import tool_environment
+          output = Path('artifacts/cloud-macos')
+          output.mkdir(parents=True)
+          environment = tool_environment()
+          default = subprocess.check_output(['xcode-select', '-p'], env=environment, text=True, timeout=15).strip()
+          candidates = [Path(default), *sorted(Path('/Applications').glob('Xcode*.app/Contents/Developer'))]
+          observations = []
+          suitable = []
+          modern = []
+          for developer in dict.fromkeys(candidates):
+              selected = dict(environment, DEVELOPER_DIR=str(developer))
+              result = subprocess.run(['xcrun', '--show-sdk-version'], env=selected, capture_output=True, text=True, timeout=15)
+              version = result.stdout.strip()
+              observation = dict(developer=str(developer), sdk=version, exit_code=result.returncode, error=result.stderr[:4096])
+              observations.append(observation)
+              if result.returncode == 0 and re.fullmatch(r'[0-9]+(?:\.[0-9]+)*', version):
+                  numbers = tuple(map(int, version.split('.')))
+                  if numbers >= (26, 5):
+                      suitable.append((developer == Path(default), numbers, str(developer)))
+                      if numbers[0] >= 27:
+                          modern.append((developer == Path(default), numbers, str(developer)))
+          report = dict(status='available' if modern else 'partial' if suitable else 'unexecuted',
+                        component_minimum_sdk='26.5', modern_minimum_sdk=27,
+                        modern_sdk_available=bool(modern), candidates=observations,
+                        excluded_compilation_scope=[] if modern else ['macOS 27 FSKit protocol APIs and SDK-gated tests'],
+                        runtime_scope='Component logs retain actual runtime skips; no installed FSKit qualification')
+          if suitable:
+              report['selected_developer'] = max(modern or suitable)[2]
+          (output / 'sdk-capability.json').write_text(json.dumps(report, indent=2) + '\n')
+          if not suitable:
+              raise SystemExit('UNEXECUTED: no SDK supports the component minimum macOS 26.5; see sdk-capability.json')
+          with open(os.environ['GITHUB_ENV'], 'a') as destination:
+              print('DEVELOPER_DIR=' + report['selected_developer'], file=destination)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as destination:
+              print('modern_sdk=' + str(bool(modern)).lower(), file=destination)
+          PY
       - name: Record selected Xcode and SDK capability
         run: |
-          mkdir -p artifacts/cloud-macos
           { xcodebuild -version; xcrun --show-sdk-path; xcrun --show-sdk-version; sw_vers; } | tee artifacts/cloud-macos/toolchain.txt
           command -v xcodegen || brew install xcodegen
+          xcodegen --version | tee -a artifacts/cloud-macos/toolchain.txt
       - name: Build sanitized core and component fixtures
         id: core
-        run: python3 scripts/build.py .build
+        run: python3 scripts/build.py .build 2>&1 | tee artifacts/cloud-macos/core-build.log
       - name: Run actual FSKit components (runtime skips remain explicit)
         if: ${{ !cancelled() && steps.core.outcome == 'success' }}
         run: python3 scripts/test_fskit.py 2>&1 | tee artifacts/cloud-macos/components.log
       - name: Compile unsigned universal Release app
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}
         run: python3 scripts/build_fskit.py --configuration Release --derived-data artifacts/cloud-macos/DerivedData 2>&1 | tee artifacts/cloud-macos/unsigned-build.log
       - name: Strict compiler-context and portable/GPR checks
         if: ${{ !cancelled() && steps.core.outcome == 'success' }}
         run: python3 scripts/check_cpu.py --output artifacts/cloud-macos/cpu --fixtures .build/cpu-fixtures
+      - name: Require actual modern FSKit SDK compilation coverage
+        if: ${{ !cancelled() && steps.sdk.outcome == 'success' && steps.sdk.outputs.modern_sdk != 'true' }}
+        run: |
+          echo 'UNEXECUTED: macOS 27+ SDK is absent. Available legacy components and unsigned build remain separate evidence; see sdk-capability.json.'
+          exit 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -207,7 +347,265 @@ jobs:
           retention-days: 14
           path: |
             artifacts/cloud-macos/*.txt
+            artifacts/cloud-macos/*.json
             artifacts/cloud-macos/*.log
             artifacts/cloud-macos/cpu/*.json
             artifacts/cloud-macos/cpu/*.stderr
             artifacts/cloud-macos/DerivedData/Logs/Build
+  windows-access:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check Windows disk and transfer guards without device operations
+        run: |
+          ./tests/windows_scratch_guard.ps1
+          ./tests/windows_cloud_transport.ps1
+      - name: Capture actual Windows AccessCheck observations
+        run: |
+          New-Item -ItemType Directory -Force artifacts/ci | Out-Null
+          python scripts/collect_windows_access.py --output artifacts/windows-access 2>&1 | Tee-Object -FilePath artifacts/ci/access.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-access
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/windows-access
+            artifacts/ci/access.log
+  windows-access-review:
+    needs: windows-access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-access
+          path: artifacts/windows-access-download
+      - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
+      - run: |
+          mkdir -p artifacts/ci
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
+      - name: Compare supported native DACL semantics; retain declared gaps
+        run: python3 tests/windows_access.py artifacts/windows-access-download/windows-access/manifest.json --evaluator .build/ntfs-dacl-evaluate --output artifacts/windows-access-review --require-native-dacl 2>&1 | tee artifacts/ci/access-review.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-access-review
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/ci/*.log
+            artifacts/windows-access-review
+  windows-scratch:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]')) }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test scratch disk identity refusals without disk operations
+        run: ./tests/windows_scratch_guard.ps1
+      - name: Create, author, and detach a new guarded scratch VHD
+        id: bootstrap
+        run: ./scripts/bootstrap_windows_ntfs.ps1 -Output "$env:RUNNER_TEMP\MachlinNTFSCloud-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - name: Independently check detachment before retaining media
+        id: detached
+        if: always()
+        run: |
+          $vhd = "$env:RUNNER_TEMP\MachlinNTFSCloud-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT\base.vhd"
+          if (Test-Path -LiteralPath $vhd) {
+            if ((Get-DiskImage -ImagePath $vhd -ErrorAction Stop).Attached) {
+              throw 'Scratch VHD remains attached; retain diagnostics only.'
+            }
+            'confirmed=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+      - name: Retain original bootstrap diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-scratch-diagnostics
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/MachlinNTFSCloud-${{ github.run_id }}-${{ github.run_attempt }}/bootstrap.json
+            ${{ runner.temp }}/MachlinNTFSCloud-${{ github.run_id }}-${{ github.run_attempt }}/*.txt
+            ${{ runner.temp }}/MachlinNTFSCloud-${{ github.run_id }}-${{ github.run_attempt }}/*.stdout
+            ${{ runner.temp }}/MachlinNTFSCloud-${{ github.run_id }}-${{ github.run_attempt }}/*.stderr
+      - name: Retain detached native inputs, including failed candidates
+        if: ${{ always() && steps.detached.outputs.confirmed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-scratch-native
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/MachlinNTFSCloud-${{ github.run_id }}-${{ github.run_attempt }}
+  windows-corpus-review:
+    needs: windows-scratch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-scratch-native
+          path: artifacts/windows-native-inputs
+      - run: |
+          python3 -m pip install meson==1.11.1 ninja==1.13.2
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qemu-utils
+      - run: |
+          mkdir -p artifacts/ci
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
+      - name: Verify native identities and prepare exact detached inputs
+        run: python3 scripts/windows_cloud_inputs.py --bootstrap artifacts/windows-native-inputs/bootstrap.json --output artifacts/windows-cloud-inputs --qemu /usr/bin/qemu-img 2>&1 | tee artifacts/ci/prepare.log
+      - name: Compare original native namespace, content, and metadata
+        run: python3 tests/windows_corpus.py artifacts/windows-native-inputs/corpus/manifest.json --reader .build/ntfs-inspect --report artifacts/windows-corpus-review/report.json 2>&1 | tee artifacts/ci/corpus.log
+      - name: Validate complete observed NTFS image
+        if: ${{ !cancelled() }}
+        run: .build/ntfs-validate artifacts/windows-cloud-inputs/source.ntfs 2>&1 | tee artifacts/ci/validation.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-corpus-review
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/ci/*.log
+            artifacts/windows-corpus-review
+            artifacts/windows-cloud-inputs/*.json
+  portable-performance:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      REFERENCE: ${{ inputs.benchmark_reference || '35136fa' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
+      - name: Build and verify original fixtures before measurement
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
+          python3 scripts/test.py .build 2>&1 | tee artifacts/ci/tests.log
+      - name: Strict compiler contexts and portable/GPR controls
+        run: python3 scripts/check_cpu.py --compiler clang --fixtures .build/cpu-fixtures --output artifacts/cloud-cpu-check 2>&1 | tee artifacts/ci/cpu-check.log
+      - name: Matched CPU preparation and five serial repetitions
+        run: |
+          python3 scripts/benchmark_cpu.py prepare --compiler clang --reference "$REFERENCE" --output artifacts/cloud-cpu 2>&1 | tee artifacts/ci/cpu-prepare.log
+          python3 scripts/benchmark_cpu.py compare --compiler clang --output artifacts/cloud-cpu --comparison current --repetitions 5 2>&1 | tee artifacts/ci/cpu-compare.log
+      - name: Independent Huffman comparison against retained source
+        run: python3 scripts/check_huffman.py --compiler clang --reference artifacts/cloud-cpu/reference --fixtures .build/huffman-fixtures --output artifacts/cloud-huffman 2>&1 | tee artifacts/ci/huffman.log
+      - name: Matched core, mutation, and directory preparation measurements
+        run: |
+          for kind in core mutation write; do
+            python3 "scripts/benchmark_${kind}.py" prepare --compiler clang --reference "$REFERENCE" --output "artifacts/cloud-${kind}" 2>&1 | tee "artifacts/ci/${kind}-prepare.log"
+            python3 "scripts/benchmark_${kind}.py" compare --compiler clang --output "artifacts/cloud-${kind}" --comparison current --repetitions 5 2>&1 | tee "artifacts/ci/${kind}-compare.log"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: portable-performance
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/ci/*.log
+            artifacts/cloud-*
+  windows-directory-prepare:
+    needs: windows-corpus-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-scratch-native
+          path: artifacts/windows-native-inputs
+      - run: |
+          python3 -m pip install meson==1.11.1 ninja==1.13.2
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qemu-utils
+      - run: |
+          mkdir -p artifacts/ci
+          df -Pk . | tee artifacts/ci/disk-before.log
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
+      - name: Rebind exact native inputs to this consumer
+        run: python3 scripts/windows_cloud_inputs.py --bootstrap artifacts/windows-native-inputs/bootstrap.json --output artifacts/windows-cloud-inputs --qemu /usr/bin/qemu-img 2>&1 | tee artifacts/ci/prepare.log
+      - name: Run complete independent directory sequence and recovery cuts
+        run: python3 tests/native_directory_batch.py --cloud-manifest artifacts/windows-cloud-inputs/cloud-manifest.json --build .build --qemu /usr/bin/qemu-img --output artifacts/windows-native-directory 2>&1 | tee artifacts/ci/directory.log
+      - name: Package individually identified candidates for native Windows recovery
+        run: python3 tests/native_directory_package.py --local artifacts/windows-native-directory --cloud-manifest artifacts/windows-cloud-inputs/cloud-manifest.json --tag 'Cloud${{ github.run_id }}-${{ github.run_attempt }}' --output artifacts/windows-directory-packages --qemu /usr/bin/qemu-img 2>&1 | tee artifacts/ci/package.log
+      - name: Retain directory diagnostics and exact failed inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-directory-preparation
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/ci/*.log
+            artifacts/windows-native-directory
+            artifacts/windows-cloud-inputs/*.json
+      - name: Retain complete Windows recovery packages
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-directory-packages
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/windows-directory-packages
+            artifacts/windows-native-inputs/base.vhd
+  windows-directory-recovery:
+    needs: windows-directory-prepare
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-directory-packages
+          path: artifacts/windows-recovery-download
+      - name: Check transfer and parser refusals without native disk operations
+        run: ./tests/windows_cloud_transport.ps1
+      - name: Replay each identified candidate once and retain original native verdicts
+        run: ./scripts/replay_windows_cloud.ps1 -Packages artifacts/windows-recovery-download/windows-directory-packages -BaseVhd artifacts/windows-recovery-download/windows-native-inputs/base.vhd -Output "$env:RUNNER_TEMP\MachlinNTFSReplay-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - name: Retain original reports, events, and confirmed-detached postimages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-directory-recovery
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/MachlinNTFSReplay-${{ github.run_id }}-${{ github.run_attempt }}

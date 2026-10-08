@@ -13,6 +13,12 @@ diagrams, field maps, examples and a research register.
 - [Development](DEVELOPMENT.md): prepared build/test and VM workflows.
 - [Acceptance](ACCEPTANCE.md): actual evidence and remaining feature gates.
 - [Write contract](WRITES.md): durability, allocation, namespace and recovery scope.
+- [Portable feature map](PORTABLE-FEATURES.md): implemented capabilities, remaining
+  cloud algorithms, independent native evidence and intentional policy boundaries.
+- [Deferred retirement](DEFERRED-RETIREMENT.md): explicit lifetime/durability model
+  for open unlink/replacement, with native orphan authority left unresolved.
+- [Sparse preparation](SPARSE-PREPARATION.md): private owned zero/punch mapping and
+  partial-byte spans, preserving the unsupported media-execution boundary.
 - [Completed driver refactoring](REFACTORING.md): component map, consistent
   ownership conventions and complete local/native regression evidence.
 - [Current VM handoff](HANDOFF-SOL.md): execution paths and operating constraints.

@@ -1,5 +1,129 @@
 # Performance contracts
 
+## Portable cloud tooling
+
+The existing matched harnesses (`benchmark_cpu.py`, `benchmark_core.py`,
+`benchmark_mutation.py`, and `benchmark_write.py`) accept an explicit
+`--compiler` executable on Linux and macOS. The default remains the selected
+Xcode compiler/SDK on macOS and `cc` on Linux. Ambient `CC`, compiler flags,
+and credentials are not forwarded. Linux uses POSIX declarations and ELF
+section garbage collection for the focused CPU/codec harness; macOS retains
+its selected SDK and Mach-O dead stripping. This extends the existing isolated
+experiments; Meson remains the product build system.
+
+Preparation records the compiler path, complete version, target, SDK, host and
+execution contexts. Comparison requires an exact match, retains both binaries,
+and hashes the frozen harness, independent fixture bytes and reference binaries
+before and after measurement. A different compiler or host requires a separate
+preparation. Existing historical artifacts without this identity must not be
+silently reclassified as portable evidence. Each command has a five-minute
+wall-time limit and separate eight-MiB stdout/stderr limits, with commands,
+partial diagnostics and failures retained. Comparison directories remain new
+and repetitions are bounded to 5–100 alternating pairs.
+
+`check_cpu.py` and `check_huffman.py` accept the same explicit compiler interface.
+On macOS, the object matrix remains userspace arm64/x86_64 and Xcode kernel-SDK
+arm64e/x86_64. Linux checks native userspace and general-register-restricted
+objects with GNU-compatible `objdump` and `nm` (overridable using
+`--disassembler` and `--nm`). Linux GPR objects are not kernel-SDK compilation.
+Both routes retain the 2-KiB frame ceiling, inspect restricted disassembly for
+SIMD/FP registers, verify the memory object's undefined symbols, and run portable
+and GPR boundary tests with fatal ASan/UBSan. Host GPR execution never establishes
+a kernel adapter, kernel load or installed mount.
+
+A fresh cloud run requires the ordinary Meson fixture build and sanitized suite
+first. Run matched experiments serially on one runner, retaining each output
+directory and all failed attempts. For example, on Linux with Clang:
+
+```sh
+python3 scripts/build.py .build --compiler clang
+python3 scripts/test.py .build
+python3 scripts/check_cpu.py --compiler clang --fixtures .build/cpu-fixtures --output artifacts/cloud-cpu-check
+python3 scripts/benchmark_cpu.py prepare --compiler clang --reference HEAD --output artifacts/cloud-cpu
+python3 scripts/benchmark_cpu.py compare --compiler clang --output artifacts/cloud-cpu --comparison current --repetitions 5
+python3 scripts/check_huffman.py --compiler clang --reference artifacts/cloud-cpu/reference --fixtures .build/huffman-fixtures --output artifacts/cloud-huffman
+python3 scripts/benchmark_core.py prepare --compiler clang --reference HEAD --output artifacts/cloud-core
+python3 scripts/benchmark_core.py compare --compiler clang --output artifacts/cloud-core --comparison current --repetitions 5
+python3 scripts/benchmark_mutation.py prepare --compiler clang --reference HEAD --output artifacts/cloud-mutation
+python3 scripts/benchmark_mutation.py compare --compiler clang --output artifacts/cloud-mutation --comparison current --repetitions 5
+python3 scripts/benchmark_write.py prepare --compiler clang --reference HEAD --output artifacts/cloud-write
+python3 scripts/benchmark_write.py compare --compiler clang --output artifacts/cloud-write --comparison current --repetitions 5
+```
+
+Choose the actual committed pre-change revision with `--reference` for an
+optimization claim. `HEAD` versus the same unchanged checkout is a tooling/parity
+control, not evidence of an optimization. Reference revisions must themselves
+compile with the selected compiler; do not suppress their diagnostics or edit
+their exported sources to make an old baseline pass. Linux GCC rejected the
+initial handoff's all-core reference under warnings-as-errors; retain that failed
+baseline or use an independently disclosed fixed baseline. A Clang result does
+not establish a GCC result.
+
+The full-volume `benchmark.py` continues to consume ordinary Meson Release
+products and optional `check_reproducible.py` reports. Linux reports explicitly
+record null SDK fields; both sides must still match compiler, host, options,
+unchanged harness/adapter sources and exact retained products. Its independent
+whole-content check and source-image integrity checks remain mandatory.
+
+The Python regression in `tests/test_benchmark_tools.py` checks compiler/SDK
+selection, execution-context labels, bounded subprocess behavior, frozen-artifact
+integrity and refusal of mismatched comparisons. The commands above are execution
+instructions, not an acceptance result. Cloud measurements, once run, must retain
+raw repetitions, allocator and callback accounting, checksum/namespace oracles,
+measured regressions and shared-runner limitations. They do not establish durable
+storage, Windows recovery or FSKit throughput.
+
+
+### Cloud stack and governor checks
+
+GCC 14 with fatal ASan/UBSan and the unchanged 2-KiB frame policy exposed a
+2,624-byte catalog-opening frame. Inlined list-name decoding, base-name checks,
+heap-sort and sift each previously owned a large temporary. Catalog opening now
+owns one entry-sized stack workspace shared by these serial phases. There is no
+new heap allocation, forced out-of-line attribute, weakened frame policy, changed
+comparison order or added resource allowance. The existing catalog suite retains
+its independent names, long-name and extent fixtures, injected allocation/read
+failures and exact cleanup checks.
+
+The same GCC gate then exposed a 2,752-byte attribute-validation frame. The
+attribute scan already owns a bounded 255-unit UTF-16 buffer; sequential list
+validation and filename admission now borrow that buffer instead of each owning
+another inlined copy. Name consumers finish before it is reused, and remembered
+namespace names are still copied into the existing accounted vector. No new
+heap allocation, larger budget or out-of-line compiler override is introduced.
+
+GCC also exposed a 3,200-byte recursive directory-edit frame. After the child edit
+returns and its promoted key has been copied into the parent, sibling balancing
+now borrows the current depth's existing candidate/replacement buffers for its
+separator and donated keys. Buffers remain distinct across recursion depths;
+the depth limit, balancing sequence, transient-node byte reserve, publication
+and recovery semantics are unchanged. The complete tree model and split/merge
+recovery suites remain the correctness gate.
+
+`tests/operation_governor.c` additionally checks every one of the 32 possible
+denying ancestors across read calls/bytes, allocation calls/bytes and work. It
+checks that refusal charges no partial credits to earlier ancestors, optional
+allocation refusal latches none of the scopes, required refusal remains sticky
+through unwind, and maximal work/live-byte accounting cannot wrap. This is
+private governor accounting coverage alongside the public whole-volume operation
+suite, not a replacement for it.
+
+The first local cloud GCC sanitizer invocation terminated in LeakSanitizer with
+its explicit “does not work under ptrace” diagnostic, retained in
+`artifacts/dots-cloud-foundation/logfile-sanitizer-run.log`. The separate
+`logfile-sanitizer-no-lsan.log` is supplementary diagnostic execution only.
+Disabling leak checks does not constitute the required sanitized gate. The
+tracked benchmark/check tools and hosted workflow keep fatal sanitizer settings;
+actual hosted outcomes and full-suite evidence belong in the acceptance report.
+
+The local pinned-toolchain GCC rebuild subsequently completes with the unchanged
+2-KiB frame policy (`artifacts/dots-toolchain-source/gcc-build-v3.log`). The 18
+Python tooling regressions pass. The separate catalog run passes 14 inventories,
+28 allocation failures and one I/O failure; the governor run passes its ancestor
+and saturation matrix. Their retained command records explicitly disable LSan
+for this ptraced environment, so these are supplementary fatal ASan/UBSan results,
+not the full hosted sanitizer gate. No matched timing result follows from them.
+
 ## Incremental directory and journal preparation
 
 This connected C batch changes four preparation paths: local `$I30` editing,

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Current-C directory transitions and preselected native crash inputs; no VM commands.
 
-All writes target new private APFS clones. The source descriptor names retained
+All writes target new private regular-file copies. The source descriptor names retained
 native media and its hash, not a binary or verdict to reuse. Failures stop the
 batch without retries. A separate packaging step and Windows collector follow.
 """
@@ -11,7 +11,8 @@ import base64
 import copy
 import hashlib
 import json
-import subprocess
+import re
+import shutil
 import sys
 import time
 
@@ -24,6 +25,7 @@ from native_growth_faults import (sha, at, apply, stage_values, logical_protecte
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from environment import sanitizer_environment
+from benchmark_toolchain import command as bounded_command
 
 TRACE_CAPACITY = 4096
 CHECKPOINT_INTERVAL = 4
@@ -62,13 +64,14 @@ def native_cuts(plan, initialized):
 
 
 class Batch:
-    def __init__(self, output, build, qemu):
+    def __init__(self, output, build, qemu, native_root=NATIVE_ROOT):
         self.output, self.build, self.qemu = output, build, qemu
         self.env = sanitizer_environment()
         self.report = dict(status='running', vmCommands=0, automaticRetry=False,
                            commands=[], operations=[], transitions=[], snapshots=[], cuts=[])
         self.image, self.oracle = output / 'candidate.ntfs', output / 'publication-oracle.ntfs'
         self.files, self.directories = {}, {}
+        self.native_root = native_root
 
     def save(self):
         (self.output / 'result.json').write_text(json.dumps(self.report, indent=2) + '\n')
@@ -76,14 +79,20 @@ class Batch:
     def command(self, directory, name, argv, timeout=600):
         argv = list(map(str, argv))
         started = time.monotonic()
-        with (directory / (name + '.stdout')).open('xb') as stdout, (directory / (name + '.stderr')).open('xb') as stderr:
-            result = subprocess.run(argv, cwd=ROOT, env=self.env, stdin=subprocess.DEVNULL,
-                                    stdout=stdout, stderr=stderr, timeout=timeout)
-        self.report['commands'].append(dict(argv=argv, directory=str(directory), name=name,
-            exitCode=result.returncode, seconds=time.monotonic() - started))
+        entry = dict(argv=argv, directory=str(directory), name=name, status='running')
+        self.report['commands'].append(entry)
         self.save()
-        assert result.returncode == 0 and (directory / (name + '.stderr')).stat().st_size == 0, (name, directory)
-        return (directory / (name + '.stdout')).read_bytes()
+        try:
+            value = bounded_command(argv, directory, name, self.env, timeout=timeout, text=False)
+            assert (directory / (name + '.stderr')).stat().st_size == 0, (name, directory)
+            entry.update(status='pass', exitCode=0)
+            return value
+        except BaseException as error:
+            entry.update(status='fail', error=f'{type(error).__name__}: {error}')
+            raise
+        finally:
+            entry['seconds'] = time.monotonic() - started
+            self.save()
 
     def json_command(self, directory, name, argv):
         return json.loads(self.command(directory, name, argv))
@@ -92,7 +101,9 @@ class Batch:
         return self.build / name
 
     def clone(self, directory, name, source, destination):
-        self.command(directory, name, ['/bin/cp', '-c', source, destination])
+        assert not destination.exists() and not destination.is_symlink()
+        options = ['-c'] if sys.platform == 'darwin' else ['--reflink=auto', '--sparse=always', '--']
+        self.command(directory, name, ['/bin/cp', *options, source, destination])
         destination.chmod(0o600)
         assert destination.stat().st_nlink == 1 and destination.stat().st_size == source.stat().st_size
 
@@ -194,9 +205,9 @@ class Batch:
         old_files, old_directories = copy.deepcopy(self.files), dict(self.directories)
         old_state = self.state(directory, 'before-state', previous, self.directories['native-growth']) if 'native-growth' in self.directories else None
         stamp = start_time + ordinal * FILETIME_TICKS_PER_SECOND
-        arguments = (NATIVE_ROOT + '/' + extra[0], extra[1]) if operation == 'rename' else extra
+        arguments = (self.native_root + '/' + extra[0], extra[1]) if operation == 'rename' else extra
         result = self.json_command(directory, 'writer', [self.tool('ntfs-write-operation-image-tests'),
-            'interrupt', self.image, operation, NATIVE_ROOT + '/' + path, stamp, trace, *arguments,
+            'interrupt', self.image, operation, self.native_root + '/' + path, stamp, trace, *arguments,
             '--fault', 0, 0, 0, TRACE_CAPACITY])
         assert result['result'] == 0 and result['executed'] and result['completed'] and not result['poisoned']
         assert result['instrumented'] and result['initial_persistence']
@@ -299,23 +310,38 @@ class Batch:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source-descriptor', type=Path, required=True)
-    parser.add_argument('--baseline-manifest', type=Path, required=True)
+    parser.add_argument('--source-descriptor', type=Path)
+    parser.add_argument('--baseline-manifest', type=Path)
+    parser.add_argument('--cloud-manifest', type=Path,
+                        help='Prepared native scratch manifest from windows_cloud_inputs.py')
     parser.add_argument('--build', type=Path, default=ROOT / '.build')
-    parser.add_argument('--qemu', type=Path, default=Path('/opt/homebrew/bin/qemu-img'))
+    parser.add_argument('--qemu', type=Path, default=Path(shutil.which('qemu-img') or '/opt/homebrew/bin/qemu-img'))
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
+    native_root = NATIVE_ROOT
+    if args.cloud_manifest:
+        if args.source_descriptor or args.baseline_manifest:
+            parser.error('--cloud-manifest cannot be combined with historical source arguments')
+        cloud = json.loads(args.cloud_manifest.read_text())
+        assert cloud['status'] == 'pass' and cloud['nativeWindowsRecoveryPending'] is True
+        assert re.fullmatch(r'R:\\MachlinCloudNTFS-[0-9a-f]{32}', cloud['root'])
+        args.source_descriptor = Path(cloud['sourceDescriptor'])
+        args.baseline_manifest = Path(cloud['baselineManifest'])
+        native_root = cloud['root'][2:].replace('\\', '/')
+    elif not args.source_descriptor or not args.baseline_manifest:
+        parser.error('Supply --cloud-manifest or both historical source manifests')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    batch = Batch(output, args.build.resolve(strict=True), args.qemu.resolve(strict=True))
+    batch = Batch(output, args.build.resolve(strict=True), args.qemu.resolve(strict=True), native_root)
     source_info = json.loads(args.source_descriptor.read_text())
     source = Path(source_info['source']).resolve(strict=True)
     baseline = json.loads(args.baseline_manifest.read_text())
     assert source.is_file() and source.stat().st_mode & 0o777 == 0o444
     assert sha(source) == source_info['sourceSha256']
-    assert baseline['root'] == 'R:' + NATIVE_ROOT.replace('/', '\\')
+    assert baseline['root'] == 'R:' + native_root.replace('/', '\\')
     batch.report.update(source=str(source), sourceSha256=source_info['sourceSha256'],
         baselineManifest=str(args.baseline_manifest.resolve()),
+        cloudManifest=str(args.cloud_manifest.resolve()) if args.cloud_manifest else None,
         binaries={name: sha(batch.tool(name)) for name in ('ntfs-native-state', 'ntfs-native-checkpoint',
             'ntfs-native-inventory', 'ntfs-write-operation-image-tests', 'ntfs-inspect', 'ntfs-validate')},
         sanitizerOptions={key: batch.env[key] for key in ('ASAN_OPTIONS', 'UBSAN_OPTIONS')})

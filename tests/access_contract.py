@@ -384,6 +384,28 @@ def subprocess_contract():
     check(run_tool([sys.executable, '-c', 'print("ok")']) == b'ok\n')
 
 
+def native_gate_contract():
+    report = dict(native_dacl_vectors_verified=True, manifest_unchanged=True,
+                  acquisition_status='complete', missing_cases=[], missing_contexts=[],
+                  acquisition_errors=[], cases=[dict(scope='dacl', status='passed'),
+                  dict(scope='probe', status='unsupported'),
+                  dict(scope='boundary', status='out_of_plane')])
+    check(verifier.native_dacl_gate(report))
+    for field, value in (('native_dacl_vectors_verified', False), ('manifest_unchanged', False),
+                         ('acquisition_status', 'partial'), ('missing_cases', ['missing']),
+                         ('missing_contexts', ['base']), ('acquisition_errors', ['error']),
+                         ('cases', [])):
+        altered = deepcopy(report)
+        altered[field] = value
+        check(not verifier.native_dacl_gate(altered))
+    for scope in ('dacl', 'probe', 'boundary'):
+        for status in ('failed', 'oracle_errors', 'unsupported', 'out_of_plane'):
+            altered = deepcopy(report)
+            altered['cases'].append(dict(scope=scope, status=status))
+            expected = (scope, status) in (('probe', 'unsupported'), ('boundary', 'out_of_plane'))
+            check(verifier.native_dacl_gate(altered) == expected)
+
+
 def main():
     evaluator = Path(sys.argv[1]).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix='ntfs-access-contract-') as temporary:
@@ -392,6 +414,7 @@ def main():
         sdk_contract()
         corpus_contract(evaluator, directory)
         subprocess_contract()
+        native_gate_contract()
     print(f'PASS: {checks} access transport, SDK span, token acquisition, cleanup and reporting contracts; '
           'synthetic oracle only, no Windows qualification')
 

@@ -53,6 +53,30 @@ paths, cross-volume destinations and native filesystem path-walk policy require
 an owning integration contract. Our adapter's qualified projection policy is in
 [LINK-POLICY.md](../LINK-POLICY.md).
 
+### Private payload authoring
+
+[write_reparse.c](../../core/write_reparse.c) provides an allocation-free private
+encoder for the documented symlink and junction envelopes. It stores substitute
+then print UTF-16 names, each with a trailing zero unit; lengths exclude those
+terminators and offsets remain relative to PathBuffer. The common reserved word
+is zero. The substitute is nonempty, the print name may be empty, and embedded
+zero units refuse. Other UTF-16 units, including unpaired surrogates, remain
+exact. Only the defined relative symlink flag is accepted; junctions have none.
+
+The complete result, including the common header, is capped at 16 KiB. Counts
+are bounded before input traversal and byte conversion. Inputs may share name
+storage; outputs may not alias inputs or each other. Every failure preserves
+both the output buffer and its size output. Encoding writes only the returned
+extent and performs no allocation, I/O, target resolution or filesystem change.
+
+Microsoft's linked REPARSE_DATA_BUFFER definition supplies byte units, optional
+terminator and flag semantics. The canonical name order and always-present
+terminators are our encoding choice, not a requirement inferred for every native
+packet. [write_reparse.c tests](../../tests/write_reparse.c) use independent literal
+packets plus exact-capacity, one-past, UTF-16, alias and unchanged-error vectors.
+They do not prove native creation, Reparse index maintenance, privilege behavior,
+cross-volume ownership, WAL publication or recovery; those gates remain closed.
+
 ## Native NTFS compression
 
 The admitted NTFS compression profile uses 16-cluster logical units and LZNT1.

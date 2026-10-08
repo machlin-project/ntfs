@@ -4,17 +4,19 @@ from pathlib import Path
 import argparse
 import filecmp
 import hashlib
+import io
 import json
 import os
 import platform
 import selectors
-import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import time
 
 from bounded_tool import run_tool
+from build import verify_compiler
 from environment import selected_toolchain
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +25,7 @@ PRODUCTS = ('libntfs.a', 'libntfs-posix.a', 'ntfs-inspect', 'ntfs-validate',
 TARGETS = PRODUCTS[2:]
 SOURCE_PATHS = ('meson.build', 'core', 'include', 'adapters/posix', 'tools',
                 'scripts/check_reproducible.py', 'scripts/environment.py',
-                'scripts/bounded_tool.py')
+                'scripts/bounded_tool.py', 'scripts/build.py')
 HASH_IO_BYTES = 1024 * 1024
 MAX_BUILD_LOG_BYTES = 4 * HASH_IO_BYTES
 LOG_IO_BYTES = 65536
@@ -31,6 +33,8 @@ DEFAULT_JOBS = 4
 MAX_JOBS = 8
 DEFAULT_TIMEOUT_SECONDS = 300
 MAX_TIMEOUT_SECONDS = 900
+MAX_SOURCE_ARCHIVE_BYTES = 64 * HASH_IO_BYTES
+MAX_SOURCE_EXPANDED_BYTES = 256 * HASH_IO_BYTES
 
 
 def digest(path):
@@ -49,11 +53,11 @@ def clean_product_sources():
         raise ValueError('Commit build-source changes before comparing release builds')
 
 
-def run_logged(command, log, environment, timeout):
+def run_logged(command, log, environment, timeout, *, cwd=ROOT):
     """Retain bounded combined output, including diagnostics from a failed build."""
     deadline = time.monotonic() + timeout
     retained = 0
-    process = subprocess.Popen(command, cwd=ROOT, env=environment, stdin=subprocess.DEVNULL,
+    process = subprocess.Popen(command, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                start_new_session=True)
     try:
@@ -99,7 +103,8 @@ def selected_options(build):
                                     'b_lto', 'b_ndebug', 'c_std', 'werror')}
     if (selected.get('buildtype') != 'release' or selected.get('b_sanitize') not in
             ('none', [], ['none']) or str(selected.get('optimization')) != '3' or
-            selected.get('debug') or selected.get('b_ndebug') not in ('false', False)):
+            selected.get('debug') or selected.get('b_ndebug') not in ('false', False) or
+            selected.get('werror') is not True or selected.get('c_std') != 'c11'):
         raise ValueError('Expected the requested unsanitized optimized release configuration')
     return selected
 
@@ -108,11 +113,38 @@ def write_report(path, report):
     path.write_text(json.dumps(report, indent=2) + '\n')
 
 
+def export_sources(archive_bytes, directory):
+    """Export the committed tree with bounded, contained ordinary source files."""
+    if len(archive_bytes) > MAX_SOURCE_ARCHIVE_BYTES:
+        raise ValueError('Committed source archive exceeds its byte budget')
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode='r:') as archive:
+        members = archive.getmembers()
+        if sum(member.size for member in members) > MAX_SOURCE_EXPANDED_BYTES:
+            raise ValueError('Expanded source archive exceeds its byte budget')
+        for member in members:
+            path = Path(member.name)
+            if (path.is_absolute() or '..' in path.parts or
+                    not (member.isdir() or member.isfile())):
+                raise ValueError('Source archive must contain only relative regular files/directories')
+        directory.mkdir(parents=True, exist_ok=False)
+        archive.extractall(directory, members=members, filter='data')
+
+
+def path_map_options(source, build):
+    """Map compiler paths before compilation, never rewrite completed products."""
+    prefixes = (str(source), os.path.relpath(source, build))
+    flags = [f'-ffile-prefix-map={prefix}=.' for prefix in prefixes]
+    flags += [f'-fdebug-prefix-map={build}=.build']
+    return ['-Dc_args=' + json.dumps(flags)]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New ignored artifact directory')
     parser.add_argument('--jobs', type=int, default=DEFAULT_JOBS)
     parser.add_argument('--compiler', help='One explicit compiler executable; ambient CC is ignored')
+    parser.add_argument('--relocated', action='store_true',
+                        help='Build two committed Git exports at distinct source paths')
     parser.add_argument('--timeout', type=int, default=DEFAULT_TIMEOUT_SECONDS,
                         help='Deadline in seconds for each setup/compile invocation')
     args = parser.parse_args()
@@ -127,11 +159,20 @@ def main():
               'machine': platform.machine(), 'scope': 'portable release archives and CLI products; '
               'same checkout/toolchain, distinct build directories',
               'native_app_qualified': False, 'relocated_checkout_qualified': False,
+              'sdk_path': None, 'sdk_version': None,
               'builds': [], 'products': []}
     write_report(report_path, report)
     try:
         clean_product_sources()
         report['git_head_before'] = run_tool(['git', 'rev-parse', 'HEAD']).decode().strip()
+        archive_bytes = None
+        if args.relocated:
+            archive_bytes = run_tool(['git', 'archive', '--format=tar', report['git_head_before']],
+                                     timeout=30, output_limit=MAX_SOURCE_ARCHIVE_BYTES)
+            report['scope'] = ('portable Release archives and CLI products; same committed '
+                               'tree/toolchain, distinct exported source and build directories')
+            report['source_archive_sha256'] = hashlib.sha256(archive_bytes).hexdigest()
+            report['path_policy'] = 'compiler file/debug prefix maps; products are not rewritten'
         environment = selected_toolchain(args.compiler)
         compiler = environment['CC']
         report['archive_environment'] = {'ZERO_AR_DATE': environment['ZERO_AR_DATE']}
@@ -143,17 +184,24 @@ def main():
         report['compiler_version'] = run_tool([compiler, '--version']).decode().splitlines()[0]
         for name in ('first', 'second'):
             directory = args.output / name
+            source = ROOT
+            if archive_bytes is not None:
+                source = args.output / f'source-{name}'
+                export_sources(archive_bytes, source)
             setup = ['meson', 'setup', str(directory), '-Dbuildtype=release',
-                     '-Db_sanitize=none', '-Db_lundef=false', '-Db_ndebug=false']
+                     '-Db_sanitize=none', '-Db_lundef=false', '-Db_ndebug=false',
+                     *(path_map_options(source, directory) if args.relocated else [])]
             compile_command = ['meson', 'compile', '-C', str(directory), '-j', str(args.jobs), *TARGETS]
-            entry = {'directory': str(directory), 'setup_command': setup,
+            entry = {'directory': str(directory), 'source_directory': str(source), 'setup_command': setup,
                      'compile_command': compile_command, 'status': 'running'}
             report['builds'].append(entry)
             write_report(report_path, report)
             started = time.monotonic()
-            run_logged(setup, args.output / f'{name}-setup.log', environment, args.timeout)
+            run_logged(setup, args.output / f'{name}-setup.log', environment, args.timeout, cwd=source)
+            verify_compiler(directory, compiler)
+            entry['compiler'] = json.loads((directory / 'meson-info/intro-compilers.json').read_text())['host']['c']
             entry['options'] = selected_options(directory)
-            run_logged(compile_command, args.output / f'{name}-compile.log', environment, args.timeout)
+            run_logged(compile_command, args.output / f'{name}-compile.log', environment, args.timeout, cwd=source)
             entry['seconds'] = time.monotonic() - started
             entry['status'] = 'pass'
             write_report(report_path, report)
@@ -173,6 +221,7 @@ def main():
         if not all(item['byte_equal'] for item in report['products']):
             raise ValueError('Release artifacts differ between build directories')
         report['status'] = 'pass'
+        report['relocated_checkout_qualified'] = args.relocated
     except Exception as error:
         report['status'] = 'failed'
         report['error'] = f'{type(error).__name__}: {error}'

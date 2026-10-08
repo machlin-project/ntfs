@@ -726,3 +726,46 @@ continuations, nonresident list storage and malformed/failing counterparts.
 No GPL implementation or default allocation policy was copied. Independent
 mkntfs empty-stream inventories remain separate from unacquired Windows-authored
 bad-cluster chains and flagged forms.
+
+## Portable timestamp, reparse and sparse preparation
+
+The selected SI timestamp planner is original code using this repository's named
+wire fields and existing FILE snapshot compiler. Microsoft's
+[FILE_BASIC_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/ns-wdm-_file_basic_information)
+was consulted for absolute time units and the distinction between disk values and
+API/handle sentinels. Public SI/FN devnotes do not settle later cache refresh;
+the implementation deliberately leaves execution unadmitted. Independent Python
+fixtures author field masks and exact unchanged record bytes.
+
+The private reparse encoder uses Microsoft's
+[REPARSE_DATA_BUFFER](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_reparse_data_buffer)
+definition for byte lengths, PathBuffer-relative offsets, optional terminators
+and the relative symlink flag. The selected canonical terminated name order is
+our choice. Original literal-byte C goldens are independent of parser-private
+wire structures. No filesystem implementation code was consulted or imported.
+
+The sparse zero/punch transform and deferred-retirement state model are original
+algorithms and tests over explicit mathematical mapping, reachability and abstract
+durability contracts. They neither assert a native orphan field nor treat a
+retirement candidate as volume allocation authority. Native coupled metadata,+journal, recovery and admission evidence remains separately required.
+
+## Fresh hosted Windows inputs
+
+The [cloud bootstrap and consumer adapter](WINDOWS-CLOUD.md) are original
+repository PowerShell/Python code using documented Windows storage APIs and
+commands. Disposable Windows creates the namespace and NTFS media. Existing
+original UEFI wire checks validate both GPT copies and native identities.
+qemu-img runs only as an external container conversion/comparison utility;
+no QEMU or GPL filesystem implementation is imported or linked into the product.
+Generated reports preserve source-script hashes and actual acquisition provenance,
+distinct from C admission, native recovery and installed FSKit acceptance.
+
+The [bounded external oracle bootstrap](EXTERNAL-ORACLES.md) retains the original
+release-tar SHA-256 and separately pins an explicitly selected official upstream
+Git tag/commit. The latter has its own provenance and never claims release-tar
+identity. Only upstream build configuration is consulted for prefix/exec-prefix,
+private DESTDIR staging and disabling driver/mount-helper/ldconfig installation.
+The resulting standalone test utilities and retained upstream notices remain
+under ignored vendor storage; no filesystem implementation is imported into the
+product. Original Python contracts check acquisition, preservation and failure
+reporting without running a substituted filesystem oracle.

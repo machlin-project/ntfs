@@ -8,10 +8,10 @@ The regular fixture suite owns independent successful-output expectations.
 import argparse
 import json
 from pathlib import Path
-import subprocess
 
 from benchmark_cpu import ROOT, build
-from environment import sanitizer_environment, tool_environment
+from environment import sanitizer_environment
+from benchmark_toolchain import command, select, sdk_flags, host_flags, section_flags, identity
 
 
 def main():
@@ -19,26 +19,22 @@ def main():
     parser.add_argument('--reference', type=Path, required=True)
     parser.add_argument('--fixtures', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--compiler', help='Explicit compiler executable; selected Xcode or cc by default')
     args = parser.parse_args()
     reference = args.reference.resolve()
     fixtures = args.fixtures.resolve()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    env = tool_environment()
-    clang = subprocess.check_output(['xcrun', '--find', 'clang'], env=env, text=True).strip()
-    sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], env=env, text=True).strip()
+    env = select(args.compiler)
+    clang = env['CC']
+    toolchain = identity(env)
     commands = []
 
     def run(name, argv, environment=env):
-        argv = list(map(str, argv))
-        result = subprocess.run(argv, cwd=ROOT, env=environment, capture_output=True)
-        (output / f'{name}.stdout').write_bytes(result.stdout)
-        (output / f'{name}.stderr').write_bytes(result.stderr)
-        commands.append(dict(name=name, argv=argv, exitCode=result.returncode))
+        result = command(argv, output, name, environment)
+        commands.append(dict(name=name, argv=list(map(str, argv)), exitCode=0))
         (output / 'commands.json').write_text(json.dumps(commands, indent=2) + '\n')
-        if result.returncode:
-            raise RuntimeError(f'{name} failed; see retained diagnostics')
-        return result.stdout.decode().strip()
+        return result.strip()
 
     results = []
     for context, flags in (('userspace', []), ('portable', ['-DNTFS_MEMORY_PORTABLE']),
@@ -55,7 +51,7 @@ def main():
                        f'{codec}_workspace_alignment',
                        'xpress_huffman_decode' if codec == 'xpress' else 'lzx_decode')
             renames = [*support_renames, *(f'-Dntfs_{symbol}=reference_{symbol}' for symbol in exports)]
-            run(name, [clang, '-isysroot', sdk, '-std=c11', '-O2', '-g', '-ffreestanding',
+            run(name, [clang, *sdk_flags(env), *host_flags(), *section_flags(), '-std=c11', '-O2', '-g', '-ffreestanding',
                        '-fno-builtin', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                        '-I', reference / 'include', '-I', reference / 'core', *flags, *renames,
                        '-c', reference / 'core' / f'{codec}.c', '-o', target])
@@ -68,7 +64,7 @@ def main():
         results.append(dict(context=context, summary=summary))
         print(context, summary, flush=True)
     report = dict(complete=True, reference=str(reference), fixtures=str(fixtures),
-                  fatalSanitizers=True, kernelLoaded=False, results=results)
+                  fatalSanitizers=True, kernelLoaded=False, toolchain=toolchain, results=results)
     (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
 
 

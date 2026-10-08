@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $nativeEventMaximumAttempts = 64
 $nativeEventPollMilliseconds = 500
+$fileBackedVirtualBusType = 15  # MSFT_Disk.BusType; use raw CIM rather than display text.
 if ($ReportName -notmatch '^[A-Za-z0-9-]{1,96}$') { throw 'A bounded report name is required.' }
 $reportPath = Join-Path $env:SystemRoot ('Temp\' + $ReportName + '.json')
 if (Test-Path -LiteralPath $reportPath) { throw 'Retained reports must not be replaced.' }
@@ -17,6 +18,20 @@ $report = [ordered]@{ success=$false; stage='input-guards'; cases=@();
 $candidate = $null
 $attached = $false
 $batch = $null
+
+function Assert-NativeCandidateDrive($ExpectedDisk, $ExpectedPartition) {
+    $routes = @(Get-Partition -DriveLetter R -ErrorAction Stop)
+    $disk = Get-Disk -Number $ExpectedDisk.Number
+    if ($routes.Count -ne 1 -or $disk.IsBoot -or $disk.IsSystem -or
+        [Guid]$disk.Guid -ne [Guid]$ExpectedDisk.Guid -or
+        $routes[0].DiskNumber -ne $ExpectedDisk.Number -or
+        $routes[0].PartitionNumber -ne $ExpectedPartition.PartitionNumber -or
+        [Guid]$routes[0].Guid -ne [Guid]$ExpectedPartition.Guid -or
+        $routes[0].Offset -ne $ExpectedPartition.Offset -or $routes[0].Size -ne $ExpectedPartition.Size -or
+        $routes[0].IsBoot -or $routes[0].IsSystem) {
+        throw 'Candidate R: route no longer names the admitted disk and partition.'
+    }
+}
 
 function Test-NativeOrdinaryFiles($expected, [string]$root) {
     $descriptorHeaderBytes = 20
@@ -298,7 +313,8 @@ function Test-NativeSequenceProfile($expected, [string]$root) {
     $descriptorMaximumBytes = 65536
     $contentMaximumBytes = 1048576
     $entries = @($expected.sequenceObjects)
-    if ($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -or
+    if (($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -and
+         $root -cnotmatch '^R:\\MachlinCloudNTFS-[0-9a-f]{32}$') -or
         $entries.Count -lt 2 -or $entries.Count -gt $objectMaximum) {
         throw 'Unexpected sequence namespace profile.'
     }
@@ -446,7 +462,8 @@ function Test-NativeSequenceFiles($expected, [string]$root) {
 }
 
 function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
-    if ($root -notmatch '^[TR]:\\MachlinWriteCases-native-write-alias-20261006$' -or
+    if (($root -notmatch '^[TR]:\\MachlinWriteCases-native-write-alias-20261006$' -and
+         $root -cnotmatch '^R:\\MachlinCloudNTFS-[0-9a-f]{32}$') -or
         @($expected.files).Count -ne 4) { throw 'Unexpected workload root or count.' }
     $result = [ordered]@{ checks=@(); success=$false }
     foreach ($entry in $expected.files) {
@@ -512,6 +529,19 @@ function Test-NativeFiles($expected, [string]$root, [string]$acl, $fileId) {
 }
 
 function Test-OriginalDisk {
+    if ($batch.PSObject.Properties.Name -contains 'cloudInput') {
+        # The cloud baseline remains detached and immutable throughout this run.
+        # Its complete native namespace/corpus is reviewed before packaging.
+        $path = Join-Path $batch.directory 'base.vhd'
+        if ($batch.cloudInput -isnot [bool] -or -not $batch.cloudInput -or
+            (Get-DiskImage -ImagePath $path).Attached -or
+            (Get-Item -LiteralPath $path).Length -ne $batch.baseVhdBytes -or
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $batch.baseVhdSha256) {
+            throw 'Detached cloud baseline identity changed.'
+        }
+        return [ordered]@{success=$true;baselineDetached=$true;sha256=$batch.baseVhdSha256;
+            namespaceSource='original Windows native corpus; no baseline remount'}
+    }
     $disk = Get-Disk -Number 1
     $partition = Get-Partition -DriveLetter T
     $volume = Get-Volume -DriveLetter T
@@ -539,7 +569,8 @@ function Test-NativeTornMetadataProfile($product, [string]$root) {
     $fields = @('FileName','FileReference','BufferOffset','TornStructureOffset',
                 'BlockIndex','ExpectedSequenceNumber','ActualSequenceNumber')
     if ($product.PSObject.Properties.Name -notcontains 'expectedTornMetadataPages') { return @() }
-    if ($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -or
+    if (($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -and
+         $root -cnotmatch '^R:\\MachlinCloudNTFS-[0-9a-f]{32}$') -or
         $product.PSObject.Properties.Name -notcontains 'sequenceObjects') {
         throw 'Unexpected torn metadata namespace.'
     }
@@ -683,6 +714,36 @@ try {
     $report.identity = $identity.Name
     if ((Get-Item -LiteralPath $BatchManifest).Length -gt 8388608) { throw 'Batch input exceeds its bound.' }
     $batch = Get-Content -LiteralPath $BatchManifest -Raw | ConvertFrom-Json
+    $diskBytes = [long]8589934592
+    $partitionOffset = [long]16777216
+    $partitionBytes = [long]8572108800
+    $partitionNumber = 2
+    $volumeLabel = 'MachlinNTFS'
+    $protectedDiskNumbers = @((Get-Disk).Number)
+    if ($batch.PSObject.Properties.Name -contains 'cloudInput') {
+        if ($batch.cloudInput -isnot [bool] -or -not $batch.cloudInput -or
+            $batch.bootstrapSha256 -notmatch '^[a-f0-9]{64}$' -or
+            $batch.baseline.root -cnotmatch '^R:\\MachlinCloudNTFS-[0-9a-f]{32}$' -or
+            $batch.diskBytes -lt 134217728 -or $batch.diskBytes -gt 4294967296 -or
+            $batch.diskBytes % 1048576 -ne 0 -or $batch.partitionOffset -lt 1048576 -or
+            $batch.partitionBytes -le 0 -or $batch.partitionOffset % 512 -ne 0 -or
+            $batch.partitionBytes % 512 -ne 0 -or $batch.partitionOffset -ge $batch.diskBytes -or
+            $batch.partitionBytes -gt $batch.diskBytes - $batch.partitionOffset -or
+            $batch.partitionNumber -lt 1 -or $batch.partitionNumber -gt 128 -or
+            $batch.volumeLabel -cne 'MachlinCloudNTFS') { throw 'Unexpected cloud input identity or geometry.' }
+        $diskBytes = [long]$batch.diskBytes
+        $partitionOffset = [long]$batch.partitionOffset
+        $partitionBytes = [long]$batch.partitionBytes
+        $partitionNumber = [int]$batch.partitionNumber
+        $volumeLabel = $batch.volumeLabel
+        foreach ($product in $batch.products) {
+            if ($product.root -cne $batch.baseline.root -or
+                $product.PSObject.Properties.Name -notcontains 'sequenceObjects' -or
+                $product.PSObject.Properties.Name -notcontains 'preparedVhdName') {
+                throw 'Cloud candidates must use their exact native baseline and prepared sequence profile.'
+            }
+        }
+    }
     if ($batch.directory -notmatch '^C:\\Windows\\Temp\\MachlinNTFSImageRecovery-[A-Za-z0-9-]{1,48}$' -or
         @($batch.products).Count -lt 1 -or @($batch.products).Count -gt 256) { throw 'Unexpected private fixture directory or count.' }
     # Admit every declared mounted profile before constructing or attaching any
@@ -754,33 +815,40 @@ try {
         $case.mountStartedUtc = [DateTime]::UtcNow.ToString('o')
         $since = [DateTime]::Parse($case.mountStartedUtc,[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::RoundtripKind)
         $case.stage = 'native-mount'
+        # Preserve the first attempted identity even if the runner is interrupted.
+        $report | ConvertTo-Json -Depth 16 | Out-File -Encoding utf8 -LiteralPath $reportPath
         $image = Mount-DiskImage -ImagePath $candidate -StorageType VHD -Access ReadWrite -NoDriveLetter -PassThru
         $attached = $true
         $disk = $image | Get-Disk
-        if (@($disk).Count -ne 1 -or $disk.Number -le 1 -or $disk.Size -ne 8589934592 -or
+        if (@($disk).Count -ne 1 -or $protectedDiskNumbers -contains $disk.Number -or $disk.Size -ne $diskBytes -or
+            [int]$disk.CimInstanceProperties['BusType'].Value -ne $fileBackedVirtualBusType -or
             $disk.PartitionStyle -ne 'GPT' -or $disk.IsBoot -or $disk.IsSystem -or $disk.IsOffline -or
             $disk.IsReadOnly -or [Guid]$disk.Guid -ne [Guid]$product.diskGuid) { throw 'Candidate virtual disk identity changed.' }
-        $partition = Get-Partition -DiskNumber $disk.Number -PartitionNumber 2
-        if ($partition.Offset -ne 16777216 -or $partition.Size -ne 8572108800 -or
+        $partition = Get-Partition -DiskNumber $disk.Number -PartitionNumber $partitionNumber
+        if ($partition.DiskNumber -ne $disk.Number -or $partition.Offset -ne $partitionOffset -or $partition.Size -ne $partitionBytes -or
             $partition.IsBoot -or $partition.IsSystem -or [Guid]$partition.Guid -ne [Guid]$product.partitionGuid -or
             [Guid]$partition.GptType -ne [Guid]'ebd0a0a2-b9e5-4433-87c0-68b6b72699c7') { throw 'Candidate partition identity changed.' }
         if (@(Get-Partition -DriveLetter R -ErrorAction SilentlyContinue).Count -ne 0) { throw 'Candidate letter became occupied.' }
-        Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber 2 -AccessPath 'R:\'
+        Add-PartitionAccessPath -DiskNumber $disk.Number -PartitionNumber $partitionNumber -AccessPath 'R:\'
+        Assert-NativeCandidateDrive $disk $partition
         $volume = Get-Volume -DriveLetter R
         $encryption = Get-BitLockerVolume -MountPoint 'R:'
         $case.disk = $disk | Select-Object Number,Guid,UniqueId,BusType,Size,PartitionStyle,IsBoot,IsSystem,IsOffline,IsReadOnly
         $case.partition = $partition | Select-Object DiskNumber,PartitionNumber,Guid,GptType,Offset,Size,IsBoot,IsSystem
         $case.volume = $volume | Select-Object UniqueId,DriveLetter,FileSystemType,FileSystemLabel,HealthStatus,Size,SizeRemaining
         $case.encryption = $encryption | Select-Object VolumeStatus,EncryptionMethod,EncryptionPercentage
-        if ($volume.FileSystemType -ne 'NTFS' -or $volume.FileSystemLabel -ne 'MachlinNTFS' -or
+        if ($volume.FileSystemType -ne 'NTFS' -or $volume.FileSystemLabel -ne $volumeLabel -or
             $volume.HealthStatus -ne 'Healthy' -or $encryption.VolumeStatus -ne 'FullyDecrypted' -or
             $encryption.EncryptionMethod -ne 'None' -or $encryption.EncryptionPercentage -ne 0) { throw 'Candidate is not the expected healthy plaintext NTFS volume.' }
         $case.stage = 'native-files-and-metadata'
+        Assert-NativeCandidateDrive $disk $partition
         $case.nativeChecks = Test-NativeFiles $product $product.root $batch.targetAcl $batch.fileId
+        Assert-NativeCandidateDrive $disk $partition
         $dirty = @(& "$env:SystemRoot\System32\fsutil.exe" dirty query 'R:' 2>&1)
         $dirtyExit = $LASTEXITCODE
         if ($dirtyExit -ne 0 -or ($dirty -join "`n") -notmatch 'Volume - R: is NOT Dirty') { throw 'Native clean-volume observation failed.' }
         $case.dirtyQuery = [ordered]@{ exitCode=$dirtyExit; output=$dirty }
+        Assert-NativeCandidateDrive $disk $partition
         $chkdsk = @(& "$env:SystemRoot\System32\chkdsk.exe" 'R:' 2>&1)
         $chkdskExit = $LASTEXITCODE
         $case.chkdsk = [ordered]@{ exitCode=$chkdskExit; output=$chkdsk }
@@ -831,3 +899,4 @@ try {
     $report.finishedUtc = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 16 | Out-File -Encoding utf8 -LiteralPath $reportPath
 }
+if (-not $report.success) { throw ('Native recovery failed at ' + $report.stage + '; see ' + $reportPath) }

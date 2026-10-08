@@ -86,6 +86,22 @@ A plausible runlist alone cannot prove that the named clusters belong to this
 file. The last check belongs to the full owning validator and writable admission.
 Allocation bits alone also cannot prove ownership by a particular stream.
 
+## Private sparse transformation
+
+[write_sparse.c](../../core/write_sparse.c) now prepares a bounded, owned
+uncompressed zero/punch projection. It retains exact original runs, converts fully
+covered logical clusters into holes, records their original physical retirement
+candidates and describes at most two partial-cluster byte-zero spans. It proves
+no physical overlap inside the supplied complete map before allocation. The
+existing mapping-pairs wire interpretation and diagram above do not change.
+
+This is a mathematical mapping/content contract, not a sparse media operation.
+Whole-volume ownership, EOF/VDL, partial-data before images, sparse flags and size
+accounting, bitmap/SI/FN publication and native redo/undo remain separately owned.
+There is no execution entry point or widened ordinary-writer admission. See
+[the preparation contract](../SPARSE-PREPARATION.md) and
+[independent map/content tests](../../tests/write_sparse.c).
+
 ## Implementation and evidence
 
 - Decode, assembly and run lookup: [stream_mapping.c](../../core/stream_mapping.c).

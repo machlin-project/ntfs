@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 import re
+import shutil
 import struct
 
 import fixtures as wire
@@ -85,28 +86,29 @@ def metadata_tears(image, regions, root):
     return result
 
 
-def overlay_partition(image, raw, wanted_hash):
-    assert image.stat().st_size == PARTITION_BYTES and raw.stat().st_size == DISK_BYTES
+def overlay_partition(image, raw, wanted_hash, partition_first=PARTITION_FIRST,
+                      partition_bytes=PARTITION_BYTES, disk_bytes=DISK_BYTES):
+    assert image.stat().st_size == partition_bytes and raw.stat().st_size == disk_bytes
     digest = hashlib.sha256()
     with image.open('rb') as source, raw.open('r+b') as target:
         offset = 0
-        while offset < PARTITION_BYTES:
-            value = source.read(min(COPY_BYTES, PARTITION_BYTES - offset))
+        while offset < partition_bytes:
+            value = source.read(min(COPY_BYTES, partition_bytes - offset))
             assert value
             digest.update(value)
-            target.seek(PARTITION_FIRST + offset)
+            target.seek(partition_first + offset)
             previous = target.read(len(value))
             assert len(previous) == len(value)
             if previous != value:
-                target.seek(PARTITION_FIRST + offset)
+                target.seek(partition_first + offset)
                 assert target.write(value) == len(value)
             offset += len(value)
         assert not source.read(1)
     assert digest.hexdigest() == wanted_hash
     observed = hashlib.sha256()
     with raw.open('rb') as source:
-        source.seek(PARTITION_FIRST)
-        remaining = PARTITION_BYTES
+        source.seek(partition_first)
+        remaining = partition_bytes
         while remaining:
             value = source.read(min(COPY_BYTES, remaining))
             assert value
@@ -118,21 +120,45 @@ def overlay_partition(image, raw, wanted_hash):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--local', type=Path, required=True, help='Completed native_directory_batch output')
-    parser.add_argument('--collector-profile', type=Path, required=True, help='Retained accepted batch.json for original T: expectations')
-    parser.add_argument('--raw-container', type=Path, required=True)
-    parser.add_argument('--base-vhd', type=Path, required=True)
+    parser.add_argument('--collector-profile', type=Path, help='Retained accepted batch.json for original T: expectations')
+    parser.add_argument('--raw-container', type=Path)
+    parser.add_argument('--base-vhd', type=Path)
+    parser.add_argument('--cloud-manifest', type=Path, help='Validated windows_cloud_inputs.py output')
     parser.add_argument('--tag', required=True, help='Fresh group identity, ASCII letters/digits/hyphens')
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--qemu', type=Path, default=Path('/opt/homebrew/bin/qemu-img'))
+    parser.add_argument('--qemu', type=Path, default=Path(shutil.which('qemu-img') or '/opt/homebrew/bin/qemu-img'))
     args = parser.parse_args()
     assert re.fullmatch('[A-Za-z0-9-]{1,32}', args.tag)
     local = json.loads((args.local / 'result.json').read_text())
     assert local['status'] == 'pass' and local['vmCommands'] == 0
     baseline = json.loads(Path(local['baselineManifest']).read_text())
-    original = json.loads(args.collector_profile.read_text())
+    disk_bytes, partition_first, partition_bytes = DISK_BYTES, PARTITION_FIRST, PARTITION_BYTES
+    if args.cloud_manifest:
+        if args.collector_profile or args.raw_container or args.base_vhd:
+            parser.error('Cloud manifest cannot be combined with historical container arguments')
+        cloud = json.loads(args.cloud_manifest.read_text())
+        assert cloud['status'] == 'pass' and cloud['nativeWindowsRecoveryPending'] is True
+        assert re.fullmatch(r'R:\\MachlinCloudNTFS-[0-9a-f]{32}', cloud['root'])
+        assert local['cloudManifest'] == str(args.cloud_manifest.resolve()) and baseline['root'] == cloud['root']
+        disk_bytes, partition_first, partition_bytes = cloud['diskBytes'], cloud['partitionOffset'], cloud['partitionBytes']
+        assert 128 * 1024 * 1024 <= disk_bytes <= 4096 * 1024 * 1024
+        assert partition_first >= 1024 * 1024 and 0 < partition_bytes <= disk_bytes - partition_first
+        assert partition_first % wire.SECTOR == partition_bytes % wire.SECTOR == 0
+        args.raw_container, args.base_vhd = Path(cloud['rawContainer']), Path(cloud['baseVhd'])
+        assert sha(args.raw_container) == cloud['rawContainerSha256']
+        original = dict(cloudInput=True, diskBytes=disk_bytes, partitionOffset=partition_first,
+                        partitionBytes=partition_bytes, partitionNumber=cloud['partitionNumber'],
+                        volumeLabel='MachlinCloudNTFS', baseline=baseline,
+                        bootstrapSha256=cloud['bootstrapSha256'],
+                        baseVhdSha256=cloud['baseVhdSha256'], baseVhdBytes=cloud['baseVhdBytes'],
+                        targetAcl=cloud['targetAcl'], fileId=cloud['fileId'])
+    else:
+        if not args.collector_profile or not args.raw_container or not args.base_vhd:
+            parser.error('Supply --cloud-manifest or every historical container argument')
+        original = json.loads(args.collector_profile.read_text())
     raw_source, base_vhd = args.raw_container.resolve(strict=True), args.base_vhd.resolve(strict=True)
     assert raw_source.stat().st_mode & 0o777 == base_vhd.stat().st_mode & 0o777 == 0o444
-    assert raw_source.stat().st_size == DISK_BYTES and sha(base_vhd) == original['baseVhdSha256']
+    assert raw_source.stat().st_size == disk_bytes and sha(base_vhd) == original['baseVhdSha256']
     assert base_vhd.stat().st_size == original['baseVhdBytes'] <= VHD_MAX_BYTES
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -149,9 +175,9 @@ def main():
             objects = json.loads(Path(entry['objects']).read_text())
             raw, vhd = directory / 'expected.raw', directory / ('input-' + entry['case'] + '.vhd')
             batch.clone(directory, 'clone-raw', raw_source, raw)
-            overlay_partition(image, raw, entry['sha256'])
+            overlay_partition(image, raw, entry['sha256'], partition_first, partition_bytes, disk_bytes)
             with raw.open('rb') as source:
-                patches, disk_id, partition_id = unique_gpt(source, DISK_BYTES, PARTITION_FIRST, PARTITION_BYTES)
+                patches, disk_id, partition_id = unique_gpt(source, disk_bytes, partition_first, partition_bytes)
             apply(raw, patches)
             batch.command(directory, 'convert-vhd', [batch.qemu, 'convert', '-f', 'raw', '-O', 'vpc',
                           '-o', 'subformat=dynamic,force_size=on', raw, vhd])

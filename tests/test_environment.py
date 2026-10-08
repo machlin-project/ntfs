@@ -10,6 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from environment import selected_toolchain, tool_environment
 from build import verify_compiler
+import build as builder
 
 class EnvironmentTests(unittest.TestCase):
     def test_allowlist(self):
@@ -83,6 +84,39 @@ class EnvironmentTests(unittest.TestCase):
             inventory.write_text(json.dumps({'host': {'c': {'exelist': ['ccache', '/compiler/gcc']}}}))
             with self.assertRaisesRegex(ValueError, 'another compiler'):
                 verify_compiler(build, '/compiler/gcc')
+
+    def test_reconfigure_reasserts_requested_sanitizers_and_assertions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'build.ninja').touch()
+            inventory = root / 'meson-info/intro-compilers.json'
+            inventory.parent.mkdir()
+            inventory.write_text(json.dumps({'host': {'c': {'exelist': ['/compiler/gcc']}}}))
+            for release in (False, True):
+                argv = ['build.py', directory, '--compiler', 'gcc', *(['--release'] if release else [])]
+                with self.subTest(release=release), patch.object(sys, 'argv', argv), \
+                        patch.object(builder, 'selected_toolchain', return_value={'CC': '/compiler/gcc'}), \
+                        patch.object(builder.subprocess, 'run') as run:
+                    builder.main()
+                    setup = run.call_args_list[0].args[0]
+                    self.assertIn('--reconfigure', setup)
+                    self.assertIn('-Db_ndebug=false', setup)
+                    self.assertIn('-Db_sanitize=' + ('none' if release else 'address,undefined'), setup)
+                    self.assertEqual(len(run.call_args_list), 2)
+
+    def test_cached_mismatch_stops_before_any_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'build.ninja').touch()
+            inventory = root / 'meson-info/intro-compilers.json'
+            inventory.parent.mkdir()
+            inventory.write_text(json.dumps({'host': {'c': {'exelist': ['/compiler/clang']}}}))
+            with patch.object(sys, 'argv', ['build.py', directory, '--compiler', 'gcc']), \
+                    patch.object(builder, 'selected_toolchain', return_value={'CC': '/compiler/gcc'}), \
+                    patch.object(builder.subprocess, 'run') as run:
+                with self.assertRaisesRegex(ValueError, 'another compiler'):
+                    builder.main()
+                run.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

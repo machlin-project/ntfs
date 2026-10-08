@@ -264,8 +264,21 @@ def verify(path, evaluator, directory):
                         before == after and data['acquisition_status'] == 'complete' and
                         counts['failed'] == counts['unsupported'] == counts['oracle_errors'] == counts['out_of_plane'] == 0
                         else 'gaps')
+    report['native_dacl_gate_passed'] = native_dacl_gate(report)
     (directory / 'report.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     return report
+
+
+def native_dacl_gate(report):
+    """Require native DACL agreement without relabeling declared scope gaps."""
+    return (report['native_dacl_vectors_verified'] and report['manifest_unchanged'] and
+            report['acquisition_status'] == 'complete' and
+            not report['missing_cases'] and not report['missing_contexts'] and
+            not report['acquisition_errors'] and bool(report['cases']) and
+            all(case['status'] == 'passed' or
+                (case['scope'] == 'probe' and case['status'] == 'unsupported') or
+                (case['scope'] == 'boundary' and case['status'] == 'out_of_plane')
+                for case in report['cases']))
 
 
 def main():
@@ -273,13 +286,17 @@ def main():
     parser.add_argument('manifest', type=Path)
     parser.add_argument('--evaluator', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path, help='New report directory')
+    parser.add_argument('--require-native-dacl', action='store_true',
+                        help='Gate native DACL agreement; retain declared probe/boundary gaps')
     args = parser.parse_args()
     try:
         report = verify(args.manifest, args.evaluator.resolve(strict=True), args.output)
     except (ValueError, KeyError, TypeError, OSError, RuntimeError) as error:
         raise SystemExit(f'Access comparison rejected: {error}') from error
     print(json.dumps({key: report[key] for key in ('status', 'counts', 'native_dacl_vectors_verified',
-                                                  'full_authorization_qualified')}))
+                                                  'full_authorization_qualified', 'native_dacl_gate_passed')}))
+    if args.require_native_dacl:
+        return 0 if report['native_dacl_gate_passed'] else 1
     return 0 if report['status'] == 'matched' else 1
 
 

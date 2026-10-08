@@ -1,61 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 
-uint16_t
-ntfs_u16(const void *input)
-{
-	const uint8_t *bytes = input;
-
-	return (uint16_t)(bytes[0] | (uint16_t)bytes[1] << NTFS_BITS_PER_BYTE);
-}
-
-uint32_t
-ntfs_u32(const void *input)
-{
-	const uint8_t *bytes = input;
-
-	return (uint32_t)ntfs_u16(bytes) |
-	    (uint32_t)ntfs_u16(bytes + sizeof(uint16_t)) << (sizeof(uint16_t) * NTFS_BITS_PER_BYTE);
-}
-
-uint64_t
-ntfs_u64(const void *input)
-{
-	const uint8_t *bytes = input;
-
-	return (uint64_t)ntfs_u32(bytes) |
-	    (uint64_t)ntfs_u32(bytes + sizeof(uint32_t)) << (sizeof(uint32_t) * NTFS_BITS_PER_BYTE);
-}
-
-void
-ntfs_put_u16(void *output, uint16_t value)
-{
-	uint8_t *bytes = output;
-
-	bytes[0] = (uint8_t)value;
-	bytes[1] = (uint8_t)(value >> NTFS_BITS_PER_BYTE);
-}
-
-void
-ntfs_put_u32(void *output, uint32_t value)
-{
-	uint8_t *bytes = output;
-
-	ntfs_put_u16(bytes, (uint16_t)value);
-	ntfs_put_u16(
-	    bytes + sizeof(uint16_t), (uint16_t)(value >> (sizeof(uint16_t) * NTFS_BITS_PER_BYTE)));
-}
-
-void
-ntfs_put_u64(void *output, uint64_t value)
-{
-	uint8_t *bytes = output;
-
-	ntfs_put_u32(bytes, (uint32_t)value);
-	ntfs_put_u32(
-	    bytes + sizeof(uint32_t), (uint32_t)(value >> (sizeof(uint32_t) * NTFS_BITS_PER_BYTE)));
-}
-
 bool
 ntfs_bounds(uint64_t offset, uint64_t length, uint64_t size)
 {

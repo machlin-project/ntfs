@@ -1,5 +1,67 @@
 # Acceptance
 
+## Core acquisition and allocation optimization
+
+The C-only optimization batch is complete. Journal traversal, checkpoint capture
+and transaction chains reuse a protected page only after physical/target routing
+and while the source scratch generation matches. Each call owns one growable,
+accounted packet buffer and releases it on every outcome. Physical read counters
+remain distinct from assembled page segments. Cluster allocation scans original/
+private bitmap words while preserving exact first-fit placement, run coalescing,
+partial-failure behavior and the original work admission. WOF retains a completed
+table proof only on the same immutable node; each stream still owns its table
+window and verifies boundaries used for decoding. Private inline wire helpers
+retain exact unaligned access widths with an explicit portable fallback. Public
+interfaces, disk representations and supported mutation/recovery families are
+unchanged. See the [contracts and measurements](PERFORMANCE.md#core-acquisition-and-allocation).
+
+The complete regression initially passes 205 of 207 suites. Two journal fuzz
+assertions still equate logical page segments with physical reads. They are
+replaced with an independent check against actual backend callback counts,
+including exact byte counts and bounded page reuse. All 69 suites sharing that
+fuzz executable and the allocation-model suite then pass; 137 unaffected passing
+suites are reused. The resulting **207 suites pass with zero failures or SKIPs**,
+assertions enabled and fatal ASan/UBSan. The original failed log is retained.
+All **45 frozen whole images** remain byte-identical, including original physical
+allocation choices and recovery output.
+
+New independent bit-by-bit allocation and wire-byte oracles cover partial words,
+alignment, exact allocation ends, no-space and the run cap. Journal tests verify
+exact packets, short cumulative budgets, all packet-buffer growth failures,
+read failures, wrap/copy selection and scratch invalidation. WOF tests cover
+cold/warm admission, all warm-open callback faults, no proof after a failed first
+open, new-node isolation and stream lifetime after node close.
+
+All **308 strict objects** pass across 77 core sources in userspace arm64/x86_64
+and kernel arm64e/x86_64 contexts. The 154 kernel objects avoid SIMD/FP registers
+and satisfy the 2-KiB frame ceiling; memory objects have no unresolved runtime
+dependencies. Six portable/GPR memory, codec and endian checks pass. Each of
+three decoder differential contexts passes **662 packets and 229,388 boundary,
+truncation and mutation comparisons** with identical reference status, written
+length and partial output. Selected-Xcode formatting passes.
+
+Nine alternating paired measurements show 3.46×/5.36× dense journal traversal,
+28.91×/22.33× same-node WOF reopening and approximately 33× nearly full bitmap
+search in userspace/GPR-only host executables. Journal work falls from 600 reads
+and allocations per walk to eight reads and one allocation. One thousand WOF
+opens reduce table reads from 2,000 to two; the fresh-node control retains full
+validation. Sixty-eight CPU control profiles preserve the preceding decoder and
+memory gains. Noisy short controls are resolved with 21 longer alternating pairs
+and unchanged disassembly, with every original sample retained. These are
+targeted host measurements, not mounted or native-kernel throughput.
+
+**No FSKit tests, app builds, installation, VM operations, Windows candidates or
+kernel loads run in this batch.** Installed signed build 19 retains its earlier
+mounted/Windows acceptance; it does not contain these latest C changes. Full
+bitmap snapshot I/O, broader cache lifetimes and native transport/parallelism
+remain separate optimization designs.
+
+Evidence: `artifacts/core-optimization-20261008/`,
+`artifacts/core-boundaries-20261008/`,
+`artifacts/core-huffman-differential-20261008/`,
+`artifacts/core-regression-20261008/` and
+`artifacts/core-regression-followup-20261008/`.
+
 ## Huffman decoder acceleration
 
 The connected Huffman batch is complete. XPRESS selects long canonical codes

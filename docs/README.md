@@ -18,6 +18,9 @@ diagrams, field maps, examples and a research register.
   memory operations, userspace/kernel selection and measured tradeoffs.
 - [Huffman decoding](PERFORMANCE.md#huffman-decoding): bounded prefix/word paths,
   differential contracts and matched XPRESS/LZX measurements.
+- [Core acquisition and allocation](PERFORMANCE.md#core-acquisition-and-allocation):
+  journal page/staging reuse, word-based first-fit, WOF node proofs and inline
+  wire fields, with C-only acceptance separate from native testing.
 
 ## Detailed contracts
 

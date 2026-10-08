@@ -11,7 +11,7 @@
 #define NTFS_MEMORY_GENERAL_REGISTERS 1
 #endif
 
-enum { NTFS_MEMORY_VECTOR_BYTES = 16 };
+enum { NTFS_MEMORY_VECTOR_BYTES = 16, NTFS_MEMORY_COPY_CODE_ALIGNMENT = 64 };
 #ifdef NTFS_MEMORY_GENERAL_REGISTERS
 enum { NTFS_MEMORY_ZERO_BLOCK_MIN = 256 };
 #else
@@ -39,7 +39,8 @@ memory_store_word(uint8_t *bytes, uint64_t value)
 #endif
 #endif
 
-void
+/* Stabilize placement of the tight word loop across unrelated code-size changes. */
+__attribute__((aligned(NTFS_MEMORY_COPY_CODE_ALIGNMENT))) void
 ntfs_copy(void *destination, const void *source, size_t bytes)
 {
 	uint8_t *output = destination;

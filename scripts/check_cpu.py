@@ -41,12 +41,13 @@ def main():
 
     checked = []
     for context, flags in (
-        ('portable', ['-DNTFS_MEMORY_PORTABLE']),
+        ('portable', ['-DNTFS_MEMORY_PORTABLE', '-DNTFS_WIRE_BYTES_PORTABLE']),
         ('general-registers', ['-DKERNEL', '-mgeneral-regs-only']),
     ):
-        for name in ('memory', 'codecs'):
+        for name in ('memory', 'codecs', 'endian'):
             label = f'{context}-{name}'
-            binary, argv = build(ROOT, output, ROOT / f'tests/cpu_{name}.c',
+            harness = ROOT / ('tests/endian.c' if name == 'endian' else f'tests/cpu_{name}.c')
+            binary, argv = build(ROOT, output, harness,
                                  [*flags, '-fsanitize=address,undefined'], label, clang, env)
             commands.append(dict(name=f'{label}-build', argv=argv, exitCode=0))
             run(f'{label}-run', [binary, *([args.fixtures.resolve()] if name == 'codecs' else [])], tests)

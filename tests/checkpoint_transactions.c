@@ -398,10 +398,10 @@ source_ceilings(struct test_device *device,
 		for (variant = 0; variant < 2; variant++) {
 			reset_visitor(context);
 			assert(walk(source, variant == 0 ? limits : NULL, workspace, context,
-				   report) == NTFS_RANGE);
-			assert(!report->value.complete && context->calls == 1 &&
-			    report->value.read_calls == TEST_SOURCE_CEILING_CALLS &&
-			    report->value.read_bytes == ceiling_bytes);
+				   report) == NTFS_OK);
+			assert(report->value.complete && context->calls == 2 &&
+			    report->value.read_calls < TEST_SOURCE_CEILING_CALLS &&
+			    report->value.read_bytes < ceiling_bytes);
 		}
 		ntfs_logfile_close(source);
 		assert(device->device.memory == 0);

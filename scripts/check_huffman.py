@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Compare decoder contracts to frozen source under fatal sanitizers.
 
-Only the two decoder objects from the reference are linked with renamed public
-symbols. Test status, written length and partial error output must agree exactly.
+The two decoders and their scalar support from the reference are linked with
+renamed symbols. Status, written length and partial error output must agree exactly.
 The regular fixture suite owns independent successful-output expectations.
 """
 import argparse
@@ -44,12 +44,17 @@ def main():
     for context, flags in (('userspace', []), ('portable', ['-DNTFS_MEMORY_PORTABLE']),
                            ('general-registers', ['-DKERNEL', '-mgeneral-regs-only'])):
         objects = []
-        for codec in ('xpress', 'lzx'):
+        support_exports = ('u16', 'u32', 'u64', 'put_u16', 'put_u32', 'put_u64', 'bounds',
+                           'alloc', 'alloc_optional', 'free', 'io', 'default_limits',
+                           'result_string', 'decode_time')
+        support_renames = [f'-Dntfs_{symbol}=reference_{symbol}' for symbol in support_exports]
+        for codec in ('support', 'xpress', 'lzx'):
             name = f'{context}-reference-{codec}'
             target = output / f'{name}.o'
-            exports = (f'{codec}_workspace_size', f'{codec}_workspace_alignment',
+            exports = () if codec == 'support' else (f'{codec}_workspace_size',
+                       f'{codec}_workspace_alignment',
                        'xpress_huffman_decode' if codec == 'xpress' else 'lzx_decode')
-            renames = [f'-Dntfs_{symbol}=reference_{symbol}' for symbol in exports]
+            renames = [*support_renames, *(f'-Dntfs_{symbol}=reference_{symbol}' for symbol in exports)]
             run(name, [clang, '-isysroot', sdk, '-std=c11', '-O2', '-g', '-ffreestanding',
                        '-fno-builtin', '-Wall', '-Wextra', '-Werror', '-fsanitize=address,undefined',
                        '-I', reference / 'include', '-I', reference / 'core', *flags, *renames,

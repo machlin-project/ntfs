@@ -54,10 +54,13 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--reference', default='HEAD')
     parser.add_argument('--repetitions', type=int, default=9)
+    parser.add_argument('--sample-ms', type=int, default=20,
+                        help='Minimum pilot-calibrated sample duration; increase for noisy controls')
     parser.add_argument('--comparison', default='comparison')
     parser.add_argument('--case', action='append', default=[],
                         help='Measure only this named workload (repeatable); default: all')
     args = parser.parse_args()
+    assert 10 <= args.sample_ms <= 1000
     output = args.output.resolve()
     env = tool_environment()
     clang = subprocess.check_output(['xcrun', '--find', 'clang'], env=env, text=True).strip()
@@ -128,9 +131,9 @@ def main():
             pilot = [json.loads(command([pair[version], *argv, iterations], current,
                                         f'{context}-{name}-pilot-{version}', env))
                      for version in (0, 1)]
-            # Give even the faster version about 20 ms per sample. Pilot results
+            # Give even the faster version the requested sample duration. Pilot results
             # choose identical work counts; they are excluded from statistics.
-            iterations = max(64, min(10000000, int(iterations * 20000000 /
+            iterations = max(64, min(10000000, int(iterations * args.sample_ms * 1000000 /
                                                    min(row['ns'] for row in pilot))))
             for repetition in range(args.repetitions):
                 for version in (0, 1) if repetition % 2 == 0 else (1, 0):
@@ -144,7 +147,7 @@ def main():
                                 iterations=iterations, medianNs=medians,
                                 speedup=medians[0] / medians[1], samples=rows))
     report = dict(complete=True, reference=prepared['reference'], compiler=compiler,
-                  repetitions=args.repetitions, selectedCases=args.case,
+                  repetitions=args.repetitions, sampleMilliseconds=args.sample_ms, selectedCases=args.case,
                   buildCommands=commands, results=results)
     (current / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(complete=True, comparisons=len(results), output=str(current))))

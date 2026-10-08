@@ -12,7 +12,7 @@ static enum ntfs_result ntfs_logfile_assemble_record(struct ntfs_logfile *source
 static enum ntfs_result ntfs_logfile_capture_packet(struct ntfs_logfile *source, uint64_t lsn,
     uint8_t *workspace, size_t capacity, struct ntfs_logfile_span *span,
     struct ntfs_logfile_report *work, const struct ntfs_logfile_checkpoint_capture_limits *limits,
-    struct ntfs_logfile_checkpoint_capture_report *report);
+    struct ntfs_logfile_checkpoint_capture_report *report, struct ntfs_logfile_record_reuse *reuse);
 static enum ntfs_result ntfs_logfile_transaction_link(
     const struct ntfs_logfile *source, uint64_t lsn, uint64_t current, uint64_t oldest);
 static bool ntfs_logfile_transaction_contains(const uint8_t *links, uint32_t count, uint64_t lsn);
@@ -30,6 +30,38 @@ static enum ntfs_result ntfs_logfile_history_tail(struct ntfs_logfile *source,
     struct ntfs_logfile_report *work, const struct ntfs_logfile_checkpoint_capture_limits *limits,
     struct ntfs_logfile_history_report *out);
 
+static void
+logfile_record_reuse_release(struct ntfs_logfile *source, struct ntfs_logfile_record_reuse *reuse)
+{
+	if (reuse->staged != NULL) {
+		source->environment.release(
+		    source->environment.context, reuse->staged, reuse->capacity);
+		reuse->staged = NULL;
+		reuse->capacity = 0;
+	}
+}
+
+static uint8_t *
+logfile_record_stage(
+    struct ntfs_logfile *source, struct ntfs_logfile_record_reuse *reuse, size_t size)
+{
+	uint8_t *bytes;
+
+	if (reuse != NULL) {
+		if (reuse->capacity >= size) {
+			return reuse->staged;
+		}
+		/* Release before growth: peak staging stays bounded by one packet. */
+		logfile_record_reuse_release(source, reuse);
+	}
+	bytes = source->environment.allocate(source->environment.context, size);
+	if (bytes != NULL && reuse != NULL) {
+		reuse->staged = bytes;
+		reuse->capacity = size;
+	}
+	return bytes;
+}
+
 static enum ntfs_result
 ntfs_logfile_assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
     size_t capacity, struct ntfs_logfile_record_view *out, struct ntfs_logfile_report *work,
@@ -40,6 +72,7 @@ ntfs_logfile_assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn
 	struct ntfs_logfile_lsn location, linked;
 	const struct ntfs_logfile_restart *restart;
 	const struct ntfs_disk_log_record *header;
+	struct ntfs_logfile_record_reuse *reuse = copies == NULL ? NULL : copies->reuse;
 	uint8_t *staged;
 	uint64_t total, unique_capacity, offset;
 	size_t copied, amount, record_offset;
@@ -83,7 +116,7 @@ ntfs_logfile_assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn
 	if (total > NTFS_LOGFILE_MAX_RECORD_BYTES || total > capacity || total > unique_capacity) {
 		return NTFS_RANGE;
 	}
-	staged = source->environment.allocate(source->environment.context, (size_t)total);
+	staged = logfile_record_stage(source, reuse, (size_t)total);
 	if (staged == NULL) {
 		return NTFS_NO_MEMORY;
 	}
@@ -184,7 +217,9 @@ ntfs_logfile_assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn
 		}
 	}
 done:
-	source->environment.release(source->environment.context, staged, (size_t)total);
+	if (reuse == NULL) {
+		source->environment.release(source->environment.context, staged, (size_t)total);
+	}
 	return result;
 }
 
@@ -215,11 +250,12 @@ static __attribute__((noinline)) enum ntfs_result
 ntfs_logfile_capture_packet(struct ntfs_logfile *source, uint64_t lsn, uint8_t *workspace,
     size_t capacity, struct ntfs_logfile_span *span, struct ntfs_logfile_report *work,
     const struct ntfs_logfile_checkpoint_capture_limits *limits,
-    struct ntfs_logfile_checkpoint_capture_report *report)
+    struct ntfs_logfile_checkpoint_capture_report *report, struct ntfs_logfile_record_reuse *reuse)
 {
 	struct ntfs_logfile_record_view view;
 	struct ntfs_logfile_record_ending ending;
-	struct ntfs_logfile_record_copies route = {.capture_limits = limits, .indexed = true};
+	struct ntfs_logfile_record_copies route = {
+	    .capture_limits = limits, .reuse = reuse, .indexed = true};
 	enum ntfs_result result;
 
 	report->requested_lsn = lsn;
@@ -236,11 +272,11 @@ ntfs_logfile_capture_packet(struct ntfs_logfile *source, uint64_t lsn, uint8_t *
 	return result;
 }
 
-enum ntfs_result
-ntfs_logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
+static __attribute__((noinline)) enum ntfs_result
+logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
     const struct ntfs_logfile_checkpoint_capture_limits *limits, void *workspace, size_t capacity,
     void *names, size_t name_capacity, struct ntfs_logfile_checkpoint_capture *out,
-    struct ntfs_logfile_checkpoint_capture_report *report)
+    struct ntfs_logfile_checkpoint_capture_report *report, struct ntfs_logfile_record_reuse *reuse)
 {
 	struct ntfs_logfile_checkpoint_capture value = {0};
 	struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS] = {0};
@@ -282,7 +318,7 @@ ntfs_logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uin
 		return NTFS_NOT_FOUND;
 	}
 	result = ntfs_logfile_capture_packet(source, value.client.restart_lsn, bytes, capacity,
-	    &value.checkpoint, &work, budget, report);
+	    &value.checkpoint, &work, budget, report, reuse);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -314,7 +350,7 @@ ntfs_logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uin
 			continue;
 		}
 		result = ntfs_logfile_capture_packet(source, anchors[kind].lsn, bytes, capacity,
-		    &value.dumps[kind], &work, budget, report);
+		    &value.dumps[kind], &work, budget, report, reuse);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -332,6 +368,21 @@ ntfs_logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uin
 	*out = value;
 	report->complete = true;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
+    const struct ntfs_logfile_checkpoint_capture_limits *limits, void *workspace, size_t capacity,
+    void *names, size_t name_capacity, struct ntfs_logfile_checkpoint_capture *out,
+    struct ntfs_logfile_checkpoint_capture_report *report)
+{
+	struct ntfs_logfile_record_reuse reuse = {0};
+	enum ntfs_result result;
+
+	result = logfile_capture_checkpoint(source, index, sequence, limits, workspace, capacity,
+	    names, name_capacity, out, report, &reuse);
+	logfile_record_reuse_release(source, &reuse);
+	return result;
 }
 
 static enum ntfs_result
@@ -374,16 +425,17 @@ ntfs_logfile_transaction_contains(const uint8_t *links, uint32_t count, uint64_t
 	return false;
 }
 
-enum ntfs_result
-ntfs_logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
+static enum ntfs_result
+logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
     uint32_t transaction, uint64_t root_lsn, const struct ntfs_logfile_transaction_limits *limits,
     void *workspace, size_t capacity, void *link_workspace, size_t link_capacity,
     ntfs_logfile_record_visitor visitor, void *context,
-    struct ntfs_logfile_transaction_report *report)
+    struct ntfs_logfile_transaction_report *report, struct ntfs_logfile_record_reuse *reuse)
 {
 	struct ntfs_logfile_transaction_limits admitted;
 	struct ntfs_logfile_checkpoint_capture_limits budget;
-	struct ntfs_logfile_record_copies route = {.capture_limits = &budget, .indexed = true};
+	struct ntfs_logfile_record_copies route = {
+	    .capture_limits = &budget, .reuse = reuse, .indexed = true};
 	struct ntfs_logfile_report work = {0};
 	struct ntfs_logfile_record_view view;
 	struct ntfs_logfile_client client;
@@ -504,6 +556,22 @@ ntfs_logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint
 	}
 	report->complete = true;
 	return NTFS_OK;
+}
+
+enum ntfs_result
+ntfs_logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint16_t sequence,
+    uint32_t transaction, uint64_t root_lsn, const struct ntfs_logfile_transaction_limits *limits,
+    void *workspace, size_t capacity, void *link_workspace, size_t link_capacity,
+    ntfs_logfile_record_visitor visitor, void *context,
+    struct ntfs_logfile_transaction_report *report)
+{
+	struct ntfs_logfile_record_reuse reuse = {0};
+	enum ntfs_result result;
+
+	result = logfile_visit_transaction(source, index, sequence, transaction, root_lsn, limits,
+	    workspace, capacity, link_workspace, link_capacity, visitor, context, report, &reuse);
+	logfile_record_reuse_release(source, &reuse);
+	return result;
 }
 
 static enum ntfs_result
@@ -927,7 +995,9 @@ ntfs_logfile_visit_records_limited(struct ntfs_logfile *source, uint64_t first,
     void *workspace, size_t capacity, ntfs_logfile_record_visitor visitor, void *context,
     struct ntfs_logfile_history_report *out)
 {
-	struct ntfs_logfile_record_copies route = {.indexed = true, .history = true};
+	struct ntfs_logfile_record_reuse reuse = {0};
+	struct ntfs_logfile_record_copies route = {
+	    .reuse = &reuse, .indexed = true, .history = true};
 	struct ntfs_logfile_checkpoint_capture_limits admitted;
 	struct ntfs_logfile_report work = {0};
 	struct ntfs_logfile_record_view record;
@@ -1067,6 +1137,7 @@ ntfs_logfile_visit_records_limited(struct ntfs_logfile *source, uint64_t first,
 	}
 	out->read_calls = work.read_calls;
 	out->read_bytes = work.read_bytes;
+	logfile_record_reuse_release(source, &reuse);
 	return result;
 }
 

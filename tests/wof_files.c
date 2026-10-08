@@ -306,6 +306,89 @@ exercise(struct fuzz_device *device, const struct test_case *test, const uint8_t
 	return work;
 }
 
+static void
+reopen_case(const char *directory, const char *name)
+{
+	struct fuzz_device device = {0};
+	struct ntfs_environment environment;
+	struct ntfs_volume *volume = NULL;
+	struct ntfs_node *node = NULL;
+	struct ntfs_stream *stream = NULL;
+	struct ntfs_stat stat;
+	uint8_t *image, *original, output[GUARD_BYTES];
+	uint64_t reference = (uint64_t)FILE_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT | FILE_RECORD;
+	size_t image_size, size, reads, allocations, cold_reads, warm_reads, warm_allocations;
+	size_t retained, done, mode, fault;
+
+	image = load(directory, name, "img", &image_size);
+	original = load(directory, name, "data", &size);
+	device.data = image;
+	device.size = image_size;
+	environment = fuzz_environment(&device);
+	assert(ntfs_mount(&environment, NULL, &volume) == NTFS_OK);
+	assert(ntfs_node_open(volume, reference, &node) == NTFS_OK);
+	assert(ntfs_node_stat(node, &stat) == NTFS_OK && stat.size == size);
+	reads = device.reads;
+	assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+	cold_reads = device.reads - reads;
+	ntfs_stream_close(stream);
+	stream = NULL;
+	reads = device.reads;
+	allocations = device.allocations;
+	assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+	warm_reads = device.reads - reads;
+	warm_allocations = device.allocations - allocations;
+	/* The authored tables occupy two pages. Required provider/mapping checks
+	 * still execute; only the already validated table walk disappears. */
+	assert(cold_reads == warm_reads + 2);
+	ntfs_stream_close(stream);
+	stream = NULL;
+	retained = device.memory;
+	for (mode = 0; mode < 2; mode++) {
+		for (fault = 1; fault <= (mode == 0 ? warm_allocations : warm_reads); fault++) {
+			device.fail_allocation = mode == 0 ? device.allocations + fault : 0;
+			device.fail_read = mode == 1 ? device.reads + fault : 0;
+			assert(ntfs_stream_open(node, NULL, 0, &stream) ==
+			    (mode == 0 ? NTFS_NO_MEMORY : NTFS_IO));
+			assert(stream == NULL && device.memory == retained);
+			device.fail_allocation = device.fail_read = 0;
+			reads = device.reads;
+			assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+			assert(device.reads - reads == warm_reads);
+			ntfs_stream_close(stream);
+			stream = NULL;
+		}
+	}
+	/* A fresh node never inherits a previous node's validation marker. Refuse
+	 * the final stream allocation, after validation, then require a cold retry. */
+	ntfs_node_close(node);
+	assert(ntfs_node_open(volume, reference, &node) == NTFS_OK);
+	assert(ntfs_node_stat(node, &stat) == NTFS_OK);
+	device.fail_allocation = device.allocations + warm_allocations;
+	assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_NO_MEMORY && stream == NULL);
+	device.fail_allocation = 0;
+	reads = device.reads;
+	assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+	assert(device.reads - reads == cold_reads);
+	ntfs_stream_close(stream);
+	assert(ntfs_stream_open(node, NULL, 0, &stream) == NTFS_OK);
+	ntfs_node_close(node);
+	device.fail_read = device.reads + 1;
+	memset(output, GUARD_VALUE, sizeof(output));
+	assert(ntfs_stream_read(stream, size - sizeof(output), output, sizeof(output), &done) ==
+	    NTFS_IO);
+	assert(done == 0);
+	guards(output, sizeof(output));
+	device.fail_read = 0;
+	assert(ntfs_stream_read(stream, size - sizeof(output), output, sizeof(output), &done) ==
+	    NTFS_OK);
+	assert(done == sizeof(output) && memcmp(output, original + size - done, done) == 0);
+	ntfs_stream_close(stream);
+	assert(ntfs_unmount(volume) == NTFS_OK && device.memory == 0);
+	free(original);
+	free(image);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -316,6 +399,8 @@ main(int argc, char **argv)
 	unsigned phase;
 
 	assert(argc == 2);
+	reopen_case(argv[1], "pages");
+	reopen_case(argv[1], "lzx-pages");
 	for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
 		image = load(argv[1], cases[i].name, "img", &image_size);
 		saved = malloc(image_size);

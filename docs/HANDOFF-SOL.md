@@ -1,6 +1,23 @@
 # Handoff to Sol
 
-The subsequent Huffman batch is complete locally: 205 fatal-sanitizer suites,
+The latest C-only optimization batch is complete: journal page/staging reuse,
+wordwise cluster allocation, same-node WOF table proof and inline wire access.
+All 207 fatal-sanitizer suites and 45 unchanged whole images pass, with 308 strict
+objects, six portable/GPR checks and three decoder differential contexts. The
+full regression's two obsolete fuzz accounting assertions are corrected using
+actual backend read counts; all 69 shared fuzz suites plus allocation pass on
+the follow-up, reusing 137 unaffected results. Original failures are preserved.
+See [current acceptance](ACCEPTANCE.md#core-acquisition-and-allocation-optimization)
+and [performance scope](PERFORMANCE.md#core-acquisition-and-allocation).
+
+The user explicitly defers FSKit work. This batch runs no FSKit tests, app build,
+installation, VM/UTM operation or kernel load. Installed signed build 19 remains
+the preceding mounted/Windows baseline and does not include these changes.
+No VM is assigned to a worker; do not restart completed C suites or initiate
+native work from this handoff. Generated evidence is under
+`artifacts/core-regression-followup-20261008/` and the linked acceptance paths.
+
+The preceding Huffman batch is complete locally: 205 fatal-sanitizer suites,
 45 unchanged whole images, 64 host FSKit PASS/13 runtime SKIPs, 308 strict objects
 and 229,388 frozen-reference comparisons in each of three host contexts. XPRESS
 and LZX retain their original scratch sizes and input/error contracts. The

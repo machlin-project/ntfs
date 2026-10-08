@@ -155,12 +155,6 @@ wof_stream_table_validate(struct ntfs_wof_stream *wof)
 	uint32_t chunk;
 	enum ntfs_result result;
 
-	if (wof->layout.table_size != 0) {
-		wof->page = ntfs_alloc(wof->backing->volume, NTFS_WOF_TABLE_PAGE_BYTES);
-		if (wof->page == NULL) {
-			return NTFS_NO_MEMORY;
-		}
-	}
 	for (chunk = 0; chunk < wof->layout.chunks; chunk++) {
 		end = wof->layout.stored_size - wof->layout.table_size;
 		if (chunk != wof->layout.chunks - 1) {
@@ -225,7 +219,21 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	wof->layout = layout;
 	wof->cached_page = UINT64_MAX;
 	ntfs_unit_cache_initialize(&wof->decoded);
-	result = wof_stream_table_validate(wof);
+	if (layout.table_size != 0) {
+		wof->page = ntfs_alloc(node->volume, NTFS_WOF_TABLE_PAGE_BYTES);
+		if (wof->page == NULL) {
+			ntfs_wof_close(wof);
+			return NTFS_NO_MEMORY;
+		}
+	}
+	/* Provider, placeholder and complete backing mappings were admitted above.
+	 * Reuse only the successful table proof on the same immutable node. Each
+	 * stream still loads and checks the boundaries of every decoded chunk. */
+	if (!node->wof_table_verified || node->wof_logical_size != layout.logical_size ||
+	    node->wof_stored_size != layout.stored_size ||
+	    node->wof_algorithm != layout.algorithm) {
+		result = wof_stream_table_validate(wof);
+	}
 	if (result == NTFS_OK) {
 		stream = ntfs_alloc(node->volume, sizeof(*stream));
 		if (stream == NULL) {
@@ -242,6 +250,10 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	stream->physical_size = backing->physical_size;
 	ntfs_unit_cache_initialize(&stream->decoded);
 	stream->wof = wof;
+	node->wof_logical_size = layout.logical_size;
+	node->wof_stored_size = layout.stored_size;
+	node->wof_algorithm = layout.algorithm;
+	node->wof_table_verified = true;
 	*out = stream;
 	return NTFS_OK;
 }

@@ -8,7 +8,7 @@ import sys
 
 import logfile_fixtures as w
 import logfile_tables_fixtures as t
-from checkpoint_capture_fixtures import Journal, TRANSACTIONS
+from checkpoint_capture_fixtures import packet_read_calls, Journal, TRANSACTIONS
 from checkpoint_fixtures import DUMP_OPERATIONS, STORED_UPDATE_BYTES
 from logfile_checkpoint_fixtures import CLIENT_RESTART
 from logfile_source_fixtures import restart
@@ -150,7 +150,7 @@ def chain_view(source, entry):
     key = t.TABLE.size + entry * t.TRANSACTION.size
     controls = [p for p in packets if p['operation'] in (PREPARE, COMMIT, FORGET)]
     control = controls[0] if controls else None
-    reads = sum(p['pages'] for p in packets)
+    reads = sum(packet_read_calls(source.window, packets))
     chain = dict(root_lsn=seed['previous_lsn'], last_lsn=packets[-1]['lsn'] if packets else 0,
         next_lsn=0, control_lsn=control['lsn'] if control else 0,
         record_bytes=sum(len(p['packet']) for p in packets), read_bytes=reads * source.window.log,
@@ -282,8 +282,9 @@ def author(output):
                 requested=t.TABLE.size + t.TRANSACTION.size)
             case = cases[-1]
             partial = list(reversed(source.chains[1]))[:MAX_RECORDS - len(source.chains[0])]
-            case['report']['read_calls'] += len(partial)
-            case['report']['read_bytes'] += len(partial) * source.window.log
+            partial_reads = sum(packet_read_calls(source.window, partial))
+            case['report']['read_calls'] += partial_reads
+            case['report']['read_bytes'] += partial_reads * source.window.log
             case['report']['record_bytes'] += sum(len(p['packet']) for p in partial)
             case['report']['examined_records'] = case['report']['checked_records'] = MAX_RECORDS
             report = case['report']

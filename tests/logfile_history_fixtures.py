@@ -95,7 +95,12 @@ def author(output):
         observed = candidate if observed is None else observed
         endpoint = code == OK if endpoint is None else endpoint
         expected = []
+        previous = None
         for ordinal, record in enumerate(records):
+            reused = (previous is not None and previous['end_page'] == record['page']
+                      and record.get('reuses_first', True))
+            calls = record['pages'] - int(reused)
+            previous = record
             packet_path = path + f'.packet-{ordinal}'
             (output / packet_path).write_bytes(record['packet'])
             expected.append(dict(record=record['record'], packet_path=packet_path,
@@ -103,9 +108,9 @@ def author(output):
                 assembly=dict(first_page_offset=window.circular + record['page'] * window.log,
                     last_page_offset=window.circular + record['end_page'] * window.log,
                     bytes=len(record['packet']), pages_read=record['pages'],
-                    copy_pages_read=record['copies'], read_calls=record['pages'],
-                    read_bytes=record['pages'] * window.log, wrapped=record['wrapped'])))
-        reads = sum(record['pages'] for record in records) + int(tail is not None) if reads is None else reads
+                    copy_pages_read=record['copies'], read_calls=calls,
+                    read_bytes=calls * window.log, wrapped=record['wrapped'])))
+        reads = sum(record['assembly']['read_calls'] for record in expected) + int(tail is not None) if reads is None else reads
         raw = window.raw(first or window.lsn(0, window.data))
         (output / path).write_bytes(raw)
         report = dict(first_lsn=first, candidate_end_lsn=candidate,
@@ -136,7 +141,7 @@ def author(output):
             ' '.join(map(str, (entry['record']['lsn'], entry['assembly']['bytes'],
                 entry['assembly']['first_page_offset'], entry['assembly']['last_page_offset'],
                 entry['assembly']['pages_read'], entry['assembly']['copy_pages_read'],
-                int(entry['assembly']['wrapped'])))) for entry in expected) + '\n')
+                int(entry['assembly']['wrapped']), entry['assembly']['read_calls']))) for entry in expected) + '\n')
 
     def single(modern=False, header=w.RECORD.size, page=0, offset=None, sequence=w.LSN_SEQUENCE):
         window = Window(modern, header)
@@ -216,6 +221,7 @@ def author(output):
                 next_offset=span_offset, chunks=[(first['offset'], first['packet'])], slot=0,
                 count=1, position=1)
             tail_records[0]['copies'] = 1
+            tail_records[1]['reuses_first'] = False
             finish('legacy-tail-prefix-circular-span', tail_window, tail_records)
         else:
             # Last-start names the header on page zero; the copy's routing DWORD
@@ -230,7 +236,7 @@ def author(output):
             zero = copy.deepcopy(window)
             zero.pages[zero.circular + zero.log]['fields']['copy_value'] = 0
             finish('fast-zero-start-unqualified', zero, [first], code=NOT_FOUND,
-                candidate=span['record']['lsn'], observed=span['record']['lsn'], reads=2)
+                candidate=span['record']['lsn'], observed=span['record']['lsn'], reads=1)
         for field, value, code in (('copy_value', first['record']['lsn'], STALE),
                                   ('next_record_offset', window.data + w.ALIGNMENT, CORRUPT),
                                   ('last_end_lsn', first['record']['lsn'], CORRUPT),
@@ -238,13 +244,13 @@ def author(output):
             changed = copy.deepcopy(window)
             changed.pages[changed.circular + changed.log]['fields'][field] = value
             finish(f'{label}-middle-{field}', changed, [first], code=code,
-                candidate=span['record']['lsn'], observed=span['record']['lsn'], reads=3)
+                candidate=span['record']['lsn'], observed=span['record']['lsn'], reads=2)
         changed = copy.deepcopy(window)
         broken = bytearray(span['packet'])
         w.RECORD.put(broken, 'flags', 0)
         changed.pages[changed.circular]['chunks'][-1] = (span_offset, bytes(broken[:first_bytes]))
         finish(label + '-missing-multipage-flag', changed, [first], code=CORRUPT,
-            candidate=span['record']['lsn'], observed=span['record']['lsn'], reads=4)
+            candidate=span['record']['lsn'], observed=span['record']['lsn'], reads=3)
 
         # An unfinished successor has only a complete header and its first body
         # fragment. It is reported separately, never emitted as complete data.
@@ -325,7 +331,7 @@ def author(output):
             finish(f'{label}-footer-{field}-{value}', changed, records[:count], code=code,
                 first=records[0]['record']['lsn'], candidate=candidate,
                 observed=records[-1]['record']['lsn'], reads=0
-                if field == 'last_end_lsn' else count + 1 if code != UNSUPPORTED else 0)
+                if field == 'last_end_lsn' else 1 if code != UNSUPPORTED else 0)
 
         # Old duplicate completion tags do not hide a unique newer end. Their
         # page bytes are outside the caller's exact requested interval.

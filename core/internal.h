@@ -6,6 +6,7 @@
 #include <ntfs/access.h>
 #include <ntfs/logfile.h>
 #include "disk.h"
+#include "wire_bytes.h"
 
 /* Implementation budgets are distinct from disk-format fields. */
 enum {
@@ -120,6 +121,10 @@ struct ntfs_node {
 	bool metadata_verified;
 	struct ntfs_link_counts link_counts;
 	bool link_counts_verified;
+	/* A successful table validation belongs to this immutable node only. */
+	uint64_t wof_logical_size, wof_stored_size;
+	uint32_t wof_algorithm;
+	bool wof_table_verified;
 };
 
 struct ntfs_attr_view {
@@ -129,12 +134,6 @@ struct ntfs_attr_view {
 	uint16_t flags, instance;
 };
 
-uint16_t ntfs_u16(const void *);
-uint32_t ntfs_u32(const void *);
-uint64_t ntfs_u64(const void *);
-void ntfs_put_u16(void *, uint16_t);
-void ntfs_put_u32(void *, uint32_t);
-void ntfs_put_u64(void *, uint64_t);
 /* Normal RAM spans only. Copy preserves forward byte-loop overlap semantics;
  * equality is a metadata comparison, not a constant-time authentication API. */
 void ntfs_copy(void *, const void *, size_t);

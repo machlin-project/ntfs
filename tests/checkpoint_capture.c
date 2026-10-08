@@ -256,7 +256,7 @@ faults(const char *directory, const struct test_case *test, struct ntfs_logfile 
 	struct guarded_report report;
 	FILE *rows;
 	size_t baseline_memory, baseline_reads, baseline_allocations, mode;
-	uint32_t ordinal, point, full, previous_pages = 0;
+	uint32_t ordinal, point, full, previous_pages = 0, stage_size = 0, growths = 0;
 	enum ntfs_result result;
 
 	rows = open_file(directory, test->name, ".packets.tsv");
@@ -287,13 +287,19 @@ faults(const char *directory, const struct test_case *test, struct ntfs_logfile 
 		}
 	}
 	for (ordinal = 0; ordinal < test->report.acquired_records; ordinal++) {
+		if (packets[ordinal].bytes <= stage_size) {
+			previous_pages += packets[ordinal].pages;
+			continue;
+		}
+		stage_size = packets[ordinal].bytes;
+		growths++;
 		baseline_reads = device->device.reads;
 		baseline_allocations = device->device.allocations;
-		device->device.fail_allocation = baseline_allocations + ordinal + 1;
+		device->device.fail_allocation = baseline_allocations + growths;
 		result = invoke(source, test, NULL, records, capacity, names,
 		    NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES, &capture, &report);
 		assert(result == NTFS_NO_MEMORY &&
-		    device->device.allocations - baseline_allocations == ordinal + 1 &&
+		    device->device.allocations - baseline_allocations == growths &&
 		    device->device.reads - baseline_reads == previous_pages + 1 &&
 		    device->device.memory == baseline_memory);
 		failure_oracle(test, packets, previous_pages + 1, true, &expected);

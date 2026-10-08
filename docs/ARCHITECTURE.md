@@ -69,6 +69,12 @@ checkpoint/transaction capture and ordered history visits. Borrowed page bytes
 still belong to the source's original raw/scratch windows and survive only their
 original observation boundary. Physical inventory, selected framing and owning
 recovery evidence remain distinct; extraction grants no extra replay authority.
+One traversal/capture-local descriptor can reuse the existing restored page only
+after exact physical/target routing and while the source scratch generation is
+unchanged. It also owns one bounded, lazily grown packet buffer until call cleanup.
+No reuse crosses public calls; failed packets never publish partial caller bytes.
+Actual read/allocation charges reflect transfers and buffer growth, while logical
+segment counts retain their original meaning. See [the core optimization contract](PERFORMANCE.md#journal-traversal).
 
 FSKit retains one volume owner across four private implementation components.
 [NTFSVolume.m](../adapters/fskit/NTFSVolume.m) owns native lifecycle, request
@@ -185,6 +191,14 @@ a later read still requires full callback admission and successful data transfer
 Independent streams own independent positions. Diagnostic pure lookups retain
 their binary-search contract. The private field adds eight bytes per stream on
 the tested architectures and allocates no separate storage.
+
+A successful WOF stream open can publish a node-local table-validation proof.
+Its key is logical size, stored size and algorithm within that immutable node's
+lifetime. Required provider/backing validation and local chunk-span checks still
+execute on reuse; new nodes and failed opens cannot inherit an incomplete proof.
+The fields add 24 bytes per node with no separate allocation or public ABI change.
+Private [wire helpers](../core/wire_bytes.h) inline exact unaligned little-endian
+fields; compiler-specific wide operations retain a portable byte fallback.
 
 All calls on one volume and its children require external serialization. Objects
 hold a counted volume lifetime; unmount returns BUSY while nodes, public streams,

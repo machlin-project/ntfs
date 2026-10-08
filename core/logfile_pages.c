@@ -15,7 +15,8 @@ static enum ntfs_result ntfs_logfile_load_fast_page(struct ntfs_logfile *source,
     struct ntfs_logfile_report *work, struct ntfs_logfile_fast_copies *copies,
     struct ntfs_logfile_page_view *out);
 static enum ntfs_result ntfs_logfile_load_history_page(struct ntfs_logfile *source, uint64_t offset,
-    uint64_t lsn, struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out);
+    uint64_t lsn, struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_page_view *out);
 
 enum ntfs_result
 ntfs_logfile_load_page(struct ntfs_logfile *source, uint64_t offset,
@@ -29,6 +30,10 @@ ntfs_logfile_load_page(struct ntfs_logfile *source, uint64_t offset,
 	    offset < (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes ||
 	    !ntfs_bounds(offset, restart->log_page_bytes, restart->usable_bytes)) {
 		return NTFS_INVALID;
+	}
+	/* Saturation disables reuse rather than allowing an old generation to match. */
+	if (source->page_generation != UINT64_MAX) {
+		source->page_generation++;
 	}
 	result =
 	    ntfs_logfile_source_read(source, offset, source->raw, restart->log_page_bytes, work);
@@ -518,7 +523,8 @@ ntfs_logfile_load_fast_page(struct ntfs_logfile *source, uint64_t offset,
 
 static enum ntfs_result
 ntfs_logfile_load_history_page(struct ntfs_logfile *source, uint64_t offset, uint64_t lsn,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out)
+    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_page_view *out)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
 	const struct ntfs_logfile_index_entry *entry;
@@ -547,7 +553,40 @@ ntfs_logfile_load_history_page(struct ntfs_logfile *source, uint64_t offset, uin
 	    (entry->circular.page.copy_value == lsn || entry->circular.page.copy_value == 0)) {
 		selected = &entry->circular;
 	}
-	return ntfs_logfile_index_reload(source, selected, offset, work, out);
+	return ntfs_logfile_reload_record_page(source, selected, offset, work, copies, out);
+}
+
+enum ntfs_result
+ntfs_logfile_reload_record_page(struct ntfs_logfile *source,
+    const struct ntfs_logfile_page_view *selected, uint64_t target,
+    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_page_view *out)
+{
+	struct ntfs_logfile_record_reuse *reuse = copies->reuse;
+	const struct ntfs_logfile_checkpoint_capture_limits *limits = copies->capture_limits;
+	enum ntfs_result result;
+
+	/* Routing is evaluated for every requested LSN before consulting this slot:
+	 * a legacy completed tail and a spanning circular start may share a target. */
+	if (reuse != NULL && reuse->generation != 0 &&
+	    reuse->generation == source->page_generation && reuse->generation != UINT64_MAX &&
+	    reuse->physical == selected->offset && reuse->target == target) {
+		*out = *selected;
+		return NTFS_OK;
+	}
+	if (limits != NULL &&
+	    (work->read_calls >= limits->max_read_calls ||
+		work->read_bytes > limits->max_read_bytes ||
+		source->restart.log_page_bytes > limits->max_read_bytes - work->read_bytes)) {
+		return NTFS_RANGE;
+	}
+	result = ntfs_logfile_index_reload(source, selected, target, work, out);
+	if (result == NTFS_OK && reuse != NULL) {
+		reuse->generation = source->page_generation;
+		reuse->physical = selected->offset;
+		reuse->target = target;
+	}
+	return result;
 }
 
 enum ntfs_result
@@ -560,18 +599,19 @@ ntfs_logfile_load_record_page(struct ntfs_logfile *source, uint64_t offset, uint
 	if (copies == NULL) {
 		return ntfs_logfile_load_page(source, offset, work, out);
 	}
+	if (copies->indexed) {
+		if (copies->history) {
+			return ntfs_logfile_load_history_page(
+			    source, offset, lsn, work, copies, out);
+		}
+		return ntfs_logfile_load_indexed_page(source, offset, work, copies, out);
+	}
 	limits = copies->capture_limits;
 	if (limits != NULL &&
 	    (work->read_calls >= limits->max_read_calls ||
 		work->read_bytes > limits->max_read_bytes ||
 		source->restart.log_page_bytes > limits->max_read_bytes - work->read_bytes)) {
 		return NTFS_RANGE;
-	}
-	if (copies->indexed) {
-		if (copies->history) {
-			return ntfs_logfile_load_history_page(source, offset, lsn, work, out);
-		}
-		return ntfs_logfile_load_indexed_page(source, offset, work, out);
 	}
 	if (copies->legacy != NULL) {
 		return ntfs_logfile_load_legacy_page(source, offset, work, copies->legacy, out);

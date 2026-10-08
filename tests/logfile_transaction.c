@@ -66,6 +66,7 @@ struct visitor_context {
 	const uint8_t *packets;
 	size_t packet_bytes, position, calls, stop;
 	uint32_t reads;
+	uint64_t last_page;
 	enum ntfs_result stop_result;
 	struct ntfs_logfile_transaction_limits *alter_limits;
 };
@@ -160,6 +161,7 @@ reset_visitor(struct visitor_context *context)
 	context->position = 0;
 	context->calls = 0;
 	context->reads = 0;
+	context->last_page = UINT64_MAX;
 	context->stop = 0;
 	context->alter_limits = NULL;
 }
@@ -179,7 +181,8 @@ visit(void *opaque, const struct ntfs_logfile_record_view *view, const void *byt
 	    length <= context->packet_bytes - context->position);
 	assert(memcmp(bytes, context->packets + context->position, length) == 0);
 	context->position += length;
-	context->reads += pages;
+	context->reads += pages - (view->first_page_offset == context->last_page);
+	context->last_page = view->last_page_offset;
 	assert(view->read_calls == context->reads);
 	context->calls++;
 	if (context->alter_limits != NULL) {
@@ -262,7 +265,7 @@ exercise(const char *directory, const struct test_case *test)
 	uint8_t *input, *unchanged, *record_guard, *link_guard, *records, *links;
 	size_t source_bytes, packet_bytes, before_reads, before_allocations, retained;
 	size_t shift, item, mode, failure, record, prefix_reads, completed, read_faults = 0;
-	size_t record_capacity;
+	size_t record_capacity, staging_capacity = 0, growths = 0;
 	uint64_t lsn;
 	uint32_t bytes, pages, copies;
 	enum ntfs_result result;
@@ -389,23 +392,32 @@ exercise(const char *directory, const struct test_case *test)
 			}
 		}
 		prefix_reads = 0;
+		reset_visitor(&context);
 		for (record = 0; record < test->expected.visited_records; record++) {
-			reset_visitor(&context);
-			before_reads = device.device.reads;
-			before_allocations = device.device.allocations;
-			device.device.fail_allocation = before_allocations + record + 1;
-			result = ntfs_logfile_visit_transaction(source, (uint16_t)test->index,
-			    (uint16_t)test->sequence, test->transaction, test->root, &limits,
-			    records, NTFS_LOGFILE_MAX_RECORD_BYTES, links, TEST_LINK_BYTES, visit,
-			    &context, &report.value);
-			assert(result == NTFS_NO_MEMORY && !report.value.complete &&
-			    context.calls == record);
-			assert(report.value.read_calls == prefix_reads + 1 &&
-			    report.value.visited_records == record);
-			assert(device.device.memory == retained);
-			device.device.fail_allocation = 0;
 			assert(fscanf(context.rows, "%" SCNu64 " %" SCNu32 " %" SCNu32 " %" SCNu32,
 				   &lsn, &bytes, &pages, &copies) == TEST_PACKET_COLUMNS);
+			if (bytes > staging_capacity) {
+				staging_capacity = bytes;
+				growths++;
+				reset_visitor(&context);
+				before_reads = device.device.reads;
+				before_allocations = device.device.allocations;
+				device.device.fail_allocation = before_allocations + growths;
+				result =
+				    ntfs_logfile_visit_transaction(source, (uint16_t)test->index,
+					(uint16_t)test->sequence, test->transaction, test->root,
+					&limits, records, NTFS_LOGFILE_MAX_RECORD_BYTES, links,
+					TEST_LINK_BYTES, visit, &context, &report.value);
+				assert(result == NTFS_NO_MEMORY && !report.value.complete &&
+				    context.calls == record);
+				assert(report.value.read_calls == prefix_reads + 1 &&
+				    report.value.visited_records == record);
+				assert(device.device.memory == retained);
+				device.device.fail_allocation = 0;
+				assert(fscanf(context.rows,
+					   "%" SCNu64 " %" SCNu32 " %" SCNu32 " %" SCNu32, &lsn,
+					   &bytes, &pages, &copies) == TEST_PACKET_COLUMNS);
+			}
 			prefix_reads += pages;
 		}
 		for (item = 1; item <= test->expected.visited_records; item++) {
@@ -508,11 +520,11 @@ exercise(const char *directory, const struct test_case *test)
 			    (uint16_t)test->sequence, test->transaction, test->root, &limits,
 			    records, NTFS_LOGFILE_MAX_RECORD_BYTES, links, TEST_LINK_BYTES, visit,
 			    &context, &report.value);
-			assert(result == NTFS_RANGE && !report.value.complete &&
-			    report.value.visited_records == TEST_DENSE_OWNER_CALLS &&
-			    report.value.read_calls == TEST_DENSE_OWNER_CALLS &&
-			    report.value.read_bytes == TEST_DENSE_OWNER_READ_BYTES &&
-			    device.device.reads - before_reads == TEST_DENSE_OWNER_CALLS &&
+			assert(result == NTFS_OK && report.value.complete);
+			assert(report.value.visited_records == test->expected.visited_records &&
+			    report.value.read_calls == test->expected.read_calls &&
+			    report.value.read_bytes == test->expected.read_bytes &&
+			    device.device.reads - before_reads == test->expected.read_calls &&
 			    device.device.memory == retained);
 			ntfs_logfile_close(source);
 			assert(device.device.memory == 0);

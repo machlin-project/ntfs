@@ -74,6 +74,13 @@ native recovery; this is outside the current ordinary write family.
 
 ## WOF file-provider storage
 
+**Implementation lifetime.** A complete offset-table validation may be retained
+on the same immutable node after successful stream publication. Reopening still
+validates provider/backing metadata and each decoded chunk's local boundaries;
+new nodes validate the full table again. This is a bounded implementation reuse
+rule, not an additional NTFS field or a weaker table-ordering contract. See
+[the lifetime and failure checks](../PERFORMANCE.md#wof-and-wire-fields).
+
 Our observed supported WOF payload is 16 bytes: outer version, provider,
 provider version and algorithm, each a little-endian DWORD. It is not assumed
 identical to every WOFAPI parameter structure. The admitted profile uses outer

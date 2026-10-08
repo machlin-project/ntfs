@@ -464,8 +464,10 @@ indexed_digest(struct ntfs_logfile *source, const struct ntfs_logfile_restart *r
 }
 
 struct fuzz_history_visitor {
+	const struct fuzz_device *device;
 	uint64_t last_lsn, digest, bytes, last_bytes;
-	uint32_t calls, stop, read_calls;
+	size_t read_calls;
+	uint32_t calls, stop, page_bytes;
 	uint16_t header_bytes;
 	bool descending;
 };
@@ -476,7 +478,7 @@ fuzz_history_visit(void *context, const struct ntfs_logfile_record_view *view, c
 	struct fuzz_history_visitor *visitor = context;
 	struct ntfs_logfile_record decoded;
 	const uint8_t *bytes = input;
-	size_t i;
+	size_t i, read_calls, packet_reads;
 
 	assert(view->bytes <= NTFS_LOGFILE_MAX_RECORD_BYTES);
 	assert(visitor->calls == 0 ||
@@ -485,10 +487,14 @@ fuzz_history_visit(void *context, const struct ntfs_logfile_record_view *view, c
 	assert(ntfs_logfile_record_decode(bytes, view->bytes, visitor->header_bytes, &decoded) ==
 	    NTFS_OK);
 	assert(memcmp(&decoded, &view->record, sizeof(decoded)) == 0);
-	assert(view->read_calls ==
-		(visitor->descending ? visitor->read_calls + view->pages_read : view->pages_read) &&
+	read_calls = visitor->device->reads;
+	assert(read_calls >= visitor->read_calls);
+	packet_reads = read_calls - visitor->read_calls;
+	assert(view->read_calls == (visitor->descending ? read_calls : packet_reads));
+	assert(view->read_bytes == (uint64_t)view->read_calls * visitor->page_bytes);
+	assert(packet_reads <= view->pages_read && view->pages_read - packet_reads <= 1 &&
 	    view->copy_pages_read <= view->pages_read);
-	visitor->read_calls += view->pages_read;
+	visitor->read_calls = read_calls;
 	visitor->last_lsn = view->record.lsn;
 	visitor->digest ^= view->first_page_offset ^ view->last_page_offset ^ view->read_bytes ^
 	    view->copy_pages_read ^ view->wrapped;
@@ -940,6 +946,8 @@ fuzz_source_index(const uint8_t *bytes, size_t size, uint64_t lsn, uint32_t cont
 				assert(memcmp(&cached, &empty, sizeof(cached)) == 0 &&
 				    device.reads == reads && device.allocations == allocations);
 				device.reads = 0;
+				visitors[index].device = &device;
+				visitors[index].page_bytes = restart.log_page_bytes;
 				device.fail_read =
 				    (controls & FUZZ_FAULT_SELECTED_READ) != 0 ? fault : 0;
 				device.fail_allocation =

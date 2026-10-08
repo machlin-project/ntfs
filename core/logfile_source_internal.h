@@ -39,6 +39,8 @@ struct ntfs_logfile {
 	struct ntfs_logfile_report report;
 	struct ntfs_logfile_restart restart;
 	uint8_t *raw, *scratch, *selected;
+	/* Changes before every protected-page load, including failed attempts. */
+	uint64_t page_generation;
 	bool backend_failed;
 	struct ntfs_stream *backing;
 	struct ntfs_logfile_page_index *page_index;
@@ -57,10 +59,18 @@ struct ntfs_logfile_fast_copies {
 	uint8_t *comparison;
 };
 
+/* Private to one traversal/capture call. Scratch reuse never crosses calls. */
+struct ntfs_logfile_record_reuse {
+	uint64_t generation, physical, target;
+	uint8_t *staged;
+	size_t capacity;
+};
+
 struct ntfs_logfile_record_copies {
 	struct ntfs_logfile_legacy_copies *legacy;
 	struct ntfs_logfile_fast_copies *fast;
 	const struct ntfs_logfile_checkpoint_capture_limits *capture_limits;
+	struct ntfs_logfile_record_reuse *reuse;
 	bool indexed, history;
 };
 
@@ -108,7 +118,12 @@ enum ntfs_result ntfs_logfile_index_reload(struct ntfs_logfile *source,
     const struct ntfs_logfile_page_view *expected, uint64_t target,
     struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out);
 enum ntfs_result ntfs_logfile_load_indexed_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out);
+    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_page_view *out);
+enum ntfs_result ntfs_logfile_reload_record_page(struct ntfs_logfile *source,
+    const struct ntfs_logfile_page_view *selected, uint64_t target,
+    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_page_view *out);
 enum ntfs_result ntfs_logfile_scan_fast_copies(struct ntfs_logfile *source,
     struct ntfs_logfile_report *work, struct ntfs_logfile_fast_copies *copies);
 enum ntfs_result ntfs_logfile_load_record_page(struct ntfs_logfile *source, uint64_t offset,

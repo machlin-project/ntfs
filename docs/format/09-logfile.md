@@ -7,6 +7,14 @@ circular journal, and the NTFS client gives those payloads metadata-update and
 checkpoint meaning. Valid LFS bytes are not automatically an executable NTFS
 transaction.
 
+**Implementation accounting.** Logical record segments and physical callback
+reads are different units. An immutable traversal can reuse its last validated
+selected page after resolving the exact physical copy and target for each LSN.
+New public calls still reload and revalidate against prepared metadata. Packet
+staging remains private until complete validation, with one growable buffer per
+call. None of these reuse rules changes LFS framing, copy precedence or recovery
+authority; see [the selected-journal contract](../PERFORMANCE.md#journal-traversal).
+
 The layout basis is [original Linux-NTFS `$LogFile` research](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html).
 [Maxim Suhanov's original LFS research](https://dfir.ru/2019/02/16/how-the-logfile-works/)
 explains version boundaries and native observations. Our decoders and original

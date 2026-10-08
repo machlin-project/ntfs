@@ -163,59 +163,128 @@ All 154 kernel objects are checked for SIMD/FP registers, and every context's
 memory object has no unresolved runtime dependency. Full integration results
 are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md).
 
-## Selected journal interval costs and optimization plan
+## Core acquisition and allocation
 
-The bounded selected-record walker keeps index preparation and record traversal as
-separate accounted operations. Endpoint gathering is O(circular targets + fixed copy
-slots); stored routing targets avoid deriving a continuation's target from its header
-LSN or scanning every copy for every target. The index retains metadata and one page
-comparison buffer, with no disk-sized payload cache. Each complete packet still has
-one bounded staging allocation and one selected-page read per physical segment.
+The portable core now reuses completed work within explicit immutable lifetimes.
+This batch covers the journal, cluster allocation, WOF stream reopening and
+little-endian fields. FSKit builds/tests, VM operations and installed acceptance
+are outside this batch. The implementation does not change disk layouts, packet
+selection, physical allocation order or supported operation families.
 
-The 600-record functional source puts eighty small records on each full 4-KiB page.
-Its ordinary walk performs 600 reads although only eight target pages contain its
-records. This is explicit I/O accounting, without a timing or throughput claim.
-After native history/continuation correctness is qualified, measure matched cold/hot
-walks against this source and unchanged Windows inputs before introducing reuse:
+### Journal traversal
 
-1. Measure constructor/traversal wall and CPU time, physical calls/bytes, staging
-   allocations and peak retained bytes independently; include small and spanning
-   records, unused page capacity, copies, wrap, short budgets and injected errors.
-2. Evaluate one bounded restored selected-page reuse slot tied to the immutable
-   owner and exact target/header selection. Preserve separate prepared metadata,
-   fault/revalidation behavior, packet atomicity and whole-operation credits.
-3. Evaluate private staging reuse only after measuring allocator costs. Retain exact
-   packet caps, caller-workspace isolation, allocation refusal and owner lifetime.
-4. Repeat packet/refusal/fault checks and matched benchmarks; qualify installed
-   resource reads and memory pressure separately. A lower synthetic callback count
-   alone cannot establish a Windows recovery or installed throughput improvement.
+Index preparation remains a separate operation. Each history, checkpoint capture
+or transaction-chain call starts with an empty reuse descriptor. After routing the
+requested LSN to an exact physical page and circular target, a successful protected
+reload can serve further records while the source scratch generation is unchanged.
+Every attempted page load advances that generation; saturation disables reuse.
+Legacy completed tails and circular spanning starts are selected before the reuse
+check, so a common target cannot hide a change in physical selection. No extra page
+buffer is allocated. New public calls still reload and compare protected headers
+against prepared metadata. The generation check also defensively rejects scratch
+changed by nested page I/O; it does not grant general callback reentrancy.
 
-The new selected checkpoint capture has the same per-packet staging/read policy,
-with aggregate credits for all packets and no hidden retained payload allocation.
-Measure index construction, checkpoint capture and later ordered analysis separately.
-Include copied caller bytes/name scratch as well as core live memory; caller storage
-is outside the source allocator report. Compare repeated same-page dumps, large
-tables and spanning checkpoints against exact packet/failure oracles before sharing
-the proposed bounded page or staging reuse slot. Capture ownership and lower read
-counts alone establish no throughput or native recovery improvement.
+A private packet buffer grows only when a later packet exceeds its capacity. Old
+storage is released before growth, keeping at most one packet allocation and the
+existing 1-MiB ceiling. The buffer remains charged during callbacks and is released
+on every call outcome. Only complete validated packet bytes reach caller storage.
+Single-record APIs retain their separate allocation and fresh-page behavior.
 
-The selected transaction-chain verifier keeps index preparation separate and uses
-one packet staging allocation at a time. Caller scratch retains two uint64_t values
-per admitted record, at most 64 KiB for 4096 records. Strictly decreasing links
-permit O(records log records) undo membership checks with no additional reads.
-The original dense 4096-record graph still reads one selected page per packet even
-when several packets share a page. Measure forward analysis, backward transaction
-traversal and final link verification separately before considering the bounded
-page/staging reuse above. Include caller scratch, partial failures and exact byte
-oracles in paired measurements. No timing or speedup is claimed for this verifier.
+`pages_read` and `copy_pages_read` describe assembled segments; `read_calls` and
+`read_bytes` count actual callback attempts, including failures. A reused page
+therefore contributes a segment but no physical read. Budgets apply before actual
+transfers and never reset per packet. Checkpoint composition retains aggregate
+credits across capture and individual transaction chains; record/link caps remain
+unchanged. The dense independent 600-record/eight-page fixture now requires eight
+reads and one packet allocation, replacing 600 of each. Tests cover exact packets,
+copies, legacy tail/circular transitions, wrap, spanning packets, short credits,
+failed reads, every staging growth and caller-buffer isolation.
 
-Checkpoint composition retains that chain policy and reuses the link reservation
-between entries. Complete seed admission is linear in transaction-table bytes;
-membership work is bounded by the aggregate record cap rather than a cap renewed
-for each transaction. Checkpoint acquisition and all chains share read credits,
-including failed attempts. Caller checkpoint/name/record/link storage is explicit
-and separate from source-retained metadata. No benchmark or throughput improvement
-is claimed for this composition.
+### Cluster allocation
+
+First-fit scans inspect the union of original and privately edited bitmap words,
+skip occupied 64-bit words and append consecutive free spans. The final partial
+word is read and written only within bitmap storage, and padding beyond the volume
+is never allocated. Allocation order and run coalescing match the independent
+bit-by-bit model, including partial changes on no-space/run-cap refusal. Original
+allocations remain unavailable after private retirement, preventing precommit
+payloads from overwriting the old state. Admission still charges the original
+whole-volume work bound before allocation. Bitmap snapshots, run capacity and
+physical mutation/journal composition are unchanged.
+
+The independent model covers every 0–257-bit geometry at sixteen alignments,
+empty/full/alternating/mixed original and private maps, partial words, no-space
+and the 4,096-run limit. Whole-image regression additionally checks that accepted
+mutations retain their exact original physical placements and bytes.
+
+### WOF and wire fields
+
+A live node retains a completed WOF table proof keyed by logical size, stored
+size and algorithm. Every open still validates provider metadata, placeholder
+policy, complete backing mappings, VDL and chunk limits, and allocates its own
+bounded table window. A matching node proof skips only the full table walk;
+actual reads fetch and validate their local chunk boundaries. Publication follows
+successful stream allocation. Failed opens publish no proof, new nodes validate
+again, and closing a node cannot invalidate an already opened stream. The private
+node fields add 24 bytes on both supported 64-bit architectures, without a new
+allocation or public ABI. XPRESS/LZX table-page fixtures verify cold/warm counts,
+all warm-open allocation/read failures, cold retry after final-allocation refusal,
+new-node isolation and independent data after node close.
+
+Private inline little-endian helpers expose exact unaligned 2/4/8-byte operations
+to each caller without LTO. Supported little-endian compilers use constant-size
+builtin copies; the portable fallback assembles bytes explicitly. Independent
+byte oracles check all bits, widths, thirty-two alignments and exact allocation
+ends. Kernel compilation retains general-register restrictions and the 2-KiB
+frame ceiling.
+
+### Measurement scope
+
+`scripts/benchmark_core.py` freezes the Git reference, identical C harness and
+independent journal/WOF fixtures before paired comparison. It measures ordinary
+userspace and GPR-only host executables with identical compiler/SDK/options,
+nine alternating pairs and exact semantic checksums. Counters measure actual
+allocation/read callbacks. Bitmap cases use a nearly full 1,048,576-cluster map
+and request 256 contiguous or alternating free clusters; this emphasizes search
+cost and does not represent complete write throughput. WOF compares repeated
+stream opens on one node with a fresh-node control. Journal preparation is outside
+traversal counters; its one-time setup remains in elapsed time.
+
+CPU controls retain the separate frozen codec/memory harness. Initial regressions
+and tuning candidates remain in artifacts; measurements do not establish mounted
+throughput, kernel execution or Windows recovery acceptance. Full bitmap snapshot
+I/O and write-plan composition, volume-wide WOF proof retention and FSKit view
+replacement/parallelism remain potential later work requiring their own lifetime,
+resource and durability design.
+
+The final paired core measurements are:
+
+| Workload | Userspace | GPR-only host | Deterministic work change |
+| --- | ---: | ---: | --- |
+| Nearly full bitmap, contiguous request | 33.55× | 33.97× | Same 256 clusters and one run |
+| Nearly full bitmap, fragmented request | 32.85× | 32.96× | Same 256 clusters and 256 runs |
+| Dense journal traversal | 3.46× | 5.36× | Per walk: 600→8 reads, 600→1 allocations |
+| Same-node WOF stream reopening | 28.91× | 22.33× | 1,000 opens: 2,000→2 table reads |
+| WOF fresh-node control | 1.04× | 1.06× | Full validation and callback counts retained |
+
+These are medians of nine alternating pairs, not whole-driver speedups. The
+full CPU control run retains 68 profiles. Its two noisy short samples are checked
+again with 21 alternating pairs calibrated to 200 ms: 4-KiB zeroing is at parity
+(1.003× userspace / 0.999× GPR), and one-bit LZX is 1.070× / 1.069×. Both executables
+have identical disassembly to that full control run. All original samples remain
+available; longer controls resolve measurement variation without changing code.
+
+Earlier candidates showed layout-sensitive slowdowns in the tight GPR copy loop
+and LZX long-code bucket loop. Disassembly confirmed shifted loop placement after
+surrounding code growth; it does not establish the hardware cause. Explicit
+function alignment stabilizes their placement and removed the measured slowdowns;
+LZX retains equivalent bounded word normalization. The unsuccessful inline/shift
+candidates and their measurements are retained. Exact-width endian loads remove
+split-byte code generation without enabling LTO or kernel SIMD.
+
+Evidence: `artifacts/core-optimization-20261008/core-prepared/accepted/`,
+`cpu/accepted/`, `cpu/long-controls/` and `disassembly/` under the same batch root.
+Correctness and native scope are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md).
 
 ## Checked base metadata across temporary nodes
 

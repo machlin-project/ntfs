@@ -553,7 +553,8 @@ ntfs_logfile_get_indexed_page(
 
 enum ntfs_result
 ntfs_logfile_load_indexed_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out)
+    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_page_view *out)
 {
 	struct ntfs_logfile_indexed_page indexed;
 	enum ntfs_result result;
@@ -568,5 +569,6 @@ ntfs_logfile_load_indexed_page(struct ntfs_logfile *source, uint64_t offset,
 	if (indexed.result != NTFS_OK) {
 		return indexed.result;
 	}
-	return ntfs_logfile_index_reload(source, &indexed.selected, offset, work, out);
+	return ntfs_logfile_reload_record_page(
+	    source, &indexed.selected, offset, work, copies, out);
 }

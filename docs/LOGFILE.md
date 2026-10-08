@@ -60,7 +60,10 @@ The caller supplies record and link scratch. At most 4096 records are admitted;
 two uint64_t values per admitted record are reserved before I/O, at most 64 KiB.
 Scratch accepts byte alignment. The decreasing chain permits binary membership
 search without extra reads, giving O(records log records) bounded work. One staging
-allocation exists per packet, with no retained allocation. All packet reads use
+allocation is retained within the call, growing only for a larger packet and
+released on every outcome. Consecutive packets can reuse the existing restored
+page after exact physical/target selection; new calls still reload protected
+headers. All packet reads use
 one operation budget; copied positive limits may tighten, never raise source I/O
 ceilings. Discovery/index preparation remains separate. NULL limits inherit those
 ceilings and the record policy cap.
@@ -240,7 +243,9 @@ byte extents, intermediate page boundaries and the completed ending witness must
 agree. Indexed copy/continuation admission retains its existing limitations.
 
 The operation stages one exact bounded packet at a time, copying it into the
-workspace only after successful assembly. The restart is first; present dumps
+workspace only after successful assembly. Its private buffer grows only for a
+larger packet and is released on all outcomes. Selected-page reuse is restricted
+to this call and the unchanged scratch generation after exact routing. The restart is first; present dumps
 follow in checkpoint-kind order without alignment padding. The complete binding,
 free topology, allocated entries and cross-table name/dirty membership must pass
 before the value-only capture is published. Errors zero the capture. The separate
@@ -575,10 +580,14 @@ remains incomplete; the visitor never receives that tail as a complete packet.
 Legacy tail-only pages may have no observed start LSN because their common field
 is a physical target. An exhausted sequence cannot invent a representable successor.
 
-Each record uses one bounded private staging allocation and publishes exact unpadded
-bytes into the transient caller workspace after assembly. All record and optional
+Each record assembles into one bounded private staging buffer, reused and grown
+within the call, and publishes exact unpadded bytes into the transient caller
+workspace only after complete validation. Selected-page reuse requires the same
+physical page, target and scratch generation after per-LSN routing. Every new
+public call starts cold and revalidates protected metadata. All record and optional
 tail reads share one operation budget; it never resets per record. Visitor read
-counters describe that packet's successful physical segments. Report read counters
+counters describe actual transfers for that packet, including zero on page reuse;
+logical page/copy counts still describe all assembled segments. Report read counters
 also retain failed attempts and optional tail-header reads; copy_pages_read counts
 completed assembled packets. A callback failure counts the examined packet but
 does not advance visited_records. A record/quota/read/allocation/footer failure

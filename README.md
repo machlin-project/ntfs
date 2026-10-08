@@ -14,8 +14,9 @@ checkpoints, including MFT growth, large directories and 30 journal ring wraps.
 All six retained pressure/reuse states pass independent Windows namespace,
 metadata, read-only chkdsk and original healthy-event review.
 
-The general owner passes 205 sanitized C suites, 64 host FSKit groups and a
-universal Release build. The personally signed build 19 is installed and
+The current C core passes 207 sanitized suites. The preceding general-owner
+acceptance includes 64 host FSKit groups and a universal Release build.
+The personally signed build 19 is installed and
 all 81 native component groups pass. Actual create, growth with zero gaps,
 truncate/regrow, shared-mapping writes, cross-parent directory movement,
 closed-victim replacement, removal and sixteen generation-reuse cycles pass.
@@ -53,6 +54,16 @@ oracles, 308 compiler-context objects and 229,388 differential checks in each of
 three host contexts pass. Host FSKit remains 64 PASS/13 runtime SKIPs; the unsigned
 universal Release app is uninstalled and installed build 19 retains its native
 acceptance. These are CPU results, not mounted throughput measurements.
+
+The latest [core optimization batch](docs/PERFORMANCE.md#core-acquisition-and-allocation)
+reuses journal pages and packet storage within one traversal, scans allocation
+bitmaps by words, retains successful WOF table validation on the same immutable
+node and inlines bounded little-endian access. Targeted host measurements improve
+dense journal traversal 3.46–5.36×, same-node WOF reopening 22.33–28.91× and
+nearly full bitmap search about 33×. All 207 sanitized suites, 45 unchanged whole
+images, 308 strict compiler-context objects and three decoder differential runs
+pass. This batch runs no FSKit tests, app build, installation or VM operation;
+native acceptance remains attached to the preceding installed app.
 
 The separate growth recovery matrix now passes all 264 actual current-C states:
 181 MFT-extension and 83 large-index states, each with full validation and a

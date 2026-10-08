@@ -16,6 +16,31 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+## Core optimization checks
+
+Prepare the frozen reference and workload inputs before editing core sources:
+
+```sh
+python3 scripts/benchmark_core.py prepare --reference HEAD --output artifacts/core-next
+python3 scripts/benchmark_core.py compare --output artifacts/core-next --comparison candidate --repetitions 9
+```
+
+This requires the ordinary generated journal/WOF fixtures in `.build/`. The
+harness checks semantic checksums and balances all allocation lifetimes; its
+profiles isolate dense journal traversal, nearly full first-fit bitmap search,
+same-node WOF reopening and a fresh-node control. Both compiler contexts run on
+the host. Preserve rejected candidates and serialize timing against other builds
+or tests. `benchmark_cpu.py --sample-ms 200 --case NAME` increases the calibrated
+duration for a noisy control without changing either side's code or workload.
+
+The regular C regression includes independent allocation/endian tests, WOF
+cold/warm failures and journal packet/read/growth oracles. Whole-image comparisons
+retain the exact physical allocation and recovery results. The compiler-context
+check below covers the portable endian fallback and GPR-only loads as well as
+memory/codecs. C tests and compiler objects remain separate from FSKit builds,
+installed mounts and native Windows acceptance. The current core-only batch does
+not run any FSKit/app/VM stage.
+
 ## CPU optimization checks
 
 `cpu-memory`, `cpu-codecs` and `huffman` are part of the regular sanitized Meson suite.
@@ -59,7 +84,7 @@ three host execution contexts (ordinary, portable memory and GPR-only):
 python3 scripts/check_huffman.py --reference artifacts/cpu-next/reference --fixtures .build/huffman-fixtures --output artifacts/huffman-check-next
 ```
 
-The script links only the old decoder objects with renamed public symbols;
+The script links the old decoders and their scalar support with renamed symbols;
 reference source stays in ignored artifacts. It checks exact result, written
 length and partial output on every error under fatal ASan/UBSan. Independent
 authored output bytes remain the successful-decode oracle. Kernel object checks

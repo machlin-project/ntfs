@@ -56,7 +56,11 @@ Worst-case flat tables occupy 8 MiB and 128 MiB respectively. These are policy
 limits, not format restrictions. The primitives allocate nothing. Public stream
 opening uses the default work cap and validates the entire table through one
 4-KiB page, charged to the existing owner allocator. It never allocates a flat
-table. Each subsequent random read checks its local span using that same page.
+table. After successful stream publication, the immutable node can reuse that
+complete proof for the same logical size, stored size and algorithm. Every open
+still validates provider/placeholder/backing metadata and requires its own table
+page; every actual read fetches and checks its local span. Failure publishes no
+proof and a new node starts cold. See [the core reuse contract](PERFORMANCE.md#wof-and-wire-fields).
 
 ## Storage, lifetime and native projection
 

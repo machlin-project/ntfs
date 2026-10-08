@@ -8,7 +8,7 @@ import sys
 import logfile_fixtures as w
 from logfile_source_fixtures import restart
 from logfile_history_fixtures import Window
-from checkpoint_capture_fixtures import Journal
+from checkpoint_capture_fixtures import Journal, packet_read_calls
 
 OK, INVALID, CORRUPT, UNSUPPORTED, NOT_FOUND, STALE, RANGE = 0, 9, 2, 3, 6, 10, 11
 NOOP, PREPARE, COMMIT, FORGET = 0x00, 0x19, 0x1a, 0x1b
@@ -78,10 +78,11 @@ def author(output):
         root = source.packets[-1]['lsn'] if root is None else root
         delivered = list(reversed(source.packets)) if delivered is None else delivered
         examined = len(delivered) if examined is None else examined
-        reads = sum(packet['pages'] for packet in delivered) if reads is None else reads
+        page_calls = packet_read_calls(source.window, delivered)
+        reads = sum(page_calls) if reads is None else reads
         blob, records = bytearray(), []
         cumulative_reads = 0
-        for packet in delivered:
+        for packet, calls in zip(delivered, page_calls):
             raw = packet['packet']
             fields = {name: struct.unpack_from('<' + kind, raw, w.RECORD.offsets[name])[0]
                       for name, kind in w.RECORD.fields if not kind.endswith('s')}
@@ -89,7 +90,7 @@ def author(output):
             fields.pop('data_bytes')
             fields['data'] = dict(offset=source.window.header,
                 length=len(raw) - source.window.header)
-            cumulative_reads += packet['pages']
+            cumulative_reads += calls
             records.append(dict(record=fields, packet_offset=len(blob), bytes=len(raw),
                 pages=packet['pages'], copies=packet['copies'], operation=packet['operation'],
                 read_calls=cumulative_reads, read_bytes=cumulative_reads * source.window.log,

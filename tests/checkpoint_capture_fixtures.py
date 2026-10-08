@@ -139,6 +139,24 @@ class Journal:
         return journal, packets
 
 
+def packet_read_calls(window, packets):
+    """Consecutive records can share the preceding restored ending page.
+
+    The author fixes one selected copy per target for these indexed chains.
+    History's legacy tail/circular transitions have separate explicit oracles.
+    """
+    previous, calls = None, []
+    offset_mask = (1 << (window.size.bit_length() - w.OFFSET_SHIFT)) - 1
+    for packet in packets:
+        offset = (packet['lsn'] & offset_mask) << w.OFFSET_SHIFT
+        first = offset - offset % window.log
+        calls.append(packet['pages'] - int(previous == first))
+        previous = first + (packet['pages'] - 1) * window.log
+        if previous >= window.size:
+            previous -= window.size - window.circular
+    return calls
+
+
 def author(output):
     output.mkdir(parents=True, exist_ok=True)
     cases = []

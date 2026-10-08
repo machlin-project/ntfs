@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include <ntfs/logfile.h>
+#include "logfile_internal.h"
 #include "fuzz_device.h"
 #include <assert.h>
 #include <inttypes.h>
@@ -25,8 +26,12 @@ enum {
 	TEST_PARTIAL_FILL = 0x71,
 	TEST_PARTIAL_DIVISOR = 2,
 	TEST_CASE_FIELDS = 9,
-	TEST_PACKET_FIELDS = 7,
-	TEST_PREFIX_PAIR_READS = 2
+	TEST_PACKET_FIELDS = 8,
+	TEST_PREFIX_PAIR_READS = 2,
+	TEST_DENSE_RECORDS = 600,
+	TEST_DENSE_PER_PAGE = 80,
+	TEST_DENSE_PAGES = (TEST_DENSE_RECORDS + TEST_DENSE_PER_PAGE - 1) / TEST_DENSE_PER_PAGE,
+	TEST_SHORT_READS = 3
 };
 
 struct test_device {
@@ -128,17 +133,18 @@ visit_record(void *context, const struct ntfs_logfile_record_view *view, const v
 {
 	struct test_visitor *visitor = context;
 	uint64_t lsn, first, last;
-	uint32_t size, pages, copies, wrapped;
+	uint32_t size, pages, copies, wrapped, reads;
 	char name[TEST_NAME_BYTES];
 	uint8_t *expected;
 	size_t expected_bytes;
 	int length;
 
 	assert(visitor->calls < visitor->test->records);
-	assert(
-	    fscanf(visitor->rows,
-		"%" SCNu64 " %" SCNu32 " %" SCNu64 " %" SCNu64 " %" SCNu32 " %" SCNu32 " %" SCNu32,
-		&lsn, &size, &first, &last, &pages, &copies, &wrapped) == TEST_PACKET_FIELDS);
+	assert(fscanf(visitor->rows,
+		   "%" SCNu64 " %" SCNu32 " %" SCNu64 " %" SCNu64 " %" SCNu32 " %" SCNu32
+		   " %" SCNu32 " %" SCNu32,
+		   &lsn, &size, &first, &last, &pages, &copies, &wrapped,
+		   &reads) == TEST_PACKET_FIELDS);
 	length =
 	    snprintf(name, sizeof(name), "%s.packet-%" PRIu32, visitor->test->name, visitor->calls);
 	assert(length > 0 && (size_t)length < sizeof(name));
@@ -148,8 +154,8 @@ visit_record(void *context, const struct ntfs_logfile_record_view *view, const v
 	    view->last_page_offset == last);
 	assert(view->pages_read == pages && view->copy_pages_read == copies &&
 	    view->wrapped == (wrapped != 0));
-	assert(view->read_calls == pages &&
-	    view->read_bytes == (uint64_t)pages * visitor->test->page_bytes);
+	assert(view->read_calls == reads &&
+	    view->read_bytes == (uint64_t)reads * visitor->test->page_bytes);
 	free(expected);
 	visitor->calls++;
 	return visitor->calls == visitor->stop_at ? visitor->stop_result : NTFS_OK;
@@ -188,7 +194,7 @@ check_case(const char *directory, const struct test_case *test)
 	const enum ntfs_result failures[] = {NTFS_IO, NTFS_CORRUPT, NTFS_NOT_FOUND, NTFS_RANGE};
 
 	uint8_t *raw, *allocation, *workspace;
-	size_t size, retained, before, fault, mode, status, stop, base_allocations;
+	size_t size, retained, before, fault, mode, status, stop, base_allocations, allocations;
 	bool faults;
 	enum ntfs_result result;
 
@@ -212,6 +218,7 @@ check_case(const char *directory, const struct test_case *test)
 	retained = device.device.memory;
 	visitor.rows = open_file(directory, test->name, ".packets.rows");
 	before = device.device.reads;
+	base_allocations = device.device.allocations;
 	result = ntfs_logfile_visit_records(source, test->first, TEST_RECORDS, workspace,
 	    NTFS_LOGFILE_MAX_RECORD_BYTES, visit_record, &visitor, &report);
 	if (result != (enum ntfs_result)test->code) {
@@ -226,6 +233,7 @@ check_case(const char *directory, const struct test_case *test)
 	    report.tail_verified == (test->tail != 0));
 	assert(report.complete == (result == NTFS_OK) && report.wrapped == (test->wrapped != 0));
 	assert(device.device.memory == retained);
+	allocations = device.device.allocations - base_allocations;
 	guarded(allocation);
 	/* Every physical read and record allocation in these distinct successful
 	 * windows is failed in turn. Backend statuses survive full/partial buffers,
@@ -273,15 +281,14 @@ check_case(const char *directory, const struct test_case *test)
 				}
 			}
 		}
-		for (fault = 1; fault <= test->records; fault++) {
+		for (fault = 1; fault <= allocations; fault++) {
 			reset_visitor(&visitor);
 			base_allocations = device.device.allocations;
 			device.device.fail_allocation = base_allocations + fault;
 			assert(ntfs_logfile_visit_records(source, test->first, TEST_RECORDS,
 				   workspace, NTFS_LOGFILE_MAX_RECORD_BYTES, visit_record, &visitor,
 				   &report) == NTFS_NO_MEMORY);
-			assert(visitor.calls == fault - 1 && report.visited_records == fault - 1 &&
-			    !report.complete);
+			assert(visitor.calls == report.visited_records && !report.complete);
 			assert(device.device.memory == retained);
 			device.device.fail_allocation = 0;
 			reset_visitor(&visitor);
@@ -320,6 +327,29 @@ check_case(const char *directory, const struct test_case *test)
 	free(raw);
 }
 
+struct nested_visitor {
+	struct ntfs_logfile *source;
+	uint8_t *page;
+	size_t page_bytes, calls;
+};
+
+static enum ntfs_result
+nested_page_read(void *context, const struct ntfs_logfile_record_view *view, const void *bytes)
+{
+	struct nested_visitor *visitor = context;
+	struct ntfs_logfile_page_view page;
+	struct ntfs_logfile_record record;
+
+	assert(ntfs_logfile_record_decode(bytes, view->bytes, view->record.data.offset, &record) ==
+	    NTFS_OK);
+	assert(record.lsn == view->record.lsn);
+	if (visitor->calls++ == 0) {
+		assert(ntfs_logfile_read_page(visitor->source, view->first_page_offset,
+			   visitor->page, visitor->page_bytes, &page) == NTFS_OK);
+	}
+	return NTFS_OK;
+}
+
 static void
 shared_credits(const char *directory)
 {
@@ -330,8 +360,9 @@ shared_credits(const char *directory)
 	struct ntfs_logfile_restart restart;
 	struct ntfs_logfile_page_index_report preparation;
 	struct ntfs_logfile_history_report report;
+	struct nested_visitor nested = {0};
 	uint8_t *raw, *workspace;
-	size_t size, before, mode;
+	size_t size, before, mode, allocations;
 	uint32_t maximum;
 
 	raw = file_bytes(directory, "fast-shared-operation-credits.journal", &size);
@@ -350,7 +381,9 @@ shared_credits(const char *directory)
 	    NTFS_LOGFILE_FAST_COPY_PAGES + TEST_PREFIX_PAIR_READS * NTFS_LOGFILE_FAST_COPY_PAGES;
 	assert(maximum < TEST_RECORDS);
 	workspace = malloc(NTFS_LOGFILE_MAX_RECORD_BYTES);
-	assert(workspace != NULL);
+	nested.page = malloc(restart.log_page_bytes);
+	nested.page_bytes = restart.log_page_bytes;
+	assert(workspace != NULL && nested.page != NULL);
 	for (mode = 0; mode < 2; mode++) {
 		limits.max_read_calls = mode == 0 ? maximum : TEST_READ_CALLS;
 		limits.max_read_bytes =
@@ -359,18 +392,43 @@ shared_credits(const char *directory)
 		assert(ntfs_logfile_prepare_page_index(source, TEST_INDEX_BYTES, &preparation) ==
 		    NTFS_OK);
 		before = device.device.reads;
+		allocations = device.device.allocations;
 		assert(
 		    ntfs_logfile_visit_records(source, restart.current_lsn, TEST_RECORDS, workspace,
-			NTFS_LOGFILE_MAX_RECORD_BYTES, NULL, NULL, &report) == NTFS_RANGE);
-		assert(report.read_calls == maximum &&
-		    report.read_bytes == (uint64_t)maximum * restart.log_page_bytes &&
-		    report.visited_records == maximum && !report.complete &&
-		    !report.endpoint_verified);
-		assert(device.device.reads - before == maximum);
+			NTFS_LOGFILE_MAX_RECORD_BYTES, NULL, NULL, &report) == NTFS_OK);
+		assert(report.read_calls == TEST_DENSE_PAGES &&
+		    report.visited_records == TEST_DENSE_RECORDS && report.complete);
+		assert(device.device.reads - before == TEST_DENSE_PAGES);
+		assert(device.device.allocations - allocations == 1);
+		before = device.device.reads;
+		nested.source = source;
+		nested.calls = 0;
+		assert(ntfs_logfile_visit_records(source, restart.current_lsn, TEST_RECORDS,
+			   workspace, NTFS_LOGFILE_MAX_RECORD_BYTES, nested_page_read, &nested,
+			   &report) == NTFS_OK);
+		assert(report.read_calls == TEST_DENSE_PAGES + 1 &&
+		    nested.calls == TEST_DENSE_RECORDS);
+		/* Nested public I/O invalidates the outer scratch slot. It has separate
+		 * credits, and the outer walk must reload before its second packet. */
+		assert(device.device.reads - before == TEST_DENSE_PAGES + 2);
+		{
+			struct ntfs_logfile_checkpoint_capture_limits credits = {
+			    TEST_SHORT_READS, TEST_SHORT_READS * restart.log_page_bytes};
+
+			before = device.device.reads;
+			assert(ntfs_logfile_visit_records_limited(source, restart.current_lsn,
+				   TEST_RECORDS, &credits, workspace, NTFS_LOGFILE_MAX_RECORD_BYTES,
+				   NULL, NULL, &report) == NTFS_RANGE);
+			assert(report.read_calls == TEST_SHORT_READS &&
+			    report.visited_records == TEST_SHORT_READS * TEST_DENSE_PER_PAGE &&
+			    !report.complete);
+			assert(device.device.reads - before == TEST_SHORT_READS);
+		}
 		ntfs_logfile_close(source);
 		assert(device.device.memory == 0);
 	}
 	free(workspace);
+	free(nested.page);
 	free(raw);
 }
 

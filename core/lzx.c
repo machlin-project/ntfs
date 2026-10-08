@@ -4,7 +4,12 @@
 
 /* Small canonical buckets with an eight-bit shortcut. Complete alphabets and
  * prior block lengths live in caller scratch, keeping kernel-sized frames. */
-enum { LZX_PREFIX_BITS = 8, LZX_PREFIX_ENTRIES = 1u << LZX_PREFIX_BITS, LZX_SYMBOL_BITS = 9 };
+enum {
+	LZX_PREFIX_BITS = 8,
+	LZX_PREFIX_ENTRIES = 1u << LZX_PREFIX_BITS,
+	LZX_SYMBOL_BITS = 9,
+	LZX_SYMBOL_CODE_ALIGNMENT = 256
+};
 
 struct ntfs_lzx_tree {
 	uint32_t first[NTFS_LZX_MAX_CODE_BITS + 1];
@@ -134,8 +139,9 @@ lzx_consume_symbol(struct ntfs_lzx_reader *reader, unsigned bits, uint32_t next)
 	reader->valid -= bits;
 }
 
-/* Keep the refill/long-code frame out of the inlined short-code path. */
-static __attribute__((noinline)) enum ntfs_result
+/* Keep the refill/long-code frame out of the inlined short-code path. Stabilize
+ * the small bucket loop's placement as surrounding code grows. */
+static __attribute__((noinline, aligned(LZX_SYMBOL_CODE_ALIGNMENT))) enum ntfs_result
 lzx_take_symbol_fallback(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree,
     const uint16_t *symbols, uint32_t value, unsigned *out)
 {
@@ -191,7 +197,7 @@ lzx_take_symbol(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree
 	}
 	/* Zero-padded lookup also recognizes a complete short code when fewer
 	 * than eight bits remain. The long-code marker's length exceeds one word. */
-	value = ((uint32_t)reader->value << (NTFS_LZX_WORD_BITS - reader->valid)) & UINT16_MAX;
+	value = (((uint32_t)reader->value << NTFS_LZX_WORD_BITS) >> reader->valid) & UINT16_MAX;
 	entry = tree->prefix[value >> (NTFS_LZX_WORD_BITS - LZX_PREFIX_BITS)];
 	bits = entry >> LZX_SYMBOL_BITS;
 	if (bits <= reader->valid) {

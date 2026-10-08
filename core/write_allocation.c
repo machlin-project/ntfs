@@ -107,13 +107,52 @@ mutation_allocation_append_run(
 	return NTFS_OK;
 }
 
+enum { MUTATION_BITMAP_WORD_BITS = sizeof(uint64_t) * NTFS_BITS_PER_BYTE };
+
+static uint64_t
+mutation_allocation_mask(unsigned bits)
+{
+	return bits == MUTATION_BITMAP_WORD_BITS ? UINT64_MAX : (UINT64_C(1) << bits) - 1;
+}
+
+static uint64_t
+mutation_allocation_word(const uint8_t *bytes, size_t size)
+{
+	uint64_t value = 0;
+	size_t index;
+
+	if (size >= sizeof(value)) {
+		return ntfs_u64(bytes);
+	}
+	for (index = 0; index < size; index++) {
+		value |= (uint64_t)bytes[index] << (index * NTFS_BITS_PER_BYTE);
+	}
+	return value;
+}
+
+static void
+mutation_allocation_put_word(uint8_t *bytes, size_t size, uint64_t value)
+{
+	size_t index;
+
+	if (size >= sizeof(value)) {
+		ntfs_put_u64(bytes, value);
+		return;
+	}
+	for (index = 0; index < size; index++) {
+		bytes[index] = (uint8_t)(value >> (index * NTFS_BITS_PER_BYTE));
+	}
+}
+
 enum ntfs_result
 ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn, uint64_t clusters,
     struct ntfs_run **out, size_t *count)
 {
 	struct ntfs_mutation_bitmap *bitmap = &plan->allocation;
 	struct ntfs_run *runs;
-	uint64_t cluster;
+	uint64_t cluster, available, current, shifted, mask;
+	size_t byte, bytes;
+	unsigned bits, first, length;
 	enum ntfs_result result = NTFS_OK;
 
 	*out = NULL;
@@ -131,18 +170,42 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 	}
 	/* Original allocations stay unavailable even after private retirement.
 	 * No precommit payload can overwrite storage belonging to the old state. */
-	for (cluster = 0; cluster < plan->info.cluster_count && clusters != 0; cluster++) {
-		if (ntfs_mutation_bit(bitmap->before, bitmap->bytes, cluster) ||
-		    ntfs_mutation_bit(bitmap->after, bitmap->bytes, cluster)) {
+	for (cluster = 0; cluster < plan->info.cluster_count && clusters != 0;
+	    cluster += MUTATION_BITMAP_WORD_BITS) {
+		byte = (size_t)(cluster / NTFS_BITS_PER_BYTE);
+		bytes = bitmap->bytes - byte;
+		bits = plan->info.cluster_count - cluster < MUTATION_BITMAP_WORD_BITS
+		    ? (unsigned)(plan->info.cluster_count - cluster)
+		    : MUTATION_BITMAP_WORD_BITS;
+		current = mutation_allocation_word(bitmap->after + byte, bytes);
+		available = ~(mutation_allocation_word(bitmap->before + byte, bytes) | current) &
+		    mutation_allocation_mask(bits);
+		if (available == 0) {
 			continue;
 		}
-		result = mutation_allocation_append_run(runs, count, vcn, cluster, 1);
+		while (available != 0 && clusters != 0) {
+			first = (unsigned)__builtin_ctzll(available);
+			shifted = available >> first;
+			length = shifted == UINT64_MAX ? MUTATION_BITMAP_WORD_BITS
+						       : (unsigned)__builtin_ctzll(~shifted);
+			if (length > clusters) {
+				length = (unsigned)clusters;
+			}
+			result = mutation_allocation_append_run(
+			    runs, count, vcn, cluster + first, length);
+			if (result != NTFS_OK) {
+				break;
+			}
+			mask = mutation_allocation_mask(length) << first;
+			current |= mask;
+			available &= ~mask;
+			vcn += length;
+			clusters -= length;
+		}
+		mutation_allocation_put_word(bitmap->after + byte, bytes, current);
 		if (result != NTFS_OK) {
 			break;
 		}
-		ntfs_mutation_set_bit(bitmap->after, cluster, true);
-		vcn++;
-		clusters--;
 	}
 	if (result == NTFS_OK && clusters != 0) {
 		result = NTFS_NO_SPACE;

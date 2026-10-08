@@ -49,6 +49,10 @@ targets:
       - NTFSReadCachePolicy.m
       - NTFSReadCachePolicy.h
       - NTFSVolume.m
+      - NTFSVolumeInternal.h
+      - NTFSVolumeItems.m
+      - NTFSVolumeRead.m
+      - NTFSImageVolume.m
       - NTFSVolume.h
       - NTFSLegacyVolume.m
       - NTFSModernVolume.m

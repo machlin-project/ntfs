@@ -29,7 +29,7 @@ METRICS = ('wall_ns', 'cpu_ns', 'p50_ns', 'p95_ns', 'p99_ns', 'read_calls',
            'peak_rss_bytes', 'entries_per_second')
 WORKLOAD = 'tools/fskit_directory_workload.m'
 ADAPTERS = ('NTFSResource.m', 'NTFSNames.m', 'NTFSLinks.m', 'NTFSAccessPolicy.m', 'NTFSReadCachePolicy.m',
-            'NTFSVolume.m', 'NTFSLegacyVolume.m', 'NTFSModernVolume.m')
+            'NTFSVolume.m', 'NTFSVolumeItems.m', 'NTFSVolumeRead.m', 'NTFSImageVolume.m', 'NTFSLegacyVolume.m', 'NTFSModernVolume.m')
 
 
 def digest(path):

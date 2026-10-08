@@ -26,6 +26,21 @@ operation governor and decoded-unit cache; no additional owner or callback is
 introduced. Public call admission remains in `api.c`, and WOF retains its separate
 provider lifetime and content route.
 
+FSKit retains one volume owner across four private implementation components.
+[NTFSVolume.m](../adapters/fskit/NTFSVolume.m) owns native lifecycle, request
+admission, operation/publication serialization and replies.
+[NTFSVolumeItems.m](../adapters/fskit/NTFSVolumeItems.m) owns canonical item and
+ancestry binding, reader caches and directory-continuation storage.
+[NTFSVolumeRead.m](../adapters/fskit/NTFSVolumeRead.m) owns complete immutable
+lookup, attributes, data, xattr and enumeration bodies.
+[NTFSImageVolume.m](../adapters/fskit/NTFSImageVolume.m) owns recovered image
+construction, view replacement, authenticated open rights and prepared mutations.
+The [private storage contract](../adapters/fskit/NTFSVolumeInternal.h) retains the
+same volume/item fields and their ordering; categories introduce no additional
+owner, monitor, callback or native item identity. Whole method bodies retain their
+original lock, authorization, cleanup and reply order. Extraction qualification
+and the separate installed gate are recorded in [REFACTORING.md](REFACTORING.md).
+
 The private `NTFSImageTransport` platform component holds the original authorized
 `FSPathURLResource` and balances successful security-scope access for its lifetime.
 [FSKit transports that scope intact](https://developer.apple.com/documentation/fskit/fspathurlresource).

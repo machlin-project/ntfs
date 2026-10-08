@@ -88,8 +88,14 @@ checkpoint, their joint execution credits, final object metadata and free-space
 count. Native replies and stable-item/path changes are allocated before execute;
 old core views have already closed. Parent close defers backend-claim release
 until its pending child closes, while forbidding that child's execution. These
-are locally verified owner/lifecycle contracts, separate from installed mount
-acceptance. See [the general owner contract](../WRITES.md#general-owner-and-native-reply-preparation).
+are locally verified owner/lifecycle contracts. The current combined installed
+scenario independently passes creation, resize, range writes, movement,
+closed-victim replacement, removal, sixteen generation-reuse cycles and fresh
+same-URL remount. Its exact inactive postimage passes Windows namespace, data,
+identity, descriptor projection and FILETIME checks, clean state, read-only
+chkdsk and matching original healthy-event review. This is a bounded ordinary-image
+profile; open unlink, broader security defaults and growth interruption matrices
+remain separate. See [the general owner contract](../WRITES.md#general-owner-and-native-reply-preparation).
 
 Creation now prepares independently requested object times together with the
 new SI, filename and directory key. Invalid selected timestamps and unsupported
@@ -475,6 +481,14 @@ free-slot exclusions. The existing exact journal-space tests retain their measur
 forward, inverse and checkpoint page requirement; cheaper proof of an unchanged
 open-only prefix must not reduce that physical admission contract.
 
+The corrected current installed scenario passes all sixteen generation-reuse
+cycles and exact bytes/metadata after ordinary unmount and a fresh same-URL mount.
+Its frozen whole postimage also passes independent Windows file/namespace,
+File ID, ACL projection, SI time, clean-state, read-only chkdsk and original
+healthy-event review. This observes the combined owner and reserve contract on
+real mounted syscalls; it does not qualify every growth/reuse interruption point
+or change the cumulative budgets. Preceding failed images remain preserved.
+
 ### Loser, winner and interrupted recovery
 
 This experimental physical protocol publishes no metadata homes before durable
@@ -658,7 +672,9 @@ execute afterward. This is bounded native recovery evidence, not warning
 suppression, a remount or a repaired image. The two expected warnings are one
 journal USA fault and one [INDX USA fault](02-records-and-fixups.md#native-indx-sector-fault-observation).
 Native inheritance, MFT pressure, sustained ring reuse and installed general
-mutation still need their own gates.
+mutation retained their separate gates at that preceding boundary. Later bounded
+pressure/reuse and installed ordinary-image results are recorded in
+[ACCEPTANCE.md](../ACCEPTANCE.md); broader security and fault coverage remain open.
 
 ## Implementation and evidence
 
@@ -701,6 +717,7 @@ mutation still need their own gates.
 Actual installed initialized and unchanged-size resident overwrites, offline
 interruption recovery and independent Windows checks have qualified evidence.
 Selected allocation/namespace operations now have the separate bounded native
-gate above. Installed general mutation, sustained native checkpoint/ring reuse
-and hardware power cuts do not inherit it. [ACCEPTANCE.md](../ACCEPTANCE.md)
+gate above. Installed ordinary-image mutation and sustained native checkpoint/ring
+reuse now pass their own bounded gates; hardware power cuts remain untested.
+[ACCEPTANCE.md](../ACCEPTANCE.md)
 records the distinction.

@@ -87,19 +87,72 @@ unchanged state. The fresh full current-source batch passes all 202 suites,
 134 strict core and four test compilations, selected-Xcode style, 64 host FSKit
 groups/thirteen runtime SKIPs and the universal unsigned Release app. Independent
 review also binds its zero-write checkpoint/create preview to the exact failed
-image. The personally signed current app/tools package passes separate byte,
+image. The personally signed preceding app/tools package passes separate byte,
 profile, entitlement and symbol-UUID review. The signed app is installed with its
 previous app and six inactive saved images preserved. The immediate registration
 query initially returned no module; the later exact public FSClient module is
 disabled. An ordinary CLI user election does not change that FSClient verdict.
-Settings enablement awaits guest unlock. No fresh image import or corrected
-native mutation scenario has run, so installed completion and its Windows
-postimage remain unqualified.
+At that preceding boundary Settings enablement awaited guest unlock. Its fresh
+image import and corrected native scenario were not executed; the current
+extracted build closes the combined gate below.
 No native candidate has been retried. Evidence is retained in
 `history-budget-red-20261008/`, `history-budget-local16-20261008/`,
 `history-reserve-local17-20261008/`, `history-space-diagnosis17-20261008/`,
 `history-reserve-local18-20261008/` and
 `history-reserve-signed-pack18-20261008/`.
+
+The separate FSKit extraction now passes its local boundary on the current source.
+One volume retains the same fields, locks, authorization and native item identity
+across lifecycle, item/cache, immutable-read and image-operation components.
+Independent review compares all 96 Objective-C method bodies, 20 helper/factory
+bodies and three object layouts against the functional checkpoint; tokens and
+field ordering remain exact. Eight strict native object compilations cover all
+four components on both architectures. Fatal-ASan/UBSan host components retain
+the same 64 PASS and thirteen runtime SKIP groups, and the universal unsigned
+Release app builds. The unchanged C core's 202-suite and strict-compilation
+evidence is reused, not rerun. The current personally signed app/tools package
+passes independent byte, entitlement and symbol review. It is installed once,
+preserving the preceding app, six saved URLs and all five old-image hashes.
+Main reviews all nine installed entries and the exact enabled public FSClient
+module after ordinary guest Settings enablement.
+One combined current-build scenario now qualifies the extraction and preceding
+recovery correction together. All 81 native component groups pass with zero
+SKIPs. Actual creation, zero-gap growth, truncate/regrow, observer/shared-mapping
+coherence, held-descendant movement, closed-victim replacement, removal and all
+sixteen generation-reuse cycles pass. All six authenticated root/nobody opens
+are denied. Two ordinary unmounts release the backing descriptors; a fresh mount
+of the same saved URL returns exact bytes and metadata without changing the image.
+The loaded extension is bound to the current installed binary and its symbols.
+
+The original nobody check cannot execute beneath the mode-750 guest home;
+its stderr and read-only diagnosis are retained. Only that unexecuted checker
+stage continues from a publicly traversable temporary directory with the same
+signed checker bytes and unchanged home/image permissions. Later capture-wrapper
+failures are retained too; completed native mutations, root denials and remount
+checks are reused, not repeated. The inactive image exports through binary CLI
+stdout, is completely hashed and frozen. All five old images, 871 prior fixtures,
+twelve resident fixtures and the new fixture remain unchanged.
+
+Independent postimage validation and fresh C recovery write zero bytes. Four
+original file stats/descriptors and the ADS remain exact. Twelve raw SI time
+fields and two native stat identities independently bind the final objects.
+One unique GPT VHD then passes Windows checks for all seven present/absent object
+expectations, three complete namespaces, final bytes, File IDs, ACL projections,
+FILETIMEs, original files/ADS, clean state and read-only chkdsk. Main reviews one
+matching original healthy event and no warning or repair. Ordinary detach, exact
+postimage archive and original-test-volume guards pass. The original local
+absence-stderr and namespace-sort review failures remain retained; neither causes
+a repeated native case. This qualifies bounded ordinary-image mutation; open
+unlink, broader creation-security defaults, growth interruption matrices,
+unsupported file/volume features and block-device writes remain outside the gate.
+Evidence is under
+`refactor-fskit-draft-frontend-20261008/`,
+`refactor-fskit-draft-components-20261008/`,
+`refactor-fskit-connected19-20261008/` and
+`refactor-fskit-signed-pack19-20261008/`,
+`refactor-fskit-installed19-20261008/`,
+`refactor-fskit-postimage-input19-20261008/` and
+`windows-mounted-general-refactor19-20261008/`.
 
 The new exclusive owner joins fresh image-only recovery, reconstructed-volume
 admission, ordinary mutation, automatic checkpoint preparation and one-shot

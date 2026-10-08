@@ -15,7 +15,7 @@ sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
 adapter = root / 'adapters/fskit'
 executable = output / 'ntfs-fskit-test'
 command = [clang, '-isysroot', sdk, '-mmacosx-version-min=26.5', '-fobjc-arc', '-fblocks', '-O1', '-g', '-fsanitize=address,undefined', '-Wall', '-Wextra', '-Werror', '-Wdeclaration-after-statement', '-Wno-deprecated-declarations', '-I', str(root / 'include'), '-I', str(adapter), '-framework', 'Foundation', '-framework', 'FSKit', str(root / 'tests/fskit.m')]
-command += [str(adapter / name) for name in ('NTFSResource.m', 'NTFSImageTransport.m', 'NTFSNames.m', 'NTFSLinks.m', 'NTFSAccessPolicy.m', 'NTFSReadCachePolicy.m', 'NTFSVolume.m', 'NTFSLegacyVolume.m', 'NTFSModernVolume.m', 'NTFSCheckTask.m', 'NTFSFileSystem.m')]
+command += [str(adapter / name) for name in ('NTFSResource.m', 'NTFSImageTransport.m', 'NTFSNames.m', 'NTFSLinks.m', 'NTFSAccessPolicy.m', 'NTFSReadCachePolicy.m', 'NTFSVolume.m', 'NTFSVolumeItems.m', 'NTFSVolumeRead.m', 'NTFSImageVolume.m', 'NTFSLegacyVolume.m', 'NTFSModernVolume.m', 'NTFSCheckTask.m', 'NTFSFileSystem.m')]
 command += [str(root / 'adapters/posix/overwrite_image.c')]
 command += [str(root / 'tests' / name) for name in ('fskit_lifecycle.m', 'fskit_enumeration.m', 'fskit_content.m', 'fskit_links.m', 'fskit_pressure.m', 'fskit_read_path.m', 'fskit_operation.m', 'fskit_lookup.m', 'fskit_maintenance.m', 'fskit_access.m', 'fskit_image_transport.m', 'fskit_image_volume.m')]
 command += [str(root / '.build/libntfs.a'), '-o', str(executable)]

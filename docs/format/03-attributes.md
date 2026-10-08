@@ -64,7 +64,7 @@ creation remains a separate acceptance gate.
 
 Implementation: [write_namespace.c](../../core/write_namespace.c),
 [write_mutation.h](../../core/write_mutation.h) and
-[NTFSVolume.m](../../adapters/fskit/NTFSVolume.m).
+[NTFSImageVolume.m](../../adapters/fskit/NTFSImageVolume.m).
 Tests: [write_mutation_owner.c](../../tests/write_mutation_owner.c) and
 [fskit_image_volume.m](../../tests/fskit_image_volume.m).
 

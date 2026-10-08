@@ -168,6 +168,43 @@ The cleanup preserves mounted admission and native lifecycle/authorization code;
 it adds no installed or Windows qualification. MFT/attribute, directory, security,
 validator, journal and FSKit cleanup remain the separate reviewed work below.
 
+The next connected cleanup extracts FSKit at complete existing operation
+boundaries. [Native lifecycle and admission](../adapters/fskit/NTFSVolume.m),
+[item/cache and ancestry ownership](../adapters/fskit/NTFSVolumeItems.m),
+[immutable read operations](../adapters/fskit/NTFSVolumeRead.m) and
+[complete image operations](../adapters/fskit/NTFSImageVolume.m) now have separate
+implementation files. One [private contract](../adapters/fskit/NTFSVolumeInternal.h)
+retains the existing volume, item and continuation fields without reordering them.
+Publication and native replies remain with lifecycle; extracted bodies retain
+their original operation monitors and authenticated rights. No new owner, lock,
+callback or filesystem policy is introduced.
+
+Main compares all 96 complete method bodies, twenty C helper/factory bodies,
+three object layouts and policy constants against the preceding functional
+checkpoint. Their ordered tokens are identical after formatting. The draft first
+passes both-architecture frontend checks and the existing host component suite.
+The applied current-source batch then passes eight strict native compilations,
+selected-Xcode style, the exact 64 PASS / 13 runtime SKIP host verdicts under fatal
+ASan/UBSan, and the universal unsigned Release app with every moved component
+compiled for both architectures. Core, public C headers, tests and POSIX backend
+are unchanged; their independently reviewed 202-suite and 134 strict compilation
+evidence is retained without rerunning unchanged tests.
+
+The current signed extraction is installed once, preserving the preceding app
+and saved images. Its exact public FSClient module is enabled through ordinary
+Settings. The combined current-build installed scenario passes all 81 component
+groups, complete mutation/removal and sixteen reuse cycles, six authenticated
+denials and exact same-URL fresh-remount data/metadata after ordinary unmount.
+Its exact inactive postimage passes independent Windows namespace, bytes,
+identity/ACL, FILETIME, clean-state, read-only chkdsk and matching healthy-event
+review. This closes native qualification of the extraction and preceding
+functional correction together, without repeating completed cases. Earlier
+execution/capture-wrapper failures remain preserved separately. Reports are under
+`artifacts/overwrite/refactor-fskit-*` and
+`artifacts/overwrite/windows-mounted-general-refactor19-20261008/`.
+MFT/attribute, filename cursor, security, validator and immutable journal cleanup
+remain separate C boundaries in the plan.
+
 ## Concrete findings
 
 | Area | Current finding | Proposed change |
@@ -184,7 +221,7 @@ validator, journal and FSKit cleanup remain the separate reviewed work below.
 | Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |
 | Mutation storage | FILE ownership/replacement, attributes and streams have separate modules; directory inspection/key changes and complete index storage construction are separate. One mutation plan retains memory, work, provenance and cleanup ownership. | Review further duplication against these complete operation boundaries. Keep collation, allocation and durability in their semantic layer. |
 | Memory and cleanup | Program, mutation, bitmap, replay and volume owners have distinct accounting, reservation and lifetime rules, with repeated cleanup patterns. | Make local ownership/cleanup conventions uniform. Share byte helpers, not an allocator framework that would erase different governors or change callback order. |
-| FSKit volume | `NTFSVolume.m` owns lifecycle, operation budgets, item/cache publication, rebinding, image access rights, writable-image dispatch and read operations. | Extract private components at existing complete-operation boundaries, keeping serialization, context authorization and teardown with their native owner. |
+| FSKit volume | Lifecycle/admission, item/cache ownership, immutable reads and complete image operations now have private components sharing the unchanged native owner and layouts. | Close the combined installed gate; preserve serialization, authenticated context, reader leases, exactly-once replies and teardown at their owning boundaries. |
 | Evidence prose | Acceptance has accumulated long historical sections, while format facts, private hypotheses and product gates now have separate documents. | Keep current contracts easy to find, use links for historical evidence, and preserve useful limitations and reproduction paths. Source and artifact identities remain in Git and generated reports. |
 
 ## Implementation order

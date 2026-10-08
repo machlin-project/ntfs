@@ -9,25 +9,23 @@ today. See LICENSE and docs/PROVENANCE.md.
 The implementation provides bounded read-only extraction and experimental editing
 of ordinary files in offline images. The C core passes a bounded native Windows
 gate for create, allocation, resize, rename, removal and interrupted recovery.
-The larger native-source sequence now passes 891 actual C operations and 234
+The larger native-source sequence passes 891 actual C operations and 234
 checkpoints, including MFT growth, large directories and 30 journal ring wraps.
 All six retained pressure/reuse states pass independent Windows namespace,
 metadata, read-only chkdsk and original healthy-event review.
-Installed FSKit initialized-range and resident-range acceptance are complete.
-The general C owner and FSKit create/resize/rename/remove callbacks pass
-202 sanitized C suites, 64 host FSKit groups and a universal Release app build.
-The signed general build is installed and all 81 native component groups pass.
-The corrected installed creation path accepts the observed native attributes.
-Actual create, growth, truncate/regrow, shared-mapping writes, cross-parent
-directory movement and closed-victim replacement pass. The installed scenario
-then reaches a cumulative recovery-allocation quota after fourteen generation
-reuse cycles. The exact failed image is preserved; a test-first correction adds
-early checkpoints and reuses validation only for proved identical historical
-states. Its 100-cycle regression and full current-source local batch pass with
-the stricter joint-request reserve. The signed current build is installed but
-awaits ordinary OS module enablement; its complete installed/Windows scenario
-remains pending.
-It is not a production NTFS driver.
+
+The general owner passes 202 sanitized C suites, 64 host FSKit groups and a
+universal Release build. The personally signed refactored app is installed and
+all 81 native component groups pass. Actual create, growth with zero gaps,
+truncate/regrow, shared-mapping writes, cross-parent directory movement,
+closed-victim replacement, removal and sixteen generation-reuse cycles pass.
+Two ordinary unmounts and a fresh same-saved-URL mount preserve exact final
+data, metadata and backing identity. The exact inactive postimage passes
+independent Windows namespace, data, File ID, ACL, FILETIME, clean-state,
+read-only chkdsk and original healthy-event review. The preceding failures are
+preserved in the acceptance history; no native candidate was repeated.
+This qualifies bounded ordinary-image mutations, with explicit unsupported
+features and incomplete broader fault coverage. It is not a production NTFS driver.
 Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
@@ -78,7 +76,8 @@ Actual resident `pwrite`/`fsync`, observer and shared-mapping coherence, ordinar
 unmount and a fresh saved-URL mount pass. The exact postimage passes Windows
 file/ADS/FILETIME/identity/ACL, clean state, read-only chkdsk and original healthy
 event review. Allocation/free, resize,
-create/delete/rename, sparse/compressed/ADS writes, Windows ACL
+create/delete/rename were outside that preceding resident gate; the current
+ordinary-image gate is described above. Sparse/compressed/ADS writes, Windows ACL
 mutation and block-device writes remain unsupported. Distribution signing,
 notarization and commercial release acceptance remain open.
 

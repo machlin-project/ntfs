@@ -28,13 +28,26 @@ debugger identifies the 65,536 cumulative recovery-allocation call limit in a
 correction passes a 202-suite local boundary and prepares a joint checkpoint/create
 preview without writes on that exact native failure. The stricter quarter-budget
 reserve exposes redundant full validation of unchanged open-only prefixes; its
-correction passes the fresh complete 202-suite local batch. The current personally
+correction passes the fresh complete 202-suite local batch. The preceding personally
 signed universal app/tools package passes independent review and is installed
-in the dedicated VM. Its module is presently disabled after the update; actual
-FSClient enablement requires the ordinary Settings toggle after guest unlock.
+in the dedicated VM. Its module initially remains disabled after the update;
+actual FSClient enablement requires the ordinary Settings toggle after guest unlock.
 The first immediate registration query and the later ineffective CLI election
-are retained. No fresh image import or native mutation case has run.
-Preserve all attempts and use a fresh source clone for native acceptance.
+are retained. That preceding package's fresh image and native case did not run.
+The current FSKit extraction separates lifecycle, items/caches, immutable reads
+and complete image operations while retaining the same owner and method bodies.
+Strict dual-architecture compilation, fatal-sanitizer host components, universal
+Release and the personally signed current package pass main review. The current
+package is installed once, with strict bytes and the exact enabled public
+FSClient path passing main review. One combined native batch now passes all 81
+component groups, the complete ordinary-mutation scenario, sixteen reuse cycles,
+six authenticated denials, two ordinary unmounts and exact same-saved-URL remount.
+The exact inactive postimage passes independent Windows namespace/data, File ID,
+ACL, FILETIME, clean state, read-only chkdsk and one original matching healthy
+event with no warning or repair. Unchanged C evidence is reused. The original
+nobody helper traversal refusal and later capture-wrapper failures are preserved;
+only unexecuted stages continue, with no repeated native mutation or remount.
+Preserve all attempts and use fresh source clones for future changed behavior.
 No partially executed native namespace is retried.
 Main review is `artifacts/overwrite/windows-native-pressure-network-20261007/main-review.json`.
 
@@ -50,7 +63,7 @@ Never put credentials in source, shell arguments, environment or retained report
 Inspect only task-owned processes and filtered relevant arguments.
 
 The dedicated macOS 27 clone is running, its test images are ordinarily unmounted,
-and the current signed installed module is disabled pending Settings enablement.
+and the current signed installed module is enabled through ordinary Settings.
 The preserved macOS 26.5 reading
 baseline is unchanged. Windows is running and its original test volume is verified.
 The latest nonboot/nonsystem postimage VHD detached normally; no boot or UTM app
@@ -106,7 +119,7 @@ providers. The accepted initialized image remains unchanged. See
 
 ## Installed app and CLI harness
 
-The current personally signed universal host embeds the exact signed extension
+The accepted existing-file personally signed universal host embeds the exact signed extension
 that performed the mounted write. Strict signatures, exact installed files,
 matching executable/dSYM identities and actual enabled installed FSClient path
 pass review. Development signing is not notarization or distribution readiness.
@@ -131,11 +144,16 @@ Do not re-register staging copies or touch unrelated modules.
 
 ## Current evidence and limits
 
-The new general mutation batch passes 200 fatal-ASan/UBSan core suites, all
+The current general mutation core passes 202 fatal-ASan/UBSan suites, all
 134 strict dual-architecture core compilations, four strict changed-test
 compilations, 64 host FSKit groups with thirteen explicit runtime SKIPs and a
-universal Release build. Its personally signed package is prepared; installed
-component/syscall/remount and Windows postimage gates remain pending. The private
+universal Release build. The separate FSKit extraction passes its strict native,
+host-component and universal Release checks without changing the C core. Its
+personally signed package is installed; the combined current installed
+component/syscall/remount and Windows postimage gates pass independent main
+review. See `refactor-fskit-installed19-20261008/completion-review.json` and
+`windows-mounted-general-refactor19-20261008/main-review.json` beneath the
+ignored overwrite artifacts. This is bounded ordinary-image writing. The private
 descriptor experiment has 132 exact nonempty generic/creator profiles and five
 semantically equivalent all-Allow profiles; absent-DACL defaults and caller-token
 semantics remain open. See the current lead of [ACCEPTANCE.md](ACCEPTANCE.md).
@@ -278,8 +296,10 @@ in `windows-noop-compensation-network-20261007/`. An outer capture collision
 before any VM command is retained separately. Prepared self-capturing scripts
 create their own output directories; do not precreate or wrap those directories.
 
-Native creation inheritance, MFT reservation pressure, sustained native ring reuse
-and general FSKit mutation remain open. Follow the main agent's VM handoff and
+At that preceding boundary native creation inheritance, MFT reservation pressure,
+sustained native ring reuse and general FSKit mutation remained open. The current
+bounded pressure/reuse and installed gates pass as recorded above; broader
+inheritance and growth interruption coverage remain open. Follow the main agent's VM handoff and
 prepared commands; do not repair/remount earlier failed or diagnostic candidates.
 Passing filename diagnostics alone do not qualify the ordinary writer.
 Unsupported rejection,

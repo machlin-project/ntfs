@@ -38,11 +38,22 @@ second exact failed image too. The test-first 100-cycle correction passes a
 failure. The current quarter-budget joint-request reserve and unchanged open-only
 prefix validation pass the fresh complete 202-suite, strict-core, host-component
 and universal Release batch. Its personally signed package is independently
-reviewed. It is installed, but the OS module remains disabled pending ordinary
-Settings enablement in the unlocked guest. No fresh image import or corrected
-native scenario has run. The separate behavior-preserving FSKit extraction can
-close its local checks before one combined current-build installed scenario and
-Windows postimage review; the preceding failures remain preserved.
+reviewed. That preceding installation initially leaves the OS module disabled
+pending ordinary Settings enablement in the unlocked guest. That preceding
+package's fresh image and corrected scenario remain unexecuted. The separate
+behavior-preserving FSKit extraction now
+passes strict native compilation on both architectures, fatal-sanitizer host
+components and the universal Release build. Its signed current package passes
+main review and is installed once with its exact public FSClient module enabled.
+The C core and its tests are unchanged, so
+reuse the complete 202-suite evidence. The combined current-build installed
+scenario and one Windows postimage review now pass: 81 native component groups,
+all sixteen reuse cycles, six authenticated denials, two ordinary unmounts and
+exact fresh-remount bytes/metadata. Windows independently accepts namespace,
+data, times, identity/ACL, clean state, read-only chkdsk and its original healthy
+event. The preceding failures and first capture-wrapper errors remain preserved;
+no completed native case is repeated. Keep this accepted batch as the baseline
+for the next connected C cleanup.
 
 The standalone [mounted checker](../tests/mounted_mutation.c) runs only as the
 non-root image owner on the explicit writable `machlinntfs` mount. Generate its

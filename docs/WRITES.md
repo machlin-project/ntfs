@@ -7,9 +7,13 @@ with 30 journal ring wraps and exact complete-image oracles. All 198 sanitized
 suites pass at that boundary. Installed FSKit initialized-range and resident-range
 writing retain their separate accepted owner, cache and fresh-remount contracts.
 The general C owner and FSKit mutation callbacks now pass the connected local
-202-suite core and 64-group host component boundary. Installed general mutation,
-complete native creation inheritance and the broader growth interruption matrix
-remain pending. See [ACCEPTANCE.md](ACCEPTANCE.md).
+202-suite core and 64-group host component boundary. The current signed FSKit
+build passes all 81 native component groups, complete bounded ordinary-image
+mutation, sixteen reuse cycles, authenticated owner/root/nobody enforcement and
+exact fresh remount. Its inactive postimage passes independent Windows
+namespace/data, File ID, ACL, FILETIME, clean state, read-only chkdsk and matching
+healthy-event review. Complete native creation inheritance and the broader growth
+interruption matrix remain pending. See [ACCEPTANCE.md](ACCEPTANCE.md).
 
 ## General owner and native reply preparation
 
@@ -32,7 +36,7 @@ until the child closes. Uncertain persistence or transfer permanently poisons
 that owner. [Owner tests](../tests/write_mutation_owner.c) exercise these contracts
 and fresh recovery after an actual partial first-sector transfer.
 
-The [FSKit volume](../adapters/fskit/NTFSVolume.m) closes every old immutable lease,
+The [FSKit image component](../adapters/fskit/NTFSImageVolume.m) closes every old immutable lease,
 prepares the C child, and allocates its complete native reply, final attributes,
 free-space reply and descendant path changes before execution. A failed reply
 allocation leaves the image unchanged. Publication updates stable FSItems using
@@ -64,9 +68,12 @@ after fourteen record-reuse cycles. The exact failed history remains preserved.
 Its test-first correction passes 100 local create/remove cycles and prepares a
 checkpoint/create preview without writes on that image. The current quarter-budget
 joint-request reserve and unchanged open-only proof reuse pass a fresh complete
-local gate and independently reviewed signed package. The package is installed;
-actual module enablement remains pending in the locked guest.
-Full installed completion and Windows postimage review remain pending.
+local gate and independently reviewed signed package. The current extracted
+FSKit package is installed with its exact public module enabled. One combined
+scenario passes complete mutations, all sixteen reuse cycles, six authenticated
+open denials and exact same-URL fresh-remount bytes/metadata. The exact inactive
+postimage passes the independent Windows gate above. The old failure histories
+and first harness errors remain retained; no completed native case is repeated.
 Open unlink and replacement of an opened victim explicitly
 refuse until deferred retirement and recovery have an owning contract. Block
 resources, sparse/compressed/named-stream writes, hard-link/symlink creation,

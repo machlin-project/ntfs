@@ -6,6 +6,9 @@ diagrams, field maps, examples and a research register.
 
 ## Product and development
 
+- [Dots cloud handoff](HANDOFF-DOTS.md): complete all work feasible from the
+  private repository and cloud runners, with observed CI failures, implementation
+  priorities, verification gates, and the residual native/release boundary.
 - [Architecture](ARCHITECTURE.md): component and ownership boundaries.
 - [Development](DEVELOPMENT.md): prepared build/test and VM workflows.
 - [Acceptance](ACCEPTANCE.md): actual evidence and remaining feature gates.

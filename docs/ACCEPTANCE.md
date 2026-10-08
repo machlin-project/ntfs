@@ -1,5 +1,26 @@
 # Acceptance
 
+## Initial cloud CI and Dots handoff
+
+The [first private Actions run](https://github.com/machlin-project/ntfs/actions/runs/37830205767)
+passes all 220 core tests with zero failures on hosted macOS. Its two isolated
+Release builds produce eight byte-identical products. These are actual remote
+portable-suite and same-checkout reproducibility results, including the prepared
+directory seed replays and pure harness regression.
+
+Linux core and interoperability jobs stop during compilation: GCC diagnoses
+an anonymous-enum comparison in `core/mst.c` and a signedness comparison in
+`core/logfile.c`, both under warnings-as-errors. The image fuzz job stops before
+fuzzer execution when the WOF cache-peer fixture exceeds the compact image;
+its subsequent logfile campaign is skipped. The workflow therefore fails overall.
+No dedicated directory stress/campaign, Windows recovery, FSKit component/app,
+installed mount, or new local VM result follows from this run.
+
+[HANDOFF-DOTS.md](HANDOFF-DOTS.md) assigns all work feasible from the private
+repository and cloud runners. It records these observed defects, the remaining
+implementation/verification programme, and dependencies on native/release inputs.
+The original preparation-only boundary below describes the earlier session.
+
 ## Directory fuzz and native acceptance preparation
 
 A connected [fuzz/stress → Windows → installed FSKit → Windows postimage batch](DIRECTORY-ACCEPTANCE.md)

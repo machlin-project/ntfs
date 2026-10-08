@@ -986,8 +986,11 @@ build measurements. Sanitizers are not a performance configuration.
 Build/test subprocesses receive an explicit environment allowlist. Meson's report
 format includes environment values; do not invoke it with ambient credentials or
 display entire unreviewed reports. CI uploads only selected generated reports.
-The workflow is prepared for macOS/Linux core checks and independent Linux image
-tests, but remote CI is unverified until the owner creates a private repository.
+The private workflow has now run: hosted macOS passes 220 core tests and
+same-checkout Release reproducibility; Linux compilation and compact image-fuzz
+fixture generation fail before their applicable checks. See
+[current cloud evidence](ACCEPTANCE.md#initial-cloud-ci-and-dots-handoff) and
+[the complete Dots assignment](HANDOFF-DOTS.md) for the continuation.
 
 `corpus-contract` and `workload-contract` are regular sanitized suites. The former
 checks reference-addressed inspection, independently expected stream bytes and

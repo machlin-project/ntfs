@@ -1,5 +1,12 @@
 # Directory mutation acceptance batch
 
+The preparation boundary below records the original local handoff. Subsequent
+[private CI](ACCEPTANCE.md#initial-cloud-ci-and-dots-handoff) passes the 220-suite
+portable gate on hosted macOS; dedicated stress/fuzz and the native phases remain
+unverified. [Dots](HANDOFF-DOTS.md) now owns the complete cloud-feasible
+continuation. The owner-local paths and VM procedure below are reference inputs,
+not available cloud resources; the cloud handoff defines their replacement work.
+
 ## Preparation boundary
 
 This batch is **prepared, not executed or accepted**. The user requested source,

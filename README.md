@@ -6,6 +6,11 @@ lifecycle and I/O. There is no kernel adapter or LXNU integration in this scope.
 The owner intends a later open-source release; no open-source license is granted
 today. See LICENSE and docs/PROVENANCE.md.
 
+The [Dots cloud handoff](docs/HANDOFF-DOTS.md) defines the complete cloud
+continuation. Initial private CI passes 220 core tests and eight-product Release
+reproducibility on macOS; Linux compilation and compact image-fuzz fixture
+generation expose failures recorded in that handoff.
+
 The implementation provides bounded read-only extraction and experimental editing
 of ordinary files in offline images. A preceding C checkpoint passed a bounded
 native Windows gate for create, allocation, resize, rename, removal and interrupted recovery.

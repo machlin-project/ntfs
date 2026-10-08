@@ -68,7 +68,8 @@ verify_snapshot(struct fuzz_device *device, struct ntfs_security *snapshot,
 	assert(info.dacl.state == test->dacl && info.sacl.state == NTFS_ACL_ABSENT);
 	if (info.dacl.state == NTFS_ACL_PRESENT) {
 		assert(info.owner.authority == TEST_NT_AUTHORITY && info.owner.count == 1 &&
-		    info.owner.subauthorities[0] == TEST_LOCAL_SYSTEM_RID + test->different_owner);
+		    info.owner.subauthorities[0] ==
+			(uint32_t)TEST_LOCAL_SYSTEM_RID + test->different_owner);
 		assert(info.group.authority == TEST_NT_AUTHORITY && info.group.count == 2 &&
 		    info.group.subauthorities[1] == TEST_BUILTIN_USERS_RID);
 		assert(info.dacl.entries == 1 && !info.dacl.opaque_aces);

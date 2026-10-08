@@ -23,6 +23,13 @@ enum {
 	DIRECTORY_KEYS = 768,
 	DIRECTORY_PREFIX = 4,
 	DIRECTORY_INPUT_BYTES = 32768,
+	DIRECTORY_UNICODE_MODE = 2,
+	DIRECTORY_LATIN_SMALL_E_ACUTE = 0x00e9,
+	DIRECTORY_LATIN_CAPITAL_E_ACUTE = 0x00c9,
+	DIRECTORY_GREEK_SMALL_OMEGA = 0x03c9,
+	DIRECTORY_GREEK_CAPITAL_OMEGA = 0x03a9,
+	DIRECTORY_CJK_MIDDLE = 0x4e2d,
+	DIRECTORY_ZERO_WIDTH_JOINER = 0x200d,
 	DIRECTORY_OPERATIONS = (DIRECTORY_INPUT_BYTES - sizeof(struct directory_input_header)) /
 	    sizeof(struct directory_input_operation)
 };
@@ -41,6 +48,7 @@ struct model_key {
 	bool present;
 	uint8_t length;
 	uint16_t generation;
+	uint16_t suffix;
 	uint32_t stamp;
 };
 
@@ -51,8 +59,10 @@ struct directory_model {
 	struct ntfs_mutation_record record;
 	struct ntfs_mutation_directory directory;
 	struct model_key keys[DIRECTORY_KEYS];
+	struct ntfs_mutation_key expected_keys[DIRECTORY_KEYS];
 	struct ntfs_mutation_index_node *by_vcn[NTFS_MUTATION_MAX_REGIONS];
 	bool visited[NTFS_MUTATION_MAX_REGIONS];
+	bool unicode;
 };
 
 static void
@@ -77,7 +87,7 @@ model_key(struct ntfs_mutation_key *key, unsigned identifier, const struct model
 	for (unit = 0; unit < name->length; unit++) {
 		value = unit < DIRECTORY_PREFIX
 		    ? (uint16_t)('A' + ((identifier >> ((DIRECTORY_PREFIX - unit - 1) * 4)) & 15))
-		    : 'x';
+		    : model->suffix;
 		ntfs_put_u16(key->value + sizeof(*name) + unit * NTFS_UTF16_UNIT_BYTES, value);
 	}
 }
@@ -85,15 +95,15 @@ model_key(struct ntfs_mutation_key *key, unsigned identifier, const struct model
 static void
 check_key(struct directory_model *model, const struct ntfs_mutation_key *actual, size_t *next)
 {
-	struct ntfs_mutation_key expected;
+	const struct ntfs_mutation_key *expected;
 
 	while (*next < DIRECTORY_KEYS && !model->keys[*next].present) {
 		(*next)++;
 	}
 	assert(*next < DIRECTORY_KEYS);
-	model_key(&expected, (unsigned)*next, &model->keys[*next]);
-	assert(actual->reference == expected.reference && actual->bytes == expected.bytes);
-	assert(memcmp(actual->value, expected.value, expected.bytes) == 0);
+	expected = &model->expected_keys[*next];
+	assert(actual->reference == expected->reference && actual->bytes == expected->bytes);
+	assert(memcmp(actual->value, expected->value, expected->bytes) == 0);
 	(*next)++;
 }
 
@@ -206,6 +216,27 @@ operate(struct directory_model *model, unsigned kind, unsigned identifier, uint8
 		    ntfs_mutation_directory_find(&model->plan, &model->directory, &name, &index);
 		assert(result == (state->present ? NTFS_OK : NTFS_NOT_FOUND));
 		assert(!state->present || index == position);
+		if (kind == DIRECTORY_LOOKUP) {
+			/* Prefix identifiers stay unique. A case-only alternate query has
+			 * an independently known verdict under the selected policy. */
+			for (index = 0; index < next.length; index++) {
+				if (units[index] >= 'A' && units[index] <= 'Z') {
+					units[index] = (uint16_t)(units[index] - 'A' + 'a');
+				} else if (units[index] == 'x') {
+					units[index] = 'X';
+				} else if (units[index] == DIRECTORY_LATIN_SMALL_E_ACUTE) {
+					units[index] = DIRECTORY_LATIN_CAPITAL_E_ACUTE;
+				} else if (units[index] == DIRECTORY_GREEK_CAPITAL_OMEGA) {
+					units[index] = DIRECTORY_GREEK_SMALL_OMEGA;
+				}
+			}
+			result = ntfs_mutation_directory_find(
+			    &model->plan, &model->directory, &name, &index);
+			assert(result == (state->present && !model->directory.case_sensitive
+					     ? NTFS_OK
+					     : NTFS_NOT_FOUND));
+			assert(result != NTFS_OK || index == position);
+		}
 		return NTFS_OK;
 	}
 	if (kind == DIRECTORY_REMOVE || kind == DIRECTORY_RENAME) {
@@ -226,8 +257,14 @@ operate(struct directory_model *model, unsigned kind, unsigned identifier, uint8
 		return NTFS_OK;
 	}
 	if (kind != DIRECTORY_UPDATE) {
+		const uint16_t suffixes[] = {DIRECTORY_LATIN_SMALL_E_ACUTE,
+		    DIRECTORY_GREEK_CAPITAL_OMEGA, DIRECTORY_CJK_MIDDLE, DIRECTORY_ZERO_WIDTH_JOINER};
+
 		next.length =
 		    (uint8_t)(DIRECTORY_PREFIX + length % (NTFS_NAME_MAX - DIRECTORY_PREFIX + 1));
+		next.suffix = model->unicode
+		    ? suffixes[identifier % (sizeof(suffixes) / sizeof(suffixes[0]))]
+		    : 'x';
 		if (kind == DIRECTORY_ADD) {
 			next.generation++;
 		}
@@ -242,6 +279,10 @@ operate(struct directory_model *model, unsigned kind, unsigned identifier, uint8
 		  &model->plan, &model->directory, key.reference, key.value, key.bytes);
 	if (result == NTFS_OK) {
 		*state = next;
+		/* Author once from the independent operation model. Every later flat
+		 * and wire walk still compares every byte; avoid reauthoring unchanged
+		 * long names thousands of times under coverage instrumentation. */
+		model->expected_keys[identifier] = key;
 	}
 	return result;
 }
@@ -274,6 +315,11 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		ntfs_put_u16(model->volume.upcase + index * NTFS_UTF16_UNIT_BYTES,
 		    (uint16_t)(index >= 'a' && index <= 'z' ? index - 'a' + 'A' : index));
 	}
+	ntfs_put_u16(model->volume.upcase + DIRECTORY_LATIN_SMALL_E_ACUTE * NTFS_UTF16_UNIT_BYTES,
+	    DIRECTORY_LATIN_CAPITAL_E_ACUTE);
+	ntfs_put_u16(model->volume.upcase + DIRECTORY_GREEK_SMALL_OMEGA * NTFS_UTF16_UNIT_BYTES,
+	    DIRECTORY_GREEK_CAPITAL_OMEGA);
+	model->unicode = (input->case_sensitive & DIRECTORY_UNICODE_MODE) != 0;
 	model->plan.source = model->volume.env;
 	model->plan.volume = &model->volume;
 	model->directory.record = &model->record;

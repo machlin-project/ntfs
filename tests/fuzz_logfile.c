@@ -102,7 +102,7 @@ enum {
 	FUZZ_CHECKPOINT_PHASES
 };
 
-_Static_assert(NTFS_PROTECTED_RECORD_MAX_BYTES == NTFS_LOGFILE_MAX_PAGE_BYTES,
+_Static_assert((size_t)NTFS_PROTECTED_RECORD_MAX_BYTES == (size_t)NTFS_LOGFILE_MAX_PAGE_BYTES,
     "protected-record fuzz scratch capacity");
 
 /* Independent test envelope, not a stored LFS structure. Configuration is a

@@ -13,10 +13,10 @@ static enum ntfs_result ntfs_logfile_index_collect(
     void *context, const struct ntfs_logfile_page_observation *observation);
 static enum ntfs_result ntfs_logfile_index_compare(struct ntfs_logfile *source,
     struct ntfs_logfile_index_builder *builder, struct ntfs_logfile_index_entry *entry,
-    struct ntfs_logfile_report *work, uint8_t *comparison);
+    struct ntfs_logfile_io_work *work, uint8_t *comparison);
 static enum ntfs_result ntfs_logfile_index_compare_retained(struct ntfs_logfile *source,
     struct ntfs_logfile_index_entry *entry, struct ntfs_logfile_page_index *index,
-    struct ntfs_logfile_report *work, uint8_t *comparison);
+    struct ntfs_logfile_io_work *work, uint8_t *comparison);
 static enum ntfs_result ntfs_logfile_build_page_index(struct ntfs_logfile *source,
     uint64_t max_bytes, struct ntfs_logfile_page_index_report *out,
     bool admit_uncompleted_legacy_copies);
@@ -197,7 +197,7 @@ ntfs_logfile_index_collect(void *context, const struct ntfs_logfile_page_observa
 enum ntfs_result
 ntfs_logfile_index_reload(struct ntfs_logfile *source,
     const struct ntfs_logfile_page_view *expected, uint64_t target,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out)
+    struct ntfs_logfile_io_work *work, struct ntfs_logfile_page_view *out)
 {
 	struct ntfs_logfile_page_observation observation = {0};
 	enum ntfs_result result;
@@ -226,7 +226,7 @@ ntfs_logfile_index_reload(struct ntfs_logfile *source,
 
 static enum ntfs_result
 ntfs_logfile_index_compare(struct ntfs_logfile *source, struct ntfs_logfile_index_builder *builder,
-    struct ntfs_logfile_index_entry *entry, struct ntfs_logfile_report *work, uint8_t *comparison)
+    struct ntfs_logfile_index_entry *entry, struct ntfs_logfile_io_work *work, uint8_t *comparison)
 {
 	const struct ntfs_logfile_restart *restart = builder->restart;
 	struct ntfs_logfile_page_view canonical, duplicate, expected;
@@ -302,7 +302,7 @@ ntfs_logfile_index_compare(struct ntfs_logfile *source, struct ntfs_logfile_inde
 static enum ntfs_result
 ntfs_logfile_index_compare_retained(struct ntfs_logfile *source,
     struct ntfs_logfile_index_entry *entry, struct ntfs_logfile_page_index *index,
-    struct ntfs_logfile_report *work, uint8_t *comparison)
+    struct ntfs_logfile_io_work *work, uint8_t *comparison)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
 	const struct ntfs_logfile_index_entry *home;
@@ -370,7 +370,7 @@ static enum ntfs_result
 ntfs_logfile_build_page_index(struct ntfs_logfile *source, uint64_t max_bytes,
     struct ntfs_logfile_page_index_report *out, bool admit_uncompleted_legacy_copies)
 {
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_index_builder builder;
 	struct ntfs_logfile_page_index *index;
 	struct ntfs_logfile_index_entry *entry;
@@ -553,7 +553,7 @@ ntfs_logfile_get_indexed_page(
 
 enum ntfs_result
 ntfs_logfile_load_indexed_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
 	struct ntfs_logfile_indexed_page indexed;

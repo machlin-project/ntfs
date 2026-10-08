@@ -42,7 +42,7 @@ ntfs_logfile_valid_limits(const struct ntfs_logfile_limits *limits)
 
 enum ntfs_result
 ntfs_logfile_source_read(struct ntfs_logfile *source, uint64_t offset, void *buffer, size_t size,
-    struct ntfs_logfile_report *work)
+    struct ntfs_logfile_io_work *work)
 {
 	enum ntfs_result result;
 
@@ -50,6 +50,7 @@ ntfs_logfile_source_read(struct ntfs_logfile *source, uint64_t offset, void *buf
 		return NTFS_NOT_FOUND;
 	}
 	if (work->read_calls >= source->limits.max_read_calls ||
+	    work->read_bytes > source->limits.max_read_bytes ||
 	    size > source->limits.max_read_bytes - work->read_bytes) {
 		return NTFS_RANGE;
 	}
@@ -57,6 +58,19 @@ ntfs_logfile_source_read(struct ntfs_logfile *source, uint64_t offset, void *buf
 	work->read_bytes += size;
 	result = source->environment.read(source->environment.context, offset, buffer, size);
 	source->backend_failed = result != NTFS_OK;
+	return result;
+}
+
+static enum ntfs_result
+logfile_discovery_read(struct ntfs_logfile *source, uint64_t offset, void *buffer, size_t size)
+{
+	struct ntfs_logfile_io_work work = {
+	    .read_bytes = source->report.read_bytes, .read_calls = source->report.read_calls};
+	enum ntfs_result result;
+
+	result = ntfs_logfile_source_read(source, offset, buffer, size, &work);
+	source->report.read_bytes = work.read_bytes;
+	source->report.read_calls = work.read_calls;
 	return result;
 }
 
@@ -83,8 +97,7 @@ ntfs_logfile_probe_restart(struct ntfs_logfile *source, struct ntfs_logfile_prob
 	const struct ntfs_disk_log_restart_page *header;
 	enum ntfs_result result;
 
-	result = ntfs_logfile_source_read(
-	    source, probe->offset, &prefix, sizeof(prefix), &source->report);
+	result = logfile_discovery_read(source, probe->offset, &prefix, sizeof(prefix));
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -112,8 +125,7 @@ ntfs_logfile_probe_restart(struct ntfs_logfile *source, struct ntfs_logfile_prob
 	if (probe->page_bytes > source->limits.max_page_bytes) {
 		return NTFS_RANGE;
 	}
-	result = ntfs_logfile_source_read(
-	    source, probe->offset, source->raw, probe->page_bytes, &source->report);
+	result = logfile_discovery_read(source, probe->offset, source->raw, probe->page_bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}

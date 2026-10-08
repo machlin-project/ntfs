@@ -96,8 +96,8 @@ peer_contents(struct ntfs_volume *volume)
 		assert(ntfs_stream_read(stream, offset, output, sizeof(output), &done) == NTFS_OK);
 		assert(done > 0 && done <= sizeof(output) && done <= stat.size - offset);
 		for (index = 0; index < done; index++) {
-			assert(output[index] ==
-			    'A' + ((offset + index) / TEST_PEER_UNIT_BYTES) % TEST_PEER_ALPHABET_BYTES);
+			assert(output[index] == 'A' +
+			    ((offset + index) / TEST_PEER_UNIT_BYTES) % TEST_PEER_ALPHABET_BYTES);
 		}
 		offset += done;
 	}

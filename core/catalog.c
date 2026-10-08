@@ -42,10 +42,10 @@ catalog_compare_work(const struct ntfs_stream_catalog *catalog, const struct ntf
 }
 
 static enum ntfs_result
-catalog_sift(struct ntfs_stream_catalog *catalog, uint32_t root, uint32_t count)
+catalog_sift(struct ntfs_stream_catalog *catalog, uint32_t root, uint32_t count,
+    struct ntfs_stream_catalog_entry *temporary)
 {
 	struct ntfs_stream_catalog_entry *entries = catalog->entries;
-	struct ntfs_stream_catalog_entry temporary;
 	uint32_t child;
 	int comparison;
 	enum ntfs_result result;
@@ -70,33 +70,32 @@ catalog_sift(struct ntfs_stream_catalog *catalog, uint32_t root, uint32_t count)
 		if (comparison >= 0) {
 			break;
 		}
-		temporary = entries[root];
+		*temporary = entries[root];
 		entries[root] = entries[child];
-		entries[child] = temporary;
+		entries[child] = *temporary;
 		root = child;
 	}
 	return NTFS_OK;
 }
 
 static enum ntfs_result
-catalog_sort(struct ntfs_stream_catalog *catalog)
+catalog_sort(struct ntfs_stream_catalog *catalog, struct ntfs_stream_catalog_entry *temporary)
 {
-	struct ntfs_stream_catalog_entry temporary;
 	uint32_t i;
 	int comparison;
 	enum ntfs_result result;
 
 	for (i = catalog->count / 2; i != 0; i--) {
-		result = catalog_sift(catalog, i - 1, catalog->count);
+		result = catalog_sift(catalog, i - 1, catalog->count, temporary);
 		if (result != NTFS_OK) {
 			return result;
 		}
 	}
 	for (i = catalog->count; i > 1; i--) {
-		temporary = catalog->entries[0];
+		*temporary = catalog->entries[0];
 		catalog->entries[0] = catalog->entries[i - 1];
-		catalog->entries[i - 1] = temporary;
-		result = catalog_sift(catalog, 0, i - 1);
+		catalog->entries[i - 1] = *temporary;
+		result = catalog_sift(catalog, 0, i - 1, temporary);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -194,14 +193,13 @@ catalog_from_record(struct ntfs_node *node, struct ntfs_stream_catalog *catalog)
 }
 
 static enum ntfs_result
-catalog_from_list(
-    struct ntfs_node *node, struct ntfs_stream_catalog *catalog, const uint8_t *bytes, size_t size)
+catalog_from_list(struct ntfs_node *node, struct ntfs_stream_catalog *catalog,
+    const uint8_t *bytes, size_t size, struct ntfs_stream_name *name)
 {
 	struct ntfs_volume *volume = node->volume;
 	const struct ntfs_disk_attr_list *entry;
 	const struct ntfs_disk_record *header;
 	struct ntfs_attr_view attribute_view;
-	struct ntfs_stream_name name = {0};
 	uint8_t *record = NULL;
 	uint64_t reference, loaded_reference = 0;
 	size_t offset = 0, i;
@@ -251,15 +249,15 @@ catalog_from_list(
 			}
 			loaded_reference = reference;
 		}
-		name.length = entry->name_length;
-		for (i = 0; i < name.length; i++) {
-			name.units[i] = ntfs_u16((const uint8_t *)entry + entry->name_offset +
+		name->length = entry->name_length;
+		for (i = 0; i < name->length; i++) {
+			name->units[i] = ntfs_u16((const uint8_t *)entry + entry->name_offset +
 			    i * NTFS_UTF16_UNIT_BYTES);
 		}
 		result = ntfs_work(volume, volume->info.record_size);
 		if (result == NTFS_OK) {
-			result = ntfs_listed_attribute(record, NTFS_ATTRIBUTE_DATA, name.units,
-			    name.length, ntfs_u16(entry->instance), 0, &attribute_view);
+			result = ntfs_listed_attribute(record, NTFS_ATTRIBUTE_DATA, name->units,
+			    name->length, ntfs_u16(entry->instance), 0, &attribute_view);
 		}
 		if (result != NTFS_OK) {
 			break;
@@ -278,12 +276,12 @@ catalog_from_list(
 }
 
 static enum ntfs_result
-catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *catalog)
+catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *catalog,
+    struct ntfs_stream_name *name)
 {
 	const struct ntfs_disk_record *header = (const void *)node->record;
 	const struct ntfs_stream_catalog_entry *entry;
 	struct ntfs_attr_view attribute_view;
-	struct ntfs_stream_name name = {0};
 	uint32_t position = ntfs_u16(header->attrs_offset), low, high, middle;
 	size_t i;
 	int comparison;
@@ -299,9 +297,9 @@ catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *cat
 		    catalog_attribute_lowest(&attribute_view) != 0) {
 			continue;
 		}
-		name.length = attribute_view.disk->name_length;
-		for (i = 0; i < name.length; i++) {
-			name.units[i] = ntfs_u16(attribute_view.bytes +
+		name->length = attribute_view.disk->name_length;
+		for (i = 0; i < name->length; i++) {
+			name->units[i] = ntfs_u16(attribute_view.bytes +
 			    ntfs_u16(attribute_view.disk->name_offset) + i * NTFS_UTF16_UNIT_BYTES);
 		}
 		low = 0;
@@ -309,7 +307,7 @@ catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *cat
 		while (low < high) {
 			middle = low + (high - low) / 2;
 			result = catalog_compare_work(
-			    catalog, &catalog->entries[middle].name, &name, &comparison);
+			    catalog, &catalog->entries[middle].name, name, &comparison);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -323,7 +321,7 @@ catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *cat
 			return NTFS_CORRUPT;
 		}
 		entry = &catalog->entries[low];
-		result = catalog_compare_work(catalog, &entry->name, &name, &comparison);
+		result = catalog_compare_work(catalog, &entry->name, name, &comparison);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -340,6 +338,9 @@ ntfs_stream_catalog_open_impl(
     struct ntfs_node *node, uint32_t maximum, struct ntfs_stream_catalog **out)
 {
 	struct ntfs_stream_catalog *catalog;
+	/* These phases are serial: one caller-owned entry serves name decoding
+	 * and heap-sort swaps without accumulating inlined large stack locals. */
+	struct ntfs_stream_catalog_entry scratch = {0};
 	struct ntfs_stat metadata;
 	uint8_t *bytes = NULL;
 	size_t size = 0;
@@ -369,14 +370,14 @@ ntfs_stream_catalog_open_impl(
 	if (result == NTFS_NOT_FOUND) {
 		result = catalog_from_record(node, catalog);
 	} else if (result == NTFS_OK) {
-		result = catalog_from_list(node, catalog, bytes, size);
+		result = catalog_from_list(node, catalog, bytes, size, &scratch.name);
 	}
 	ntfs_free(node->volume, bytes, size);
 	if (result == NTFS_OK) {
-		result = catalog_sort(catalog);
+		result = catalog_sort(catalog, &scratch);
 	}
 	if (result == NTFS_OK) {
-		result = catalog_check_base(node, catalog);
+		result = catalog_check_base(node, catalog, &scratch.name);
 	}
 	if (result != NTFS_OK) {
 		ntfs_stream_catalog_close(catalog);

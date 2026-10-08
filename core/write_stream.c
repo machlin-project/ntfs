@@ -63,6 +63,9 @@ ntfs_mutation_stream_read(struct ntfs_write_mutation_plan *plan, const struct nt
 	if (!ntfs_bounds(offset, bytes, stream->size)) {
 		return NTFS_RANGE;
 	}
+	if (bytes == 0) {
+		return NTFS_OK;
+	}
 	if (stream->resident) {
 		ntfs_copy(buffer, stream->value + offset, bytes);
 		return NTFS_OK;

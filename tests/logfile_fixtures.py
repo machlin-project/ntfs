@@ -332,7 +332,10 @@ def author(output):
     ):
         data = bytearray(base)
         RESTART_AREA.put(data, 'last_data_bytes', payload, RESTART_OFFSET)
-        add(label, 'restart', data, result, header=RESTART_HEADER)
+        fields = copy.deepcopy(base_fields) if result == SUCCESS else None
+        if fields is not None:
+            fields['last_data_bytes'] = payload
+        add(label, 'restart', data, result, fields=fields, header=RESTART_HEADER)
     raw, _ = protect(base, RESTART_HEADER)
     for name, change in (
         ('torn-first', lambda packet: struct.pack_into('<H', packet, USA_STRIDE - WORD_BYTES, USA_SEQUENCE + 1)),

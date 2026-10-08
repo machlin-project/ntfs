@@ -436,7 +436,7 @@ mutation_namespace_rename_entry(struct ntfs_write_mutation_plan *plan,
 	struct ntfs_mutation_key original;
 	struct ntfs_attr_view attribute;
 	struct ntfs_disk_filename *new_name;
-	uint8_t value[NTFS_MUTATION_FILENAME_BYTES];
+	uint8_t *value = original.value;
 	size_t found = 0, bytes, index;
 	bool directory;
 	enum ntfs_result result, exists;
@@ -507,7 +507,9 @@ mutation_namespace_rename_entry(struct ntfs_write_mutation_plan *plan,
 	if (result != NTFS_OK) {
 		goto done;
 	}
-	ntfs_copy(value, original.value, sizeof(struct ntfs_disk_filename));
+	/* All original-name comparisons and FILE lookup are complete. Reuse this
+	 * operation's private key bytes for the replacement instead of retaining
+	 * a second maximum-size filename buffer on the stack. */
 	new_name = (void *)value;
 	ntfs_put_u64(new_name->parent, destination->record->reference);
 	ntfs_put_u64(new_name->changed, plan->filetime);

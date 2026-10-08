@@ -440,7 +440,7 @@ main(int argc, char **argv)
 	uint64_t *samples = NULL;
 	struct rusage usage;
 	struct timespec resolution;
-	uint64_t start, elapsed, cpu_start, cpu, bytes = 0, entries = 0, sum = 0, allocations;
+	uint64_t start, elapsed = 0, cpu_start, cpu = 0, bytes = 0, entries = 0, sum = 0, allocations = 0;
 	size_t i, j, warmup, count, created = 0, sample_offset = 0, image_bytes;
 	enum ntfs_result result = NTFS_INVALID;
 	bool core_lock_initialized = false, start_lock_initialized = false;

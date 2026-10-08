@@ -138,7 +138,7 @@ try:
         item['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         item['status'] = 'running'
         report_path.write_text(json.dumps(report, indent=2) + '\n')
-        if process_flags or target in ('logfile', 'access', 'directory-mutation'):
+        if paths:
             # Child subsets are coverage-guided exploration, not proof that
             # every authored seed ran. Fixed-file batches check all seeds once
             # without retaining a growing corpus or weakening sanitizer checks.

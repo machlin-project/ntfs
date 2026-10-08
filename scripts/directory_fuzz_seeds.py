@@ -38,6 +38,14 @@ def authored():
         (ADD, 251, 0, 1), (ADD, 0, 0, 2), (LOOKUP, 0, 0, 0),
         (REMOVE, 0, 0, 0), (REMOVE, 0, 0, 0), (UPDATE, 0, 0, 0),
         (ADD, 0, 0, 3), (RENAME, 251, 0, 4), (UPDATE, 0, 0, 5)])
+    for sensitive in (False, True):
+        operations = [(LOOKUP, 0, key, 0) for key in range(KEYS)]
+        operations += [(RENAME, 251 if key % 2 else 1, key, key + 1) for key in range(KEYS)]
+        operations += [(LOOKUP, 0, key, 0) for key in range(KEYS)]
+        operations += [(REMOVE, 0, key, 0) for key in range(0, KEYS, 2)]
+        operations += [(ADD, 251, key, key + 2) for key in range(0, KEYS, 2)]
+        result['unicode-' + ('sensitive' if sensitive else 'insensitive')] = encode(
+            operations, initial=KEYS, order=2, case_sensitive=2 | sensitive, salt=23)
     for allocation in range(1, 97):
         result[f'allocation-{allocation:03d}'] = encode(
             [(REMOVE, 0, key, 0) for key in range(KEYS)], initial=KEYS,

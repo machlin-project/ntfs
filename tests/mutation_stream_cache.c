@@ -18,6 +18,20 @@ initialize_record(struct ntfs_mutation_record *record)
 	ntfs_put_u32(record->bytes + first, NTFS_ATTR_END);
 }
 
+static void
+empty_resident_read(void)
+{
+	struct ntfs_stream stream = {.resident = true};
+
+	/* An empty resident stream legitimately owns no value allocation. Even a
+	 * zero pointer offset is undefined C; zero-byte admission must not form it. */
+	assert(ntfs_mutation_stream_read(NULL, &stream, 0, NULL, 0) == NTFS_OK);
+	assert(ntfs_mutation_stream_read(NULL, &stream, 1, NULL, 0) == NTFS_RANGE);
+	assert(ntfs_mutation_stream_read(NULL, &stream, 0, NULL, 1) == NTFS_RANGE);
+	stream.resident = false;
+	assert(ntfs_mutation_stream_read(NULL, &stream, 0, NULL, 0) == NTFS_OK);
+}
+
 int
 main(void)
 {
@@ -30,6 +44,7 @@ main(void)
 	size_t index, calls, live;
 	uint8_t value = 0x37;
 
+	empty_resident_read();
 	volume.env = fuzz_environment(&device);
 	ntfs_default_limits(&volume.limits);
 	volume.info.cluster_size = NTFS_WRITE_CLUSTER_BYTES;

@@ -269,7 +269,7 @@ test('images', python, args: [files('tests/check_images.py'), inspector.full_pat
 fuzz_device = files('tests/fuzz_device.c')
 directory_fuzz_seeds = custom_target('directory-fuzz-seeds', output: 'directory-fuzz-seeds.stamp', command: [python, files('scripts/directory_fuzz_seeds.py'), meson.current_build_dir() / 'directory-fuzz-seeds', '@OUTPUT@'], build_by_default: true)
 directory_fuzz = executable('ntfs-fuzz-directory-mutation', ['tests/fuzz_directory.c', fuzz_device], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-UNDEBUG', '-Wdeclaration-after-statement'])
-foreach seed : ['ascending', 'descending', 'permuted', 'duplicate-and-absent', 'allocation-001', 'allocation-064']
+foreach seed : ['ascending', 'descending', 'permuted', 'duplicate-and-absent', 'unicode-sensitive', 'unicode-insensitive', 'allocation-001', 'allocation-064']
   test('fuzz-directory-' + seed, directory_fuzz, args: [meson.current_build_dir() / 'directory-fuzz-seeds' / (seed + '.seed')], depends: directory_fuzz_seeds, timeout: 120)
 endforeach
 fuzz = executable('ntfs-fuzz-smoke', ['tests/fuzz.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
@@ -283,6 +283,10 @@ foreach target : ['mapping-pairs', 'attribute-list', 'index-root', 'index-block'
   test('fuzz-' + target, structure_fuzz, args: [meson.current_build_dir() / 'fuzz-seeds' / target / (seed_name + '.seed')], depends: fuzz_seeds, timeout: 120)
 endforeach
 test('tool-environment', python, args: [files('tests/test_environment.py')])
+operation_governor = executable('ntfs-operation-governor-tests', 'tests/operation_governor.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('operation-governor', operation_governor)
+logfile_work = executable('ntfs-logfile-work-tests', 'tests/logfile_work.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
+test('logfile-work', logfile_work)
 test('wof-fixture-geometry', python, args: [files('tests/test_wof_geometry.py')], timeout: 120)
 access_fuzz = executable('ntfs-fuzz-access', 'tests/fuzz_access.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
 test('fuzz-access', access_fuzz, args: [meson.current_build_dir() / 'fuzz-seeds/access/allow-group.seed'], depends: fuzz_seeds, timeout: 120)

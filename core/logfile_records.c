@@ -7,11 +7,11 @@ struct ntfs_transaction_links {
 
 static enum ntfs_result ntfs_logfile_assemble_record(struct ntfs_logfile *source,
     uint64_t requested_lsn, void *bytes, size_t capacity, struct ntfs_logfile_record_view *out,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
     struct ntfs_logfile_record_ending *ending);
 static enum ntfs_result ntfs_logfile_capture_packet(struct ntfs_logfile *source, uint64_t lsn,
     uint8_t *workspace, size_t capacity, struct ntfs_logfile_span *span,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_checkpoint_capture_limits *limits,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_checkpoint_capture_limits *limits,
     struct ntfs_logfile_checkpoint_capture_report *report, struct ntfs_logfile_record_reuse *reuse);
 static enum ntfs_result ntfs_logfile_transaction_link(
     const struct ntfs_logfile *source, uint64_t lsn, uint64_t current, uint64_t oldest);
@@ -27,7 +27,7 @@ static enum ntfs_result ntfs_logfile_history_next_lsn(const struct ntfs_logfile_
     const struct ntfs_logfile_record_ending *ending, bool next_page, uint64_t *out);
 static enum ntfs_result ntfs_logfile_history_tail(struct ntfs_logfile *source,
     const struct ntfs_logfile_record_view *last, const struct ntfs_logfile_record_ending *ending,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_checkpoint_capture_limits *limits,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_checkpoint_capture_limits *limits,
     struct ntfs_logfile_history_report *out);
 
 static void
@@ -64,7 +64,7 @@ logfile_record_stage(
 
 static enum ntfs_result
 ntfs_logfile_assemble_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
-    size_t capacity, struct ntfs_logfile_record_view *out, struct ntfs_logfile_report *work,
+    size_t capacity, struct ntfs_logfile_record_view *out, struct ntfs_logfile_io_work *work,
     const struct ntfs_logfile_record_copies *copies, struct ntfs_logfile_record_ending *ending)
 {
 	struct ntfs_logfile_record_view view = {0};
@@ -227,7 +227,7 @@ enum ntfs_result
 ntfs_logfile_read_circular_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
     size_t capacity, struct ntfs_logfile_record_view *out)
 {
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 
 	return ntfs_logfile_assemble_record(
 	    source, requested_lsn, bytes, capacity, out, &work, NULL, NULL);
@@ -237,7 +237,7 @@ enum ntfs_result
 ntfs_logfile_read_indexed_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
     size_t capacity, struct ntfs_logfile_record_view *out)
 {
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_record_copies route = {.indexed = true};
 
 	return ntfs_logfile_assemble_record(
@@ -248,7 +248,7 @@ ntfs_logfile_read_indexed_record(struct ntfs_logfile *source, uint64_t requested
  * snapshot: inlining it exceeds the 2-KiB general-register-only kernel frame. */
 static __attribute__((noinline)) enum ntfs_result
 ntfs_logfile_capture_packet(struct ntfs_logfile *source, uint64_t lsn, uint8_t *workspace,
-    size_t capacity, struct ntfs_logfile_span *span, struct ntfs_logfile_report *work,
+    size_t capacity, struct ntfs_logfile_span *span, struct ntfs_logfile_io_work *work,
     const struct ntfs_logfile_checkpoint_capture_limits *limits,
     struct ntfs_logfile_checkpoint_capture_report *report, struct ntfs_logfile_record_reuse *reuse)
 {
@@ -281,7 +281,7 @@ logfile_capture_checkpoint(struct ntfs_logfile *source, uint16_t index, uint16_t
 	struct ntfs_logfile_checkpoint_capture value = {0};
 	struct ntfs_logfile_checkpoint_dump dumps[NTFS_LOGFILE_CHECKPOINT_KINDS] = {0};
 	struct ntfs_logfile_table_reference anchors[NTFS_LOGFILE_CHECKPOINT_KINDS];
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_checkpoint_capture_limits admitted;
 	const struct ntfs_logfile_checkpoint_capture_limits *budget = NULL;
 	uint8_t *bytes = workspace;
@@ -436,7 +436,7 @@ logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint16_t 
 	struct ntfs_logfile_checkpoint_capture_limits budget;
 	struct ntfs_logfile_record_copies route = {
 	    .capture_limits = &budget, .reuse = reuse, .indexed = true};
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_record_view view;
 	struct ntfs_logfile_client client;
 	struct ntfs_logfile_update update;
@@ -778,6 +778,7 @@ ntfs_logfile_history_bounds(struct ntfs_logfile *source, uint64_t first,
 	bool duplicate = false;
 	enum ntfs_result result;
 
+	*end_target = 0;
 	result = ntfs_logfile_lsn_decode(restart, first, &beginning);
 	if (result != NTFS_OK) {
 		return result;
@@ -914,7 +915,7 @@ ntfs_logfile_history_next_lsn(const struct ntfs_logfile_restart *restart, uint64
 
 static enum ntfs_result
 ntfs_logfile_history_tail(struct ntfs_logfile *source, const struct ntfs_logfile_record_view *last,
-    const struct ntfs_logfile_record_ending *ending, struct ntfs_logfile_report *work,
+    const struct ntfs_logfile_record_ending *ending, struct ntfs_logfile_io_work *work,
     const struct ntfs_logfile_checkpoint_capture_limits *limits,
     struct ntfs_logfile_history_report *out)
 {
@@ -999,7 +1000,7 @@ ntfs_logfile_visit_records_limited(struct ntfs_logfile *source, uint64_t first,
 	struct ntfs_logfile_record_copies route = {
 	    .reuse = &reuse, .indexed = true, .history = true};
 	struct ntfs_logfile_checkpoint_capture_limits admitted;
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_record_view record;
 	struct ntfs_logfile_record_ending ending;
 	struct ntfs_logfile_lsn location, beginning;
@@ -1156,7 +1157,7 @@ ntfs_logfile_read_legacy_record(struct ntfs_logfile *source, uint64_t requested_
 {
 	struct ntfs_logfile_legacy_copies copies = {0};
 	struct ntfs_logfile_record_copies route = {.legacy = &copies};
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_lsn location;
 	enum ntfs_result result;
 
@@ -1196,7 +1197,7 @@ enum ntfs_result
 ntfs_logfile_read_fast_record(struct ntfs_logfile *source, uint64_t requested_lsn, void *bytes,
     size_t capacity, struct ntfs_logfile_record_view *out)
 {
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_lsn location;
 	struct ntfs_logfile_record_copies route;
 	const struct ntfs_logfile_restart *restart;

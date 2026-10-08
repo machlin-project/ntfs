@@ -339,8 +339,8 @@ check_names(struct ntfs_reparse *reparse, const struct image_case *test)
 	}
 	assert(ntfs_reparse_name(reparse, NTFS_REPARSE_SUBSTITUTE_NAME, NULL, 1, &length) ==
 	    NTFS_INVALID);
-	assert(ntfs_reparse_name(reparse, TEST_INVALID_NAME_SELECTOR, buffer, TEST_NAME_CAPACITY,
-		   &length) == NTFS_INVALID &&
+	assert(ntfs_reparse_name(reparse, (enum ntfs_reparse_name_type)TEST_INVALID_NAME_SELECTOR,
+		   buffer, TEST_NAME_CAPACITY, &length) == NTFS_INVALID &&
 	    length == 0);
 	assert(ntfs_reparse_name(reparse, NTFS_REPARSE_SUBSTITUTE_NAME, buffer, TEST_NAME_CAPACITY,
 		   NULL) == NTFS_INVALID);

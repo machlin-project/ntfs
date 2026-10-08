@@ -2,25 +2,25 @@
 #include "logfile_source_internal.h"
 
 static enum ntfs_result ntfs_logfile_load_legacy_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_legacy_copies *copies,
+    struct ntfs_logfile_io_work *work, struct ntfs_logfile_legacy_copies *copies,
     struct ntfs_logfile_page_view *out);
 static enum ntfs_result ntfs_logfile_fast_target(struct ntfs_logfile *source, uint32_t *target);
 static enum ntfs_result ntfs_logfile_reload_fast_copy(struct ntfs_logfile *source,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_fast_copies *copies, unsigned index,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_fast_copies *copies, unsigned index,
     struct ntfs_logfile_page_view *out);
 static bool ntfs_logfile_same_fast_prefix(const struct ntfs_logfile_restart *restart,
     const struct ntfs_logfile_page *a, const uint8_t *a_bytes, const struct ntfs_logfile_page *b,
     const uint8_t *b_bytes);
 static enum ntfs_result ntfs_logfile_load_fast_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_fast_copies *copies,
+    struct ntfs_logfile_io_work *work, struct ntfs_logfile_fast_copies *copies,
     struct ntfs_logfile_page_view *out);
 static enum ntfs_result ntfs_logfile_load_history_page(struct ntfs_logfile *source, uint64_t offset,
-    uint64_t lsn, struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    uint64_t lsn, struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
     struct ntfs_logfile_page_view *out);
 
 enum ntfs_result
 ntfs_logfile_load_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_page_view *out)
+    struct ntfs_logfile_io_work *work, struct ntfs_logfile_page_view *out)
 {
 	struct ntfs_logfile_page_view view = {0};
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -57,7 +57,7 @@ enum ntfs_result
 ntfs_logfile_read_page(struct ntfs_logfile *source, uint64_t offset, void *bytes, size_t capacity,
     struct ntfs_logfile_page_view *out)
 {
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_page_view view;
 	const struct ntfs_logfile_restart *restart;
 	enum ntfs_result result;
@@ -99,7 +99,7 @@ ntfs_logfile_same_written_prefix(const struct ntfs_logfile_restart *restart,
 }
 
 enum ntfs_result
-ntfs_logfile_scan_legacy_copies(struct ntfs_logfile *source, struct ntfs_logfile_report *work,
+ntfs_logfile_scan_legacy_copies(struct ntfs_logfile *source, struct ntfs_logfile_io_work *work,
     struct ntfs_logfile_legacy_copies *copies)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -143,7 +143,7 @@ ntfs_logfile_scan_legacy_copies(struct ntfs_logfile *source, struct ntfs_logfile
 
 static enum ntfs_result
 ntfs_logfile_load_legacy_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_legacy_copies *copies,
+    struct ntfs_logfile_io_work *work, struct ntfs_logfile_legacy_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -272,7 +272,7 @@ enum ntfs_result
 ntfs_logfile_visit_pages(struct ntfs_logfile *source, ntfs_logfile_page_visitor visitor,
     void *context, struct ntfs_logfile_inventory *out)
 {
-	struct ntfs_logfile_report work = {0};
+	struct ntfs_logfile_io_work work = {0};
 	struct ntfs_logfile_page_observation observation;
 	struct ntfs_logfile_page_view page = {0};
 	const struct ntfs_logfile_restart *restart;
@@ -358,7 +358,7 @@ ntfs_logfile_visit_pages(struct ntfs_logfile *source, ntfs_logfile_page_visitor 
 }
 
 enum ntfs_result
-ntfs_logfile_scan_fast_copies(struct ntfs_logfile *source, struct ntfs_logfile_report *work,
+ntfs_logfile_scan_fast_copies(struct ntfs_logfile *source, struct ntfs_logfile_io_work *work,
     struct ntfs_logfile_fast_copies *copies)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -402,7 +402,7 @@ ntfs_logfile_scan_fast_copies(struct ntfs_logfile *source, struct ntfs_logfile_r
 }
 
 static enum ntfs_result
-ntfs_logfile_reload_fast_copy(struct ntfs_logfile *source, struct ntfs_logfile_report *work,
+ntfs_logfile_reload_fast_copy(struct ntfs_logfile *source, struct ntfs_logfile_io_work *work,
     const struct ntfs_logfile_fast_copies *copies, unsigned index,
     struct ntfs_logfile_page_view *out)
 {
@@ -440,7 +440,7 @@ ntfs_logfile_same_fast_prefix(const struct ntfs_logfile_restart *restart,
 
 static enum ntfs_result
 ntfs_logfile_load_fast_page(struct ntfs_logfile *source, uint64_t offset,
-    struct ntfs_logfile_report *work, struct ntfs_logfile_fast_copies *copies,
+    struct ntfs_logfile_io_work *work, struct ntfs_logfile_fast_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -523,7 +523,7 @@ ntfs_logfile_load_fast_page(struct ntfs_logfile *source, uint64_t offset,
 
 static enum ntfs_result
 ntfs_logfile_load_history_page(struct ntfs_logfile *source, uint64_t offset, uint64_t lsn,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
 	const struct ntfs_logfile_restart *restart = &source->restart;
@@ -559,7 +559,7 @@ ntfs_logfile_load_history_page(struct ntfs_logfile *source, uint64_t offset, uin
 enum ntfs_result
 ntfs_logfile_reload_record_page(struct ntfs_logfile *source,
     const struct ntfs_logfile_page_view *selected, uint64_t target,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
 	struct ntfs_logfile_record_reuse *reuse = copies->reuse;
@@ -591,7 +591,7 @@ ntfs_logfile_reload_record_page(struct ntfs_logfile *source,
 
 enum ntfs_result
 ntfs_logfile_load_record_page(struct ntfs_logfile *source, uint64_t offset, uint64_t lsn,
-    struct ntfs_logfile_report *work, const struct ntfs_logfile_record_copies *copies,
+    struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
     struct ntfs_logfile_page_view *out)
 {
 	const struct ntfs_logfile_checkpoint_capture_limits *limits;

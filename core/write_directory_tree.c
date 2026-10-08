@@ -336,11 +336,10 @@ index_extreme(struct ntfs_mutation_index_tree *tree, struct ntfs_mutation_index_
 }
 
 static enum ntfs_result
-index_balance(
-    struct ntfs_mutation_index_tree *tree, struct ntfs_mutation_index_node *parent, size_t position)
+index_balance(struct ntfs_mutation_index_tree *tree, struct ntfs_mutation_index_node *parent,
+    size_t position, struct ntfs_mutation_key *separator, struct ntfs_mutation_key *donated)
 {
 	struct ntfs_mutation_index_node *left, *right;
-	struct ntfs_mutation_key separator, donated;
 	size_t offset = 0, previous = SIZE_MAX, next, end, bytes, donor;
 	uint64_t child;
 
@@ -366,15 +365,15 @@ index_balance(
 		/* Previously admitted trees may have unequal subtree heights. */
 		return NTFS_OK;
 	}
-	index_key(parent, position, &separator);
+	index_key(parent, position, separator);
 	end = sizeof(struct ntfs_disk_index_entry) + (left->child ? sizeof(uint64_t) : 0);
-	bytes = ntfs_mutation_align_bytes(sizeof(struct ntfs_disk_index_entry) + separator.bytes) +
+	bytes = ntfs_mutation_align_bytes(sizeof(struct ntfs_disk_index_entry) + separator->bytes) +
 	    (left->child ? sizeof(uint64_t) : 0);
 	if (left->used - end + bytes + right->used <= NTFS_MUTATION_INDEX_CONTENT_BYTES) {
 		child = left->child ? index_child(left, left->used - end) : 0;
 		left->used -= end;
 		left->used += ntfs_mutation_index_encode(
-		    left->entries + left->used, &separator, left->child, child);
+		    left->entries + left->used, separator, left->child, child);
 		ntfs_copy(left->entries + left->used, right->entries, right->used);
 		left->used += right->used;
 		left->dirty = true;
@@ -383,30 +382,30 @@ index_balance(
 		    parent, position, ntfs_u16(index_entry(parent, position)->length), NULL, 0);
 		index_set_child(parent, position, left->vcn);
 	} else if (left->used == end) {
-		index_key(right, 0, &donated);
+		index_key(right, 0, donated);
 		child = left->child ? index_child(left, 0) : 0;
-		index_replace(left, 0, 0, &separator, child);
+		index_replace(left, 0, 0, separator, child);
 		if (left->child) {
 			index_set_child(left, bytes, index_child(right, 0));
 		}
 		index_replace(right, 0, ntfs_u16(index_entry(right, 0)->length), NULL, 0);
 		index_replace(parent, position, ntfs_u16(index_entry(parent, position)->length),
-		    &donated, left->vcn);
+		    donated, left->vcn);
 	} else if (right->used == end) {
 		for (donor = 0;
 		    donor + ntfs_u16(index_entry(left, donor)->length) < left->used - end;
 		    donor += ntfs_u16(index_entry(left, donor)->length)) {
 		}
-		index_key(left, donor, &donated);
+		index_key(left, donor, donated);
 		child = left->child ? index_child(left, left->used - end) : 0;
-		index_replace(right, 0, 0, &separator, child);
+		index_replace(right, 0, 0, separator, child);
 		if (left->child) {
 			child = index_child(left, donor);
 			index_set_child(left, left->used - end, child);
 		}
 		index_replace(left, donor, ntfs_u16(index_entry(left, donor)->length), NULL, 0);
 		index_replace(parent, position, ntfs_u16(index_entry(parent, position)->length),
-		    &donated, left->vcn);
+		    donated, left->vcn);
 	}
 	return NTFS_OK;
 }
@@ -511,7 +510,9 @@ index_edit_node(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_inde
 			    node, offset + ntfs_u16(index_entry(node, offset)->length), split);
 		}
 		if (remove) {
-			result = index_balance(tree, node, offset);
+			/* The recursive edit and split insertion have consumed these keys;
+			 * reuse this depth's two buffers for separator/donor balancing. */
+			result = index_balance(tree, node, offset, &candidate, &replacement);
 			if (result != NTFS_OK) {
 				return result;
 			}

@@ -12,6 +12,8 @@ DATA_INSTANCE, BACKING_INSTANCE, ADS_INSTANCE = 1, 2, 3
 REPARSE_INSTANCE, LIST_INSTANCE = 4, 5
 BACKING_NAME = 'WofCompressedData'
 BACKING_FIRST_LCN, BACKING_SECOND_LCN = 160, 208
+CACHE_PEER_RECORD = f.FILE_RECORDS['fragmented.bin']
+CACHE_PEER_LCN = 512
 REPARSE_LCN, LIST_LCN = 154, 156
 TABLE_PAGE_BYTES = 4096
 PAGE_SPILL_CHUNKS = 76
@@ -237,4 +239,34 @@ def author(output, source):
                      'backing-vdl', 'backing-flags', 'backing-efs', 'missing-backing',
                      'cleared-reparse', 'work-limit', 'unknown-provider', 'directory'):
         save(mutation, mutation=mutation)
+    # Two independent WOF files exercise collision/eviction in a one-entry
+    # validation memo. The malformed peer must never inherit the first proof.
+    peer_original, peer_packed = contents(x.WOF_XPRESS_4K, PAGE_CHUNKS, mixed=False)
+    peer_clusters = (len(peer_packed) + f.CLUSTER - 1) // f.CLUSTER
+    peer_payload = x.WOF_FILE.pack(x.WOF_VERSION, x.WOF_PROVIDER_FILE,
+                                  x.WOF_FILE_VERSION, x.WOF_XPRESS_4K)
+    peer_reparse = x.REPARSE.pack(x.WOF_TAG, len(peer_payload), 0) + peer_payload
+    for bad in (False, True):
+        image = bytearray((output / 'wof-file-pages.img').read_bytes())
+        packed = bytearray(peer_packed)
+        if bad:
+            struct.pack_into('<I', packed, 0, (1 << 32) - 1)
+        attributes = [f.standard(f.FILE_ATTRIBUTE_REPARSE | f.FILE_ATTRIBUTE_SPARSE),
+            f.nonresident(f.DATA, [((len(peer_original) + f.CLUSTER - 1) // f.CLUSTER, None)],
+                len(peer_original), DATA_INSTANCE, initialized=0, flags=f.SPARSE),
+            f.nonresident(f.DATA, [(peer_clusters, CACHE_PEER_LCN)], len(packed),
+                BACKING_INSTANCE, BACKING_NAME),
+            f.resident(f.REPARSE_POINT, peer_reparse, REPARSE_INSTANCE)]
+        f.put_record(image, CACHE_PEER_RECORD, f.file_record(CACHE_PEER_RECORD, attributes))
+        f.put_data(image, CACHE_PEER_LCN, packed)
+        bitmap = bytearray((len(image) // f.CLUSTER + f.BYTE_BITS - 1) // f.BYTE_BITS)
+        for first, count in ((0, f.ALLOCATED_CLUSTERS),
+                             (BACKING_FIRST_LCN, peer_clusters // 2),
+                             (BACKING_SECOND_LCN, peer_clusters - peer_clusters // 2),
+                             (CACHE_PEER_LCN, peer_clusters)):
+            for cluster in range(first, min(first + count, len(image) // f.CLUSTER)):
+                bitmap[cluster // f.BYTE_BITS] |= 1 << (cluster % f.BYTE_BITS)
+        f.put_record(image, f.BITMAP_RECORD, f.file_record(f.BITMAP_RECORD,
+            [f.standard(), f.resident(f.DATA, bitmap)]))
+        (output / ('wof-cache-bad-peer.img' if bad else 'wof-cache-pair.img')).write_bytes(image)
     return cases

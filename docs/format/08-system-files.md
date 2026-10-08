@@ -83,6 +83,17 @@ Allocation maps prove occupancy. Stream mappings and the complete validator
 establish which object owns occupied storage. A set volume bit does not identify
 a file; an unset MFT bit does not prove the old slot's bytes are valid for reuse.
 
+The local planner scans original/private occupancy in 64-bit words without
+changing these bit identities. Ordinary MFT first-fit begins at record 24 and
+excludes both bitmap padding and records beyond the initialized MFT prefix.
+Cluster retirement clears only the requested suffix of each run in run order.
+If a bit is already clear, the private result contains exactly the cleared prefix
+before that failure; the original bitmap stays unchanged. Word loads/stores stop
+at the bitmap's allocation end. Independent bitwise oracles cover these rules in
+[allocation_scan.c](../../tests/allocation_scan.c) and
+[mutation_lookup.c](../../tests/mutation_lookup.c). They are implementation
+contracts, not a new bitmap representation or native observation.
+
 ### Changing bits without resizing the stream
 
 A bitmap's logical byte length, initialized prefix and physical allocation are

@@ -1,6 +1,20 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "write_mutation_internal.h"
 
+static uint16_t *
+mutation_record_slot(const struct ntfs_write_mutation_plan *plan, uint64_t number)
+{
+	uint16_t *slots = ntfs_mutation_vector_slots(plan->records, plan->record_capacity);
+	size_t position = ntfs_mutation_hash(number, plan->record_capacity);
+	size_t mask = plan->record_capacity * NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY - 1u;
+
+	/* The vector is bounded and the table never exceeds half occupancy. */
+	while (slots[position] != 0 && plan->records[slots[position] - 1u]->number != number) {
+		position = (position + 1u) & mask;
+	}
+	return &slots[position];
+}
+
 static enum ntfs_result
 mutation_record_physical(struct ntfs_write_mutation_plan *plan, uint64_t number, uint64_t *out)
 {
@@ -59,13 +73,15 @@ ntfs_mutation_record_get(struct ntfs_write_mutation_plan *plan, uint64_t referen
 	struct ntfs_disk_record *header;
 	uint64_t number = number_only ? reference : reference & NTFS_REFERENCE_RECORD_MASK;
 	size_t index, capacity;
+	uint16_t slot;
 	enum ntfs_result result;
 	bool free_slot;
 
 	*out = NULL;
-	for (index = 0; index < plan->record_count; index++) {
-		record = plan->records[index];
-		if (record->number == number) {
+	if (plan->record_capacity != 0) {
+		slot = *mutation_record_slot(plan, number);
+		if (slot != 0) {
+			record = plan->records[slot - 1u];
 			goto checked;
 		}
 	}
@@ -75,15 +91,19 @@ ntfs_mutation_record_get(struct ntfs_write_mutation_plan *plan, uint64_t referen
 	if (plan->record_count == plan->record_capacity) {
 		capacity = plan->record_capacity == 0 ? NTFS_MUTATION_INITIAL_RECORDS
 						      : plan->record_capacity * NTFS_VECTOR_GROWTH;
-		records = ntfs_mutation_allocate(plan, capacity * sizeof(*records));
+		records = ntfs_mutation_allocate(plan, ntfs_mutation_vector_bytes(capacity));
 		if (records == NULL) {
 			return NTFS_NO_MEMORY;
 		}
 		ntfs_copy(records, plan->records, plan->record_count * sizeof(*records));
 		ntfs_mutation_release(
-		    plan, plan->records, plan->record_capacity * sizeof(*records));
+		    plan, plan->records, ntfs_mutation_vector_bytes(plan->record_capacity));
 		plan->records = records;
 		plan->record_capacity = capacity;
+		for (index = 0; index < plan->record_count; index++) {
+			*mutation_record_slot(plan, plan->records[index]->number) =
+			    (uint16_t)(index + 1u);
+		}
 	}
 	record = ntfs_mutation_allocate(plan, sizeof(*record));
 	if (record == NULL) {
@@ -126,6 +146,7 @@ ntfs_mutation_record_get(struct ntfs_write_mutation_plan *plan, uint64_t referen
 	record->reference =
 	    number | (uint64_t)ntfs_u16(header->sequence) << NTFS_REFERENCE_SEQUENCE_SHIFT;
 	plan->records[plan->record_count++] = record;
+	*mutation_record_slot(plan, number) = (uint16_t)plan->record_count;
 
 checked:
 	header = (void *)record->bytes;

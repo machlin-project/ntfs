@@ -1,8 +1,62 @@
 # Acceptance
 
+## Mutation lookup, bitmap retirement and WOF reuse
+
+The C-only batch is complete. Bounded indexes accelerate lookup of changed
+physical blocks and MFT records while insertion-ordered vectors retain exact
+publication order. Short projected reads use the block index after the same
+fresh source read and original work admission. Cluster retirement and MFT
+first-fit use bounded words with exact partial-failure results, record-24 reserve
+and original/private ownership exclusion. Successful WOF table proofs survive
+node close within the same immutable volume; provider/backing and per-read span
+checks remain mandatory. Failed opens cannot publish or replace a proof.
+The [performance contract](PERFORMANCE.md#mutation-planning-and-cross-node-wof)
+records memory costs, lifetimes and measurement scope.
+
+The initial test-first run passes the bitwise allocation/free model, lookup
+contracts and existing same-node WOF checks against unchanged core code. The new
+cross-node WOF read-count assertion fails as expected. After implementation,
+the connected complete regression passes **209 suites, zero failures and zero
+SKIPs**, with assertions and fatal ASan/UBSan. All **45 frozen whole images**
+match exactly, including physical placement, journal and recovered output.
+The expanded tests cover high/sparse lookup keys, insertion order, projected
+reads, source-error precedence, vector/record/read failures with retry,
+full-reference staleness, both 4,096-entry limits and complete allocation-alias
+protection. WOF tests cover disabled/one/default cache capacities, successful and
+malformed colliding files, all allocation failures, one-credit-short work refusal,
+failed final publication, fresh mounts and reading after source-node close.
+
+All **308 strict compiler objects** pass across 77 sources in userspace
+arm64/x86_64 and kernel arm64e/x86_64. All 154 kernel objects avoid SIMD/FP
+registers; every context meets the 2-KiB frame ceiling, and memory objects have
+no unresolved runtime dependencies. Six portable/GPR memory, codec and endian
+checks pass. Decoder algorithms are unchanged; this batch does not repeat the
+preceding full Huffman differential corpus. Selected-Xcode formatting passes.
+
+Nine alternating paired measurements show 1.33×/1.24× complete preparation of
+a 1-MiB growing write in userspace/GPR host contexts, with identical reads,
+allocation calls and complete region-byte checksums. Small create/resize/shrink/
+unlink preparations remain near parity. Primitive lookup and bitmap operations
+show larger gains; these are not whole-driver rates. WOF fresh-node opens reduce
+table reads from 2,000 to two per 1,000 opens. Longer diagnostic series using
+the exact unchanged binaries resolve noisy short controls; fresh-node WOF
+improves 27.62×/20.32×, while bitmap/journal controls remain 0.990–1.003×.
+All original samples are retained.
+
+**No FSKit tests, app build/install, VM/UTM operation, Windows candidate or kernel
+load runs in this batch.** Installed signed build 19 retains its prior native
+acceptance and does not contain these C changes. Paged bitmap snapshots,
+incremental directory editing and native transport/parallelism remain separate.
+
+Evidence: `artifacts/mutation-test-first-20261008/`,
+`artifacts/mutation-focused-contracts-20261008/`,
+`artifacts/mutation-optimization-20261008/`,
+`artifacts/mutation-boundaries-20261008/` and
+`artifacts/mutation-regression-20261008/`.
+
 ## Core acquisition and allocation optimization
 
-The C-only optimization batch is complete. Journal traversal, checkpoint capture
+The preceding C-only optimization batch is complete. Journal traversal, checkpoint capture
 and transaction chains reuse a protected page only after physical/target routing
 and while the source scratch generation matches. Each call owns one growable,
 accounted packet buffer and releases it on every outcome. Physical read counters

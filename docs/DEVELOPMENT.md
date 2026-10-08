@@ -23,18 +23,31 @@ Prepare the frozen reference and workload inputs before editing core sources:
 ```sh
 python3 scripts/benchmark_core.py prepare --reference HEAD --output artifacts/core-next
 python3 scripts/benchmark_core.py compare --output artifacts/core-next --comparison candidate --repetitions 9
+python3 scripts/benchmark_mutation.py prepare --reference HEAD --output artifacts/mutation-next
+python3 scripts/benchmark_mutation.py compare --output artifacts/mutation-next --comparison candidate --repetitions 9
 ```
 
 This requires the ordinary generated journal/WOF fixtures in `.build/`. The
 harness checks semantic checksums and balances all allocation lifetimes; its
 profiles isolate dense journal traversal, nearly full first-fit bitmap search,
-same-node WOF reopening and a fresh-node control. Both compiler contexts run on
+same-node WOF reopening and closing/reopening nodes. Both compiler contexts run on
 the host. Preserve rejected candidates and serialize timing against other builds
 or tests. `benchmark_cpu.py --sample-ms 200 --case NAME` increases the calibrated
 duration for a noisy control without changing either side's code or workload.
 
-The regular C regression includes independent allocation/endian tests, WOF
-cold/warm failures and journal packet/read/growth oracles. Whole-image comparisons
+The mutation harness also requires `.build/write-mutation-cases/source.img`.
+It freezes that image and measures region/record lookup, short projected reads,
+cluster retirement, MFT first-fit and complete create/resize/shrink/unlink/growing
+write preparation. Whole-plan cases derive a private seed outside timing, leave
+that seed unchanged during repeated preparations and hash all final region bytes
+outside timing. Allocation counts/bytes, source reads/bytes and peak live memory
+are retained for both versions. `--case grow-write` selects the 1-MiB payload
+case; case selection also applies to preparation. These measurements do not
+include journal reservation, durable transfer, fsync or a mounted adapter.
+
+The regular C regression includes independent allocation/endian tests, mutation
+lookup/overlay/failure limits, WOF eviction/cold/warm failures and journal
+packet/read/growth oracles. Whole-image comparisons
 retain the exact physical allocation and recovery results. The compiler-context
 check below covers the portable endian fallback and GPR-only loads as well as
 memory/codecs. C tests and compiler objects remain separate from FSKit builds,

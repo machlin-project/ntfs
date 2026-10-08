@@ -104,6 +104,92 @@ check(size_t bits, size_t alignment, unsigned pattern, uint64_t wanted)
 	free(plan);
 }
 
+static enum ntfs_result
+free_model(uint8_t *bitmap, size_t bits, const struct ntfs_stream *stream, uint64_t retain)
+{
+	const struct ntfs_run *run;
+	size_t index;
+	uint64_t cluster, first;
+
+	for (index = 0; index < stream->run_count; index++) {
+		run = &stream->runs[index];
+		if (run->lcn == NTFS_HOLE || run->lcn > bits || run->length > bits - run->lcn) {
+			return NTFS_CORRUPT;
+		}
+		first = retain > run->vcn ? retain - run->vcn : 0;
+		for (cluster = first; cluster < run->length; cluster++) {
+			if ((bitmap[(run->lcn + cluster) / TEST_BITS_PER_BYTE] &
+				(1u << ((run->lcn + cluster) % TEST_BITS_PER_BYTE))) == 0) {
+				return NTFS_CORRUPT;
+			}
+			bitmap[(run->lcn + cluster) / TEST_BITS_PER_BYTE] &=
+			    (uint8_t)~(1u << ((run->lcn + cluster) % TEST_BITS_PER_BYTE));
+		}
+	}
+	return NTFS_OK;
+}
+
+static void
+free_cases(void)
+{
+	struct ntfs_write_mutation_plan *plan = calloc(1, sizeof(*plan));
+	struct ntfs_stream stream = {0};
+	struct ntfs_run runs[2];
+	uint8_t *allocation, *bitmap, *oracle;
+	size_t bits, bytes, first, alignment, fault, retained, mode;
+	enum ntfs_result expected;
+
+	assert(plan != NULL);
+	for (alignment = 0; alignment < TEST_ALIGNMENTS; alignment++) {
+		for (bits = 1; bits <= TEST_SMALL_BITS; bits++) {
+			bytes = (bits + TEST_BITS_PER_BYTE - 1) / TEST_BITS_PER_BYTE;
+			allocation = malloc(alignment + bytes);
+			oracle = malloc(bytes);
+			assert(allocation != NULL && oracle != NULL);
+			bitmap = allocation + alignment;
+			for (mode = 0; mode < 4; mode++) {
+				first = mode == 0 ? 0 : bits / 3;
+				runs[0] = (struct ntfs_run){0, bits - first, first};
+				runs[1] = (struct ntfs_run){bits - first, first, 0};
+				if (mode == 2) {
+					runs[1].lcn = NTFS_HOLE;
+				} else if (mode == 3) {
+					runs[1].lcn = bits;
+					runs[1].length++;
+				}
+				stream.runs = runs;
+				stream.run_count = 2;
+				stream.clusters = bits;
+				for (fault = 0; fault <= bits; fault++) {
+					retained = mode == 0 ? 0 : bits / 3;
+					memset(allocation, TEST_SENTINEL, alignment);
+					memset(bitmap, UINT8_MAX, bytes);
+					if (fault < bits) {
+						bitmap[fault / TEST_BITS_PER_BYTE] &=
+						    (uint8_t)~(1u << (fault % TEST_BITS_PER_BYTE));
+					}
+					memcpy(oracle, bitmap, bytes);
+					memset(plan, 0, sizeof(*plan));
+					plan->info.cluster_count = bits;
+					plan->allocation.after = bitmap;
+					plan->allocation.bytes = bytes;
+					expected = free_model(oracle, bits, &stream, retained);
+					assert(ntfs_mutation_free_runs(plan, &stream, retained) ==
+					    expected);
+					assert(memcmp(bitmap, oracle, bytes) == 0 &&
+					    plan->work == bits);
+					for (first = 0; first < alignment; first++) {
+						assert(allocation[first] == TEST_SENTINEL);
+					}
+				}
+			}
+			free(oracle);
+			free(allocation);
+		}
+	}
+	free(plan);
+}
+
 int
 main(void)
 {
@@ -120,6 +206,8 @@ main(void)
 	}
 	check(TEST_FRAGMENT_BITS, 1, 2, NTFS_MUTATION_MAX_RUNS + 1);
 	check(TEST_FRAGMENT_BITS, 7, 0, TEST_FRAGMENT_BITS + 1);
-	puts("allocation first-fit model, original/private union, tails and run cap pass");
+	free_cases();
+	puts("allocation/free bitmap models, original/private union, tails, faults and run cap "
+	     "pass");
 	return 0;
 }

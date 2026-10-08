@@ -219,12 +219,47 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 	return NTFS_OK;
 }
 
+static enum ntfs_result
+mutation_allocation_clear(struct ntfs_mutation_bitmap *bitmap, uint64_t first, uint64_t end)
+{
+	uint64_t current, mask, missing;
+	size_t byte, bytes;
+	unsigned within, take;
+
+	while (first < end) {
+		within = (unsigned)(first % MUTATION_BITMAP_WORD_BITS);
+		byte = (size_t)((first - within) / NTFS_BITS_PER_BYTE);
+		if (byte >= bitmap->bytes) {
+			return NTFS_CORRUPT;
+		}
+		bytes = bitmap->bytes - byte;
+		take = MUTATION_BITMAP_WORD_BITS - within;
+		if (end - first < take) {
+			take = (unsigned)(end - first);
+		}
+		current = mutation_allocation_word(bitmap->after + byte, bytes);
+		mask = mutation_allocation_mask(take) << within;
+		missing = mask & ~current;
+		/* Preserve the bitwise failure state: clear exactly the allocated
+		 * prefix preceding the first missing bit, even in a partial word. */
+		if (missing != 0) {
+			mask &= mutation_allocation_mask((unsigned)__builtin_ctzll(missing));
+		}
+		mutation_allocation_put_word(bitmap->after + byte, bytes, current & ~mask);
+		if (missing != 0) {
+			return NTFS_CORRUPT;
+		}
+		first += take;
+	}
+	return NTFS_OK;
+}
+
 enum ntfs_result
 ntfs_mutation_free_runs(
     struct ntfs_write_mutation_plan *plan, const struct ntfs_stream *stream, uint64_t retain)
 {
 	const struct ntfs_run *run;
-	uint64_t first, cluster;
+	uint64_t first;
 	size_t index;
 	enum ntfs_result result;
 
@@ -245,12 +280,10 @@ ntfs_mutation_free_runs(
 		if (first >= run->length) {
 			continue;
 		}
-		for (cluster = first; cluster < run->length; cluster++) {
-			if (!ntfs_mutation_bit(plan->allocation.after, plan->allocation.bytes,
-				run->lcn + cluster)) {
-				return NTFS_CORRUPT;
-			}
-			ntfs_mutation_set_bit(plan->allocation.after, run->lcn + cluster, false);
+		result = mutation_allocation_clear(
+		    &plan->allocation, run->lcn + first, run->lcn + run->length);
+		if (result != NTFS_OK) {
+			return result;
 		}
 	}
 	return NTFS_OK;
@@ -422,6 +455,34 @@ done:
 	return NTFS_OK;
 }
 
+static uint64_t
+mutation_allocation_first_record(const struct ntfs_mutation_bitmap *bitmap, uint64_t records)
+{
+	uint64_t number, available;
+	size_t byte, bytes;
+	unsigned bits, first;
+
+	for (number = NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD; number < records;) {
+		first = (unsigned)(number % MUTATION_BITMAP_WORD_BITS);
+		number -= first;
+		byte = (size_t)(number / NTFS_BITS_PER_BYTE);
+		if (byte >= bitmap->bytes) {
+			break;
+		}
+		bytes = bitmap->bytes - byte;
+		bits = records - number < MUTATION_BITMAP_WORD_BITS ? (unsigned)(records - number)
+								    : MUTATION_BITMAP_WORD_BITS;
+		available = ~(mutation_allocation_word(bitmap->before + byte, bytes) |
+				mutation_allocation_word(bitmap->after + byte, bytes)) &
+		    mutation_allocation_mask(bits) & ~mutation_allocation_mask(first);
+		if (available != 0) {
+			return number + (unsigned)__builtin_ctzll(available);
+		}
+		number += MUTATION_BITMAP_WORD_BITS;
+	}
+	return records;
+}
+
 enum ntfs_result
 ntfs_mutation_new_record(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record **out)
 {
@@ -435,17 +496,13 @@ ntfs_mutation_new_record(struct ntfs_write_mutation_plan *plan, struct ntfs_muta
 		if (result != NTFS_OK) {
 			return result;
 		}
-		for (number = NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD; number < records; number++) {
-			if (!ntfs_mutation_bit(
-				plan->mft_bitmap.before, plan->mft_bitmap.bytes, number) &&
-			    !ntfs_mutation_bit(
-				plan->mft_bitmap.after, plan->mft_bitmap.bytes, number)) {
-				result = ntfs_mutation_record_get(plan, number, true, out);
-				if (result == NTFS_OK) {
-					ntfs_mutation_set_bit(plan->mft_bitmap.after, number, true);
-				}
-				return result;
+		number = mutation_allocation_first_record(&plan->mft_bitmap, records);
+		if (number < records) {
+			result = ntfs_mutation_record_get(plan, number, true, out);
+			if (result == NTFS_OK) {
+				ntfs_mutation_set_bit(plan->mft_bitmap.after, number, true);
 			}
+			return result;
 		}
 		result = mutation_allocation_grow_mft(plan);
 		if (result != NTFS_OK) {

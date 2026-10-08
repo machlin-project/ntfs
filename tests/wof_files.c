@@ -315,6 +315,7 @@ reopen_case(const char *directory, const char *name)
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_stat stat;
+	struct ntfs_limits limits;
 	uint8_t *image, *original, output[GUARD_BYTES];
 	uint64_t reference = (uint64_t)FILE_SEQUENCE << NTFS_REFERENCE_SEQUENCE_SHIFT | FILE_RECORD;
 	size_t image_size, size, reads, allocations, cold_reads, warm_reads, warm_allocations;
@@ -325,7 +326,9 @@ reopen_case(const char *directory, const char *name)
 	device.data = image;
 	device.size = image_size;
 	environment = fuzz_environment(&device);
-	assert(ntfs_mount(&environment, NULL, &volume) == NTFS_OK);
+	ntfs_default_limits(&limits);
+	limits.record_cache_entries = 0;
+	assert(ntfs_mount(&environment, &limits, &volume) == NTFS_OK);
 	assert(ntfs_node_open(volume, reference, &node) == NTFS_OK);
 	assert(ntfs_node_stat(node, &stat) == NTFS_OK && stat.size == size);
 	reads = device.reads;

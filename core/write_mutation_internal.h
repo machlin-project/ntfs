@@ -11,6 +11,8 @@ enum {
 	NTFS_MUTATION_MAX_REGIONS = 4096,
 	NTFS_MUTATION_INITIAL_RECORDS = 8,
 	NTFS_MUTATION_MAX_RECORDS = 4096,
+	NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY = 2,
+	NTFS_MUTATION_HASH_SHIFT = sizeof(uint32_t) * NTFS_BITS_PER_BYTE,
 	NTFS_MUTATION_MAX_BITMAP_BYTES = 4 * 1024 * 1024,
 	NTFS_MUTATION_INITIAL_KEYS = 16,
 	NTFS_MUTATION_MAX_KEYS = 65536,
@@ -26,6 +28,11 @@ enum {
 	NTFS_MUTATION_CREATOR_OWNER = 0,
 	NTFS_MUTATION_CREATOR_GROUP = 1
 };
+
+#define NTFS_MUTATION_HASH_MULTIPLIER UINT64_C(11400714819323198485)
+
+_Static_assert(NTFS_MUTATION_MAX_REGIONS <= UINT16_MAX && NTFS_MUTATION_MAX_RECORDS <= UINT16_MAX,
+    "Mutation lookup slots hold a vector index plus one");
 
 struct ntfs_mutation_patch {
 	uint64_t physical;
@@ -78,6 +85,31 @@ struct ntfs_write_mutation_plan {
 	uint8_t *scratch, *protected_record;
 	bool sealed, operation_active;
 };
+
+/* Insertion order owns the public region order. A half-full, power-of-two hash
+ * table follows each pointer vector in the same allocation. Zero is empty;
+ * every other slot names a completely acquired vector entry (index plus one).
+ * Vector growth retains the original allocation-call/failure boundaries. */
+static inline size_t
+ntfs_mutation_vector_bytes(size_t capacity)
+{
+	return capacity *
+	    (sizeof(void *) + NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY * sizeof(uint16_t));
+}
+
+static inline uint16_t *
+ntfs_mutation_vector_slots(void *vector, size_t capacity)
+{
+	return (void *)((uint8_t *)vector + capacity * sizeof(void *));
+}
+
+static inline size_t
+ntfs_mutation_hash(uint64_t key, size_t capacity)
+{
+	key ^= key >> NTFS_MUTATION_HASH_SHIFT;
+	return (size_t)((key * NTFS_MUTATION_HASH_MULTIPLIER) >> NTFS_MUTATION_HASH_SHIFT) &
+	    (capacity * NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY - 1u);
+}
 
 /* Equivalent wire byte rounding; callers retain their existing size admission
  * and ownership policy. These helpers perform no allocation or I/O. */

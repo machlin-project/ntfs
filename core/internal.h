@@ -84,6 +84,13 @@ struct ntfs_link_count_cache {
 	struct ntfs_link_counts counts;
 };
 
+/* A successful WOF table proof has an independent sequence-bearing key.
+ * It shares the immutable volume lifetime, not a raw MFT cache slot's key. */
+struct ntfs_wof_table_proof {
+	uint64_t reference, logical_size, stored_size;
+	uint32_t algorithm;
+};
+
 struct ntfs_record_cache {
 	uint64_t number, stamp;
 	uint8_t *bytes;
@@ -91,6 +98,7 @@ struct ntfs_record_cache {
 	/* Independent full-reference key in metadata.reference; zero is unused.
 	 * Sizes remain zero: only checked base metadata and presence are retained. */
 	struct ntfs_stat metadata;
+	struct ntfs_wof_table_proof wof;
 };
 
 struct ntfs_volume {
@@ -121,7 +129,7 @@ struct ntfs_node {
 	bool metadata_verified;
 	struct ntfs_link_counts link_counts;
 	bool link_counts_verified;
-	/* A successful table validation belongs to this immutable node only. */
+	/* Local fast path for a successful proof in this immutable volume. */
 	uint64_t wof_logical_size, wof_stored_size;
 	uint32_t wof_algorithm;
 	bool wof_table_verified;

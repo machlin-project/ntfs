@@ -57,10 +57,13 @@ limits, not format restrictions. The primitives allocate nothing. Public stream
 opening uses the default work cap and validates the entire table through one
 4-KiB page, charged to the existing owner allocator. It never allocates a flat
 table. After successful stream publication, the immutable node can reuse that
-complete proof for the same logical size, stored size and algorithm. Every open
+complete proof for the same logical size, stored size and algorithm. The optional
+bounded volume cache retains the same tuple under a full sequence-bearing file
+reference, so a newly opened node can also reuse a completed proof. Every open
 still validates provider/placeholder/backing metadata and requires its own table
 page; every actual read fetches and checks its local span. Failure publishes no
-proof and a new node starts cold. See [the core reuse contract](PERFORMANCE.md#wof-and-wire-fields).
+proof or replacement. A new volume starts cold, and zero record-cache entries
+disable cross-node reuse. See [the core reuse contract](PERFORMANCE.md#mutation-planning-and-cross-node-wof).
 
 ## Storage, lifetime and native projection
 

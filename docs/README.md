@@ -21,6 +21,9 @@ diagrams, field maps, examples and a research register.
 - [Core acquisition and allocation](PERFORMANCE.md#core-acquisition-and-allocation):
   journal page/staging reuse, word-based first-fit, WOF node proofs and inline
   wire fields, with C-only acceptance separate from native testing.
+- [Mutation planning and WOF reuse](PERFORMANCE.md#mutation-planning-and-cross-node-wof):
+  bounded region/MFT indexes, bitmap retirement, cross-node WOF proofs and
+  complete growing-write preparation measurements.
 
 ## Detailed contracts
 

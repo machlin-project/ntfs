@@ -1,21 +1,28 @@
 # Handoff to Sol
 
-The latest C-only optimization batch is complete: journal page/staging reuse,
-wordwise cluster allocation, same-node WOF table proof and inline wire access.
-All 207 fatal-sanitizer suites and 45 unchanged whole images pass, with 308 strict
-objects, six portable/GPR checks and three decoder differential contexts. The
-full regression's two obsolete fuzz accounting assertions are corrected using
-actual backend read counts; all 69 shared fuzz suites plus allocation pass on
-the follow-up, reusing 137 unaffected results. Original failures are preserved.
-See [current acceptance](ACCEPTANCE.md#core-acquisition-and-allocation-optimization)
-and [performance scope](PERFORMANCE.md#core-acquisition-and-allocation).
+The latest C-only optimization batch is complete: bounded region/MFT lookup
+indexes, wordwise cluster retirement/MFT first-fit and volume-lifetime WOF table
+proofs. All 209 fatal-sanitizer suites and 45 unchanged whole images pass, with
+308 strict compiler objects and six portable/GPR checks. A 1-MiB growing-write
+preparation improves 1.33×/1.24× in userspace/GPR host contexts, with unchanged
+reads and allocation calls. WOF fresh-node reopening improves 27.62×/20.32×;
+small whole-plan controls remain near parity. Noisy short measurements are
+retained and resolved by longer series of the same binaries. See
+[current acceptance](ACCEPTANCE.md#mutation-lookup-bitmap-retirement-and-wof-reuse)
+and [performance scope](PERFORMANCE.md#mutation-planning-and-cross-node-wof).
 
 The user explicitly defers FSKit work. This batch runs no FSKit tests, app build,
 installation, VM/UTM operation or kernel load. Installed signed build 19 remains
 the preceding mounted/Windows baseline and does not include these changes.
 No VM is assigned to a worker; do not restart completed C suites or initiate
 native work from this handoff. Generated evidence is under
-`artifacts/core-regression-followup-20261008/` and the linked acceptance paths.
+`artifacts/mutation-regression-20261008/` and the linked acceptance paths.
+
+The preceding journal/cluster-allocation/node-local-WOF/wire batch retains its
+207-suite and decoder-differential evidence in
+`artifacts/core-regression-followup-20261008/`. The latest batch preserves those
+contracts and extends WOF proof reuse to one immutable volume. It changes no
+disk-format relationship, decoder algorithm or durable execution family.
 
 The preceding Huffman batch is complete locally: 205 fatal-sanitizer suites,
 45 unchanged whole images, 64 host FSKit PASS/13 runtime SKIPs, 308 strict objects

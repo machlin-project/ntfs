@@ -74,12 +74,58 @@ source_read(void *context, uint64_t offset, void *memory, size_t bytes)
 	return plan->source.read(plan->source.context, offset, memory, bytes);
 }
 
+static uint16_t *
+mutation_patch_slot(const struct ntfs_write_mutation_plan *plan, uint64_t physical)
+{
+	uint16_t *slots = ntfs_mutation_vector_slots(plan->patches, plan->patch_capacity);
+	size_t position =
+	    ntfs_mutation_hash(physical / NTFS_WRITE_CLUSTER_BYTES, plan->patch_capacity);
+	size_t mask = plan->patch_capacity * NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY - 1u;
+
+	/* At most patch_count occupied slots precede an empty one. Equality uses
+	 * the full physical key, including its high bits. */
+	while (slots[position] != 0 && plan->patches[slots[position] - 1u]->physical != physical) {
+		position = (position + 1u) & mask;
+	}
+	return &slots[position];
+}
+
+static void
+mutation_patch_reindex(struct ntfs_write_mutation_plan *plan)
+{
+	size_t index;
+
+	if (plan->patch_capacity == 0) {
+		return;
+	}
+	ntfs_zero(ntfs_mutation_vector_slots(plan->patches, plan->patch_capacity),
+	    plan->patch_capacity * NTFS_MUTATION_LOOKUP_SLOTS_PER_ENTRY * sizeof(uint16_t));
+	for (index = 0; index < plan->patch_count; index++) {
+		*mutation_patch_slot(plan, plan->patches[index]->physical) = (uint16_t)(index + 1u);
+	}
+}
+
+static void
+mutation_overlay(
+    const struct ntfs_mutation_patch *patch, uint64_t offset, void *memory, size_t bytes)
+{
+	uint64_t first = offset > patch->physical ? offset : patch->physical;
+	uint64_t end = offset + bytes < patch->physical + NTFS_WRITE_CLUSTER_BYTES
+	    ? offset + bytes
+	    : patch->physical + NTFS_WRITE_CLUSTER_BYTES;
+
+	if (first < end) {
+		ntfs_copy((uint8_t *)memory + first - offset,
+		    patch->after + first - patch->physical, (size_t)(end - first));
+	}
+}
+
 enum ntfs_result
 ntfs_mutation_read(
     struct ntfs_write_mutation_plan *plan, uint64_t offset, void *memory, size_t bytes)
 {
-	const struct ntfs_mutation_patch *patch;
-	uint64_t first, end;
+	uint64_t first, blocks;
+	uint16_t slot;
 	size_t index;
 	enum ntfs_result result;
 
@@ -93,15 +139,24 @@ ntfs_mutation_read(
 	if (result != NTFS_OK) {
 		return result;
 	}
-	for (index = 0; index < plan->patch_count; index++) {
-		patch = plan->patches[index];
-		first = offset > patch->physical ? offset : patch->physical;
-		end = offset + bytes < patch->physical + NTFS_WRITE_CLUSTER_BYTES
-		    ? offset + bytes
-		    : patch->physical + NTFS_WRITE_CLUSTER_BYTES;
-		if (first < end) {
-			ntfs_copy((uint8_t *)memory + first - offset,
-			    patch->after + first - patch->physical, (size_t)(end - first));
+	if (bytes == 0 || plan->patch_count == 0) {
+		return NTFS_OK;
+	}
+	first = offset / NTFS_WRITE_CLUSTER_BYTES;
+	blocks = (offset + bytes - 1u) / NTFS_WRITE_CLUSTER_BYTES - first + 1u;
+	/* A short metadata read visits covered blocks; a large sparse view read
+	 * visits changed regions. Keep the original work charge and fresh I/O. */
+	if (blocks < plan->patch_count) {
+		for (index = 0; index < blocks; index++) {
+			slot =
+			    *mutation_patch_slot(plan, (first + index) * NTFS_WRITE_CLUSTER_BYTES);
+			if (slot != 0) {
+				mutation_overlay(plan->patches[slot - 1u], offset, memory, bytes);
+			}
+		}
+	} else {
+		for (index = 0; index < plan->patch_count; index++) {
+			mutation_overlay(plan->patches[index], offset, memory, bytes);
 		}
 	}
 	return NTFS_OK;
@@ -118,7 +173,8 @@ ntfs_mutation_patch(struct ntfs_write_mutation_plan *plan, uint64_t physical,
     enum ntfs_write_mutation_region_kind kind, struct ntfs_mutation_patch **out)
 {
 	struct ntfs_mutation_patch **pointers, *patch;
-	size_t index, capacity;
+	size_t capacity;
+	uint16_t slot;
 	enum ntfs_result result;
 
 	*out = NULL;
@@ -126,9 +182,10 @@ ntfs_mutation_patch(struct ntfs_write_mutation_plan *plan, uint64_t physical,
 	    !ntfs_bounds(physical, NTFS_WRITE_CLUSTER_BYTES, plan->info.size_bytes)) {
 		return NTFS_RANGE;
 	}
-	for (index = 0; index < plan->patch_count; index++) {
-		patch = plan->patches[index];
-		if (patch->physical == physical) {
+	if (plan->patch_capacity != 0) {
+		slot = *mutation_patch_slot(plan, physical);
+		if (slot != 0) {
+			patch = plan->patches[slot - 1u];
 			if (kind != patch->kind) {
 				return NTFS_CORRUPT;
 			}
@@ -142,15 +199,16 @@ ntfs_mutation_patch(struct ntfs_write_mutation_plan *plan, uint64_t physical,
 	if (plan->patch_count == plan->patch_capacity) {
 		capacity = plan->patch_capacity == 0 ? NTFS_MUTATION_INITIAL_REGIONS
 						     : plan->patch_capacity * NTFS_VECTOR_GROWTH;
-		pointers = ntfs_mutation_allocate(plan, capacity * sizeof(*pointers));
+		pointers = ntfs_mutation_allocate(plan, ntfs_mutation_vector_bytes(capacity));
 		if (pointers == NULL) {
 			return NTFS_NO_MEMORY;
 		}
 		ntfs_copy(pointers, plan->patches, plan->patch_count * sizeof(*pointers));
 		ntfs_mutation_release(
-		    plan, plan->patches, plan->patch_capacity * sizeof(*pointers));
+		    plan, plan->patches, ntfs_mutation_vector_bytes(plan->patch_capacity));
 		plan->patches = pointers;
 		plan->patch_capacity = capacity;
+		mutation_patch_reindex(plan);
 	}
 	patch = ntfs_mutation_allocate(plan, sizeof(*patch));
 	if (patch == NULL) {
@@ -165,6 +223,7 @@ ntfs_mutation_patch(struct ntfs_write_mutation_plan *plan, uint64_t physical,
 	patch->physical = physical;
 	patch->kind = kind;
 	plan->patches[plan->patch_count++] = patch;
+	*mutation_patch_slot(plan, physical) = (uint16_t)plan->patch_count;
 	*out = patch;
 	return NTFS_OK;
 }
@@ -498,6 +557,7 @@ mutation_seal(struct ntfs_write_mutation_plan *plan)
 		}
 	}
 	plan->patch_count = kept;
+	mutation_patch_reindex(plan);
 	plan->sealed = true;
 	return NTFS_OK;
 }
@@ -584,9 +644,9 @@ plan_output_separate(const struct ntfs_write_mutation_plan *plan, const void *ou
 
 	if (!ntfs_pointer_ranges_separate(plan, sizeof(*plan), out, bytes) ||
 	    !ntfs_pointer_ranges_separate(
-		plan->patches, plan->patch_capacity * sizeof(*plan->patches), out, bytes) ||
+		plan->patches, ntfs_mutation_vector_bytes(plan->patch_capacity), out, bytes) ||
 	    !ntfs_pointer_ranges_separate(
-		plan->records, plan->record_capacity * sizeof(*plan->records), out, bytes) ||
+		plan->records, ntfs_mutation_vector_bytes(plan->record_capacity), out, bytes) ||
 	    !ntfs_pointer_ranges_separate(plan->scratch, NTFS_WRITE_CLUSTER_BYTES, out, bytes) ||
 	    !ntfs_pointer_ranges_separate(
 		plan->protected_record, NTFS_WRITE_CLUSTER_BYTES, out, bytes) ||
@@ -695,8 +755,10 @@ ntfs_write_mutation_plan_close(struct ntfs_write_mutation_plan *plan)
 	for (index = 0; index < plan->patch_count; index++) {
 		ntfs_mutation_release(plan, plan->patches[index], sizeof(*plan->patches[index]));
 	}
-	ntfs_mutation_release(plan, plan->records, plan->record_capacity * sizeof(*plan->records));
-	ntfs_mutation_release(plan, plan->patches, plan->patch_capacity * sizeof(*plan->patches));
+	ntfs_mutation_release(
+	    plan, plan->records, ntfs_mutation_vector_bytes(plan->record_capacity));
+	ntfs_mutation_release(
+	    plan, plan->patches, ntfs_mutation_vector_bytes(plan->patch_capacity));
 	ntfs_mutation_release(plan, plan->scratch, NTFS_WRITE_CLUSTER_BYTES);
 	ntfs_mutation_release(plan, plan->protected_record, NTFS_WRITE_CLUSTER_BYTES);
 	ntfs_mutation_release(plan, plan->guard, sizeof(*plan->guard));

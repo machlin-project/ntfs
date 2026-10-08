@@ -192,11 +192,17 @@ Independent streams own independent positions. Diagnostic pure lookups retain
 their binary-search contract. The private field adds eight bytes per stream on
 the tested architectures and allocates no separate storage.
 
-A successful WOF stream open can publish a node-local table-validation proof.
-Its key is logical size, stored size and algorithm within that immutable node's
-lifetime. Required provider/backing validation and local chunk-span checks still
-execute on reuse; new nodes and failed opens cannot inherit an incomplete proof.
-The fields add 24 bytes per node with no separate allocation or public ABI change.
+A successful WOF stream open publishes a node-local table-validation proof and,
+when the optional record cache exists, a bounded volume proof. The volume key is
+the full sequence-bearing reference, logical size, stored size and algorithm.
+Required provider/placeholder/backing validation still executes on every open;
+each stream owns its table page and checks the boundaries it decodes. Publication
+follows all fallible work, including final stream allocation. A failed open
+cannot evict another file's proof. Closing nodes retains volume proofs; unmount
+or immutable-view replacement destroys them. Zero cache entries disable this
+cross-node reuse. Storage adds 32 bytes per record-cache entry (2 KiB at the
+default 64 entries), alongside the existing 24-byte node fast path, with no new
+allocation or public ABI. See [the lifetime contract](PERFORMANCE.md#mutation-planning-and-cross-node-wof).
 Private [wire helpers](../core/wire_bytes.h) inline exact unaligned little-endian
 fields; compiler-specific wide operations retain a portable byte fallback.
 

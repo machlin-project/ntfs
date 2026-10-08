@@ -195,7 +195,10 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	struct ntfs_wof_layout layout;
 	struct ntfs_stream *backing = NULL, *stream = NULL;
 	struct ntfs_wof_stream *wof = NULL;
+	struct ntfs_wof_table_proof *cached = NULL;
+	size_t slot;
 	enum ntfs_result result;
+	bool verified;
 
 	result = wof_stream_provider_info(node, &info);
 	if (result != NTFS_OK) {
@@ -227,11 +230,30 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 		}
 	}
 	/* Provider, placeholder and complete backing mappings were admitted above.
-	 * Reuse only the successful table proof on the same immutable node. Each
-	 * stream still loads and checks the boundaries of every decoded chunk. */
-	if (!node->wof_table_verified || node->wof_logical_size != layout.logical_size ||
-	    node->wof_stored_size != layout.stored_size ||
-	    node->wof_algorithm != layout.algorithm) {
+	 * Reuse only a successful proof in this immutable volume. Each stream still
+	 * loads and checks the boundaries of every decoded chunk. */
+	verified = node->wof_table_verified && node->wof_logical_size == layout.logical_size &&
+	    node->wof_stored_size == layout.stored_size && node->wof_algorithm == layout.algorithm;
+	if (!verified && node->volume->cache != NULL) {
+		slot = (size_t)(node->reference & NTFS_REFERENCE_RECORD_MASK) %
+		    node->volume->limits.record_cache_entries;
+		cached = &node->volume->cache[slot].wof;
+		result = ntfs_work(node->volume, sizeof(*cached));
+		if (result == NTFS_OK) {
+			verified = cached->reference == node->reference &&
+			    cached->logical_size == layout.logical_size &&
+			    cached->stored_size == layout.stored_size &&
+			    cached->algorithm == layout.algorithm;
+			if (!verified) {
+				/* Reserve publication work before table I/O or allocation.
+				 * A failed open cannot evict another successful proof. */
+				result = ntfs_work(node->volume, sizeof(*cached));
+			} else {
+				cached = NULL;
+			}
+		}
+	}
+	if (result == NTFS_OK && !verified) {
 		result = wof_stream_table_validate(wof);
 	}
 	if (result == NTFS_OK) {
@@ -250,6 +272,10 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	stream->physical_size = backing->physical_size;
 	ntfs_unit_cache_initialize(&stream->decoded);
 	stream->wof = wof;
+	if (cached != NULL) {
+		*cached = (struct ntfs_wof_table_proof){
+		    node->reference, layout.logical_size, layout.stored_size, layout.algorithm};
+	}
 	node->wof_logical_size = layout.logical_size;
 	node->wof_stored_size = layout.stored_size;
 	node->wof_algorithm = layout.algorithm;

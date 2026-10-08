@@ -1,5 +1,104 @@
 # Performance contracts
 
+## Mutation planning and cross-node WOF
+
+This core batch indexes private mutation state, processes cluster retirement
+and MFT allocation a word at a time, and retains successful WOF table proofs
+across node close/reopen. It changes no disk representation, journal ordering,
+supported operation family or public interface.
+
+### Mutation lookup and bitmap contracts
+
+Insertion-ordered pointer vectors still define region and record order. Each
+vector allocation now includes a half-full open-addressed table of 16-bit
+vector-index-plus-one slots. Equality checks the complete physical block or MFT
+record number. Acquisition publishes an entry only after successful allocation,
+I/O and validation; record hits still check live flags and the full sequence-bearing
+reference. Vector growth and final unchanged-region removal rebuild the index.
+All public output-alias checks cover the complete combined allocations.
+
+Short projected reads look up their covered physical blocks; wide reads scan the
+smaller changed-region set. The original source read, error precedence and whole
+patch-count work charge remain. This saves search CPU without suppressing fresh
+I/O or changing error prefixes. Each index adds four bytes per vector capacity
+entry: at most 16 KiB retained per vector, 32 KiB for both. Growth temporarily
+retains old and new vectors within the original allocation/live-byte budgets;
+allocation-call counts do not increase.
+
+Cluster retirement clears bounded 64-bit bitmap words, preserving retained
+prefixes, run order and the exact partial result before an already-clear bit.
+MFT first-fit scans the union of original and private occupancy from record 24
+to the initialized record count. Final words exclude padding; originally owned
+slots remain unavailable even after private retirement. Both operations keep
+their original work admission and byte-exact physical allocation choices.
+The [bitwise model](../tests/allocation_scan.c) and
+[lookup/first-fit/fault tests](../tests/mutation_lookup.c) cover these contracts.
+
+### WOF proof lifetime
+
+The optional existing record-cache allocation now reserves 32 bytes per entry
+for an independent WOF proof. Direct mapping uses the record number; a hit also
+requires the full sequence-bearing reference, logical size, stored size and
+algorithm. Raw-record eviction cannot change that key. The default 64 entries
+cost 2 KiB; zero entries disable cross-node reuse. The existing 24-byte node
+fast path remains. No new allocation or cache-lifetime mechanism is introduced.
+
+Every open still validates provider metadata, placeholder policy, complete backing
+mappings, VDL and chunk limits. A proof skips only the completed full-table walk;
+each stream owns its own 4-KiB table window and validates local chunk boundaries.
+Lookup/publication work is charged before validation and publication. Final stream
+allocation must succeed before either the node or volume proof is published.
+Failed opens cannot replace successful colliding proofs. Node close retains the
+volume proof; unmount or immutable-view replacement destroys it. The caller's
+existing serialization and immutable-media contract still apply. Independent
+[cache tests](../tests/wof_cache.c) exercise disabled/one-entry/default capacities,
+collisions, malformed peers, allocation and work refusals, remount and stream
+reading after node close. Decoder algorithms and decoded-unit cache sizes stay
+unchanged.
+
+### Paired measurements
+
+The reference is the preceding accepted core-acquisition checkpoint. Frozen
+harnesses and input images, the selected Xcode compiler/SDK, `-O2` and nine
+alternating pairs are shared by both sides. Ratios above one mean faster.
+GPR-only executables run on the host; they are not native kernel measurements.
+
+| Workload | Userspace | GPR-only host |
+| --- | ---: | ---: |
+| Region lookup, 1,024 retained entries | 133.19× | 138.67× |
+| MFT record lookup, 1,024 retained entries | 177.02× | 178.00× |
+| Short projected read over 1,024 changed regions | 82.10× | 35.71× |
+| Free 1,048,576 allocated cluster bits | 63.25× | 56.67× |
+| MFT first-fit near the end of 1,048,576 slots | 24.85× | 27.64× |
+| Complete preparation of a 1-MiB growing write | 1.33× | 1.24× |
+| WOF close/reopen with new nodes | 27.62× | 20.32× |
+
+The growing-write case starts with a 1-MiB allocated but uninitialized file and
+appends a nonzero 1-MiB payload. Preparation includes zero-gap planning, growth,
+all metadata work and region sealing. Its userspace median falls from 343.25 to
+258.40 microseconds per preparation; GPR falls from 428.33 to 344.08 microseconds.
+Every final region byte hashes identically. Both sides make 530 reads and 605
+allocations per preparation; peak live memory grows by 4,128 bytes (about 0.09%).
+Small create/resize/shrink/unlink preparations remain near parity, 0.979–1.041×
+across contexts; the eight-entry lookup control improves about 1.9×. Primitive
+ratios above do not describe full-driver write throughput.
+
+WOF table reads fall from 2,000 to two per 1,000 fresh-node opens. Initial short
+unchanged controls show substantial scheduling variation; retained diagnostic
+series run the exact same binaries with 32 times as many iterations. Bitmap and
+journal controls then range 0.990–1.003×; same-node WOF is 1.119×/1.003×. No code
+tuning follows those noisy samples. The longer series supplies the WOF ratios
+in the table. Reports retain all initial results, actual callback counts,
+allocation bytes and raw samples; medians are not a confidence interval.
+
+Evidence: `artifacts/mutation-optimization-20261008/write/candidate/`,
+`write-range/candidate/`, `core/candidate/` and `core/long-controls/` beneath the
+same optimization directory. [Development instructions](DEVELOPMENT.md#core-optimization-checks)
+describe the frozen harnesses. These measurements exclude journal reservation,
+durable transfer, fsync, mounted FSKit and VM acceptance. Paged bitmap snapshots,
+incremental directory updates and native transport/parallelism remain separate
+designs. Full C regression is recorded in [acceptance](ACCEPTANCE.md).
+
 ## Huffman decoding
 
 The next CPU batch accelerates the existing XPRESS-Huffman and WOF LZX decoders.
@@ -219,8 +318,8 @@ mutations retain their exact original physical placements and bytes.
 
 ### WOF and wire fields
 
-A live node retains a completed WOF table proof keyed by logical size, stored
-size and algorithm. Every open still validates provider metadata, placeholder
+At this preceding checkpoint, a live node retains a completed WOF table proof
+keyed by logical size, stored size and algorithm. Every open still validates provider metadata, placeholder
 policy, complete backing mappings, VDL and chunk limits, and allocates its own
 bounded table window. A matching node proof skips only the full table walk;
 actual reads fetch and validate their local chunk boundaries. Publication follows
@@ -252,10 +351,10 @@ traversal counters; its one-time setup remains in elapsed time.
 
 CPU controls retain the separate frozen codec/memory harness. Initial regressions
 and tuning candidates remain in artifacts; measurements do not establish mounted
-throughput, kernel execution or Windows recovery acceptance. Full bitmap snapshot
-I/O and write-plan composition, volume-wide WOF proof retention and FSKit view
-replacement/parallelism remain potential later work requiring their own lifetime,
-resource and durability design.
+throughput, kernel execution or Windows recovery acceptance. The subsequent
+[mutation and WOF batch](#mutation-planning-and-cross-node-wof) extends write-plan
+lookup and WOF proof lifetime. Full bitmap snapshot I/O and FSKit view
+replacement/parallelism retain their separate resource and durability designs.
 
 The final paired core measurements are:
 

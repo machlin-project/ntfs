@@ -1,10 +1,13 @@
 # Product and release process
 
-The repository is proprietary under LICENSE. It currently has no public remote,
+The repository is proprietary under LICENSE. The owner made its GitHub remote
+public specifically for cloud CI; that does not grant an open-source license or
+authorize product distribution. Historical release-policy notes below retain
+their original context. It has no authorized commercial release,
 open-source grant, payment integration, trial enforcement or distribution package.
-A future public release is an ownership decision, not an automatic date-based
-license conversion. Maintain contributor rights and dependency provenance so
-that decision remains possible.
+A future product distribution or open-source license is an ownership decision,
+not an automatic date-based conversion. Maintain contributor rights and dependency
+provenance so that decision remains possible.
 
 Keep the filesystem core usable without licensing or network access. A future
 commercial control plane may decide whether a new mount is admitted; it must

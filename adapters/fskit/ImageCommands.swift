@@ -5,7 +5,7 @@ import FSKit
 
 private enum ImageControlError: LocalizedError {
     case usage, missingImage, staleBookmark, scopeRefused, changedImage, busy
-    case ambiguousMount, invalidMount, unavailableRuntime, invalidCatalog
+    case ambiguousMount, invalidMount, unavailableRuntime, unavailableSDK, invalidCatalog
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +18,7 @@ private enum ImageControlError: LocalizedError {
         case .ambiguousMount: return "The image does not have exactly one matching NTFS mount."
         case .invalidMount: return "The reported mount is outside the managed volume directory."
         case .unavailableRuntime: return "Image editing requires macOS 27."
+        case .unavailableSDK: return "Image editing is unavailable in this build. Rebuild with a macOS 27 or newer SDK."
         case .invalidCatalog: return "The saved image catalog is invalid."
         }
     }
@@ -193,8 +194,26 @@ private struct ImageNativeMount {
 enum ImageOperations {
     private static let moduleID = "org.machlin.ntfs.filesystem"
 
-    @available(macOS 27.0, *)
+    static var imageEditingAvailable: Bool {
+        guard NTFSAppBuiltWithModernFSKit() else { return false }
+        if #available(macOS 27.0, *) { return true }
+        return false
+    }
+
+    static var imageEditingUnavailableReason: String {
+        if !NTFSAppBuiltWithModernFSKit() {
+            return ImageControlError.unavailableSDK.localizedDescription
+        }
+        return ImageControlError.unavailableRuntime.localizedDescription
+    }
+
+    static func requireImageEditing() throws {
+        guard NTFSAppBuiltWithModernFSKit() else { throw ImageControlError.unavailableSDK }
+        guard #available(macOS 27.0, *) else { throw ImageControlError.unavailableRuntime }
+    }
+
     static func mountSelectedImage(_ url: URL) async throws -> URL {
+        try requireImageEditing()
         guard url.isFileURL, url.startAccessingSecurityScopedResource() else {
             throw ImageControlError.scopeRefused
         }
@@ -205,15 +224,20 @@ enum ImageOperations {
         return try await mountScopedImage(url)
     }
 
-    @available(macOS 27.0, *)
     private static func mountScopedImage(_ url: URL) async throws -> URL {
+        try requireImageEditing()
         let mounts = try ImageNativeMount.all()
         guard !mounts.contains(where: { $0.source == url.absoluteString }) else {
             throw ImageControlError.ambiguousMount
         }
         let resource = FSPathURLResource(url: url, writable: true)
-        return try await FSClient.shared.mountSingleVolume(resource: resource,
-            bundleID: moduleID, options: ["-o", "rw,owners,ntfs-access=image-edit"])
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+            NTFSAppMountImageResource(resource, moduleID) { mounted, error in
+                if let error { continuation.resume(throwing: error) }
+                else if let mounted { continuation.resume(returning: mounted) }
+                else { continuation.resume(throwing: ImageControlError.invalidMount) }
+            }
+        }
     }
 
     static func unmount(_ url: URL) async throws {
@@ -258,6 +282,9 @@ enum ImageOperations {
         } else if arguments.count == 3, UUID(uuidString: arguments[2]) == nil {
             throw ImageControlError.usage
         }
+        // Refuse unavailable mounts before creating the catalog, restoring
+        // permission, or touching an image. Other commands retain their scope.
+        if action == "mount" { try requireImageEditing() }
         let catalog = try ImageCatalog()
         defer { catalog.close() }
         let mounts = try ImageNativeMount.all()
@@ -265,6 +292,11 @@ enum ImageOperations {
             "realUserID": getuid(), "effectiveUserID": geteuid(),
             "bundleVersion": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") ?? "unknown"]
         if action == "status" {
+            let runtimeSupported: Bool
+            if #available(macOS 27.0, *) { runtimeSupported = true }
+            else { runtimeSupported = false }
+            report["imageEditing"] = ["buildSDKSupported": NTFSAppBuiltWithModernFSKit(),
+                "runtimeSupported": runtimeSupported, "available": imageEditingAvailable]
             let modules = try await FSClient.shared.installedExtensions
             report["modules"] = modules.filter { $0.bundleIdentifier == moduleID }.map {
                 ["bundleIdentifier": $0.bundleIdentifier, "enabled": $0.isEnabled]
@@ -312,7 +344,6 @@ enum ImageOperations {
             report["mountURL"] = try await unmountOwned(matches[0], backingOwner: image.identity.owner).path
             return report
         }
-        guard #available(macOS 27.0, *) else { throw ImageControlError.unavailableRuntime }
         let url = try image.resolve()
         guard url.startAccessingSecurityScopedResource() else { throw ImageControlError.scopeRefused }
         defer { url.stopAccessingSecurityScopedResource() }

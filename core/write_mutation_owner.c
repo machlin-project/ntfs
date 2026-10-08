@@ -439,9 +439,9 @@ ntfs_write_mutation_execution_prepare(struct ntfs_overwrite *owner,
 	if (!ntfs_write_mutation_request_valid(request)) {
 		return NTFS_INVALID;
 	}
-	/* SI-only storage preparation has no native later-setter/cache contract.
-	 * Keep execution closed even if the generic FILE compiler accepts its bytes. */
-	if (request->kind == NTFS_WRITE_SET_TIMES) {
+	/* These storage preparations lack their own complete native durability gate.
+	 * Keep execution closed even if the generic compiler accepts their bytes. */
+	if (request->kind == NTFS_WRITE_SET_TIMES || request->kind == NTFS_WRITE_CREATE_HARD_LINK) {
 		return NTFS_UNSUPPORTED;
 	}
 	prepared = owner->reader.allocate(owner->reader.context, sizeof(*prepared));

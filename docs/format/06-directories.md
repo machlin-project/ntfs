@@ -107,6 +107,26 @@ evidence closes the selected composition; it does not establish MFT/INDX growth
 or sustained ring reuse. The earlier failed postimage remains part of the research
 record, rather than being replaced by the later successful result.
 
+## Private selected hard-link preparation
+
+[write_hardlink.c](../../core/write_hardlink.c) adds one unpaired POSIX edge to an
+existing ordinary base FILE. It preserves every original name, including a DOS
+alias, and copies one explicitly selected primary FILE_NAME cache to both the
+new attribute and destination I30 key. Only `parent`, `length`, `name_namespace`
+and name units change in that copied body. The FILE's physical `links` and
+`next_instance` fields advance after a collision-free indexed resident insertion;
+the original sequence-bearing identity remains unchanged. The parent index editor
+owns its complete tree/allocation/bitmap changes.
+
+Logical link admission is separate from physical name inventory and uint16 wire
+capacity. The [published-limit and storage contract](../HARDLINK-PREPARATION.md#published-logical-link-limit-and-stored-aliases)
+records the primary/DOS distinction, callback-free limit checks, exact capacity
+refusals, source preservation and independent oracles. SI and parent timestamps,
+all old filename/index bodies, streams and security remain unchanged. This exact
+storage transform does not claim Windows hard-link API side effects. Complete
+regions compile through generic redo/undo, but the execution owner and FSKit
+remain refused pending the family's own durable/native qualification.
+
 ## Directory ancestry through native aliases
 
 A directory move checks the destination's complete parent chain before preparing

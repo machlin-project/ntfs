@@ -94,6 +94,14 @@ and no CLI/FSKit setter is enabled. Later-setter cache and native recovery
 observations remain required. See the current
 [portable capability and completion map](PORTABLE-FEATURES.md).
 
+The private [selected hard-link preparation](HARDLINK-PREPARATION.md) similarly
+owns a new POSIX FILE_NAME, physical FILE count and destination I30 key, including
+index growth and generic redo/undo. It copies the explicitly selected original
+filename cache while preserving all SI/parent times, existing names, data/ADS and
+security. Its allocation-free logical-count admission is separate from physical
+FILE field width and inline record capacity. The execution owner refuses this
+family before allocation/I/O; no CLI or FSKit hard-link operation is enabled.
+
 ## Ordinary mutation implementation batch
 
 The next implementation unit combines storage allocation, file-size changes,

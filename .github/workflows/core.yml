@@ -24,7 +24,7 @@ defaults:
   run:
     shell: bash
 concurrency:
-  group: ntfs-core-${{ github.workflow }}-${{ github.ref }}
+  group: ntfs-core-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   core:
@@ -145,7 +145,7 @@ jobs:
       - name: Install official build prerequisites for the explicit pinned Git route
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y autoconf automake libtool pkg-config
+          sudo apt-get install --no-install-recommends -y autoconf automake libtool pkg-config libgcrypt20-dev
       - name: Build independently pinned external tools (first archive-fetch failure retained)
         run: python3 scripts/bootstrap_test_tools.py --source git-pinned --compiler clang 2>&1 | tee artifacts/ci/bootstrap.log
       - run: python3 tests/interoperability.py 2>&1 | tee artifacts/ci/oracle.log
@@ -328,9 +328,36 @@ jobs:
       - name: Run actual FSKit components (runtime skips remain explicit)
         if: ${{ !cancelled() && steps.core.outcome == 'success' }}
         run: python3 scripts/test_fskit.py 2>&1 | tee artifacts/cloud-macos/components.log
+      - name: Check app SDK and runtime refusal with actual Apple frameworks
+        if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}
+        run: python3 scripts/test_fskit_app_support.py --output artifacts/cloud-macos/app-support
       - name: Compile unsigned universal Release app
+        id: unsigned
         if: ${{ !cancelled() && steps.sdk.outcome == 'success' }}
         run: python3 scripts/build_fskit.py --configuration Release --derived-data artifacts/cloud-macos/DerivedData 2>&1 | tee artifacts/cloud-macos/unsigned-build.log
+      - name: Retain and verify the actual unsigned app transport
+        id: package
+        if: ${{ !cancelled() && steps.unsigned.outcome == 'success' }}
+        run: |
+          python3 scripts/package_unsigned.py \
+            --app 'artifacts/cloud-macos/DerivedData/Build/Products/Release/Machlin NTFS.app' \
+            --build-report artifacts/cloud-macos/DerivedData/build-report.json \
+            --output artifacts/cloud-macos/package \
+            2>&1 | tee artifacts/cloud-macos/package.log
+      - name: Build the same committed app from a relocated source snapshot
+        id: unsigned_second
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: python3 scripts/build_fskit.py --configuration Release --derived-data artifacts/cloud-macos/DerivedData-comparison 2>&1 | tee artifacts/cloud-macos/unsigned-build-comparison.log
+      - name: Compare two actual unsigned app builds and retain original evidence
+        if: ${{ !cancelled() && steps.unsigned_second.outcome == 'success' }}
+        run: |
+          python3 scripts/package_unsigned.py \
+            --app 'artifacts/cloud-macos/DerivedData/Build/Products/Release/Machlin NTFS.app' \
+            --build-report artifacts/cloud-macos/DerivedData/build-report.json \
+            --compare-app 'artifacts/cloud-macos/DerivedData-comparison/Build/Products/Release/Machlin NTFS.app' \
+            --compare-build-report artifacts/cloud-macos/DerivedData-comparison/build-report.json \
+            --output artifacts/cloud-macos/package-comparison \
+            2>&1 | tee artifacts/cloud-macos/package-comparison.log
       - name: Strict compiler-context and portable/GPR checks
         if: ${{ !cancelled() && steps.core.outcome == 'success' }}
         run: python3 scripts/check_cpu.py --output artifacts/cloud-macos/cpu --fixtures .build/cpu-fixtures
@@ -351,7 +378,16 @@ jobs:
             artifacts/cloud-macos/*.log
             artifacts/cloud-macos/cpu/*.json
             artifacts/cloud-macos/cpu/*.stderr
-            artifacts/cloud-macos/DerivedData/Logs/Build
+            artifacts/cloud-macos/package
+            artifacts/cloud-macos/package-comparison
+            artifacts/cloud-macos/app-support
+            artifacts/cloud-macos/DerivedData*/build-report.json
+            artifacts/cloud-macos/DerivedData*/*.command.json
+            artifacts/cloud-macos/DerivedData*/xcode-build.stdout
+            artifacts/cloud-macos/DerivedData*/xcode-build.stderr
+            artifacts/cloud-macos/DerivedData*/xcodegen.stdout
+            artifacts/cloud-macos/DerivedData*/xcodegen.stderr
+            artifacts/cloud-macos/DerivedData*/Logs/Build
   windows-access:
     runs-on: windows-latest
     timeout-minutes: 15
@@ -367,6 +403,7 @@ jobs:
         run: |
           ./tests/windows_scratch_guard.ps1
           ./tests/windows_cloud_transport.ps1
+          ./tests/windows_named_stream.ps1
       - name: Capture actual Windows AccessCheck observations
         run: |
           New-Item -ItemType Directory -Force artifacts/ci | Out-Null

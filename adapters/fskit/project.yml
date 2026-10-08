@@ -78,6 +78,8 @@ targets:
     sources:
       - App.swift
       - ImageCommands.swift
+      - NTFSAppSupport.h
+      - NTFSAppSupport.m
     dependencies:
       - target: NTFSExtension
         embed: true
@@ -90,6 +92,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: App.entitlements
         ENABLE_APP_SANDBOX: YES
         ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_OBJC_BRIDGING_HEADER: NTFSAppSupport.h
+        OTHER_CFLAGS: -Wdeclaration-after-statement
         INFOPLIST_KEY_CFBundleDisplayName: Machlin NTFS
 schemes:
   NTFSApp:

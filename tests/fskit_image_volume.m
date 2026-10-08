@@ -935,9 +935,8 @@ image_volume_case(NSString *path, NSData *source, NSData *payload, NSData *expec
 }
 
 static void
-image_lazy_view_drain_case(
-    NSString *path, NSData *source, NSData *payload, NSData *expected, ImageVolumeCase mode,
-    BOOL overlappingUnmount)
+image_lazy_view_drain_case(NSString *path, NSData *source, NSData *payload, NSData *expected,
+    ImageVolumeCase mode, BOOL overlappingUnmount)
 {
 	__attribute__((objc_precise_lifetime)) ImageVolumeTransport *transport;
 	__weak ImageVolumeTransport *callbackTransport;
@@ -966,11 +965,11 @@ image_lazy_view_drain_case(
 	assert(root != nil && error == nil);
 	file = lookup_item(volume, root, @"fragmented.bin");
 	assert([volume overwriteImageItem:file
-				     offset:TEST_IMAGE_FILE_OFFSET
-				      bytes:payload.bytes
-				     length:payload.length
-				   fileTime:TEST_IMAGE_FILE_TIME
-				  completed:&completed] == NTFS_OK &&
+				   offset:TEST_IMAGE_FILE_OFFSET
+				    bytes:payload.bytes
+				   length:payload.length
+				 fileTime:TEST_IMAGE_FILE_TIME
+				completed:&completed] == NTFS_OK &&
 	    completed == payload.length);
 	assert([[NSData dataWithContentsOfFile:path] isEqualToData:expected]);
 	writes = transport.nativeWrites;

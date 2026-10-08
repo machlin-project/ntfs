@@ -13,6 +13,7 @@ $part = [pscustomobject]@{DiskNumber=4;PartitionNumber=2;IsBoot=$false;IsSystem=
     GptType='ebd0a0a2-b9e5-4433-87c0-68b6b72699c7'}
 $checks = 0
 foreach ($name in @('scripts\bootstrap_windows_ntfs.ps1','scripts\windows_scratch_guard.ps1',
+    'scripts\windows_named_stream.ps1','tests\windows_named_stream.ps1',
     'tests\windows_image_recovery.ps1','tests\windows_directory_guard.ps1')) {
     $tokens = $null
     $errors = $null

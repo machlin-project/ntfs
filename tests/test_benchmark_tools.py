@@ -179,7 +179,7 @@ class BenchmarkToolTests(unittest.TestCase):
             working.mkdir()
             output = tools.command([sys.executable, '-c', "import os; print(os.getcwd())"],
                                    root, 'cwd', tool_environment(), cwd=working)
-            self.assertEqual(output.strip(), str(working))
+            self.assertEqual(output.strip(), str(working.resolve()))
             before = {path.name: path.read_bytes() for path in root.iterdir() if path.is_file()}
             with self.assertRaises(FileExistsError):
                 tools.command([sys.executable, '-c', "print('replacement')"], root,

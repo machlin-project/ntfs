@@ -26,7 +26,8 @@ enum ntfs_write_mutation_kind {
 	NTFS_WRITE_REMOVE_DIRECTORY,
 	NTFS_WRITE_RENAME,
 	/* Experimental private storage preparation only; execution refuses. */
-	NTFS_WRITE_SET_TIMES
+	NTFS_WRITE_SET_TIMES,
+	NTFS_WRITE_CREATE_HARD_LINK
 };
 
 enum ntfs_write_creation_time_field {
@@ -65,6 +66,11 @@ struct ntfs_write_times {
 	uint32_t fields;
 };
 
+/* CREATE_HARD_LINK is exact private storage preparation: reference selects an
+ * ordinary base FILE; source selects an existing primary edge whose FILE_NAME
+ * cache is copied to destination, changing only parent, name and POSIX namespace.
+ * SI and parent times, all old names, streams and security remain unchanged.
+ * replace must be false. No owner execution or FSKit admission is granted. */
 struct ntfs_write_mutation_request {
 	enum ntfs_write_mutation_kind kind;
 	struct ntfs_write_name source, destination;

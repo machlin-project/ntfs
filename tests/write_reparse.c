@@ -21,17 +21,15 @@ static const uint16_t junction_display[] = {'C', ':', '\\', 'f', 'o', 'o'};
 
 /* Independent literal wire packets from the documented REPARSE_DATA_BUFFER.
  * These do not use the implementation's disk layouts or endian helpers. */
-static const uint8_t relative_golden[] = {0x0c, 0x00, 0x00, 0xa0, 0x2e, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x12, 0x00, 0x14, 0x00, 0x0c, 0x00, 0x01, 0x00, 0x00, 0x00,
-    '.', 0, '.', 0, '\\', 0, 't', 0, 'a', 0, 'r', 0, 'g', 0, 'e', 0, 't', 0, 0, 0,
-    't', 0, 'a', 0, 'r', 0, 'g', 0, 'e', 0, 't', 0, 0, 0};
-static const uint8_t junction_golden[] = {0x03, 0x00, 0x00, 0xa0, 0x2c, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x14, 0x00, 0x16, 0x00, 0x0c, 0x00, '\\', 0, '?', 0, '?', 0, '\\', 0,
-    'C', 0, ':', 0, '\\', 0, 'f', 0, 'o', 0, 'o', 0, 0, 0,
-    'C', 0, ':', 0, '\\', 0, 'f', 0, 'o', 0, 'o', 0, 0, 0};
-static const uint8_t unicode_golden[] = {0x0c, 0x00, 0x00, 0xa0, 0x18, 0, 0, 0,
-    0, 0, 8, 0, 10, 0, 0, 0, 1, 0, 0, 0,
-    0xa9, 0x03, 0x00, 0xd8, 0x3d, 0xd8, 0x00, 0xde, 0, 0, 0, 0};
+static const uint8_t relative_golden[] = {0x0c, 0x00, 0x00, 0xa0, 0x2e, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x12, 0x00, 0x14, 0x00, 0x0c, 0x00, 0x01, 0x00, 0x00, 0x00, '.', 0, '.', 0, '\\', 0, 't',
+    0, 'a', 0, 'r', 0, 'g', 0, 'e', 0, 't', 0, 0, 0, 't', 0, 'a', 0, 'r', 0, 'g', 0, 'e', 0, 't', 0,
+    0, 0};
+static const uint8_t junction_golden[] = {0x03, 0x00, 0x00, 0xa0, 0x2c, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x14, 0x00, 0x16, 0x00, 0x0c, 0x00, '\\', 0, '?', 0, '?', 0, '\\', 0, 'C', 0, ':', 0,
+    '\\', 0, 'f', 0, 'o', 0, 'o', 0, 0, 0, 'C', 0, ':', 0, '\\', 0, 'f', 0, 'o', 0, 'o', 0, 0, 0};
+static const uint8_t unicode_golden[] = {0x0c, 0x00, 0x00, 0xa0, 0x18, 0, 0, 0, 0, 0, 8, 0, 10, 0,
+    0, 0, 1, 0, 0, 0, 0xa9, 0x03, 0x00, 0xd8, 0x3d, 0xd8, 0x00, 0xde, 0, 0, 0, 0};
 
 static void
 unchanged(const uint8_t *bytes, size_t length)
@@ -87,7 +85,7 @@ boundaries(void)
 		input.kind = kind == 0 ? NTFS_REPARSE_SYMLINK : NTFS_REPARSE_MOUNT_POINT;
 		units = (NTFS_REPARSE_MAX_BYTES - TEST_COMMON_BYTES -
 			    (kind == 0 ? TEST_SYMLINK_BYTES : TEST_JUNCTION_BYTES)) /
-			    sizeof(*name) -
+			sizeof(*name) -
 		    TEST_TERMINATORS;
 		input.substitute = name;
 		input.substitute_units = units;
@@ -129,8 +127,8 @@ static void
 refusals(void)
 {
 	struct ntfs_write_reparse_input input = {NTFS_REPARSE_SYMLINK,
-	    NTFS_REPARSE_SYMLINK_RELATIVE, relative, display,
-	    sizeof(relative) / sizeof(*relative), sizeof(display) / sizeof(*display)};
+	    NTFS_REPARSE_SYMLINK_RELATIVE, relative, display, sizeof(relative) / sizeof(*relative),
+	    sizeof(display) / sizeof(*display)};
 	struct ntfs_write_reparse_input invalid, saved;
 	uint8_t output[TEST_OUTPUT_BYTES];
 	uint16_t embedded_nul[] = {'x', 0, 'y'};
@@ -228,8 +226,8 @@ main(void)
 {
 	static const uint16_t unicode[] = {0x03a9, 0xd800, 0xd83d, 0xde00};
 	struct ntfs_write_reparse_input input = {NTFS_REPARSE_SYMLINK,
-	    NTFS_REPARSE_SYMLINK_RELATIVE, relative, display,
-	    sizeof(relative) / sizeof(*relative), sizeof(display) / sizeof(*display)};
+	    NTFS_REPARSE_SYMLINK_RELATIVE, relative, display, sizeof(relative) / sizeof(*relative),
+	    sizeof(display) / sizeof(*display)};
 
 	golden(&input, relative_golden, sizeof(relative_golden));
 	input = (struct ntfs_write_reparse_input){NTFS_REPARSE_MOUNT_POINT, 0, absolute,

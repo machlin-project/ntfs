@@ -28,15 +28,16 @@ expand(const struct ntfs_run *runs, size_t count, uint64_t *map, size_t clusters
 		assert(runs[index].vcn == next && runs[index].length != 0);
 		assert(runs[index].length <= clusters - next);
 		for (offset = 0; offset < runs[index].length; offset++) {
-			map[next++] = runs[index].lcn == NTFS_HOLE ? NTFS_HOLE : runs[index].lcn + offset;
+			map[next++] =
+			    runs[index].lcn == NTFS_HOLE ? NTFS_HOLE : runs[index].lcn + offset;
 		}
 	}
 	assert(next == clusters);
 }
 
 static void
-check_interval(const uint64_t *original, const struct ntfs_run *runs, size_t count,
-    uint64_t first, uint64_t bytes, const uint8_t *physical, uint8_t *after_physical)
+check_interval(const uint64_t *original, const struct ntfs_run *runs, size_t count, uint64_t first,
+    uint64_t bytes, const uint8_t *physical, uint8_t *after_physical)
 {
 	struct fuzz_device device = {0};
 	struct ntfs_environment env = fuzz_environment(&device);
@@ -58,7 +59,8 @@ check_interval(const uint64_t *original, const struct ntfs_run *runs, size_t cou
 	assert(view->after_count <= count + 2 && view->retired_count <= count);
 	assert(view->zero_count <= NTFS_WRITE_SPARSE_MAX_ZERO_SPANS);
 	if (bytes == 0) {
-		assert(view->after_count == count && view->retired_count == 0 && view->zero_count == 0);
+		assert(view->after_count == count && view->retired_count == 0 &&
+		    view->zero_count == 0);
 		assert(memcmp(view->after, runs, count * sizeof(*runs)) == 0);
 	}
 	expand(view->after, view->after_count, after, TEST_LOGICAL_CLUSTERS);
@@ -89,7 +91,8 @@ check_interval(const uint64_t *original, const struct ntfs_run *runs, size_t cou
 	for (index = 0; index < view->zero_count; index++) {
 		const struct ntfs_write_sparse_zero *zero = &view->zero[index];
 
-		assert(zero->bytes != 0 && zero->physical / TEST_CLUSTER_BYTES < TEST_PHYSICAL_CLUSTERS);
+		assert(zero->bytes != 0 &&
+		    zero->physical / TEST_CLUSTER_BYTES < TEST_PHYSICAL_CLUSTERS);
 		assert(zero->bytes <= TEST_CLUSTER_BYTES - zero->physical % TEST_CLUSTER_BYTES);
 		assert(!retired[zero->physical / TEST_CLUSTER_BYTES]);
 		memset(after_physical + zero->physical, 0, (size_t)zero->bytes);
@@ -155,8 +158,8 @@ patterns(void)
 	runs[0] = (struct ntfs_run){0, TEST_LOGICAL_CLUSTERS, 0};
 	for (first = 0; first < count; first++) {
 		for (last = first; last < count; last++) {
-			check_interval(map, runs, 1, endpoints[first], endpoints[last] - endpoints[first],
-			    physical, after);
+			check_interval(map, runs, 1, endpoints[first],
+			    endpoints[last] - endpoints[first], physical, after);
 		}
 	}
 	free(after);
@@ -219,8 +222,10 @@ ownership_and_limits(void)
 			expected = NTFS_RANGE;
 		}
 		plan = (void *)(uintptr_t)1;
-		assert(ntfs_write_sparse_prepare(&env, &invalid, &plan) == expected && plan == NULL);
-		assert(device.allocations == allocations && device.memory == 0 && device.reads == 0);
+		assert(
+		    ntfs_write_sparse_prepare(&env, &invalid, &plan) == expected && plan == NULL);
+		assert(
+		    device.allocations == allocations && device.memory == 0 && device.reads == 0);
 		memcpy(runs, saved_runs, sizeof(runs));
 	}
 	invalid = input;
@@ -259,8 +264,8 @@ wide_boundaries(void)
 		runs[index] = (struct ntfs_run){index, 1, index % 2 == 0 ? index : NTFS_HOLE};
 	}
 	input = (struct ntfs_write_sparse_input){runs, NTFS_WRITE_SPARSE_MAX_RUNS,
-	    TEST_CLUSTER_BYTES, NTFS_WRITE_SPARSE_MAX_RUNS, NTFS_WRITE_SPARSE_MAX_RUNS,
-	    0, NTFS_WRITE_SPARSE_MAX_RUNS * TEST_CLUSTER_BYTES};
+	    TEST_CLUSTER_BYTES, NTFS_WRITE_SPARSE_MAX_RUNS, NTFS_WRITE_SPARSE_MAX_RUNS, 0,
+	    NTFS_WRITE_SPARSE_MAX_RUNS * TEST_CLUSTER_BYTES};
 	assert(ntfs_write_sparse_prepare(&env, &input, &plan) == NTFS_OK);
 	view = ntfs_write_sparse_plan_view(plan);
 	assert(view->after_count == 1 && view->after[0].lcn == NTFS_HOLE);
@@ -293,8 +298,9 @@ main(void)
 	patterns();
 	ownership_and_limits();
 	wide_boundaries();
-	printf("private sparse zero/punch: %zu independent map/content/retirement cases; "
-	       "partial clusters, original ownership, faults, aliases, geometry and limits passed\n",
+	printf(
+	    "private sparse zero/punch: %zu independent map/content/retirement cases; "
+	    "partial clusters, original ownership, faults, aliases, geometry and limits passed\n",
 	    checked);
 	return 0;
 }

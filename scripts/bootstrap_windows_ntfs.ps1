@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'windows_scratch_guard.ps1')
+. (Join-Path $PSScriptRoot 'windows_named_stream.ps1')
 $bytes = [long]$SizeMiB * 1048576
 $outputPath = [IO.Path]::GetFullPath($Output)
 $tempRoots = @($env:TEMP)
@@ -44,8 +45,8 @@ $report = [ordered]@{schema_version=1;provenance='Windows native scratch VHD boo
     acquisition_status='running';stage='capability';started_utc=[DateTime]::UtcNow.ToString('o');
     automatic_retry=$false;native_recovery_qualified=$false;root_name=$rootName;disk_bytes=$bytes;
     platform=[ordered]@{system='Windows';version=[Environment]::OSVersion.Version.ToString();
-        powershell=$PSVersionTable.PSVersion.ToString()};errors=@();commands=@()}
-$report.sources = @('bootstrap_windows_ntfs.ps1','windows_scratch_guard.ps1','collect_windows_corpus.py') | ForEach-Object {
+        powershell=$PSVersionTable.PSVersion.ToString()};errors=@();commands=@();namespace_operations=@()}
+$report.sources = @('bootstrap_windows_ntfs.ps1','windows_scratch_guard.ps1','windows_named_stream.ps1','collect_windows_corpus.py') | ForEach-Object {
     [ordered]@{file=$_;sha256=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot $_) -Algorithm SHA256).Hash.ToLowerInvariant()}
 }
 function Save-Report {
@@ -72,9 +73,17 @@ function Scratch-Drive([bool]$ReadOnly) {
     return (Assert-ScratchDrive $routes $volume $disk $partition $DriveLetter $volumeIdentity)
 }
 function Flush-File([string]$Path, [byte[]]$Value) {
+    $operation = Start-NamespaceOperation 'create-file' $Path
     [void](Scratch-Drive $false)
     $stream = [IO.FileStream]::new($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     try { $stream.Write($Value, 0, $Value.Length); $stream.Flush($true) } finally { $stream.Dispose() }
+    $operation.status = 'complete'; Save-Report
+}
+function Start-NamespaceOperation([string]$Kind, [string]$Path) {
+    $entry = [ordered]@{kind=$Kind;path=$Path;status='started'}
+    $report.namespace_operations += $entry
+    Save-Report
+    return $entry
 }
 function Run-Native([string]$Name, [string]$Executable, [string[]]$Arguments) {
     # Windows native argv quoting includes doubled trailing backslashes.
@@ -151,19 +160,28 @@ try {
     $volumeIdentity = $volume | Select-Object UniqueId
     $report.volume = $volume | Select-Object UniqueId,FileSystemType,FileSystemLabel,HealthStatus
     $report.stage = 'author-native-namespace'; Save-Report
+    $operation = Start-NamespaceOperation 'create-directory' $root
     [void](Scratch-Drive $false)
     [void][IO.Directory]::CreateDirectory($root)
+    $operation.status = 'complete'; Save-Report
     Flush-File (Join-Path $root 'resident.txt') ([Text.Encoding]::UTF8.GetBytes("Machlin original resident NTFS write witness.`r`n"))
     $data = New-Object byte[] 1048576
     for ($index=0; $index -lt $data.Length; $index++) { $data[$index] = [byte](($index * 17 + 3) % 256) }
     Flush-File (Join-Path $root 'initialized.bin') $data
     Flush-File (Join-Path $root 'rename-before.txt') ([Text.Encoding]::UTF8.GetBytes('original rename witness'))
+    $operation = Start-NamespaceOperation 'rename' (Join-Path $root 'rename-after.txt')
     [void](Scratch-Drive $false)
     [IO.File]::Move((Join-Path $root 'rename-before.txt'), (Join-Path $root 'rename-after.txt'))
+    $operation.status = 'complete'; Save-Report
+    $operation = Start-NamespaceOperation 'create-directory' (Join-Path $root 'child')
     [void](Scratch-Drive $false)
     [void][IO.Directory]::CreateDirectory((Join-Path $root 'child'))
+    $operation.status = 'complete'; Save-Report
     Flush-File (Join-Path $root 'child\nested.txt') ([Text.Encoding]::UTF8.GetBytes('original directory witness'))
-    Flush-File ((Join-Path $root 'resident.txt') + ':original-stream') ([Text.Encoding]::ASCII.GetBytes('original named stream witness'))
+    $operation = Start-NamespaceOperation 'create-named-stream' ((Join-Path $root 'resident.txt') + ':original-stream')
+    [void](Scratch-Drive $false)
+    Write-CloudNamedStream (Join-Path $root 'resident.txt') 'original-stream' ([Text.Encoding]::ASCII.GetBytes('original named stream witness'))
+    $operation.status = 'complete'; Save-Report
     [void](Scratch-Drive $false)
     $targetId = @(Run-Native 'initialized-file-id' (Join-Path $env:SystemRoot 'System32\fsutil.exe') @('file','queryfileid',(Join-Path $root 'initialized.bin')))
     [void](Scratch-Drive $false)
@@ -242,6 +260,11 @@ public static class MachlinCloudVolumeFlush {
 } catch {
     $report.acquisition_status = 'failed'
     $report.errors += $_.Exception.ToString()
+    $report.error_position = $_.InvocationInfo.PositionMessage
+    $report.error_script_stack = $_.ScriptStackTrace
+    if ($report.namespace_operations.Count -gt 0 -and $report.namespace_operations[-1].status -ceq 'started') {
+        $report.namespace_operations[-1].status = 'failed'
+    }
 } finally {
     if ($attached) {
         try {

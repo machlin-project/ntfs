@@ -232,9 +232,9 @@ operate(struct directory_model *model, unsigned kind, unsigned identifier, uint8
 			}
 			result = ntfs_mutation_directory_find(
 			    &model->plan, &model->directory, &name, &index);
-			assert(result == (state->present && !model->directory.case_sensitive
-					     ? NTFS_OK
-					     : NTFS_NOT_FOUND));
+			assert(result ==
+			    (state->present && !model->directory.case_sensitive ? NTFS_OK
+										: NTFS_NOT_FOUND));
 			assert(result != NTFS_OK || index == position);
 		}
 		return NTFS_OK;
@@ -258,7 +258,8 @@ operate(struct directory_model *model, unsigned kind, unsigned identifier, uint8
 	}
 	if (kind != DIRECTORY_UPDATE) {
 		const uint16_t suffixes[] = {DIRECTORY_LATIN_SMALL_E_ACUTE,
-		    DIRECTORY_GREEK_CAPITAL_OMEGA, DIRECTORY_CJK_MIDDLE, DIRECTORY_ZERO_WIDTH_JOINER};
+		    DIRECTORY_GREEK_CAPITAL_OMEGA, DIRECTORY_CJK_MIDDLE,
+		    DIRECTORY_ZERO_WIDTH_JOINER};
 
 		next.length =
 		    (uint8_t)(DIRECTORY_PREFIX + length % (NTFS_NAME_MAX - DIRECTORY_PREFIX + 1));

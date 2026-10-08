@@ -58,6 +58,33 @@ This is an intermediate checkpoint. All feasible cloud work is **not complete**.
 Portable, external-tool, Windows API/VHD, macOS component, unsigned-app, installed
 FSKit and commercial-release evidence remain distinct.
 
+## Wider hosted checkpoint and current continuation
+
+The [first broad continuation](https://github.com/machlin-project/ntfs/actions/runs/37847726901)
+passes all 233 tests on GCC and Clang for both Linux x86-64 and ARM64, strict
+objects, same-source and relocated Release reproducibility, all thirteen fuzz
+targets (including 900 seconds of directory exploration), 256 deterministic
+directory stress cases and the serial matched performance job. Its macOS
+component checks, including lazy-view teardown, pass; 324 compiler-context
+objects and six portable/GPR checks also pass. Modern macOS 27-only checks
+remain separately unexecuted on the observed SDK 26.5/runtime 26.6.
+
+The run also preserves failed macOS path-spelling/style checks, missing modern
+Swift API declarations, the Windows transfer test's path-spelling expectation,
+the native bootstrap's .NET alternate-stream constructor and a missing upstream
+Autotools macro. The fresh Windows runner did create, attach, initialize and
+format its guarded scratch NTFS VHD; the failed candidate was detached and
+retained unchanged. Corrections use canonical path identities, exact selected-
+Xcode formatting, a guarded documented SDK bridge, Win32 alternate-stream I/O
+and the missing declared build prerequisite. Their next hosted verdict is pending.
+
+The next local source boundary additionally includes private hard-link
+preparation, original LZNT1 encoding and build-bound unsigned packaging. Their
+independent focused tests pass, but neither new filesystem admission nor actual
+Windows codec/link-count verdicts are implied. Compression performance work now
+requires retained pre-optimization source, matched measurements and explicit
+corner-case/differential coverage before any gain is accepted.
+
 ## Reproduce and request the wider gates
 
 Use separate build directories for different compilers:

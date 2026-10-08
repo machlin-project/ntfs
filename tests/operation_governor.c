@@ -25,8 +25,9 @@ charge(struct ntfs_volume *volume, enum ntfs_operation_limit dimension, bool opt
 		return ntfs_operation_read(volume, TEST_CHARGE_BYTES);
 	case NTFS_OPERATION_LIMIT_ALLOCATION_CALLS:
 	case NTFS_OPERATION_LIMIT_ALLOCATION_BYTES:
-		return ntfs_operation_allocate(volume, TEST_CHARGE_BYTES, optional) ? NTFS_OK
-									 : NTFS_NO_MEMORY;
+		return ntfs_operation_allocate(volume, TEST_CHARGE_BYTES, optional)
+		    ? NTFS_OK
+		    : NTFS_NO_MEMORY;
 	case NTFS_OPERATION_LIMIT_WORK:
 		return ntfs_work(volume, TEST_CHARGE_BYTES);
 	default:
@@ -140,7 +141,8 @@ saturated_accounting(void)
 	assert(ntfs_operation_begin(volume, NULL, &scope) == NTFS_OK);
 	assert(ntfs_work(volume, UINT64_MAX) == NTFS_OK);
 	assert(ntfs_work(volume, 1) == NTFS_RANGE);
-	assert(scope.usage.work == UINT64_MAX && scope.usage.exhausted == NTFS_OPERATION_LIMIT_WORK);
+	assert(
+	    scope.usage.work == UINT64_MAX && scope.usage.exhausted == NTFS_OPERATION_LIMIT_WORK);
 	assert(ntfs_operation_end(&scope, NULL) == NTFS_OK);
 
 	/* The aggregate owner may be nearly full before this operation starts.
@@ -156,8 +158,8 @@ saturated_accounting(void)
 	assert(same_usage(&scope.usage, &before));
 	assert(!ntfs_operation_allocate(volume, 1, false));
 	assert(scope.usage.exhausted == NTFS_OPERATION_LIMIT_LIVE_BYTES &&
-	    scope.usage.allocation_calls == 1 && scope.usage.allocation_bytes == TEST_CHARGE_BYTES &&
-	    volume->live_bytes == UINT64_MAX);
+	    scope.usage.allocation_calls == 1 &&
+	    scope.usage.allocation_bytes == TEST_CHARGE_BYTES && volume->live_bytes == UINT64_MAX);
 	assert(ntfs_operation_end(&scope, NULL) == NTFS_OK);
 	free(volume);
 }

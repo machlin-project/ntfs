@@ -16,6 +16,7 @@ enum {
 	TEST_RECORD_BYTES = 1024,
 	TEST_PROGRAM_UPDATES = 2
 };
+
 #define TEST_CHANGED UINT64_C(134357146906613431)
 #define TEST_ACCESSED UINT64_C(134357146900000007)
 
@@ -97,7 +98,8 @@ decode_region(const struct ntfs_write_mutation_region *region, const void *sourc
 	memcpy(out, source, region->bytes);
 	for (offset = 0; offset < region->bytes; offset += TEST_RECORD_BYTES) {
 		if ((region->predecessor.file_slots & (1u << (offset / TEST_RECORD_BYTES))) != 0) {
-			assert(ntfs_record_decode(out + offset, TEST_RECORD_BYTES, false) == NTFS_OK);
+			assert(
+			    ntfs_record_decode(out + offset, TEST_RECORD_BYTES, false) == NTFS_OK);
 		}
 	}
 }
@@ -154,8 +156,8 @@ check_program(const struct ntfs_environment *env, struct ntfs_write_mutation_pla
 		}
 		normalize_record(logical + offset,
 		    (prefix == TEST_PROGRAM_UPDATES ? final : original) + offset, true);
-		assert(memcmp(logical, prefix == TEST_PROGRAM_UPDATES ? final : original,
-			   bytes) == 0);
+		assert(
+		    memcmp(logical, prefix == TEST_PROGRAM_UPDATES ? final : original, bytes) == 0);
 		for (index = prefix; index != 0; index--) {
 			assert(ntfs_write_program_apply(program, index - 1, true, 100003 + index,
 				   logical, bytes) == NTFS_OK);
@@ -170,8 +172,8 @@ check_program(const struct ntfs_environment *env, struct ntfs_write_mutation_pla
 }
 
 static void
-check_case(const uint8_t *image, size_t bytes, uint64_t reference, uint64_t physical,
-    unsigned mask, const uint8_t *expected)
+check_case(const uint8_t *image, size_t bytes, uint64_t reference, uint64_t physical, unsigned mask,
+    const uint8_t *expected)
 {
 	struct test_device test = {{.data = image, .size = bytes}, false};
 	struct ntfs_environment env = environment(&test), view;
@@ -297,9 +299,9 @@ check_admission(const uint8_t *image, size_t bytes, uint64_t reference, uint64_t
 		invalid = request;
 		if (index < 4) {
 			selected = index == 0 ? &invalid.times.created
-					     : index == 1 ? &invalid.times.modified
-							  : index == 2 ? &invalid.times.changed
-								       : &invalid.times.accessed;
+			    : index == 1      ? &invalid.times.modified
+			    : index == 2      ? &invalid.times.changed
+					      : &invalid.times.accessed;
 			*selected = (uint64_t)INT64_MAX + 1;
 		} else if (index == 4) {
 			invalid.times.fields = UINT32_MAX;
@@ -325,9 +327,9 @@ check_admission(const uint8_t *image, size_t bytes, uint64_t reference, uint64_t
 	assert(ntfs_attr_value(&attribute, &value, &length) == NTFS_OK);
 	assert(length == NTFS_WRITE_STANDARD_BYTES);
 	standard = (const void *)value;
-	request.times = (struct ntfs_write_times){ntfs_u64(standard->created),
-	    ntfs_u64(standard->modified), ntfs_u64(standard->changed),
-	    ntfs_u64(standard->accessed), NTFS_WRITE_TIME_ALL};
+	request.times =
+	    (struct ntfs_write_times){ntfs_u64(standard->created), ntfs_u64(standard->modified),
+		ntfs_u64(standard->changed), ntfs_u64(standard->accessed), NTFS_WRITE_TIME_ALL};
 	assert(ntfs_write_mutation_prepare(&env, &request, &plan) == NTFS_OK);
 	assert(ntfs_write_mutation_plan_count(plan) == 0);
 	ntfs_write_mutation_plan_close(plan);

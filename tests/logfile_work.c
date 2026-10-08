@@ -41,7 +41,8 @@ main(void)
 	assert(ntfs_logfile_source_read(&source, 0, output, sizeof(output), &work) == NTFS_OK);
 	assert(ntfs_logfile_source_read(&source, TEST_READ_BYTES, output, sizeof(output), &work) ==
 	    NTFS_OK);
-	assert(work.read_calls == TEST_READ_CALLS && work.read_bytes == TEST_READ_BYTES * TEST_READ_CALLS);
+	assert(work.read_calls == TEST_READ_CALLS &&
+	    work.read_bytes == TEST_READ_BYTES * TEST_READ_CALLS);
 	assert(backend.calls == TEST_READ_CALLS);
 	assert(ntfs_logfile_source_read(&source, 0, output, sizeof(output), &work) == NTFS_RANGE);
 	assert(work.read_calls == TEST_READ_CALLS && backend.calls == TEST_READ_CALLS);
@@ -54,15 +55,16 @@ main(void)
 	assert(work.read_calls == 0 && work.read_bytes == UINT64_MAX);
 	work = (struct ntfs_logfile_io_work){0};
 	calls = backend.calls;
-	assert(ntfs_logfile_source_read(&source, TEST_VOLUME_BYTES, output, sizeof(output), &work) ==
-	    NTFS_NOT_FOUND);
+	assert(ntfs_logfile_source_read(
+		   &source, TEST_VOLUME_BYTES, output, sizeof(output), &work) == NTFS_NOT_FOUND);
 	assert(work.read_calls == 0 && work.read_bytes == 0 && backend.calls == calls);
 	backend.result = NTFS_IO;
 	assert(ntfs_logfile_source_read(&source, 0, output, sizeof(output), &work) == NTFS_IO);
 	assert(work.read_calls == 1 && work.read_bytes == sizeof(output) && source.backend_failed);
 	backend.result = NTFS_OK;
 	assert(ntfs_logfile_source_read(&source, 0, output, sizeof(output), &work) == NTFS_OK);
-	assert(work.read_calls == 2 && work.read_bytes == 2 * sizeof(output) && !source.backend_failed);
+	assert(work.read_calls == 2 && work.read_bytes == 2 * sizeof(output) &&
+	    !source.backend_failed);
 	puts("bounded journal I/O credits, exact failure charges and overflow refusals pass");
 	return 0;
 }

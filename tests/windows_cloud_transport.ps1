@@ -20,7 +20,27 @@ try {
     $expected = [pscustomobject]@{name='input-directory-full.vhd';bytes=4;sha256=$hash;
         path='C:\DO-NOT-READ\producer-machine-secret.vhd'}
     $actual = Resolve-CloudTransfer $directory 'unused-base.vhd' $expected
-    if ($actual -cne $payload) { throw 'Transfer used the producer-local path.' }
+    $canonical = (Get-Item -LiteralPath $payload).FullName
+    if ($actual -isnot [string] -or -not [string]::Equals($actual,$canonical,[StringComparison]::OrdinalIgnoreCase)) {
+        throw ('Transfer local identity differs: expected [' + $canonical + '], actual [' + ($actual -join '; ') + '].')
+    }
+    $checks++
+    # Filesystem APIs may normalize TEMP's drive case or short-path spelling.
+    # The producer-local path remains deliberately nonexistent and is never read.
+    $alias = Join-Path $directory '.'
+    $aliased = Resolve-CloudTransfer $alias 'unused-base.vhd' $expected
+    if ($aliased -isnot [string] -or -not [string]::Equals($aliased,$canonical,[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A normalized local package alias changed the selected file.'
+    }
+    $checks++
+    $trap = [pscustomobject]@{name=$expected.name;bytes=$expected.bytes;sha256=$expected.sha256}
+    Add-Member -InputObject $trap -MemberType ScriptProperty -Name path -Value {
+        throw 'The producer-local path field must never be read.'
+    }
+    $trapped = Resolve-CloudTransfer $directory 'unused-base.vhd' $trap
+    if ($trapped -isnot [string] -or -not [string]::Equals($trapped,$canonical,[StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Transfer ignored its consumer-local file identity.'
+    }
     $checks++
     foreach ($name in @('../secret.vhd','input-..\secret.vhd','input-/escape.vhd','C:\secret.vhd','input-.vhd')) {
         $changed = $expected.PSObject.Copy(); $changed.name = $name

@@ -480,7 +480,8 @@ ntfs_validation_scan_attributes(struct ntfs_validation_context *validation)
 		if (result == NTFS_NOT_FOUND) {
 			result = NTFS_OK;
 		} else if (result == NTFS_OK && validation->records[i].base == 0) {
-			result = ntfs_validation_check_list(validation, owner, list, list_size, name);
+			result =
+			    ntfs_validation_check_list(validation, owner, list, list_size, name);
 		}
 		if (result != NTFS_OK) {
 			break;

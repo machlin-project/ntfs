@@ -7,6 +7,8 @@ enum {
 	/* Ordinary base-record allocation leaves the extension/recovery reserve
 	 * available. Existing object admission still begins at record 16. */
 	NTFS_MUTATION_FIRST_ALLOCATABLE_RECORD = 24,
+	/* MS-FSA FileLinkInformation caps logical links, not stored DOS aliases. */
+	NTFS_MUTATION_MAX_PRIMARY_LINKS = 1024,
 	NTFS_MUTATION_INITIAL_REGIONS = 16,
 	NTFS_MUTATION_MAX_REGIONS = 4096,
 	NTFS_MUTATION_INITIAL_RECORDS = 8,
@@ -248,6 +250,10 @@ enum ntfs_result ntfs_mutation_directory_store(
     struct ntfs_write_mutation_plan *, struct ntfs_mutation_directory *, bool);
 enum ntfs_result ntfs_mutation_security_inherit(
     struct ntfs_write_mutation_plan *, struct ntfs_mutation_record *, bool, uint8_t **, size_t *);
+/* Pure count admission: no allocator, callback or output mutation. */
+enum ntfs_result ntfs_mutation_hardlink_count_admit(const struct ntfs_link_counts *);
+enum ntfs_result ntfs_mutation_hardlink(
+    struct ntfs_write_mutation_plan *, const struct ntfs_write_mutation_request *);
 enum ntfs_result ntfs_mutation_namespace(
     struct ntfs_write_mutation_plan *, const struct ntfs_write_mutation_request *);
 enum ntfs_result ntfs_mutation_filename_sizes(

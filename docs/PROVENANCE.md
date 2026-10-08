@@ -1,5 +1,14 @@
 # Code provenance
 
+The private LZNT1 encoder, its independent packet/pattern tests and Windows
+RtlDecompressBuffer collector are original code grounded in the primary MS-XCA
+definitions cited in [LZNT1-ENCODING](LZNT1-ENCODING.md). No external codec
+implementation was imported. It adds no compressed filesystem write admission.
+The unsigned build/packaging validator and original synthetic fixtures follow
+the Apple format definitions cited in [UNSIGNED-PACKAGING](UNSIGNED-PACKAGING.md).
+They do not sign, notarize, install or distribute a release, and do not include
+the standalone GPL oracle utilities in the product.
+
 The [NTFS format reference](format/README.md) is original repository documentation
 with original worked numbers, diagrams and a source/evidence register. Its field
 facts use the Microsoft definitions and original NTFS/LFS research cited beside
@@ -769,3 +778,23 @@ The resulting standalone test utilities and retained upstream notices remain
 under ignored vendor storage; no filesystem implementation is imported into the
 product. Original Python contracts check acquisition, preservation and failure
 reporting without running a substituted filesystem oracle.
+
+## Selected POSIX hard-link preparation
+
+The original [hard-link storage transform](HARDLINK-PREPARATION.md) composes the
+repository's existing qualified unpaired POSIX representation, immutable filename
+inventory, local directory tree editor and complete FILE/INDX/bitmap compiler.
+Microsoft's linked CreateHardLinkW and MS-FSA contracts independently bound
+logical links and distinguish abstract names/short names from physical filename
+storage. No foreign filesystem implementation was consulted or imported. The
+fixture author and exact-cache/record/prefix-inverse tests are original. Generic
+redo/undo preparation does not establish native API semantics, durable execution
+or Windows recovery for this new family.
+
+The independent Windows link-count observer uses only documented Win32
+CreateHardLinkW, volume queries and
+[GetFileInformationByHandle](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle)
+with fixed-width original ctypes declarations. Native bytes, errors, identity and
+payload/ADS observations are retained separately from the synthetic provider's
+ABI/report tests. No Windows driver or foreign filesystem implementation was
+consulted or copied; the observer requires a fresh owned NTFS TEMP directory.

@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Dmitri Arekhta. All rights reserved.
 import AppKit
-import FSKit
 import SwiftUI
 
 private enum Layout {
@@ -19,8 +18,8 @@ private final class ImageMount: ObservableObject {
 
     func chooseImage() {
         guard !busy, mountURL == nil else { return }
-        guard #available(macOS 27.0, *) else {
-            status = "Image editing requires macOS 27."
+        guard ImageOperations.imageEditingAvailable else {
+            status = ImageOperations.imageEditingUnavailableReason
             return
         }
         busy = true
@@ -39,7 +38,6 @@ private final class ImageMount: ObservableObject {
         Task { await mountImage(url) }
     }
 
-    @available(macOS 27.0, *)
     private func mountImage(_ url: URL) async {
         defer { busy = false }
         status = "Mounting \(url.lastPathComponent)…"
@@ -85,7 +83,7 @@ struct NTFSApp: App {
                 Divider()
                 Label("Extract supported contents, or edit existing initialized file ranges in an NTFS image on macOS 27.", systemImage: "externaldrive")
                 Label("Choose extraction or image editing explicitly. Image editing is restricted to the image owner's native account; Windows permissions are not applied.", systemImage: "info.circle")
-                if #available(macOS 27.0, *) {
+                if ImageOperations.imageEditingAvailable {
                     HStack {
                         Button("Edit an NTFS image…") { imageMount.chooseImage() }
                             .disabled(imageMount.busy || imageMount.mountURL != nil)
@@ -95,13 +93,15 @@ struct NTFSApp: App {
                                 .disabled(imageMount.busy)
                         }
                         Button("Extension settings") {
-                            _ = FSClient.shared.openFileSystemExtensionsSettings()
+                            if !NTFSAppOpenFileSystemExtensionsSettings() {
+                                imageMount.status = "Could not open extension settings. Open System Settings to enable the filesystem extension."
+                            }
                         }
                     }
                     Text(imageMount.status).font(.callout)
                         .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("Image editing requires macOS 27.").font(.callout)
+                    Text(ImageOperations.imageEditingUnavailableReason).font(.callout)
                 }
                 Text("Not qualified for production use. Keep an independent backup of test data.")
                     .font(.callout).foregroundStyle(.secondary)

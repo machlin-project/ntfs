@@ -6,6 +6,11 @@ diagrams, field maps, examples and a research register.
 
 ## Product and development
 
+- [Unsigned engineering packaging](UNSIGNED-PACKAGING.md): exact build-bound
+  app inventory, deterministic transport and separate release/native gates.
+- [Private LZNT1 encoding](LZNT1-ENCODING.md): original bounded codec and
+  independent byte/native-oracle contract, without compressed media admission.
+
 - [Dots cloud handoff](HANDOFF-DOTS.md): complete all work feasible from the
   private repository and cloud runners, with observed CI failures, implementation
   priorities, verification gates, and the residual native/release boundary.
@@ -17,6 +22,8 @@ diagrams, field maps, examples and a research register.
   cloud algorithms, independent native evidence and intentional policy boundaries.
 - [Deferred retirement](DEFERRED-RETIREMENT.md): explicit lifetime/durability model
   for open unlink/replacement, with native orphan authority left unresolved.
+- [Hard-link preparation](HARDLINK-PREPARATION.md): complete selected-cache POSIX
+  link storage, logical/physical count limits and explicit execution refusal.
 - [Sparse preparation](SPARSE-PREPARATION.md): private owned zero/punch mapping and
   partial-byte spans, preserving the unsupported media-execution boundary.
 - [Completed driver refactoring](REFACTORING.md): component map, consistent

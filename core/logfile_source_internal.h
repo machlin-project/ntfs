@@ -137,7 +137,7 @@ enum ntfs_result ntfs_logfile_reload_record_page(struct ntfs_logfile *source,
 enum ntfs_result ntfs_logfile_scan_fast_copies(struct ntfs_logfile *source,
     struct ntfs_logfile_io_work *work, struct ntfs_logfile_fast_copies *copies);
 enum ntfs_result ntfs_logfile_load_record_page(struct ntfs_logfile *source, uint64_t offset,
-    uint64_t lsn, struct ntfs_logfile_io_work *work, const struct ntfs_logfile_record_copies *copies,
-    struct ntfs_logfile_page_view *out);
+    uint64_t lsn, struct ntfs_logfile_io_work *work,
+    const struct ntfs_logfile_record_copies *copies, struct ntfs_logfile_page_view *out);
 
 #endif

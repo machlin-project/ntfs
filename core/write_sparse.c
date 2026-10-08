@@ -83,8 +83,8 @@ sparse_append(struct ntfs_run *runs, size_t *count, uint64_t vcn, uint64_t lengt
 }
 
 static void
-sparse_zero_span(struct ntfs_write_sparse_plan *plan,
-    const struct ntfs_write_sparse_input *input, uint64_t offset, uint64_t bytes)
+sparse_zero_span(struct ntfs_write_sparse_plan *plan, const struct ntfs_write_sparse_input *input,
+    uint64_t offset, uint64_t bytes)
 {
 	const struct ntfs_run *run;
 	struct ntfs_write_sparse_zero *zero;
@@ -99,7 +99,8 @@ sparse_zero_span(struct ntfs_write_sparse_plan *plan,
 		if (vcn >= run->vcn && vcn - run->vcn < run->length) {
 			if (run->lcn != NTFS_HOLE) {
 				zero = &plan->view.zero[plan->view.zero_count++];
-				zero->physical = (run->lcn + vcn - run->vcn) * input->cluster_bytes +
+				zero->physical =
+				    (run->lcn + vcn - run->vcn) * input->cluster_bytes +
 				    offset % input->cluster_bytes;
 				zero->bytes = bytes;
 			}
@@ -175,7 +176,8 @@ ntfs_write_sparse_prepare(const struct ntfs_environment *environment,
 		left = run->vcn > first ? run->vcn : first;
 		right = run->vcn + run->length < last ? run->vcn + run->length : last;
 		if (left >= right) {
-			sparse_append(after, &plan->view.after_count, run->vcn, run->length, run->lcn);
+			sparse_append(
+			    after, &plan->view.after_count, run->vcn, run->length, run->lcn);
 			continue;
 		}
 		sparse_append(after, &plan->view.after_count, run->vcn, left - run->vcn, run->lcn);

@@ -711,7 +711,8 @@ native_access_selection(NSArray<NSString *> *arguments, NTFSNativeAccessMode cur
 		@synchronized(self) {
 			if (_imageMutationActive || _imageViewOpening) {
 				/* A native transfer or unpublished mount can reenter the owner.
-				 * Admission is closed; release ownership after that call returns. */
+				 * Admission is closed; release ownership after that call returns.
+				 */
 				return;
 			}
 			[_readCachePolicy stop];
@@ -1007,7 +1008,8 @@ native_access_selection(NSArray<NSString *> *arguments, NTFSNativeAccessMode cur
 			  }
 			  [self->_lifecycleLock lock];
 			  self->_pendingUnmounts--;
-			  if (self->_pendingUnmounts == 0 && self->_lifecycle == NTFSVolumeDraining) {
+			  if (self->_pendingUnmounts == 0 &&
+			      self->_lifecycle == NTFSVolumeDraining) {
 				  self->_lifecycle = NTFSVolumeUnmounted;
 			  }
 			  [self->_lifecycleLock unlock];

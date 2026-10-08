@@ -31,7 +31,7 @@ reparse_write_layout(
 	}
 	layout->prefix = sizeof(struct ntfs_disk_reparse) +
 	    (input->kind == NTFS_REPARSE_SYMLINK ? sizeof(struct ntfs_disk_reparse_symlink)
-					     : sizeof(struct ntfs_disk_reparse_names));
+						 : sizeof(struct ntfs_disk_reparse_names));
 	maximum = (NTFS_REPARSE_MAX_BYTES - layout->prefix) / NTFS_UTF16_UNIT_BYTES -
 	    REPARSE_NAME_TERMINATORS;
 	if (input->substitute_units > maximum ||
@@ -120,9 +120,9 @@ ntfs_write_reparse_encode(
 	/* All bounds, names and aliases are proved before the first changed byte. */
 	ntfs_zero(output, layout.bytes);
 	header = output;
-	ntfs_put_u32(header->tag, input->kind == NTFS_REPARSE_SYMLINK
-		    ? NTFS_REPARSE_TAG_SYMLINK
-		    : NTFS_REPARSE_TAG_MOUNT_POINT);
+	ntfs_put_u32(header->tag,
+	    input->kind == NTFS_REPARSE_SYMLINK ? NTFS_REPARSE_TAG_SYMLINK
+						: NTFS_REPARSE_TAG_MOUNT_POINT);
 	ntfs_put_u16(header->length, (uint16_t)(layout.bytes - sizeof(*header)));
 	names = (void *)((uint8_t *)output + sizeof(*header));
 	display_offset = layout.substitute_bytes + NTFS_UTF16_UNIT_BYTES;
@@ -138,8 +138,8 @@ ntfs_write_reparse_encode(
 		ntfs_put_u16(path + index * NTFS_UTF16_UNIT_BYTES, input->substitute[index]);
 	}
 	for (index = 0; index < input->display_units; index++) {
-		ntfs_put_u16(path + display_offset + index * NTFS_UTF16_UNIT_BYTES,
-		    input->display[index]);
+		ntfs_put_u16(
+		    path + display_offset + index * NTFS_UTF16_UNIT_BYTES, input->display[index]);
 	}
 	*written = layout.bytes;
 	return NTFS_OK;

@@ -193,8 +193,8 @@ catalog_from_record(struct ntfs_node *node, struct ntfs_stream_catalog *catalog)
 }
 
 static enum ntfs_result
-catalog_from_list(struct ntfs_node *node, struct ntfs_stream_catalog *catalog,
-    const uint8_t *bytes, size_t size, struct ntfs_stream_name *name)
+catalog_from_list(struct ntfs_node *node, struct ntfs_stream_catalog *catalog, const uint8_t *bytes,
+    size_t size, struct ntfs_stream_name *name)
 {
 	struct ntfs_volume *volume = node->volume;
 	const struct ntfs_disk_attr_list *entry;

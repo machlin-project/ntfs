@@ -1,5 +1,26 @@
 # Handoff to Sol
 
+## Current handoff: prepared directory acceptance
+
+The user now includes **fuzz/stress, Windows and FSKit** and explicitly requests
+stopping before test execution. The connected source/test/harness batch is ready
+for execution handoff, but **has not been built or run**. No VM is assigned or
+operated during preparation. Follow [Directory acceptance](DIRECTORY-ACCEPTANCE.md)
+for exact commands, input paths, group transfers, owner handoffs and stop criteria.
+Do not report this preparation as passing or reuse installed build 19 as current.
+
+The new files add an independent operation-sequence tree fuzzer and reproducible
+stress inputs; tracked current-core image observers; an offline transition/cut
+batch and complete VHD packaging; and a CLI-only installed FSKit sequence with
+four ordinary remount boundaries and independently observed Windows postimages.
+Driver algorithms are unchanged by this preparation. The main agent stops here;
+Sol coordinates subsequent execution, with Luna assigned prepared CLI runs.
+
+The historical checkpoint notes below retain their original evidence. Their old
+requests to defer FSKit/native testing are superseded by this current handoff.
+
+## Previously accepted checkpoints
+
 The latest C-only batch implements all four requested preparation optimizations:
 local directory split/merge and dirty-node storage, adaptive bitmap read-ahead
 with immutable original-page summaries, record-revision stream/runlist reuse,

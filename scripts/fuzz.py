@@ -10,6 +10,7 @@ import sys
 import tempfile
 from environment import sanitizer_environment
 from fuzz_seeds import generate, journal_volume_images
+from directory_fuzz_seeds import generate as generate_directory
 
 DEFAULT_SECONDS = 60
 MAX_SECONDS = 3600
@@ -30,7 +31,7 @@ STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
 LOGFILE_INPUT_BYTES = 2 * 1024 * 1024
-TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'lznt1', 'reparse', 'security', 'access', 'wof', 'logfile')
+TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'directory-mutation', 'lznt1', 'reparse', 'security', 'access', 'wof', 'logfile')
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -93,6 +94,10 @@ try:
                 paths.extend(sorted(metadata_seeds.glob('*.img')))
             sources = [root / ('tests/fuzz_validation.c' if target == 'validation' else 'tests/fuzz.c'), root / 'tests/fuzz_mutator.c']
             flags = []
+        elif target == 'directory-mutation':
+            paths = generate_directory(seeds / target)
+            sources = [root / 'tests/fuzz_directory.c']
+            flags = []
         else:
             generate(seeds)
             paths = sorted((seeds / target).glob('*.seed'))
@@ -133,7 +138,7 @@ try:
         item['binary_sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
         item['status'] = 'running'
         report_path.write_text(json.dumps(report, indent=2) + '\n')
-        if process_flags or target in ('logfile', 'access'):
+        if process_flags or target in ('logfile', 'access', 'directory-mutation'):
             # Child subsets are coverage-guided exploration, not proof that
             # every authored seed ran. Fixed-file batches check all seeds once
             # without retaining a growing corpus or weakening sanitizer checks.

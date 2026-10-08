@@ -1,5 +1,15 @@
 # Acceptance
 
+## Directory fuzz and native acceptance preparation
+
+A connected [fuzz/stress → Windows → installed FSKit → Windows postimage batch](DIRECTORY-ACCEPTANCE.md)
+is prepared at the user's request. New tests, immutable-image harnesses and a
+CLI-only four-phase mounted workload are present, but **no build or test from this
+batch has run**. The user requested a stop before execution and handoff to Sol.
+There is no new acceptance result, VM operation or installed-app claim. The
+preceding 213-suite C checkpoint below remains the last verified core result;
+signed installed build 19 remains earlier native evidence.
+
 ## Incremental directory and journal preparation
 
 The four-part C batch is complete: incremental `$I30` editing with split/merge,

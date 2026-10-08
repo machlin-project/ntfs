@@ -16,6 +16,11 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+The prepared [directory acceptance batch](DIRECTORY-ACCEPTANCE.md) connects the
+operation-sequence fuzzer, deterministic stress, current-C native image cuts,
+Windows recovery and the installed FSKit large-directory workload. Its current
+handoff stops before execution; preparation is not acceptance evidence.
+
 ## Core optimization checks
 
 Prepare the frozen reference and workload inputs before editing core sources:

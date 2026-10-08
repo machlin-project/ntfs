@@ -37,6 +37,9 @@ posix = static_library('ntfs-posix', 'adapters/posix/image.c', include_directori
 tool_path = files('tools/path.c')
 inspector = executable('ntfs-inspect', ['tools/inspect.c', tool_path], include_directories: inc, link_with: [posix, core], install: false)
 validator = executable('ntfs-validate', 'tools/validate.c', include_directories: inc, link_with: [posix, core], c_args: ['-Wdeclaration-after-statement'], install: false)
+executable('ntfs-native-inventory', 'tests/native_inventory.c', include_directories: inc, link_with: [posix, core], c_args: ['-UNDEBUG', '-Wdeclaration-after-statement'], install: false)
+executable('ntfs-native-state', 'tests/native_state.c', include_directories: [inc, include_directories('core')], link_with: [posix, core], c_args: ['-UNDEBUG', '-Wdeclaration-after-statement'], install: false)
+executable('ntfs-native-checkpoint', ['tests/native_checkpoint.c', 'tests/image_fault.c', 'adapters/posix/overwrite_image.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-D_POSIX_C_SOURCE=200809L', '-D_DARWIN_C_SOURCE', '-UNDEBUG', '-Wdeclaration-after-statement'], install: false)
 access_evaluator = executable('ntfs-dacl-evaluate', 'tools/access.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-D_POSIX_C_SOURCE=200809L', '-Wdeclaration-after-statement'], install: false)
 logfile_inspector = executable('ntfs-logfile', 'tools/logfile.c', include_directories: inc, link_with: [posix, core], c_args: ['-D_POSIX_C_SOURCE=200809L', '-Wdeclaration-after-statement'], install: false)
 executable('ntfs-overwrite', ['tools/overwrite.c', 'adapters/posix/overwrite_image.c'], include_directories: inc, link_with: core, c_args: ['-D_POSIX_C_SOURCE=200809L', '-D_DARWIN_C_SOURCE', '-Wdeclaration-after-statement'], install: false)
@@ -44,6 +47,10 @@ executable('ntfs-benchmark', 'tools/benchmark.c', include_directories: inc, link
 threads = dependency('threads')
 workload = executable('ntfs-workload', ['tools/workload.c', tool_path], include_directories: inc, link_with: [posix, core], dependencies: threads, c_args: ['-D_POSIX_C_SOURCE=200809L', '-Wdeclaration-after-statement'], install: false)
 python = find_program('python3')
+test('directory-harness', python, args: [files('tests/directory_harness.py')], timeout: 60)
+if host_machine.system() == 'darwin'
+  executable('ntfs-mounted-directory', 'tests/mounted_directory.c', c_args: ['-D_DARWIN_C_SOURCE', '-UNDEBUG', '-Wdeclaration-after-statement'], install: false)
+endif
 cpu_fixture = custom_target('cpu-fixtures', output: 'cpu-fixtures.stamp', command: [python, files('tests/cpu_fixtures.py'), meson.current_build_dir() / 'cpu-fixtures', '@OUTPUT@'], depend_files: files('tests/lzx_fixtures.py', 'tests/wof_fixtures.py', 'tests/huffman_fixtures.py'), build_by_default: true)
 cpu_codecs = executable('ntfs-cpu-codec-tests', 'tests/cpu_codecs.c', include_directories: inc, link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('cpu-codecs', cpu_codecs, args: [meson.current_build_dir() / 'cpu-fixtures'], depends: cpu_fixture, timeout: 120)
@@ -260,6 +267,11 @@ foreach layout : ['mft-resident-list', 'mft-nonresident-list', 'nested-index', '
 endforeach
 test('images', python, args: [files('tests/check_images.py'), inspector.full_path(), meson.current_build_dir() / 'fixtures'], depends: fixture, timeout: 120)
 fuzz_device = files('tests/fuzz_device.c')
+directory_fuzz_seeds = custom_target('directory-fuzz-seeds', output: 'directory-fuzz-seeds.stamp', command: [python, files('scripts/directory_fuzz_seeds.py'), meson.current_build_dir() / 'directory-fuzz-seeds', '@OUTPUT@'], build_by_default: true)
+directory_fuzz = executable('ntfs-fuzz-directory-mutation', ['tests/fuzz_directory.c', fuzz_device], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-UNDEBUG', '-Wdeclaration-after-statement'])
+foreach seed : ['ascending', 'descending', 'permuted', 'duplicate-and-absent', 'allocation-001', 'allocation-064']
+  test('fuzz-directory-' + seed, directory_fuzz, args: [meson.current_build_dir() / 'directory-fuzz-seeds' / (seed + '.seed')], depends: directory_fuzz_seeds, timeout: 120)
+endforeach
 fuzz = executable('ntfs-fuzz-smoke', ['tests/fuzz.c', fuzz_device], include_directories: inc, link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
 test('fuzz-smoke', fuzz, args: [meson.current_build_dir() / 'fixtures/standard.img'], depends: fixture, timeout: 120)
 test('fuzz-logfile-volume', fuzz, args: [meson.current_build_dir() / 'logfile-volume-fixtures/nonresident-list.img'], depends: logfile_volume_fixture, timeout: 120)

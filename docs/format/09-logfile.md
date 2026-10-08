@@ -649,7 +649,11 @@ record cannot decide winner/loser state or permit history truncation.
 
 - Named fields: [disk.h](../../core/disk.h), [logfile_tables_disk.h](../../core/logfile_tables_disk.h).
 - Scalar framing: [logfile.c](../../core/logfile.c).
-- Copies, exact assembly and proved history: [logfile_source.c](../../core/logfile_source.c).
+- Immutable source/restart/client lifetime: [logfile_source.c](../../core/logfile_source.c).
+- Protected pages and copy routing: [logfile_pages.c](../../core/logfile_pages.c).
+- Retained physical indexing: [logfile_index.c](../../core/logfile_index.c).
+- Exact record assembly and bounded history/capture: [logfile_records.c](../../core/logfile_records.c).
+- Original shared layouts/windows: [logfile_source_internal.h](../../core/logfile_source_internal.h).
 - Pure private encoding: [logfile_encode.c](../../core/logfile_encode.c).
 - Bitmap programs and private range arithmetic: [write_bitmap.c](../../core/write_bitmap.c),
   [contract](../../core/write_bitmap.h), [independent wire author](../../tests/write_bitmap_fixtures.py)

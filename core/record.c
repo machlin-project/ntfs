@@ -41,7 +41,7 @@ ntfs_fixup(void *buffer, size_t size, const char *magic)
 }
 
 enum ntfs_result
-ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs_attr_view *a)
+ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs_attr_view *attr)
 {
 	const struct ntfs_disk_attr *d;
 	const struct ntfs_disk_resident *r;
@@ -58,21 +58,21 @@ ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs
 		return NTFS_CORRUPT;
 	}
 	d = (const void *)(record + *position);
-	a->disk = d;
-	a->bytes = (const void *)d;
-	a->length = ntfs_u32(d->length);
-	a->type = ntfs_u32(d->type);
-	a->flags = ntfs_u16(d->flags);
-	a->instance = ntfs_u16(d->instance);
-	if (d->nonresident > 1 || a->type == 0 || a->length % NTFS_WIRE_ALIGNMENT != 0 ||
-	    !ntfs_bounds(*position, a->length, size)) {
+	attr->disk = d;
+	attr->bytes = (const void *)d;
+	attr->length = ntfs_u32(d->length);
+	attr->type = ntfs_u32(d->type);
+	attr->flags = ntfs_u16(d->flags);
+	attr->instance = ntfs_u16(d->instance);
+	if (d->nonresident > 1 || attr->type == 0 || attr->length % NTFS_WIRE_ALIGNMENT != 0 ||
+	    !ntfs_bounds(*position, attr->length, size)) {
 		return NTFS_CORRUPT;
 	}
 	minimum = sizeof(*d) + (d->nonresident ? sizeof(*n) : sizeof(*r));
-	if (d->nonresident && (a->flags & (NTFS_ATTR_COMPRESSED | NTFS_ATTR_SPARSE)) != 0) {
+	if (d->nonresident && (attr->flags & (NTFS_ATTR_COMPRESSED | NTFS_ATTR_SPARSE)) != 0) {
 		minimum += sizeof(struct ntfs_disk_compressed_tail);
 	}
-	if (a->length < minimum) {
+	if (attr->length < minimum) {
 		return NTFS_CORRUPT;
 	}
 	name_end = minimum;
@@ -80,26 +80,26 @@ ntfs_attr_at(const uint8_t *record, size_t size, uint32_t *position, struct ntfs
 		name_end = ntfs_u16(d->name_offset);
 		if (name_end < minimum || name_end % NTFS_UTF16_UNIT_BYTES != 0 ||
 		    !ntfs_bounds(
-			name_end, (size_t)d->name_length * NTFS_UTF16_UNIT_BYTES, a->length)) {
+			name_end, (size_t)d->name_length * NTFS_UTF16_UNIT_BYTES, attr->length)) {
 			return NTFS_CORRUPT;
 		}
 		name_end += (size_t)d->name_length * NTFS_UTF16_UNIT_BYTES;
 	}
 	if (d->nonresident) {
-		n = (const void *)(a->bytes + sizeof(*d));
+		n = (const void *)(attr->bytes + sizeof(*d));
 		value_offset = ntfs_u16(n->mapping_offset);
-		if (value_offset < name_end || value_offset >= a->length) {
+		if (value_offset < name_end || value_offset >= attr->length) {
 			return NTFS_CORRUPT;
 		}
 	} else {
-		r = (const void *)(a->bytes + sizeof(*d));
+		r = (const void *)(attr->bytes + sizeof(*d));
 		value_offset = ntfs_u16(r->offset);
 		if (value_offset < name_end ||
-		    !ntfs_bounds(value_offset, ntfs_u32(r->length), a->length)) {
+		    !ntfs_bounds(value_offset, ntfs_u32(r->length), attr->length)) {
 			return NTFS_CORRUPT;
 		}
 	}
-	*position += a->length;
+	*position += attr->length;
 	return NTFS_OK;
 }
 
@@ -183,21 +183,21 @@ ntfs_attr_find(const uint8_t *record, size_t size, uint32_t type, const uint16_t
 }
 
 enum ntfs_result
-ntfs_attr_value(const struct ntfs_attr_view *a, const uint8_t **data, size_t *size)
+ntfs_attr_value(const struct ntfs_attr_view *attr, const uint8_t **data, size_t *size)
 {
 	const struct ntfs_disk_resident *r;
 
-	if (a->disk->nonresident) {
+	if (attr->disk->nonresident) {
 		return NTFS_UNSUPPORTED;
 	}
-	r = (const void *)(a->bytes + sizeof(struct ntfs_disk_attr));
-	*data = a->bytes + ntfs_u16(r->offset);
+	r = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr));
+	*data = attr->bytes + ntfs_u16(r->offset);
 	*size = ntfs_u32(r->length);
 	return NTFS_OK;
 }
 
 enum ntfs_result
-ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
+ntfs_record_read(struct ntfs_volume *volume, uint64_t number, uint8_t **out)
 {
 	uint8_t *record;
 	uint32_t i, victim = 0;
@@ -205,38 +205,38 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 	enum ntfs_result result;
 
 	*out = NULL;
-	if (number > NTFS_REFERENCE_RECORD_MASK || number > UINT64_MAX / v->info.record_size) {
+	if (number > NTFS_REFERENCE_RECORD_MASK || number > UINT64_MAX / volume->info.record_size) {
 		return NTFS_CORRUPT;
 	}
-	offset = number * v->info.record_size;
-	if (!ntfs_bounds(offset, v->info.record_size, v->mft->size)) {
+	offset = number * volume->info.record_size;
+	if (!ntfs_bounds(offset, volume->info.record_size, volume->mft->size)) {
 		return NTFS_CORRUPT;
 	}
-	result = ntfs_work(v, v->info.record_size);
+	result = ntfs_work(volume, volume->info.record_size);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	record = ntfs_alloc(v, v->info.record_size);
+	record = ntfs_alloc(volume, volume->info.record_size);
 	if (record == NULL) {
 		return NTFS_NO_MEMORY;
 	}
-	for (i = 0; v->cache != NULL && i < v->limits.record_cache_entries; i++) {
-		if (v->cache[i].bytes != NULL && v->cache[i].number == number) {
-			ntfs_copy(record, v->cache[i].bytes, v->info.record_size);
-			v->cache[i].stamp = ++v->clock;
-			v->stats.record_cache_hits++;
+	for (i = 0; volume->cache != NULL && i < volume->limits.record_cache_entries; i++) {
+		if (volume->cache[i].bytes != NULL && volume->cache[i].number == number) {
+			ntfs_copy(record, volume->cache[i].bytes, volume->info.record_size);
+			volume->cache[i].stamp = ++volume->clock;
+			volume->stats.record_cache_hits++;
 			*out = record;
 			return NTFS_OK;
 		}
-		if (v->cache[i].stamp < oldest) {
-			oldest = v->cache[i].stamp;
+		if (volume->cache[i].stamp < oldest) {
+			oldest = volume->cache[i].stamp;
 			victim = i;
 		}
 	}
-	v->stats.record_cache_misses++;
-	result = ntfs_stream_exact(v->mft, offset, record, v->info.record_size);
+	volume->stats.record_cache_misses++;
+	result = ntfs_stream_exact(volume->mft, offset, record, volume->info.record_size);
 	if (result == NTFS_OK) {
-		result = ntfs_record_decode(record, v->info.record_size, false);
+		result = ntfs_record_decode(record, volume->info.record_size, false);
 		if (result == NTFS_OK &&
 		    (ntfs_u16(((const struct ntfs_disk_record *)(const void *)record)->flags) &
 			NTFS_RECORD_IN_USE) == 0) {
@@ -246,17 +246,18 @@ ntfs_record_read(struct ntfs_volume *v, uint64_t number, uint8_t **out)
 		}
 	}
 	if (result != NTFS_OK) {
-		ntfs_free(v, record, v->info.record_size);
+		ntfs_free(volume, record, volume->info.record_size);
 		return result;
 	}
-	if (v->cache != NULL) {
-		if (v->cache[victim].bytes == NULL) {
-			v->cache[victim].bytes = ntfs_alloc_optional(v, v->info.record_size);
+	if (volume->cache != NULL) {
+		if (volume->cache[victim].bytes == NULL) {
+			volume->cache[victim].bytes =
+			    ntfs_alloc_optional(volume, volume->info.record_size);
 		}
-		if (v->cache[victim].bytes != NULL) {
-			ntfs_copy(v->cache[victim].bytes, record, v->info.record_size);
-			v->cache[victim].number = number;
-			v->cache[victim].stamp = ++v->clock;
+		if (volume->cache[victim].bytes != NULL) {
+			ntfs_copy(volume->cache[victim].bytes, record, volume->info.record_size);
+			volume->cache[victim].number = number;
+			volume->cache[victim].stamp = ++volume->clock;
 		}
 	}
 	*out = record;

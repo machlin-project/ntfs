@@ -171,12 +171,16 @@ prevent writable admission. Detailed extended-metadata coverage is recorded in
 
 - MFT bootstrap and stream: [mount.c](../../core/mount.c), [stream.c](../../core/stream.c).
 - Metadata-only bad-cluster mappings: [stream_mapping.c](../../core/stream_mapping.c).
-- Whole-volume ownership and bitmaps: [validate.c](../../core/validate.c),
+- Whole-volume orchestration: [validate.c](../../core/validate.c);
+  record/attribute ownership: [validate_records.c](../../core/validate_records.c);
+  allocation/boot/mirror passes: [validate_media.c](../../core/validate_media.c),
   [VALIDATION.md](../VALIDATION.md).
 - Independent ownership fixtures: [validation_fixtures.py](../../tests/validation_fixtures.py).
 - Bad-cluster cases: [bad_clusters_fixtures.py](../../tests/bad_clusters_fixtures.py).
 - Writer admission: [write_recover.c](../../core/write_recover.c), [WRITES.md](../WRITES.md).
 
 The ordinary mutation batch locally exercises MFT growth, index growth,
-fragmentation, ENOSPC and generation reuse. Complete native WAL/recovery and
-open-unlink lifetime are still required before these become product write support.
+fragmentation, ENOSPC and generation reuse. The bounded native WAL/recovery,
+pressure/reuse and installed ordinary-image gates now pass separately. Broader
+growth interruption matrices, open-unlink lifetime and block-device writing remain
+required for their respective expanded product profiles.

@@ -2,41 +2,41 @@
 #include "internal.h"
 
 enum ntfs_result
-ntfs_node_by_number(struct ntfs_volume *v, uint64_t number, struct ntfs_node **out)
+ntfs_node_by_number(struct ntfs_volume *volume, uint64_t number, struct ntfs_node **out)
 {
 	struct ntfs_node *node;
 	const struct ntfs_disk_record *header;
 	enum ntfs_result result;
 
 	*out = NULL;
-	if (v->children == UINT32_MAX) {
+	if (volume->children == UINT32_MAX) {
 		return NTFS_RANGE;
 	}
-	node = ntfs_alloc(v, sizeof(*node));
+	node = ntfs_alloc(volume, sizeof(*node));
 	if (node == NULL) {
 		return NTFS_NO_MEMORY;
 	}
-	node->volume = v;
-	result = ntfs_record_read(v, number, &node->record);
+	node->volume = volume;
+	result = ntfs_record_read(volume, number, &node->record);
 	if (result != NTFS_OK) {
-		ntfs_free(v, node, sizeof(*node));
+		ntfs_free(volume, node, sizeof(*node));
 		return result;
 	}
 	header = (const void *)node->record;
 	if (ntfs_u64(header->base_reference) != 0) {
-		ntfs_free(v, node->record, v->info.record_size);
-		ntfs_free(v, node, sizeof(*node));
+		ntfs_free(volume, node->record, volume->info.record_size);
+		ntfs_free(volume, node, sizeof(*node));
 		return NTFS_CORRUPT;
 	}
 	node->reference =
 	    number | (uint64_t)ntfs_u16(header->sequence) << NTFS_REFERENCE_SEQUENCE_SHIFT;
-	v->children++;
+	volume->children++;
 	*out = node;
 	return NTFS_OK;
 }
 
 enum ntfs_result
-ntfs_node_open_impl(struct ntfs_volume *v, uint64_t reference, struct ntfs_node **out)
+ntfs_node_open_impl(struct ntfs_volume *volume, uint64_t reference, struct ntfs_node **out)
 {
 	enum ntfs_result result;
 
@@ -44,10 +44,10 @@ ntfs_node_open_impl(struct ntfs_volume *v, uint64_t reference, struct ntfs_node 
 		return NTFS_INVALID;
 	}
 	*out = NULL;
-	if (v == NULL || reference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0) {
+	if (volume == NULL || reference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0) {
 		return NTFS_INVALID;
 	}
-	result = ntfs_node_by_number(v, reference & NTFS_REFERENCE_RECORD_MASK, out);
+	result = ntfs_node_by_number(volume, reference & NTFS_REFERENCE_RECORD_MASK, out);
 	if (result == NTFS_OK && (*out)->reference != reference) {
 		ntfs_node_close(*out);
 		*out = NULL;
@@ -57,32 +57,32 @@ ntfs_node_open_impl(struct ntfs_volume *v, uint64_t reference, struct ntfs_node 
 }
 
 enum ntfs_result
-ntfs_root_impl(struct ntfs_volume *v, struct ntfs_node **out)
+ntfs_root_impl(struct ntfs_volume *volume, struct ntfs_node **out)
 {
-	if (v == NULL || out == NULL) {
+	if (volume == NULL || out == NULL) {
 		return NTFS_INVALID;
 	}
-	return ntfs_node_by_number(v, NTFS_ROOT_RECORD, out);
+	return ntfs_node_by_number(volume, NTFS_ROOT_RECORD, out);
 }
 
 void
 ntfs_node_close(struct ntfs_node *node)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 
 	if (node == NULL) {
 		return;
 	}
-	v = node->volume;
-	v->children--;
-	ntfs_free(v, node->record, v->info.record_size);
-	ntfs_free(v, node, sizeof(*node));
+	volume = node->volume;
+	volume->children--;
+	ntfs_free(volume, node->record, volume->info.record_size);
+	ntfs_free(volume, node, sizeof(*node));
 }
 
 enum ntfs_result
 ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 	struct ntfs_stat *cached = NULL;
 	const struct ntfs_disk_record *r;
 	const struct ntfs_disk_standard *si;
@@ -107,15 +107,15 @@ ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 		*st = node->metadata;
 		return NTFS_OK;
 	}
-	v = node->volume;
+	volume = node->volume;
 	r = (const void *)node->record;
-	if (v->cache != NULL) {
+	if (volume->cache != NULL) {
 		/* Direct mapping bounds lookup without scanning the record cache.
 		 * Raw record and filename-count replacement use independent keys. */
-		cache_index =
-		    (node->reference & NTFS_REFERENCE_RECORD_MASK) % v->limits.record_cache_entries;
-		cached = &v->cache[cache_index].metadata;
-		result = ntfs_work(v, sizeof(*cached));
+		cache_index = (node->reference & NTFS_REFERENCE_RECORD_MASK) %
+		    volume->limits.record_cache_entries;
+		cached = &volume->cache[cache_index].metadata;
+		result = ntfs_work(volume, sizeof(*cached));
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -129,7 +129,7 @@ ntfs_node_metadata_impl(struct ntfs_node *node, struct ntfs_stat *st)
 			goto verified;
 		}
 		/* Reserve publication work before cold I/O; failures publish nothing. */
-		result = ntfs_work(v, sizeof(*cached));
+		result = ntfs_work(volume, sizeof(*cached));
 		if (result != NTFS_OK) {
 			return result;
 		}

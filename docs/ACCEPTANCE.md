@@ -154,6 +154,43 @@ Evidence is under
 `refactor-fskit-postimage-input19-20261008/` and
 `windows-mounted-general-refactor19-20261008/`.
 
+### Immutable C component cleanup
+
+The separate connected C cleanup regularizes FILE/attribute/node and filename
+cursor names, then separates security acquisition/index/store operations,
+whole-volume validation passes and immutable journal source/page/index/record
+operations. Each retains its original owner and private accounting contract.
+Main compares 178 complete function bodies and 21 layouts against the functional
+baseline under explicit identifier substitutions. Ordered callbacks, ACE order,
+validator pass order, limits, fields, borrowed windows and release sizes are exact.
+Public headers, tests, the native adapters and the existing core owner header are
+unchanged.
+
+One complete applied regression passes all 202 unique suites with assertions and
+fatal ASan/UBSan, zero failures and zero core SKIPs. Forty-one actual complete
+postimages and four modeled recovery seeds match the preceding functional
+checkpoint byte-for-byte. All 76 core sources pass strict freestanding compilation
+for arm64 and x86_64 under the 2-KiB frame ceiling. Host FSKit verdicts are exactly
+the preceding 64 PASS / 13 explicit runtime SKIP / 0 FAIL. The actual unsigned
+universal Release app and extension build; all sixteen affected C components
+compile for both architectures, and each core archive contains all 76 objects.
+Main independently reviews the raw logs, actual objects, complete images and
+product bytes rather than accepting the worker's summary alone.
+
+The initial draft parser/name collisions and omitted private declaration remain
+preserved. The first snapshot wrapper chooses the wrong emitted recovery group
+and fails before any build or test; its correction runs the sole complete
+regression. A main review guard initially confuses grouped layout evidence with
+individual layouts; the corrected check reuses all completed evidence. Reports
+are under `refactor-read-components-connected-complete-20261008/`,
+`refactor-read-components-source-review-20261008/`,
+`refactor-read-components-draft3-20261008/` and
+`refactor-read-draft-frontend-final-20261008/` in `artifacts/overwrite/`.
+The new app is unsigned and uninstalled. The preceding signed installed package
+and accepted native/Windows postimage remain the baseline; no VM command or native
+case repeat occurs. This closes the structural C cleanup boundary, with broader
+style review and functional write/recovery limitations still open.
+
 The new exclusive owner joins fresh image-only recovery, reconstructed-volume
 admission, ordinary mutation, automatic checkpoint preparation and one-shot
 execution. Its tests cover all seven operation kinds, zero gaps and truncate/

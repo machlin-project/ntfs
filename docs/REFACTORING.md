@@ -3,7 +3,7 @@
 This review follows the verified ordinary-mutation preparation checkpoint in
 [ACCEPTANCE.md](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
 The checkpoint passes complete local regression; expanded device writing and
-native recovery retain their separate unfinished gates. Refactoring proceeds in
+broader interruption coverage retain their separate unfinished gates. Refactoring proceeds in
 focused behavior-preserving commits on `development`.
 
 The purpose is consistent, readable ownership and module boundaries across the C
@@ -202,8 +202,46 @@ functional correction together, without repeating completed cases. Earlier
 execution/capture-wrapper failures remain preserved separately. Reports are under
 `artifacts/overwrite/refactor-fskit-*` and
 `artifacts/overwrite/windows-mounted-general-refactor19-20261008/`.
-MFT/attribute, filename cursor, security, validator and immutable journal cleanup
-remain separate C boundaries in the plan.
+The next connected C cleanup below applies those separate immutable boundaries.
+
+The current read cleanup keeps existing FILE/attribute/node and filename-cursor
+components, regularizes their private helper/owner names, and separates three
+larger owners. Security descriptor/snapshot ownership, ordered index traversal
+and whole-store validation now have distinct components. The validator retains
+one bounded context while complete record/attribute, namespace, media and
+security passes move into separate files. Immutable journal lifetime, protected
+page/copy routing, retained indexing and complete record/history/capture likewise
+have separate components with the same source and borrowed windows.
+
+Main compares 178 complete function bodies and 21 object layouts against the
+functional baseline under explicit identifier substitutions. Callback order,
+checked fields, allocation/release sizes, ACE order, validator pass order,
+policies and public interfaces remain exact. Both-architecture frontend checks
+and six private-header checks pass before application. Initial parser/name
+collisions and the omitted private transaction-links declaration are retained
+as draft failures, before any driver source is applied.
+
+The applied connected batch passes all 202 unique suites with assertions and
+fatal ASan/UBSan, without failures or core SKIPs. All 41 actual postimages and four
+modeled recovery seeds are byte-identical to the preceding functional checkpoint.
+Every one of the 76 core sources compiles strictly for both architectures under
+the 2-KiB frame ceiling. Host FSKit retains the exact 64 PASS / 13 runtime SKIP
+verdicts. The actual unsigned universal Release app, extension and archive build
+with all sixteen affected C components compiled for each architecture; both
+archives contain all 76 core objects. Public interfaces, tests and native adapters
+are unchanged. Main independently checks the captured evidence and source bodies.
+
+The first local snapshot wrapper selected the wrong emitted recovery-image group;
+it failed before any build or test. The corrected wrapper preserves 45 inputs
+and runs the complete regression once. The first main review miscounted grouped
+layout evidence as individual layouts; that guard failure is also retained without
+repeating tests. Reports are under
+`artifacts/overwrite/refactor-read-components-*` and
+`artifacts/overwrite/refactor-read-draft-frontend-*`.
+The accepted installed package remains in the VM; the new unsigned build is not
+installed, and no native cases are reexecuted for this structural C cleanup.
+Broader helper/local naming, bootstrap and other unchanged components still need
+their own review; these passing boundaries do not complete the full style audit.
 
 ## Concrete findings
 
@@ -212,16 +250,16 @@ remain separate C boundaries in the plan.
 | Pointer/range checks | Ten modules now use one checked-arithmetic helper; remaining local policies differ in zero-length and NULL admission. | Preserve explicit caller-specific NULL/output rules and audit each further conversion. |
 | Complete program | Metadata compilation/application and packet/compensation composition now have separate modules behind one private retained owner. | Keep public opaque getters, copied byte lifetime and exact accounting at this boundary when adding new families. |
 | Writer contracts | Component contracts replace the combined header; the native image-owner contract exposes entry points and durable reports. | Include the owning interfaces explicitly and preserve structure fields, policy values and public declarations. |
-| Stream reading | Stream ownership, mapping-pair decoding/run lookup and data/LZNT1 reading now have separate modules, with unchanged functions and object fields. | Close the existing sparse, VDL, extent, compression-cache, metadata-only, failure and lifetime checks before committing. |
-| MFT and attributes | Boot/bootstrap, checked FILE records, attribute-list traversal and node metadata already have distinct components. Their internal names and cleanup conventions still vary. | Audit equivalent helpers and error publication; keep bootstrap's reachable-prefix proof and sequence/instance checks in their owning layers. Do not split a complete bootstrap operation merely to reduce file size. |
-| Directory reading | The persistent filename-tree cursor owns its frames, visited VCNs and inherited bounds; the separate index module checks physical allocation inventories. | Regularize cursor/frame/key names and cleanup while preserving ordinal cookies, collation, local/ancestor bounds and caller credits. Keep security view indexes separate from filename indexes. |
-| Security storage | `secure.c` combines SII/SDH index seek/cursors, descriptor acquisition, snapshot lifetime and whole-store validation. The standalone wire decoder and DACL evaluator are already separate. | Separate complete index traversal, descriptor ownership and whole-store passes behind a private storage contract. Preserve original ACE order and unsupported-feature refusal; do not change native authorization. |
-| Whole-volume validation | `validate.c` owns shared diagnostic credits and combines record/attribute, namespace/allocation, mirror/boot and security passes. | Extract complete passes behind one private validator owner. Preserve pass order, partial reports, selected security requirements and forbidden bad-cluster I/O. |
-| Immutable journal acquisition | `logfile_source.c` combines source lifetime, protected-page routing, retained indexing and ordered assembly. Its write/recovery consumers have separate contracts. | Review complete observation boundaries and private borrowed-buffer lifetimes. Keep physical inventory, selected framing and authoritative recovery evidence distinct. |
+| Stream reading | Stream ownership, mapping-pair decoding/run lookup and data/LZNT1 reading have separate modules; their existing checks and whole-image comparisons pass. | Preserve the sparse, VDL, extent, compression-cache, metadata-only, failure and lifetime contracts in further changes. |
+| MFT and attributes | Checked FILE records, attribute-list traversal and node metadata retain existing components with more explicit helper/owner names. Bootstrap is unchanged. | Continue the broader naming/cleanup audit without splitting bootstrap's complete reachable-prefix proof or weakening sequence/instance checks. |
+| Directory reading | The persistent cursor now has explicit frame/helper/owner names, with unchanged fields, collation, bounds and credits; physical allocation inventories remain separate. | Preserve ordinal cookies and original cleanup. Keep security view indexes separate from filename indexes. |
+| Security storage | Descriptor/snapshot ownership, complete SII/SDH traversal and whole-store validation have private components; connected regression and unchanged-byte review pass. | Preserve original ACE order, unsupported-feature refusal and native authorization. |
+| Whole-volume validation | One bounded context/accounting owner retains complete passes in private components; pass order, reports and connected regression are verified. | Preserve selected security requirements, partial reports, exact accounting and forbidden bad-cluster I/O. |
+| Immutable journal acquisition | Source lifetime, protected-page routing, retained indexing and complete record/history/capture share the original source/workspace contract; source and regression review pass. | Retain borrowed-buffer lifetimes and the distinction between inventory, framing and owning recovery evidence. |
 | Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |
 | Mutation storage | FILE ownership/replacement, attributes and streams have separate modules; directory inspection/key changes and complete index storage construction are separate. One mutation plan retains memory, work, provenance and cleanup ownership. | Review further duplication against these complete operation boundaries. Keep collation, allocation and durability in their semantic layer. |
 | Memory and cleanup | Program, mutation, bitmap, replay and volume owners have distinct accounting, reservation and lifetime rules, with repeated cleanup patterns. | Make local ownership/cleanup conventions uniform. Share byte helpers, not an allocator framework that would erase different governors or change callback order. |
-| FSKit volume | Lifecycle/admission, item/cache ownership, immutable reads and complete image operations now have private components sharing the unchanged native owner and layouts. | Close the combined installed gate; preserve serialization, authenticated context, reader leases, exactly-once replies and teardown at their owning boundaries. |
+| FSKit volume | Lifecycle/admission, item/cache ownership, immutable reads and complete image operations have private components; the combined installed and Windows postimage gate passes. | Preserve serialization, authenticated context, reader leases, exactly-once replies and teardown at their owning boundaries. |
 | Evidence prose | Acceptance has accumulated long historical sections, while format facts, private hypotheses and product gates now have separate documents. | Keep current contracts easy to find, use links for historical evidence, and preserve useful limitations and reproduction paths. Source and artifact identities remain in Git and generated reports. |
 
 ## Implementation order

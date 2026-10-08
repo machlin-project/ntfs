@@ -157,9 +157,12 @@ following untrusted list references indefinitely is not an acceptable bootstrap.
 
 - Inline framing: [record.c](../../core/record.c).
 - Attribute resolution and extension ownership: [attribute.c](../../core/attribute.c).
-- Extent assembly: [stream.c](../../core/stream.c).
+- Extent assembly: [stream_mapping.c](../../core/stream_mapping.c);
+  stream ownership: [stream.c](../../core/stream.c).
 - Independent record/list authors: [fixtures.py](../../tests/fixtures.py).
-- Complete ownership diagnostic: [validate.c](../../core/validate.c),
+- Complete record/attribute ownership diagnostic:
+  [validate_records.c](../../core/validate_records.c),
+  [shared context and orchestration](../../core/validate.c),
   [VALIDATION.md](../VALIDATION.md).
 
 The read core resolves qualified attribute-list extents. The ordinary write batch

@@ -30,6 +30,12 @@ Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
+The separate [reader cleanup](docs/REFACTORING.md) now passes the complete local
+regression, 45 unchanged whole images and strict builds for both architectures.
+Security, validation and immutable journal components retain their existing
+owners. Its new universal app is unsigned and uninstalled; the accepted signed
+package remains the native baseline.
+
 The [NTFS format reference](docs/format/README.md) explains disk structures and
 their relationships in chapters with diagrams, field tables and original worked
 examples. It is updated alongside implementation and native research. See the

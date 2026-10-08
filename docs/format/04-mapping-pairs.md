@@ -90,7 +90,8 @@ Allocation bits alone also cannot prove ownership by a particular stream.
 
 - Decode, assembly and run lookup: [stream_mapping.c](../../core/stream_mapping.c).
 - Physical/sparse reads: [stream_read.c](../../core/stream_read.c).
-- Ownership validation: [validate.c](../../core/validate.c).
+- Physical ownership and bitmap validation: [validate_media.c](../../core/validate_media.c);
+  [shared context and orchestration](../../core/validate.c).
 - Independent stream/run authors: [fixtures.py](../../tests/fixtures.py).
 - Mutation constraints: [WRITES.md](../WRITES.md).
 

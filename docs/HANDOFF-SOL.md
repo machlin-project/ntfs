@@ -49,7 +49,16 @@ nobody helper traversal refusal and later capture-wrapper failures are preserved
 only unexecuted stages continue, with no repeated native mutation or remount.
 Preserve all attempts and use fresh source clones for future changed behavior.
 No partially executed native namespace is retried.
-Main review is `artifacts/overwrite/windows-native-pressure-network-20261007/main-review.json`.
+The subsequent immutable C cleanup passes its independently reviewed complete
+local boundary without changing native code: 202 sanitized suites, 45 unchanged
+images, 152 strict dual-architecture core objects and exact host FSKit verdicts.
+Its unsigned universal app is built but not installed. The accepted signed
+installed package and original native/Windows postimage remain the baseline;
+no VM command or native case repeats for this cleanup.
+Current native review is
+`artifacts/overwrite/refactor-fskit-installed19-20261008/completion-review.json`;
+current C review is
+`artifacts/overwrite/refactor-read-components-connected-complete-20261008/main-review.json`.
 
 ## VM ownership and operations
 
@@ -144,12 +153,12 @@ Do not re-register staging copies or touch unrelated modules.
 
 ## Current evidence and limits
 
-The current general mutation core passes 202 fatal-ASan/UBSan suites, all
-134 strict dual-architecture core compilations, four strict changed-test
-compilations, 64 host FSKit groups with thirteen explicit runtime SKIPs and a
-universal Release build. The separate FSKit extraction passes its strict native,
-host-component and universal Release checks without changing the C core. Its
-personally signed package is installed; the combined current installed
+The current structurally separated core passes 202 fatal-ASan/UBSan suites,
+45 unchanged whole images, all 152 strict dual-architecture core compilations,
+64 host FSKit groups with thirteen explicit runtime SKIPs and an unsigned
+universal Release build. The preceding FSKit extraction passes its strict native,
+host-component and universal Release checks. Its personally signed package remains
+installed; the combined accepted installed
 component/syscall/remount and Windows postimage gates pass independent main
 review. See `refactor-fskit-installed19-20261008/completion-review.json` and
 `windows-mounted-general-refactor19-20261008/main-review.json` beneath the

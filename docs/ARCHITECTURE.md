@@ -26,6 +26,39 @@ operation governor and decoded-unit cache; no additional owner or callback is
 introduced. Public call admission remains in `api.c`, and WOF retains its separate
 provider lifetime and content route.
 
+Immutable security storage has three private components.
+[secure.c](../core/secure.c) owns descriptor acquisition and snapshot lifetime;
+[secure_index.c](../core/secure_index.c) owns complete SII/SDH seeks and ordered
+cursors; [secure_store.c](../core/secure_store.c) owns whole-store validation.
+The [private storage contract](../core/secure_internal.h) preserves the original
+cursor/snapshot fields, volume allocator and caller charges. Wire decoding and
+DACL evaluation retain their separate `security.c` and `access.c` contracts.
+Splitting storage does not reorder ACEs or change native authorization.
+
+Whole-volume validation retains one
+[private context](../core/validate_internal.h), its bounded environment, borrowed
+report, private mounted volume and accounted vectors. [validate.c](../core/validate.c)
+owns credits, allocation/release and pass orchestration.
+[Record/attribute passes](../core/validate_records.c),
+[namespace/graph passes](../core/validate_namespace.c),
+[allocation/boot/mirror passes](../core/validate_media.c) and
+[security passes](../core/validate_security.c) share that same context. Pass order
+remains records, attributes, mirror, boot, namespace, allocation, security.
+Partial diagnostics, failure precedence, bad-cluster I/O refusal and final cleanup
+retain their existing contracts; no pass receives a separate resource governor.
+
+Immutable journal acquisition retains one
+[source and workspace contract](../core/logfile_source_internal.h).
+[logfile_source.c](../core/logfile_source.c) owns source lifetime, environment,
+restart/client acquisition and volume binding.
+[logfile_pages.c](../core/logfile_pages.c) owns protected pages and copy routing;
+[logfile_index.c](../core/logfile_index.c) owns retained physical indexing;
+[logfile_records.c](../core/logfile_records.c) owns complete record assembly,
+checkpoint/transaction capture and ordered history visits. Borrowed page bytes
+still belong to the source's original raw/scratch windows and survive only their
+original observation boundary. Physical inventory, selected framing and owning
+recovery evidence remain distinct; extraction grants no extra replay authority.
+
 FSKit retains one volume owner across four private implementation components.
 [NTFSVolume.m](../adapters/fskit/NTFSVolume.m) owns native lifecycle, request
 admission, operation/publication serialization and replies.

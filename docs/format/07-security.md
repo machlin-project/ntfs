@@ -173,7 +173,10 @@ inheritance, broader ACE forms and durable shared-store insertion remain open.
 
 - Descriptor/SID/ACL framing: [security.c](../../core/security.c),
   [security.h](../../include/ntfs/security.h).
-- Shared storage: [secure.c](../../core/secure.c).
+- Descriptor acquisition and snapshots: [secure.c](../../core/secure.c).
+- SII/SDH traversal: [secure_index.c](../../core/secure_index.c).
+- Whole-store correspondence: [secure_store.c](../../core/secure_store.c).
+- Original shared storage layouts: [secure_internal.h](../../core/secure_internal.h).
 - DACL evaluator: [access.c](../../core/access.c).
 - Independent descriptor bytes: [secure_fixtures.py](../../tests/secure_fixtures.py).
 - Store relationships: [secure_store_fixtures.py](../../tests/secure_store_fixtures.py).

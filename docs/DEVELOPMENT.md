@@ -53,7 +53,21 @@ exact fresh-remount bytes/metadata. Windows independently accepts namespace,
 data, times, identity/ACL, clean state, read-only chkdsk and its original healthy
 event. The preceding failures and first capture-wrapper errors remain preserved;
 no completed native case is repeated. Keep this accepted batch as the baseline
-for the next connected C cleanup.
+for the separate connected C cleanup.
+
+That applied cleanup now passes one complete 202-suite assertion/fatal-sanitizer
+regression, 45 whole-image comparisons, 152 strict core compilations across both
+architectures, the exact 64 PASS / 13 runtime SKIP host verdicts and the actual
+unsigned universal Release app. Main verifies 178 complete bodies, 21 layouts,
+all archive members and unchanged public/native interfaces. Its new app is not
+signed or installed. Retain the accepted native package and postimage evidence;
+these unchanged native operations do not require another VM batch. The first
+snapshot wrapper fails before building or testing, and the first review grouping
+guard also remains preserved. See [the refactoring record](REFACTORING.md) and
+`artifacts/overwrite/refactor-read-components-connected-complete-20261008/main-review.json`.
+Plan the next functional change as a complete connected batch with independent
+local byte, fault and lifetime oracles, followed by the native checks its changed
+contracts require.
 
 The standalone [mounted checker](../tests/mounted_mutation.c) runs only as the
 non-root image owner on the explicit writable `machlinntfs` mount. Generate its

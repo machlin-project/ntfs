@@ -10,8 +10,8 @@ diagrams, field maps, examples and a research register.
 - [Development](DEVELOPMENT.md): prepared build/test and VM workflows.
 - [Acceptance](ACCEPTANCE.md): actual evidence and remaining feature gates.
 - [Write contract](WRITES.md): durability, allocation, namespace and recovery scope.
-- [Driver refactoring plan](REFACTORING.md): reviewed cleanup after the verified
-  local checkpoint, with preserved behavior and acceptance boundaries.
+- [Completed driver refactoring](REFACTORING.md): component map, consistent
+  ownership conventions and complete local/native regression evidence.
 - [Current VM handoff](HANDOFF-SOL.md): execution paths and operating constraints.
 - [Provenance](PROVENANCE.md): sources, consulted layouts and dependency attribution.
 

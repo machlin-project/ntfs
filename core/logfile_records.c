@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "logfile_source_internal.h"
 
-struct transaction_links {
+struct ntfs_transaction_links {
 	uint64_t lsn, undo_next_lsn;
 };
 
@@ -354,7 +354,7 @@ ntfs_logfile_transaction_link(
 static bool
 ntfs_logfile_transaction_contains(const uint8_t *links, uint32_t count, uint64_t lsn)
 {
-	struct transaction_links link;
+	struct ntfs_transaction_links link;
 	uint32_t first = 0, last = count, middle;
 
 	while (first < last) {
@@ -387,7 +387,7 @@ ntfs_logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint
 	struct ntfs_logfile_client client;
 	struct ntfs_logfile_update update;
 	struct ntfs_logfile_lsn location;
-	struct transaction_links link;
+	struct ntfs_transaction_links link;
 	struct ntfs_logfile_record_ending ending;
 	uint8_t *links = link_workspace;
 	uint64_t lsn;
@@ -477,7 +477,7 @@ ntfs_logfile_visit_transaction(struct ntfs_logfile *source, uint16_t index, uint
 			report->control_lsn = lsn;
 			report->control_operation = update.redo_operation;
 		}
-		link = (struct transaction_links){lsn, view.record.undo_next_lsn};
+		link = (struct ntfs_transaction_links){lsn, view.record.undo_next_lsn};
 		ntfs_copy(
 		    links + (size_t)report->visited_records * sizeof(link), &link, sizeof(link));
 		result = visitor(context, &view, workspace);
@@ -582,7 +582,7 @@ ntfs_logfile_visit_checkpoint_transactions(struct ntfs_logfile *source, uint16_t
 	}
 	if (admitted.max_transactions > NTFS_LOGFILE_TRANSACTION_MAX_RECORDS ||
 	    admitted.max_records > NTFS_LOGFILE_TRANSACTION_MAX_RECORDS ||
-	    buffers.link_capacity / sizeof(struct transaction_links) < admitted.max_records) {
+	    buffers.link_capacity / sizeof(struct ntfs_transaction_links) < admitted.max_records) {
 		return NTFS_RANGE;
 	}
 	budget.max_read_calls = admitted.max_read_calls < source->limits.max_read_calls

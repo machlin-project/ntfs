@@ -2,7 +2,7 @@
 #include "write_mutation_internal.h"
 
 static enum ntfs_result
-changed(struct ntfs_mutation_record *record, uint64_t filetime)
+mutation_namespace_changed(struct ntfs_mutation_record *record, uint64_t filetime)
 {
 	struct ntfs_attr_view attribute;
 	struct ntfs_disk_standard *standard;
@@ -26,8 +26,8 @@ changed(struct ntfs_mutation_record *record, uint64_t filetime)
 }
 
 static void
-creation_time_bytes(uint8_t *created, uint8_t *modified, uint8_t *changed_time, uint8_t *accessed,
-    const struct ntfs_write_creation_times *times, uint64_t filetime)
+mutation_namespace_creation_time_bytes(uint8_t *created, uint8_t *modified, uint8_t *changed_time,
+    uint8_t *accessed, const struct ntfs_write_creation_times *times, uint64_t filetime)
 {
 	ntfs_put_u64(created,
 	    (times->fields & NTFS_WRITE_CREATION_CREATED) != 0 ? times->created : filetime);
@@ -40,7 +40,7 @@ creation_time_bytes(uint8_t *created, uint8_t *modified, uint8_t *changed_time, 
 }
 
 static void
-filename(uint8_t *value, const struct ntfs_write_name *name,
+mutation_namespace_filename(uint8_t *value, const struct ntfs_write_name *name,
     const struct ntfs_write_creation_times *times, uint64_t filetime, bool directory)
 {
 	struct ntfs_disk_filename *header = (void *)value;
@@ -48,7 +48,7 @@ filename(uint8_t *value, const struct ntfs_write_name *name,
 
 	ntfs_zero(value, sizeof(*header) + name->count * NTFS_UTF16_UNIT_BYTES);
 	ntfs_put_u64(header->parent, name->parent_reference);
-	creation_time_bytes(
+	mutation_namespace_creation_time_bytes(
 	    header->created, header->modified, header->changed, header->accessed, times, filetime);
 	ntfs_put_u32(header->attributes, directory ? NTFS_FILE_DIRECTORY : NTFS_FILE_ARCHIVE);
 	header->length = (uint8_t)name->count;
@@ -61,8 +61,8 @@ filename(uint8_t *value, const struct ntfs_write_name *name,
 }
 
 static enum ntfs_result
-create(struct ntfs_write_mutation_plan *plan, const struct ntfs_write_mutation_request *request,
-    struct ntfs_mutation_directory *parent)
+mutation_namespace_create(struct ntfs_write_mutation_plan *plan,
+    const struct ntfs_write_mutation_request *request, struct ntfs_mutation_directory *parent)
 {
 	struct ntfs_mutation_record *record;
 	struct ntfs_disk_record *header;
@@ -99,8 +99,8 @@ create(struct ntfs_write_mutation_plan *plan, const struct ntfs_write_mutation_r
 	record->changed = true;
 	ntfs_zero(standard_bytes, sizeof(standard_bytes));
 	standard = (void *)standard_bytes;
-	creation_time_bytes(standard->created, standard->modified, standard->changed,
-	    standard->accessed, &request->creation_times, plan->filetime);
+	mutation_namespace_creation_time_bytes(standard->created, standard->modified,
+	    standard->changed, standard->accessed, &request->creation_times, plan->filetime);
 	ntfs_put_u32(standard->attributes, directory ? NTFS_FILE_DIRECTORY : NTFS_FILE_ARCHIVE);
 	if (directory && parent->case_sensitive) {
 		((struct ntfs_disk_standard_policy *)(void *)standard->version)->directory_flags =
@@ -108,7 +108,8 @@ create(struct ntfs_write_mutation_plan *plan, const struct ntfs_write_mutation_r
 	}
 	result = ntfs_mutation_resident(
 	    plan, record, NTFS_ATTR_STANDARD, NULL, 0, standard_bytes, sizeof(standard_bytes), 0);
-	filename(name_bytes, &request->source, &request->creation_times, plan->filetime, directory);
+	mutation_namespace_filename(
+	    name_bytes, &request->source, &request->creation_times, plan->filetime, directory);
 	bytes = sizeof(struct ntfs_disk_filename) + request->source.count * NTFS_UTF16_UNIT_BYTES;
 	if (result == NTFS_OK) {
 		result = ntfs_mutation_resident(
@@ -142,8 +143,8 @@ done:
 }
 
 static enum ntfs_result
-find_filename(struct ntfs_mutation_record *record, const struct ntfs_mutation_key *key,
-    struct ntfs_attr_view *out)
+mutation_namespace_find_filename(struct ntfs_mutation_record *record,
+    const struct ntfs_mutation_key *key, struct ntfs_attr_view *out)
 {
 	const struct ntfs_disk_record *header = (const void *)record->bytes;
 	const struct ntfs_disk_filename *wanted = (const void *)key->value, *name;
@@ -184,7 +185,8 @@ find_filename(struct ntfs_mutation_record *record, const struct ntfs_mutation_ke
 }
 
 static enum ntfs_result
-free_record(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record *record)
+mutation_namespace_free_record(
+    struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record *record)
 {
 	struct ntfs_disk_record *header = (void *)record->bytes;
 	struct ntfs_attr_view attribute;
@@ -229,8 +231,8 @@ free_record(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record *
 }
 
 static enum ntfs_result
-unlink_key(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_directory *parent,
-    size_t position, bool directory)
+mutation_namespace_unlink_key(struct ntfs_write_mutation_plan *plan,
+    struct ntfs_mutation_directory *parent, size_t position, bool directory)
 {
 	struct ntfs_mutation_record *record;
 	struct ntfs_mutation_directory children = {0};
@@ -253,7 +255,7 @@ unlink_key(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_directory
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = find_filename(record, &parent->keys[position], &name);
+	result = mutation_namespace_find_filename(record, &parent->keys[position], &name);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -263,12 +265,12 @@ unlink_key(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_directory
 		return NTFS_CORRUPT;
 	}
 	if (links == 1) {
-		result = free_record(plan, record);
+		result = mutation_namespace_free_record(plan, record);
 	} else {
 		result = ntfs_mutation_record_replace(plan, record, &name, NULL, 0);
 		if (result == NTFS_OK) {
 			ntfs_put_u16(header->links, (uint16_t)(links - 1u));
-			result = changed(record, plan->filetime);
+			result = mutation_namespace_changed(record, plan->filetime);
 		}
 	}
 	if (result == NTFS_OK) {
@@ -278,8 +280,9 @@ unlink_key(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_directory
 }
 
 static enum ntfs_result
-replace_filename(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_record *record,
-    const struct ntfs_attr_view *previous, const void *value, size_t bytes)
+mutation_namespace_replace_filename(struct ntfs_write_mutation_plan *plan,
+    struct ntfs_mutation_record *record, const struct ntfs_attr_view *previous, const void *value,
+    size_t bytes)
 {
 	struct ntfs_disk_attr *attribute;
 	struct ntfs_disk_resident *resident;
@@ -308,7 +311,7 @@ replace_filename(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_rec
 }
 
 static enum ntfs_result
-directory_parent(const struct ntfs_mutation_record *record, uint64_t *out)
+mutation_namespace_directory_parent(const struct ntfs_mutation_record *record, uint64_t *out)
 {
 	const struct ntfs_disk_record *header = (const void *)record->bytes;
 	struct ntfs_attr_view attribute;
@@ -371,7 +374,8 @@ directory_parent(const struct ntfs_mutation_record *record, uint64_t *out)
 }
 
 static enum ntfs_result
-check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64_t parent)
+mutation_namespace_check_ancestry(
+    struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64_t parent)
 {
 	struct ntfs_mutation_record *record;
 	uint32_t depth;
@@ -392,7 +396,7 @@ check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = directory_parent(record, &parent);
+		result = mutation_namespace_directory_parent(record, &parent);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -401,7 +405,8 @@ check_ancestry(struct ntfs_write_mutation_plan *plan, uint64_t directory, uint64
 }
 
 static bool
-same_name(const struct ntfs_mutation_key *key, const struct ntfs_write_name *name)
+mutation_namespace_same_name(
+    const struct ntfs_mutation_key *key, const struct ntfs_write_name *name)
 {
 	const struct ntfs_disk_filename *filename = (const void *)key->value;
 	size_t index;
@@ -419,7 +424,7 @@ same_name(const struct ntfs_mutation_key *key, const struct ntfs_write_name *nam
 }
 
 static enum ntfs_result
-rename_entry(struct ntfs_write_mutation_plan *plan,
+mutation_namespace_rename_entry(struct ntfs_write_mutation_plan *plan,
     const struct ntfs_write_mutation_request *request, struct ntfs_mutation_directory *source,
     size_t position)
 {
@@ -460,7 +465,8 @@ rename_entry(struct ntfs_write_mutation_plan *plan,
 		destination = &destination_storage;
 	}
 	if (directory) {
-		result = check_ancestry(plan, record->reference, destination->record->reference);
+		result = mutation_namespace_check_ancestry(
+		    plan, record->reference, destination->record->reference);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -472,7 +478,7 @@ rename_entry(struct ntfs_write_mutation_plan *plan,
 	}
 	if (exists == NTFS_OK && destination->keys[found].reference == record->reference) {
 		if (destination != source || found != position ||
-		    same_name(&original, &request->destination)) {
+		    mutation_namespace_same_name(&original, &request->destination)) {
 			result = NTFS_OK;
 			goto done;
 		}
@@ -486,7 +492,7 @@ rename_entry(struct ntfs_write_mutation_plan *plan,
 		if (result != NTFS_OK) {
 			goto done;
 		}
-		result = unlink_key(plan, destination, found, directory);
+		result = mutation_namespace_unlink_key(plan, destination, found, directory);
 		if (result != NTFS_OK) {
 			goto done;
 		}
@@ -494,7 +500,7 @@ rename_entry(struct ntfs_write_mutation_plan *plan,
 			position--;
 		}
 	}
-	result = find_filename(record, &original, &attribute);
+	result = mutation_namespace_find_filename(record, &original, &attribute);
 	if (result != NTFS_OK) {
 		goto done;
 	}
@@ -509,9 +515,9 @@ rename_entry(struct ntfs_write_mutation_plan *plan,
 		ntfs_put_u16(value + sizeof(*new_name) + index * NTFS_UTF16_UNIT_BYTES,
 		    request->destination.units[index]);
 	}
-	result = replace_filename(plan, record, &attribute, value, bytes);
+	result = mutation_namespace_replace_filename(plan, record, &attribute, value, bytes);
 	if (result == NTFS_OK) {
-		result = changed(record, plan->filetime);
+		result = mutation_namespace_changed(record, plan->filetime);
 	}
 	if (result == NTFS_OK) {
 		ntfs_mutation_directory_remove(source, position);
@@ -548,7 +554,7 @@ ntfs_mutation_namespace(
 	}
 	if (request->kind == NTFS_WRITE_CREATE_FILE ||
 	    request->kind == NTFS_WRITE_CREATE_DIRECTORY) {
-		result = create(plan, request, &source);
+		result = mutation_namespace_create(plan, request, &source);
 		goto done;
 	}
 	result = ntfs_mutation_directory_find(plan, &source, &request->source, &position);
@@ -557,9 +563,9 @@ ntfs_mutation_namespace(
 	}
 	plan->reference = source.keys[position].reference;
 	if (request->kind == NTFS_WRITE_RENAME) {
-		result = rename_entry(plan, request, &source, position);
+		result = mutation_namespace_rename_entry(plan, request, &source, position);
 	} else {
-		result = unlink_key(
+		result = mutation_namespace_unlink_key(
 		    plan, &source, position, request->kind == NTFS_WRITE_REMOVE_DIRECTORY);
 		if (result == NTFS_OK) {
 			result = ntfs_mutation_directory_store(plan, &source, true);

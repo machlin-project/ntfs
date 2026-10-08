@@ -2,8 +2,9 @@
 #include "write_mutation_internal.h"
 
 static enum ntfs_result
-zero_range(struct ntfs_write_mutation_plan *plan, const struct ntfs_mutation_record *record,
-    const struct ntfs_stream *stream, uint64_t offset, uint64_t bytes)
+mutation_growth_zero_range(struct ntfs_write_mutation_plan *plan,
+    const struct ntfs_mutation_record *record, const struct ntfs_stream *stream, uint64_t offset,
+    uint64_t bytes)
 {
 	size_t take;
 	enum ntfs_result result;
@@ -97,7 +98,8 @@ ntfs_mutation_resize(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation
 		/* The resident contents must survive storage conversion before the new
 		 * initialized length exposes them. Other newly allocated bytes stay
 		 * behind VDL until the zero-gap and payload preparations below. */
-		result = zero_range(plan, record, after, 0, NTFS_WRITE_CLUSTER_BYTES);
+		result =
+		    mutation_growth_zero_range(plan, record, after, 0, NTFS_WRITE_CLUSTER_BYTES);
 		if (result == NTFS_OK) {
 			result = ntfs_mutation_stream_write(plan, record, NTFS_ATTRIBUTE_DATA, NULL,
 			    0, after, 0, before->value, (size_t)old_initialized,
@@ -105,7 +107,8 @@ ntfs_mutation_resize(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation
 		}
 	}
 	if (result == NTFS_OK && bytes != 0 && offset > old_initialized) {
-		result = zero_range(plan, record, after, old_initialized, offset - old_initialized);
+		result = mutation_growth_zero_range(
+		    plan, record, after, old_initialized, offset - old_initialized);
 	}
 	if (result == NTFS_OK && bytes != 0) {
 		result = ntfs_mutation_stream_write(plan, record, NTFS_ATTRIBUTE_DATA, NULL, 0,

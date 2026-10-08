@@ -5,19 +5,19 @@
 #include <string.h>
 
 static enum ntfs_result
-resource_read(void *context, uint64_t offset, void *buffer, size_t length)
+native_resource_read(void *context, uint64_t offset, void *buffer, size_t length)
 {
 	return [(__bridge NTFSResource *)context readAt:offset bytes:buffer length:length];
 }
 
 static void *
-resource_allocate(void *context, size_t size)
+native_resource_allocate(void *context, size_t size)
 {
 	return [(__bridge NTFSResource *)context allocateSize:size];
 }
 
 static void
-resource_release(void *context, void *buffer, size_t size)
+native_resource_release(void *context, void *buffer, size_t size)
 {
 	[(__bridge NTFSResource *)context releaseBytes:buffer size:size];
 }
@@ -83,7 +83,7 @@ resource_release(void *context, void *buffer, size_t size)
 - (struct ntfs_environment)environment
 {
 	return (struct ntfs_environment){NTFS_API_VERSION, (__bridge void *)self, _size,
-	    resource_read, resource_allocate, resource_release};
+	    native_resource_read, native_resource_allocate, native_resource_release};
 }
 
 - (void *)allocateSize:(size_t)size

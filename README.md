@@ -15,7 +15,7 @@ All six retained pressure/reuse states pass independent Windows namespace,
 metadata, read-only chkdsk and original healthy-event review.
 
 The general owner passes 202 sanitized C suites, 64 host FSKit groups and a
-universal Release build. The personally signed refactored app is installed and
+universal Release build. The personally signed build 19 is installed and
 all 81 native component groups pass. Actual create, growth with zero gaps,
 truncate/regrow, shared-mapping writes, cross-parent directory movement,
 closed-victim replacement, removal and sixteen generation-reuse cycles pass.
@@ -30,11 +30,12 @@ Build, component tests and installed native
 acceptance are tracked separately in [the acceptance matrix](docs/ACCEPTANCE.md).
 Write support requires the separate recovery contract in [WRITES.md](docs/WRITES.md).
 
-The separate [reader cleanup](docs/REFACTORING.md) now passes the complete local
-regression, 45 unchanged whole images and strict builds for both architectures.
-Security, validation and immutable journal components retain their existing
-owners. Its new universal app is unsigned and uninstalled; the accepted signed
-package remains the native baseline.
+The [driver refactoring](docs/REFACTORING.md) is complete across reading, writing,
+recovery, security, diagnostics, FSKit and POSIX transports. The final batch
+passes all 202 C suites, 45 unchanged whole images, 152 strict core compilations,
+64 host FSKit groups and all 81 current-code native groups. Thirteen host runtime
+SKIPs are reported separately. The new universal Release app is unsigned and
+uninstalled; signed build 19 retains its accepted mounted/Windows baseline.
 
 The separate growth recovery matrix now passes all 264 actual current-C states:
 181 MFT-extension and 83 large-index states, each with full validation and a

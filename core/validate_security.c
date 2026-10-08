@@ -19,7 +19,7 @@ ntfs_validation_security_references(
 	struct ntfs_validation_context *validation = context;
 	struct ntfs_validation_record *record;
 	uint64_t index;
-	uint32_t first, end, middle, id;
+	uint32_t first, end, middle, security_id;
 	bool found;
 	enum ntfs_result result;
 
@@ -48,12 +48,12 @@ ntfs_validation_security_references(
 				return result;
 			}
 			middle = first + (end - first) / VALIDATION_VECTOR_GROWTH;
-			id = ntfs_u32(locators[middle].security_id);
-			if (record->security_id == id) {
+			security_id = ntfs_u32(locators[middle].security_id);
+			if (record->security_id == security_id) {
 				found = true;
 				break;
 			}
-			if (id < record->security_id) {
+			if (security_id < record->security_id) {
 				first = middle + 1;
 			} else {
 				end = middle;

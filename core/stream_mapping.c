@@ -42,7 +42,7 @@ stream_append_run(struct ntfs_stream *stream, uint64_t vcn, uint64_t count, uint
 
 static enum ntfs_result
 stream_append_mapping(
-    struct ntfs_stream *stream, const struct ntfs_attr_view *attr, bool implicit_holes)
+    struct ntfs_stream *stream, const struct ntfs_attr_view *attribute_view, bool implicit_holes)
 {
 	const struct ntfs_disk_nonresident *disk;
 	const uint8_t *mapping, *mapping_end;
@@ -50,14 +50,14 @@ stream_append_mapping(
 	unsigned count_bytes, offset_bytes, byte;
 	enum ntfs_result result;
 
-	result = ntfs_work(stream->volume, attr->length);
+	result = ntfs_work(stream->volume, attribute_view->length);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if (!attr->disk->nonresident || attr->flags != stream->flags) {
+	if (!attribute_view->disk->nonresident || attribute_view->flags != stream->flags) {
 		return NTFS_CORRUPT;
 	}
-	disk = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr));
+	disk = (const void *)(attribute_view->bytes + sizeof(struct ntfs_disk_attr));
 	if (disk->compression_unit != stream->compression_unit) {
 		return NTFS_CORRUPT;
 	}
@@ -67,8 +67,8 @@ stream_append_mapping(
 	    (highest < vcn && !(vcn == 0 && highest == UINT64_MAX && stream->size == 0))) {
 		return NTFS_CORRUPT;
 	}
-	mapping = attr->bytes + ntfs_u16(disk->mapping_offset);
-	mapping_end = attr->bytes + attr->length;
+	mapping = attribute_view->bytes + ntfs_u16(disk->mapping_offset);
+	mapping_end = attribute_view->bytes + attribute_view->length;
 	while (mapping < mapping_end && *mapping != 0) {
 		count_bytes = *mapping & NTFS_RUN_LENGTH_WIDTH_MASK;
 		offset_bytes = *mapping >> NTFS_RUN_OFFSET_WIDTH_SHIFT;
@@ -131,16 +131,16 @@ stream_append_mapping(
 }
 
 enum ntfs_result
-ntfs_stream_append(struct ntfs_stream *stream, const struct ntfs_attr_view *attr)
+ntfs_stream_append(struct ntfs_stream *stream, const struct ntfs_attr_view *attribute_view)
 {
-	return stream_append_mapping(stream, attr, false);
+	return stream_append_mapping(stream, attribute_view, false);
 }
 
 /* Internal diagnostic storage only. The $Bad stream describes physical bad
  * clusters, not readable content. Its holes need no ordinary sparse flag. */
 enum ntfs_result
 ntfs_bad_clusters_from_attr(
-    struct ntfs_node *node, const struct ntfs_attr_view *attr, struct ntfs_stream **out)
+    struct ntfs_node *node, const struct ntfs_attr_view *attribute_view, struct ntfs_stream **out)
 {
 	static const uint16_t name[] = {'$', 'B', 'a', 'd'};
 	struct ntfs_volume *volume = node->volume;
@@ -152,20 +152,20 @@ ntfs_bad_clusters_from_attr(
 
 	*out = NULL;
 	if ((node->reference & NTFS_REFERENCE_RECORD_MASK) != NTFS_BAD_CLUSTERS_RECORD ||
-	    attr->type != NTFS_ATTRIBUTE_DATA || !attr->disk->nonresident ||
-	    attr->disk->name_length != sizeof(name) / sizeof(name[0])) {
+	    attribute_view->type != NTFS_ATTRIBUTE_DATA || !attribute_view->disk->nonresident ||
+	    attribute_view->disk->name_length != sizeof(name) / sizeof(name[0])) {
 		return NTFS_NOT_FOUND;
 	}
 	for (unit = 0; unit < sizeof(name) / sizeof(name[0]); unit++) {
-		if (ntfs_u16(attr->bytes + ntfs_u16(attr->disk->name_offset) +
+		if (ntfs_u16(attribute_view->bytes + ntfs_u16(attribute_view->disk->name_offset) +
 			unit * NTFS_UTF16_UNIT_BYTES) != name[unit]) {
 			return NTFS_NOT_FOUND;
 		}
 	}
-	if (attr->flags != 0) {
+	if (attribute_view->flags != 0) {
 		return NTFS_UNSUPPORTED;
 	}
-	disk = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr));
+	disk = (const void *)(attribute_view->bytes + sizeof(struct ntfs_disk_attr));
 	if (volume->info.cluster_count > (uint64_t)INT64_MAX / volume->info.cluster_size) {
 		return NTFS_CORRUPT;
 	}
@@ -186,7 +186,7 @@ ntfs_bad_clusters_from_attr(
 	stream->initialized = ntfs_u64(disk->initialized);
 	ntfs_unit_cache_initialize(&stream->decoded);
 	stream->metadata_only = true;
-	result = stream_append_mapping(stream, attr, true);
+	result = stream_append_mapping(stream, attribute_view, true);
 	if (result != NTFS_OK) {
 		ntfs_stream_close(stream);
 		return result;
@@ -196,9 +196,9 @@ ntfs_bad_clusters_from_attr(
 }
 
 enum ntfs_result
-ntfs_bad_clusters_append(struct ntfs_stream *stream, const struct ntfs_attr_view *attr)
+ntfs_bad_clusters_append(struct ntfs_stream *stream, const struct ntfs_attr_view *attribute_view)
 {
-	return stream_append_mapping(stream, attr, true);
+	return stream_append_mapping(stream, attribute_view, true);
 }
 
 enum ntfs_result

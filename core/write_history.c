@@ -4,24 +4,26 @@
 
 enum { HISTORY_ORIGIN_PACKETS = 2 };
 
-struct history_context {
+struct ntfs_write_history_context {
 	struct ntfs_volume *volume;
 	struct ntfs_write_history *out;
 };
 
 static bool
-separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
+write_history_separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
 {
-	uintptr_t a = (uintptr_t)left, b = (uintptr_t)right;
+	uintptr_t left_address = (uintptr_t)left, right_address = (uintptr_t)right;
 
-	return left != NULL && right != NULL && left_bytes <= UINTPTR_MAX - a &&
-	    right_bytes <= UINTPTR_MAX - b && (a + left_bytes <= b || b + right_bytes <= a);
+	return left != NULL && right != NULL && left_bytes <= UINTPTR_MAX - left_address &&
+	    right_bytes <= UINTPTR_MAX - right_address &&
+	    (left_address + left_bytes <= right_address ||
+		right_address + right_bytes <= left_address);
 }
 
 static enum ntfs_result
-retain(void *context, const struct ntfs_logfile_record_view *view, const void *packet)
+write_history_retain(void *context, const struct ntfs_logfile_record_view *view, const void *packet)
 {
-	struct history_context *work = context;
+	struct ntfs_write_history_context *work = context;
 	struct ntfs_write_history *out = work->out;
 	enum ntfs_result result;
 
@@ -44,7 +46,7 @@ retain(void *context, const struct ntfs_logfile_record_view *view, const void *p
 }
 
 static enum ntfs_result
-bind_checkpoint(
+write_history_bind_checkpoint(
     struct ntfs_write_history_workspace *work, struct ntfs_write_history *out, size_t first)
 {
 	struct ntfs_logfile_restart origin = out->origin;
@@ -183,7 +185,7 @@ ntfs_write_history_prepare_transaction(struct ntfs_volume *volume,
 }
 
 static enum ntfs_result
-bind_history(struct ntfs_volume *volume, struct ntfs_write_history_workspace *work,
+write_history_bind_history(struct ntfs_volume *volume, struct ntfs_write_history_workspace *work,
     struct ntfs_write_history *out)
 {
 	struct ntfs_write_replay_input input = {0};
@@ -214,7 +216,7 @@ bind_history(struct ntfs_volume *volume, struct ntfs_write_history_workspace *wo
 	first = HISTORY_ORIGIN_PACKETS;
 	while (first < out->count) {
 		if (out->count - first == HISTORY_ORIGIN_PACKETS && out->transactions != 0) {
-			result = bind_checkpoint(work, out, first);
+			result = write_history_bind_checkpoint(work, out, first);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -278,12 +280,12 @@ bind_history(struct ntfs_volume *volume, struct ntfs_write_history_workspace *wo
 }
 
 static enum ntfs_result
-capture(struct ntfs_volume *volume, struct ntfs_write_history_workspace *work,
+write_history_capture(struct ntfs_volume *volume, struct ntfs_write_history_workspace *work,
     struct ntfs_write_history *out)
 {
 	struct ntfs_logfile *source = NULL;
 	struct ntfs_logfile_limits limits;
-	struct history_context context = {volume, out};
+	struct ntfs_write_history_context context = {volume, out};
 	enum ntfs_result result;
 
 	ntfs_logfile_default_limits(&limits);
@@ -319,12 +321,12 @@ capture(struct ntfs_volume *volume, struct ntfs_write_history_workspace *work,
 		out->origin.last_data_bytes =
 		    NTFS_WRITE_CHECKPOINT_BYTES - sizeof(struct ntfs_disk_log_record);
 		result = ntfs_logfile_visit_records(source, out->client.oldest_lsn,
-		    NTFS_WRITE_HISTORY_PACKETS, work->record, sizeof(work->record), retain,
-		    &context, &work->history);
+		    NTFS_WRITE_HISTORY_PACKETS, work->record, sizeof(work->record),
+		    write_history_retain, &context, &work->history);
 		out->history = work->history;
 	}
 	if (result == NTFS_OK) {
-		result = bind_history(volume, work, out);
+		result = write_history_bind_history(volume, work, out);
 	}
 	ntfs_logfile_close(source);
 	return result;
@@ -337,15 +339,15 @@ ntfs_write_history_capture(struct ntfs_volume *volume, struct ntfs_write_history
 	enum ntfs_result result;
 
 	if (volume == NULL || work == NULL || out == NULL ||
-	    !separate(volume, sizeof(*volume), out, sizeof(*out)) ||
-	    !separate(volume, sizeof(*volume), work, sizeof(*work)) ||
-	    !separate(work, sizeof(*work), out, sizeof(*out))) {
+	    !write_history_separate(volume, sizeof(*volume), out, sizeof(*out)) ||
+	    !write_history_separate(volume, sizeof(*volume), work, sizeof(*work)) ||
+	    !write_history_separate(work, sizeof(*work), out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
 	result = ntfs_operation_enter(volume);
 	if (result == NTFS_OK) {
-		result = capture(volume, work, out);
+		result = write_history_capture(volume, work, out);
 		ntfs_operation_leave(volume);
 	}
 	if (result != NTFS_OK) {

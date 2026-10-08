@@ -4,7 +4,7 @@
 #include <string.h>
 
 static void
-close_directory_continuation(struct ntfs_directory_continuation *continuation)
+native_directory_continuation_close(struct ntfs_directory_continuation *continuation)
 {
 	ntfs_directory_close(continuation->cursor);
 	memset(continuation, 0, sizeof(*continuation));
@@ -35,7 +35,7 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 
 	if (states != NULL) {
 		for (i = 0; i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
-			close_directory_continuation(&states[i]);
+			native_directory_continuation_close(&states[i]);
 		}
 	}
 	mostRecent = 0;
@@ -88,7 +88,7 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 		 * optional and can be reconstructed without changing any native cookie. */
 		for (i = 0; continuations != nil && i < NTFS_DIRECTORY_CONTINUATIONS; i++) {
 			if (i != continuations->mostRecent && !continuations->states[i].in_use) {
-				close_directory_continuation(&continuations->states[i]);
+				native_directory_continuation_close(&continuations->states[i]);
 			}
 		}
 	}
@@ -179,7 +179,7 @@ close_directory_continuation(struct ntfs_directory_continuation *continuation)
 		selected = &continuations->states[selectedIndex];
 		/* Evict before construction: even a failed open keeps at most two core
 		 * cursors. The other held continuation remains unchanged. */
-		close_directory_continuation(selected);
+		native_directory_continuation_close(selected);
 		result = ntfs_directory_open(item->node, &selected->cursor);
 		if (result != NTFS_OK) {
 			return result;

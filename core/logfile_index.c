@@ -30,14 +30,16 @@ ntfs_logfile_index_epoch(
 
 static bool
 ntfs_logfile_same_page_metadata(
-    const struct ntfs_logfile_page_view *a, const struct ntfs_logfile_page_view *b)
+    const struct ntfs_logfile_page_view *left_page, const struct ntfs_logfile_page_view *right_page)
 {
-	return a->offset == b->offset && a->storage == b->storage &&
-	    a->page.copy_value == b->page.copy_value &&
-	    a->page.last_end_lsn == b->page.last_end_lsn && a->page.flags == b->page.flags &&
-	    a->page.page_count == b->page.page_count &&
-	    a->page.page_position == b->page.page_position &&
-	    a->page.next_record_offset == b->page.next_record_offset;
+	return left_page->offset == right_page->offset &&
+	    left_page->storage == right_page->storage &&
+	    left_page->page.copy_value == right_page->page.copy_value &&
+	    left_page->page.last_end_lsn == right_page->page.last_end_lsn &&
+	    left_page->page.flags == right_page->page.flags &&
+	    left_page->page.page_count == right_page->page.page_count &&
+	    left_page->page.page_position == right_page->page.page_position &&
+	    left_page->page.next_record_offset == right_page->page.next_record_offset;
 }
 
 static uint32_t

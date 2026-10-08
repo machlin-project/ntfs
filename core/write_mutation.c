@@ -170,7 +170,7 @@ ntfs_mutation_patch(struct ntfs_write_mutation_plan *plan, uint64_t physical,
 }
 
 static bool
-same_target(
+mutation_same_target(
     const struct ntfs_write_mutation_target *left, const struct ntfs_write_mutation_target *right)
 {
 	return left->reference == right->reference &&
@@ -181,7 +181,7 @@ same_target(
 }
 
 static enum ntfs_result
-file_predecessors(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_patch *patch,
+mutation_file_predecessors(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_patch *patch,
     const struct ntfs_write_mutation_target *target)
 {
 	const struct ntfs_stream *original = plan->volume->mft;
@@ -277,11 +277,11 @@ ntfs_mutation_write(struct ntfs_write_mutation_plan *plan, uint64_t physical, co
 			return result;
 		}
 		current.logical_offset -= offset;
-		if (patch->bound && !same_target(&patch->target, &current)) {
+		if (patch->bound && !mutation_same_target(&patch->target, &current)) {
 			return NTFS_CORRUPT;
 		}
 		if (!patch->bound && kind == NTFS_WRITE_MUTATION_FILE) {
-			result = file_predecessors(plan, patch, &current);
+			result = mutation_file_predecessors(plan, patch, &current);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -298,7 +298,7 @@ ntfs_mutation_write(struct ntfs_write_mutation_plan *plan, uint64_t physical, co
 }
 
 static bool
-valid_name(const struct ntfs_write_name *name)
+mutation_valid_name(const struct ntfs_write_name *name)
 {
 	size_t index;
 	uint16_t unit;
@@ -348,18 +348,19 @@ ntfs_write_mutation_request_valid(const struct ntfs_write_mutation_request *requ
 		    request->bytes <= (uint64_t)INT64_MAX - request->offset &&
 		    request->bytes <= UINTPTR_MAX - (uintptr_t)request->data;
 	case NTFS_WRITE_RENAME:
-		return valid_name(&request->source) && valid_name(&request->destination);
+		return mutation_valid_name(&request->source) &&
+		    mutation_valid_name(&request->destination);
 	case NTFS_WRITE_CREATE_FILE:
 	case NTFS_WRITE_CREATE_DIRECTORY:
 	case NTFS_WRITE_REMOVE_FILE:
 	case NTFS_WRITE_REMOVE_DIRECTORY:
-		return valid_name(&request->source);
+		return mutation_valid_name(&request->source);
 	}
 	return false;
 }
 
 static enum ntfs_result
-initialize(struct ntfs_write_mutation_plan *plan)
+mutation_initialize(struct ntfs_write_mutation_plan *plan)
 {
 	struct ntfs_environment reader;
 	struct ntfs_limits limits;
@@ -414,7 +415,7 @@ initialize(struct ntfs_write_mutation_plan *plan)
 }
 
 static enum ntfs_result
-seal(struct ntfs_write_mutation_plan *plan)
+mutation_seal(struct ntfs_write_mutation_plan *plan)
 {
 	struct ntfs_mutation_record *record;
 	struct ntfs_mutation_record *mft;
@@ -543,7 +544,7 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 	plan->source = *source;
 	plan->live_bytes = sizeof(*plan);
 	plan->filetime = request->filetime;
-	result = initialize(plan);
+	result = mutation_initialize(plan);
 	if (result == NTFS_OK &&
 	    (request->kind == NTFS_WRITE_RESIZE_FILE ||
 		request->kind == NTFS_WRITE_GROWING_RANGE)) {
@@ -562,7 +563,7 @@ ntfs_write_mutation_prepare(const struct ntfs_environment *source,
 		result = ntfs_mutation_namespace(plan, request);
 	}
 	if (result == NTFS_OK) {
-		result = seal(plan);
+		result = mutation_seal(plan);
 	}
 	if (plan->operation_active) {
 		ntfs_operation_leave(plan->volume);
@@ -662,7 +663,7 @@ ntfs_write_mutation_plan_region(const struct ntfs_write_mutation_plan *plan, siz
 }
 
 static void
-close_bitmap(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_bitmap *bitmap)
+mutation_close_bitmap(struct ntfs_write_mutation_plan *plan, struct ntfs_mutation_bitmap *bitmap)
 {
 	ntfs_stream_close(bitmap->stream);
 	ntfs_mutation_release(plan, bitmap->before, bitmap->bytes);
@@ -683,8 +684,8 @@ ntfs_write_mutation_plan_close(struct ntfs_write_mutation_plan *plan)
 		ntfs_operation_leave(plan->volume);
 		plan->operation_active = false;
 	}
-	close_bitmap(plan, &plan->allocation);
-	close_bitmap(plan, &plan->mft_bitmap);
+	mutation_close_bitmap(plan, &plan->allocation);
+	mutation_close_bitmap(plan, &plan->mft_bitmap);
 	if (plan->mft != NULL && plan->volume != NULL && plan->mft != plan->volume->mft) {
 		ntfs_stream_close(plan->mft);
 	}

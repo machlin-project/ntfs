@@ -30,20 +30,20 @@ static bool
 ntfs_validation_inert_reserved_record(const uint8_t *record)
 {
 	const struct ntfs_disk_record *header = (const void *)record;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	const uint8_t *value;
 	size_t size;
 	uint32_t position = ntfs_u16(header->attrs_offset);
 	unsigned standard = 0, security = 0, data = 0;
 	enum ntfs_result result;
 
-	while (
-	    (result = ntfs_attr_at(record, ntfs_u32(header->used), &position, &attr)) == NTFS_OK) {
-		if (attr.flags != 0 || attr.disk->name_length != 0 ||
-		    ntfs_attr_value(&attr, &value, &size) != NTFS_OK) {
+	while ((result = ntfs_attr_at(
+		    record, ntfs_u32(header->used), &position, &attribute_view)) == NTFS_OK) {
+		if (attribute_view.flags != 0 || attribute_view.disk->name_length != 0 ||
+		    ntfs_attr_value(&attribute_view, &value, &size) != NTFS_OK) {
 			return false;
 		}
-		switch (attr.type) {
+		switch (attribute_view.type) {
 		case NTFS_ATTR_STANDARD:
 			if (++standard != 1) {
 				return false;
@@ -77,7 +77,7 @@ ntfs_validation_scan_records(struct ntfs_validation_context *validation)
 		 bitmap_size, i;
 	uint16_t flags;
 	uint32_t position;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	bool allocated;
 	enum ntfs_result result;
 
@@ -156,8 +156,8 @@ ntfs_validation_scan_records(struct ntfs_validation_context *validation)
 		    flags == NTFS_RECORD_IN_USE && validation->records[i].base == 0 &&
 		    validation->records[i].links == 0) {
 			validation->records[i].reserved_empty =
-			    ntfs_attr_at(record, ntfs_u32(header->used), &position, &attr) ==
-			    NTFS_END;
+			    ntfs_attr_at(record, ntfs_u32(header->used), &position,
+				&attribute_view) == NTFS_END;
 			validation->records[i].reserved_inert =
 			    validation->records[i].reserved_empty ||
 			    ntfs_validation_inert_reserved_record(record);
@@ -310,8 +310,8 @@ ntfs_validation_remember_link(struct ntfs_validation_context *validation, uint64
 }
 
 static enum ntfs_result
-ntfs_validation_remember_filename(
-    struct ntfs_validation_context *validation, uint64_t owner, const struct ntfs_attr_view *attr)
+ntfs_validation_remember_filename(struct ntfs_validation_context *validation, uint64_t owner,
+    const struct ntfs_attr_view *attribute_view)
 {
 	const struct ntfs_disk_filename *file;
 	const uint8_t *value;
@@ -319,9 +319,9 @@ ntfs_validation_remember_filename(
 	size_t size, i;
 	enum ntfs_result result;
 
-	result = ntfs_attr_value(attr, &value, &size);
-	if (result != NTFS_OK || attr->flags != 0 || attr->disk->name_length != 0 ||
-	    size < sizeof(*file)) {
+	result = ntfs_attr_value(attribute_view, &value, &size);
+	if (result != NTFS_OK || attribute_view->flags != 0 ||
+	    attribute_view->disk->name_length != 0 || size < sizeof(*file)) {
 		return NTFS_CORRUPT;
 	}
 	file = (const void *)value;
@@ -341,7 +341,7 @@ ntfs_validation_check_list(struct ntfs_validation_context *validation, struct nt
 {
 	const struct ntfs_disk_attr_list *entry;
 	const struct ntfs_validation_record *record;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	uint8_t *loaded = NULL;
 	uint16_t name[NTFS_NAME_MAX];
 	uint64_t reference, number;
@@ -377,7 +377,7 @@ ntfs_validation_check_list(struct ntfs_validation_context *validation, struct nt
 		if (result == NTFS_OK) {
 			result = ntfs_listed_attribute(loaded, ntfs_u32(entry->type), name,
 			    entry->name_length, ntfs_u16(entry->instance), ntfs_u64(entry->lowest),
-			    &attr);
+			    &attribute_view);
 		}
 		if (loaded != owner->record) {
 			ntfs_free(validation->volume, loaded, validation->volume->info.record_size);
@@ -392,7 +392,7 @@ ntfs_validation_check_list(struct ntfs_validation_context *validation, struct nt
 
 static enum ntfs_result
 ntfs_validation_listed_extent(struct ntfs_validation_context *validation, const uint8_t *bytes,
-    size_t size, uint64_t reference, const struct ntfs_attr_view *attr, uint64_t lowest)
+    size_t size, uint64_t reference, const struct ntfs_attr_view *attribute_view, uint64_t lowest)
 {
 	const struct ntfs_disk_attr_list *entry;
 	size_t offset = 0;
@@ -404,13 +404,14 @@ ntfs_validation_listed_extent(struct ntfs_validation_context *validation, const 
 			return validation->failure;
 		}
 		if (ntfs_u64(entry->reference) != reference ||
-		    ntfs_u32(entry->type) != attr->type || ntfs_u64(entry->lowest) != lowest ||
-		    entry->name_length != attr->disk->name_length ||
-		    (lowest == 0 && ntfs_u16(entry->instance) != attr->instance)) {
+		    ntfs_u32(entry->type) != attribute_view->type ||
+		    ntfs_u64(entry->lowest) != lowest ||
+		    entry->name_length != attribute_view->disk->name_length ||
+		    (lowest == 0 && ntfs_u16(entry->instance) != attribute_view->instance)) {
 			continue;
 		}
 		if (!ntfs_equal((const uint8_t *)entry + entry->name_offset,
-			attr->bytes + ntfs_u16(attr->disk->name_offset),
+			attribute_view->bytes + ntfs_u16(attribute_view->disk->name_offset),
 			(size_t)entry->name_length * NTFS_UTF16_UNIT_BYTES)) {
 			continue;
 		}
@@ -433,7 +434,7 @@ ntfs_validation_scan_attributes(struct ntfs_validation_context *validation)
 	struct ntfs_stat stat;
 	const struct ntfs_disk_record *header;
 	const struct ntfs_disk_nonresident *extent;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	uint8_t *record = NULL, *list = NULL;
 	uint16_t name[NTFS_NAME_MAX];
 	uint64_t i, owner_reference, lowest;
@@ -493,47 +494,48 @@ ntfs_validation_scan_attributes(struct ntfs_validation_context *validation)
 		}
 		header = (const void *)record;
 		position = ntfs_u16(header->attrs_offset);
-		while ((result = ntfs_attr_at(record, ntfs_u32(header->used), &position, &attr)) ==
-		    NTFS_OK) {
-			validation->report->attribute_type = attr.type;
+		while ((result = ntfs_attr_at(record, ntfs_u32(header->used), &position,
+			    &attribute_view)) == NTFS_OK) {
+			validation->report->attribute_type = attribute_view.type;
 			validation->report->related_reference = owner_reference;
-			if (ntfs_validation_charge(validation, attr.length) != NTFS_OK) {
+			if (ntfs_validation_charge(validation, attribute_view.length) != NTFS_OK) {
 				result = validation->failure;
 				break;
 			}
 			lowest = 0;
-			if (attr.disk->nonresident) {
-				extent = (const void *)(attr.bytes + sizeof(struct ntfs_disk_attr));
+			if (attribute_view.disk->nonresident) {
+				extent = (const void *)(attribute_view.bytes +
+				    sizeof(struct ntfs_disk_attr));
 				lowest = ntfs_u64(extent->lowest);
 			}
 			if (validation->records[i].base != 0 || lowest != 0 ||
-			    (list != NULL && attr.type != NTFS_ATTR_LIST)) {
+			    (list != NULL && attribute_view.type != NTFS_ATTR_LIST)) {
 				result = ntfs_validation_listed_extent(validation, list, list_size,
-				    validation->records[i].reference, &attr, lowest);
+				    validation->records[i].reference, &attribute_view, lowest);
 				if (result != NTFS_OK) {
 					break;
 				}
 			}
 			validation->report->attributes++;
-			if (attr.type == NTFS_ATTR_FILENAME) {
+			if (attribute_view.type == NTFS_ATTR_FILENAME) {
 				result = ntfs_validation_remember_filename(
-				    validation, owner_reference, &attr);
+				    validation, owner_reference, &attribute_view);
 			} else if (lowest == 0) {
-				for (unit = 0; unit < attr.disk->name_length; unit++) {
-					name[unit] =
-					    ntfs_u16(attr.bytes + ntfs_u16(attr.disk->name_offset) +
-						unit * NTFS_UTF16_UNIT_BYTES);
+				for (unit = 0; unit < attribute_view.disk->name_length; unit++) {
+					name[unit] = ntfs_u16(attribute_view.bytes +
+					    ntfs_u16(attribute_view.disk->name_offset) +
+					    unit * NTFS_UTF16_UNIT_BYTES);
 				}
-				result = ntfs_bad_clusters_open(
-				    owner, attr.type, name, attr.disk->name_length, &stream);
+				result = ntfs_bad_clusters_open(owner, attribute_view.type, name,
+				    attribute_view.disk->name_length, &stream);
 				if (result == NTFS_NOT_FOUND) {
-					result = ntfs_attribute_open(owner, attr.type, name,
-					    attr.disk->name_length, &stream);
+					result = ntfs_attribute_open(owner, attribute_view.type,
+					    name, attribute_view.disk->name_length, &stream);
 				}
 				if (result == NTFS_OK) {
 					if (!stream->resident) {
-						result = ntfs_validation_remember_stream(
-						    validation, stream, owner_reference, attr.type);
+						result = ntfs_validation_remember_stream(validation,
+						    stream, owner_reference, attribute_view.type);
 					}
 				}
 				ntfs_stream_close(stream);

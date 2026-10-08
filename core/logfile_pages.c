@@ -83,13 +83,14 @@ ntfs_logfile_read_page(struct ntfs_logfile *source, uint64_t offset, void *bytes
 
 bool
 ntfs_logfile_same_written_prefix(const struct ntfs_logfile_restart *restart,
-    const struct ntfs_logfile_page *a, const uint8_t *a_bytes, const struct ntfs_logfile_page *b,
-    const uint8_t *b_bytes)
+    const struct ntfs_logfile_page *left_page, const uint8_t *a_bytes,
+    const struct ntfs_logfile_page *right_page, const uint8_t *b_bytes)
 {
-	return a->flags == b->flags && a->next_record_offset == b->next_record_offset &&
-	    a->next_record_offset >= restart->page_data_offset &&
+	return left_page->flags == right_page->flags &&
+	    left_page->next_record_offset == right_page->next_record_offset &&
+	    left_page->next_record_offset >= restart->page_data_offset &&
 	    ntfs_equal(a_bytes + restart->page_data_offset, b_bytes + restart->page_data_offset,
-		a->next_record_offset - restart->page_data_offset);
+		left_page->next_record_offset - restart->page_data_offset);
 }
 
 enum ntfs_result
@@ -425,11 +426,11 @@ ntfs_logfile_reload_fast_copy(struct ntfs_logfile *source, struct ntfs_logfile_r
 
 static bool
 ntfs_logfile_same_fast_prefix(const struct ntfs_logfile_restart *restart,
-    const struct ntfs_logfile_page *a, const uint8_t *a_bytes, const struct ntfs_logfile_page *b,
-    const uint8_t *b_bytes)
+    const struct ntfs_logfile_page *left_page, const uint8_t *a_bytes,
+    const struct ntfs_logfile_page *right_page, const uint8_t *b_bytes)
 {
-	return a->last_end_lsn == b->last_end_lsn &&
-	    ntfs_logfile_same_written_prefix(restart, a, a_bytes, b, b_bytes);
+	return left_page->last_end_lsn == right_page->last_end_lsn &&
+	    ntfs_logfile_same_written_prefix(restart, left_page, a_bytes, right_page, b_bytes);
 }
 
 static enum ntfs_result

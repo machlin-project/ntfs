@@ -8,9 +8,9 @@ static enum ntfs_result ntfs_validation_compare_mirror_record(
 
 static int
 ntfs_validation_compare_runs(
-    struct ntfs_validation_context *validation, const void *a, const void *b)
+    struct ntfs_validation_context *validation, const void *left_input, const void *right_input)
 {
-	const struct ntfs_validation_run *left = a, *right = b;
+	const struct ntfs_validation_run *left = left_input, *right = right_input;
 
 	(void)validation;
 	if (left->first != right->first) {

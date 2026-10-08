@@ -4,16 +4,16 @@
 enum attribute_description { ATTRIBUTE_READABLE, ATTRIBUTE_METADATA, ATTRIBUTE_BAD_CLUSTERS };
 
 static enum ntfs_result
-ntfs_attribute_describe(struct ntfs_node *node, const struct ntfs_attr_view *attr,
+ntfs_attribute_describe(struct ntfs_node *node, const struct ntfs_attr_view *attribute_view,
     enum attribute_description description, struct ntfs_stream **out)
 {
 	switch (description) {
 	case ATTRIBUTE_BAD_CLUSTERS:
-		return ntfs_bad_clusters_from_attr(node, attr, out);
+		return ntfs_bad_clusters_from_attr(node, attribute_view, out);
 	case ATTRIBUTE_METADATA:
-		return ntfs_stream_metadata_from_attr(node->volume, attr, out);
+		return ntfs_stream_metadata_from_attr(node->volume, attribute_view, out);
 	case ATTRIBUTE_READABLE:
-		return ntfs_stream_from_attr(node->volume, attr, out);
+		return ntfs_stream_from_attr(node->volume, attribute_view, out);
 	}
 	return NTFS_INVALID;
 }
@@ -59,20 +59,22 @@ ntfs_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name
 {
 	const struct ntfs_disk_record *header = (const void *)record;
 	const struct ntfs_disk_nonresident *extent;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	uint32_t position = ntfs_u16(header->attrs_offset);
 	size_t i;
 	bool match, found = false;
 	enum ntfs_result result;
 
-	while (
-	    (result = ntfs_attr_at(record, ntfs_u32(header->used), &position, &attr)) == NTFS_OK) {
-		if (attr.type != type || attr.disk->name_length != name_length ||
-		    (lowest == 0 && attr.instance != instance)) {
+	while ((result = ntfs_attr_at(
+		    record, ntfs_u32(header->used), &position, &attribute_view)) == NTFS_OK) {
+		if (attribute_view.type != type ||
+		    attribute_view.disk->name_length != name_length ||
+		    (lowest == 0 && attribute_view.instance != instance)) {
 			continue;
 		}
-		if (attr.disk->nonresident) {
-			extent = (const void *)(attr.bytes + sizeof(struct ntfs_disk_attr));
+		if (attribute_view.disk->nonresident) {
+			extent =
+			    (const void *)(attribute_view.bytes + sizeof(struct ntfs_disk_attr));
 			if (ntfs_u64(extent->lowest) != lowest) {
 				continue;
 			}
@@ -82,7 +84,8 @@ ntfs_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name
 		match = true;
 		for (i = 0; i < name_length; i++) {
 			if (name[i] !=
-			    ntfs_u16(attr.bytes + ntfs_u16(attr.disk->name_offset) +
+			    ntfs_u16(attribute_view.bytes +
+				ntfs_u16(attribute_view.disk->name_offset) +
 				i * NTFS_UTF16_UNIT_BYTES)) {
 				match = false;
 				break;
@@ -92,7 +95,7 @@ ntfs_listed_attribute(const uint8_t *record, uint32_t type, const uint16_t *name
 			if (found) {
 				return NTFS_CORRUPT;
 			}
-			*out = attr;
+			*out = attribute_view;
 			found = true;
 		}
 	}
@@ -180,7 +183,7 @@ ntfs_attribute_type_present(struct ntfs_node *node, uint32_t type, bool *out)
 	struct ntfs_volume *volume = node->volume;
 	const struct ntfs_disk_record *header = (const void *)node->record;
 	const struct ntfs_disk_attr_list *entry;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	uint8_t *bytes = NULL;
 	uint32_t position = ntfs_u16(header->attrs_offset);
 	size_t size = 0, offset = 0;
@@ -191,9 +194,9 @@ ntfs_attribute_type_present(struct ntfs_node *node, uint32_t type, bool *out)
 	if (result != NTFS_OK) {
 		return result;
 	}
-	while ((result = ntfs_attr_at(node->record, ntfs_u32(header->used), &position, &attr)) ==
-	    NTFS_OK) {
-		if (attr.type == type) {
+	while ((result = ntfs_attr_at(
+		    node->record, ntfs_u32(header->used), &position, &attribute_view)) == NTFS_OK) {
+		if (attribute_view.type == type) {
 			*out = true;
 			return NTFS_OK;
 		}
@@ -229,7 +232,7 @@ ntfs_attribute_acquire(struct ntfs_node *node, uint32_t type, const uint16_t *na
     struct ntfs_stream **out)
 {
 	struct ntfs_volume *volume = node->volume;
-	struct ntfs_attr_view a, list_attr;
+	struct ntfs_attr_view attribute_view, list_attr;
 	struct ntfs_stream *stream = NULL;
 	const struct ntfs_disk_attr_list *entry;
 	const struct ntfs_disk_record *record_header;
@@ -253,9 +256,10 @@ ntfs_attribute_acquire(struct ntfs_node *node, uint32_t type, const uint16_t *na
 	    UINT16_MAX, &list_attr);
 	if (result == NTFS_NOT_FOUND || type == NTFS_ATTR_LIST) {
 		result = ntfs_attr_find(node->record, volume->info.record_size, type, name,
-		    name_length, UINT16_MAX, &a);
+		    name_length, UINT16_MAX, &attribute_view);
 		if (result == NTFS_OK) {
-			result = ntfs_attribute_describe(node, &a, description, &stream);
+			result =
+			    ntfs_attribute_describe(node, &attribute_view, description, &stream);
 		}
 		if (result == NTFS_OK) {
 			result = description == ATTRIBUTE_BAD_CLUSTERS
@@ -334,8 +338,8 @@ ntfs_attribute_acquire(struct ntfs_node *node, uint32_t type, const uint16_t *na
 		}
 		result = ntfs_work(volume, volume->info.record_size);
 		if (result == NTFS_OK) {
-			result = ntfs_listed_attribute(
-			    record, type, name, name_length, ntfs_u16(entry->instance), lowest, &a);
+			result = ntfs_listed_attribute(record, type, name, name_length,
+			    ntfs_u16(entry->instance), lowest, &attribute_view);
 		}
 		if (result == NTFS_NOT_FOUND) {
 			result = NTFS_CORRUPT;
@@ -343,8 +347,9 @@ ntfs_attribute_acquire(struct ntfs_node *node, uint32_t type, const uint16_t *na
 		if (result != NTFS_OK) {
 			goto finish;
 		}
-		if (a.disk->nonresident) {
-			nonresident = (const void *)(a.bytes + sizeof(struct ntfs_disk_attr));
+		if (attribute_view.disk->nonresident) {
+			nonresident =
+			    (const void *)(attribute_view.bytes + sizeof(struct ntfs_disk_attr));
 			if (ntfs_u64(nonresident->lowest) != lowest) {
 				result = NTFS_CORRUPT;
 				goto finish;
@@ -354,11 +359,12 @@ ntfs_attribute_acquire(struct ntfs_node *node, uint32_t type, const uint16_t *na
 			goto finish;
 		}
 		if (stream == NULL) {
-			result = ntfs_attribute_describe(node, &a, description, &stream);
+			result =
+			    ntfs_attribute_describe(node, &attribute_view, description, &stream);
 		} else {
 			result = description == ATTRIBUTE_BAD_CLUSTERS
-			    ? ntfs_bad_clusters_append(stream, &a)
-			    : ntfs_stream_append(stream, &a);
+			    ? ntfs_bad_clusters_append(stream, &attribute_view)
+			    : ntfs_stream_append(stream, &attribute_view);
 		}
 		if (result == NTFS_OK && bootstrap &&
 		    (stream->resident || stream->flags != 0 || stream->run_count == 0 ||
@@ -490,7 +496,7 @@ enum ntfs_result
 ntfs_stream_open_impl(
     struct ntfs_node *node, const uint16_t *name, size_t length, struct ntfs_stream **out)
 {
-	struct ntfs_stat st;
+	struct ntfs_stat stat;
 	size_t i;
 	enum ntfs_result result;
 
@@ -511,16 +517,16 @@ ntfs_stream_open_impl(
 	}
 	/* Stream compression/encryption state is independent. Opening one named
 	 * stream must not decode or require support for the unnamed stream. */
-	result = ntfs_node_metadata(node, &st);
+	result = ntfs_node_metadata(node, &stat);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	if (ntfs_attribute_bad_clusters_key(node, NTFS_ATTRIBUTE_DATA, name, length)) {
 		return NTFS_UNSUPPORTED;
 	}
-	if (st.reparse) {
+	if (stat.reparse) {
 		result = ntfs_wof_open(node, name, length, out);
-	} else if (st.directory && length == 0) {
+	} else if (stat.directory && length == 0) {
 		return NTFS_IS_DIRECTORY;
 	} else {
 		result = ntfs_attribute_open(node, NTFS_ATTRIBUTE_DATA, name, length, out);

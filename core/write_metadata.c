@@ -14,18 +14,19 @@ ntfs_write_restored_record_equal(const uint8_t *left, const uint8_t *right, size
 }
 
 static bool
-separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
+write_metadata_separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
 {
-	uintptr_t a = (uintptr_t)left, b = (uintptr_t)right;
+	uintptr_t left_address = (uintptr_t)left, right_address = (uintptr_t)right;
 
-	if (left_bytes > UINTPTR_MAX - a || right_bytes > UINTPTR_MAX - b) {
+	if (left_bytes > UINTPTR_MAX - left_address || right_bytes > UINTPTR_MAX - right_address) {
 		return false;
 	}
-	return a + left_bytes <= b || b + right_bytes <= a;
+	return left_address + left_bytes <= right_address ||
+	    right_address + right_bytes <= left_address;
 }
 
 static enum ntfs_result
-prepare(struct ntfs_node *node, uint64_t filetime, uint64_t lsn, bool resident,
+write_metadata_prepare(struct ntfs_node *node, uint64_t filetime, uint64_t lsn, bool resident,
     struct ntfs_write_file_plan *out)
 {
 	struct ntfs_volume *volume = node->volume;
@@ -173,15 +174,17 @@ ntfs_write_prepare_metadata(
 {
 	enum ntfs_result result;
 
-	if (node == NULL || out == NULL || !separate(node, sizeof(*node), out, sizeof(*out)) ||
-	    !separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
-	    !separate(node->record, node->volume->info.record_size, out, sizeof(*out))) {
+	if (node == NULL || out == NULL ||
+	    !write_metadata_separate(node, sizeof(*node), out, sizeof(*out)) ||
+	    !write_metadata_separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
+	    !write_metadata_separate(
+		node->record, node->volume->info.record_size, out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
 	result = ntfs_operation_enter(node->volume);
 	if (result == NTFS_OK) {
-		result = prepare(node, filetime, lsn, false, out);
+		result = write_metadata_prepare(node, filetime, lsn, false, out);
 		ntfs_operation_leave(node->volume);
 	}
 	if (result != NTFS_OK) {
@@ -191,15 +194,15 @@ ntfs_write_prepare_metadata(
 }
 
 static enum ntfs_result
-prepare_resident(struct ntfs_node *node, uint64_t filetime, uint64_t lsn, uint64_t offset,
-    const void *data, size_t bytes, struct ntfs_write_file_plan *out)
+write_metadata_prepare_resident(struct ntfs_node *node, uint64_t filetime, uint64_t lsn,
+    uint64_t offset, const void *data, size_t bytes, struct ntfs_write_file_plan *out)
 {
 	struct ntfs_attr_view attribute;
 	const uint8_t *value;
 	size_t value_bytes, record_offset, value_offset;
 	enum ntfs_result result;
 
-	result = prepare(node, filetime, lsn, true, out);
+	result = write_metadata_prepare(node, filetime, lsn, true, out);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -240,16 +243,18 @@ ntfs_write_prepare_resident_metadata(struct ntfs_node *node, uint64_t filetime, 
 	enum ntfs_result result;
 
 	if (node == NULL || data == NULL || bytes == 0 || out == NULL ||
-	    !separate(node, sizeof(*node), out, sizeof(*out)) ||
-	    !separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
-	    !separate(node->record, node->volume->info.record_size, out, sizeof(*out)) ||
-	    !separate(data, bytes, out, sizeof(*out))) {
+	    !write_metadata_separate(node, sizeof(*node), out, sizeof(*out)) ||
+	    !write_metadata_separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
+	    !write_metadata_separate(
+		node->record, node->volume->info.record_size, out, sizeof(*out)) ||
+	    !write_metadata_separate(data, bytes, out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
 	result = ntfs_operation_enter(node->volume);
 	if (result == NTFS_OK) {
-		result = prepare_resident(node, filetime, lsn, offset, data, bytes, out);
+		result =
+		    write_metadata_prepare_resident(node, filetime, lsn, offset, data, bytes, out);
 		ntfs_operation_leave(node->volume);
 	}
 	if (result != NTFS_OK) {

@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 static enum ntfs_result
-image_read(void *context, uint64_t offset, void *buffer, size_t length)
+posix_reader_read(void *context, uint64_t offset, void *buffer, size_t length)
 {
 	struct ntfs_image *image = context;
 	uint8_t *bytes = buffer;
@@ -33,14 +33,14 @@ image_read(void *context, uint64_t offset, void *buffer, size_t length)
 }
 
 static void *
-image_allocate(void *context, size_t size)
+posix_reader_allocate(void *context, size_t size)
 {
 	(void)context;
 	return malloc(size);
 }
 
 static void
-image_release(void *context, void *buffer, size_t size)
+posix_reader_release(void *context, void *buffer, size_t size)
 {
 	(void)context;
 	(void)size;
@@ -50,27 +50,28 @@ image_release(void *context, void *buffer, size_t size)
 int
 ntfs_image_open(const char *path, struct ntfs_image *image)
 {
-	struct stat st;
-	int saved;
+	struct stat status;
+	int saved_error;
 
 	*image = (struct ntfs_image){.fd = -1};
 	image->fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
 	if (image->fd < 0) {
 		return errno;
 	}
-	if (fstat(image->fd, &st) != 0) {
-		saved = errno;
+	if (fstat(image->fd, &status) != 0) {
+		saved_error = errno;
 		close(image->fd);
 		image->fd = -1;
-		return saved;
+		return saved_error;
 	}
-	if (!S_ISREG(st.st_mode) || st.st_size < 0) {
+	if (!S_ISREG(status.st_mode) || status.st_size < 0) {
 		close(image->fd);
 		image->fd = -1;
 		return EINVAL;
 	}
-	image->environment = (struct ntfs_environment){NTFS_API_VERSION, image,
-	    (uint64_t)st.st_size, image_read, image_allocate, image_release};
+	image->environment =
+	    (struct ntfs_environment){NTFS_API_VERSION, image, (uint64_t)status.st_size,
+		posix_reader_read, posix_reader_allocate, posix_reader_release};
 	return 0;
 }
 

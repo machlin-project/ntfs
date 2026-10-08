@@ -14,14 +14,14 @@ typedef NS_ENUM(NSUInteger, NTFSFileSystemPhase) {
 };
 
 static BOOL
-checkable_mount_failure(enum ntfs_result result)
+filesystem_checkable_mount_failure(enum ntfs_result result)
 {
 	return result == NTFS_NOT_NTFS || result == NTFS_CORRUPT || result == NTFS_DIRTY ||
 	    result == NTFS_UNSUPPORTED;
 }
 
 static enum ntfs_result
-check_options(NSArray<NSString *> *arguments, BOOL *quick)
+filesystem_check_options(NSArray<NSString *> *arguments, BOOL *quick)
 {
 	BOOL force = NO, repair = NO;
 	NSString *argument;
@@ -244,8 +244,8 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 		/* Only an explicit forced checker load may publish a geometry-free,
 		 * nonmountable unary identity. I/O, quota, allocator, policy and result
 		 * construction failures never become successful maintenance loads. */
-		if (force && result == mountResult && checkable_mount_failure(mountResult) &&
-		    owner.isAvailable) {
+		if (force && result == mountResult &&
+		    filesystem_checkable_mount_failure(mountResult) && owner.isAvailable) {
 			loaded = ntfs_volume_create_for_check(owner, mountResult);
 			result = loaded == nil ? NTFS_NO_MEMORY : NTFS_OK;
 		}
@@ -430,7 +430,7 @@ check_options(NSArray<NSString *> *arguments, BOOL *quick)
 		}
 		return nil;
 	}
-	result = check_options(options.taskOptions, &quick);
+	result = filesystem_check_options(options.taskOptions, &quick);
 	@synchronized(self) {
 		/* Completing a repeated FSTask would terminate its existing operation. */
 		if (_maintenanceTask == task) {

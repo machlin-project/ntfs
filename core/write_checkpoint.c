@@ -26,7 +26,7 @@ struct ntfs_write_checkpoint {
 	bool prepared;
 };
 
-struct checkpoint_workspace {
+struct ntfs_write_checkpoint_workspace {
 	struct ntfs_write_batch_history history;
 	struct ntfs_write_journal_workspace guard;
 	uint8_t checkpoint[NTFS_WRITE_CHECKPOINT_BYTES], anchor[NTFS_WRITE_FORGET_BYTES];
@@ -141,7 +141,7 @@ checkpoint_log_physical(const struct ntfs_stream *log, uint64_t logical, uint64_
 
 static enum ntfs_result
 checkpoint_packet_prepare(struct ntfs_write_checkpoint *owner, struct ntfs_volume *volume,
-    struct checkpoint_workspace *work, struct ntfs_write_batch_pages **out)
+    struct ntfs_write_checkpoint_workspace *work, struct ntfs_write_batch_pages **out)
 {
 	struct ntfs_logfile *log = NULL;
 	struct ntfs_logfile_limits limits;
@@ -221,7 +221,7 @@ checkpoint_packet_prepare(struct ntfs_write_checkpoint *owner, struct ntfs_volum
 
 static enum ntfs_result
 checkpoint_log_prepare(struct ntfs_write_checkpoint *owner, struct ntfs_stream *log,
-    const struct ntfs_write_batch_pages *pages, struct checkpoint_workspace *work)
+    const struct ntfs_write_batch_pages *pages, struct ntfs_write_checkpoint_workspace *work)
 {
 	const struct ntfs_write_batch_page *page;
 	uint64_t physical, copied;
@@ -264,7 +264,7 @@ checkpoint_log_prepare(struct ntfs_write_checkpoint *owner, struct ntfs_stream *
 
 static enum ntfs_result
 checkpoint_roots_prepare(struct ntfs_write_checkpoint *owner, struct ntfs_stream *log,
-    const struct ntfs_write_batch_pages *pages, struct checkpoint_workspace *work)
+    const struct ntfs_write_batch_pages *pages, struct ntfs_write_checkpoint_workspace *work)
 {
 	struct ntfs_logfile_restart *restart;
 	struct ntfs_logfile_client client;
@@ -368,7 +368,7 @@ checkpoint_roots_prepare(struct ntfs_write_checkpoint *owner, struct ntfs_stream
 static enum ntfs_result
 checkpoint_prepare(struct ntfs_write_checkpoint *owner)
 {
-	struct checkpoint_workspace *work;
+	struct ntfs_write_checkpoint_workspace *work;
 	struct ntfs_volume *volume = NULL;
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *log = NULL;

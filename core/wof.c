@@ -3,7 +3,7 @@
 #include <ntfs/wof.h>
 
 static uint32_t
-unit_size(uint32_t algorithm)
+wof_unit_size(uint32_t algorithm)
 {
 	switch (algorithm) {
 	case NTFS_WOF_XPRESS_4K:
@@ -59,7 +59,7 @@ ntfs_wof_decode(const void *buffer, size_t size, struct ntfs_wof_info *out)
 	}
 	info.provider_version = ntfs_u32(disk->provider_version);
 	info.algorithm = ntfs_u32(disk->algorithm);
-	info.unit_size = unit_size(info.algorithm);
+	info.unit_size = wof_unit_size(info.algorithm);
 	if (info.provider_version != NTFS_WOF_FILE_CURRENT_VERSION || info.unit_size == 0) {
 		return NTFS_UNSUPPORTED;
 	}
@@ -86,7 +86,7 @@ ntfs_wof_layout_init(uint32_t algorithm, uint64_t logical_size, uint64_t stored_
 	}
 	ntfs_zero(&layout, sizeof(layout));
 	layout.algorithm = algorithm;
-	layout.unit_size = unit_size(algorithm);
+	layout.unit_size = wof_unit_size(algorithm);
 	if (layout.unit_size == 0) {
 		return NTFS_UNSUPPORTED;
 	}
@@ -112,7 +112,7 @@ ntfs_wof_layout_init(uint32_t algorithm, uint64_t logical_size, uint64_t stored_
 }
 
 static bool
-valid_layout(const struct ntfs_wof_layout *layout)
+wof_valid_layout(const struct ntfs_wof_layout *layout)
 {
 	struct ntfs_wof_layout expected;
 
@@ -125,7 +125,7 @@ valid_layout(const struct ntfs_wof_layout *layout)
 }
 
 static enum ntfs_result
-checked_span(const struct ntfs_wof_layout *layout, uint32_t chunk, uint64_t start, uint64_t end,
+wof_checked_span(const struct ntfs_wof_layout *layout, uint32_t chunk, uint64_t start, uint64_t end,
     struct ntfs_wof_span *out)
 {
 	struct ntfs_wof_span span;
@@ -162,10 +162,10 @@ ntfs_wof_chunk_span(const struct ntfs_wof_layout *layout, uint32_t chunk, uint64
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
-	if (!valid_layout(layout)) {
+	if (!wof_valid_layout(layout)) {
 		return NTFS_INVALID;
 	}
-	return checked_span(layout, chunk, start, end, out);
+	return wof_checked_span(layout, chunk, start, end, out);
 }
 
 enum ntfs_result
@@ -177,7 +177,7 @@ ntfs_wof_table_validate(const struct ntfs_wof_layout *layout, const void *buffer
 	uint32_t chunk;
 	enum ntfs_result result;
 
-	if (!valid_layout(layout) || (size != 0 && buffer == NULL)) {
+	if (!wof_valid_layout(layout) || (size != 0 && buffer == NULL)) {
 		return NTFS_INVALID;
 	}
 	if (size != layout->table_size) {
@@ -191,7 +191,7 @@ ntfs_wof_table_validate(const struct ntfs_wof_layout *layout, const void *buffer
 			    ? ntfs_u32(table + (size_t)chunk * layout->offset_size)
 			    : ntfs_u64(table + (size_t)chunk * layout->offset_size);
 		}
-		result = checked_span(layout, chunk, start, end, &span);
+		result = wof_checked_span(layout, chunk, start, end, &span);
 		if (result != NTFS_OK) {
 			return result;
 		}

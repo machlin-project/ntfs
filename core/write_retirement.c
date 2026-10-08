@@ -10,7 +10,7 @@ enum {
 	RETIREMENT_USA_COUNT = NTFS_WRITE_RECORD_BYTES / NTFS_MST_STRIDE + 1
 };
 
-struct retirement_step {
+struct ntfs_write_retirement_step {
 	struct ntfs_write_retirement_update view;
 	uint8_t payload[RETIREMENT_PAYLOAD_CAPACITY];
 };
@@ -19,24 +19,24 @@ struct ntfs_write_retirement_program {
 	void *context;
 	void (*release)(void *, void *, size_t);
 	size_t bytes, count;
-	struct retirement_step step[];
+	struct ntfs_write_retirement_step step[];
 };
 
-struct retirement_workspace {
+struct ntfs_write_retirement_workspace {
 	uint8_t before[NTFS_WRITE_CLUSTER_BYTES], after[NTFS_WRITE_CLUSTER_BYTES];
 	uint8_t expected[NTFS_WRITE_RECORD_BYTES];
 	bool retire[NTFS_WRITE_RETIREMENT_RECORDS];
 };
 
 static uint16_t
-retired_sequence(uint16_t sequence)
+retirement_retired_sequence(uint16_t sequence)
 {
 	sequence = (uint16_t)(sequence + 1u);
 	return sequence == 0 ? 1 : sequence;
 }
 
 static bool
-modern_geometry(const struct ntfs_disk_record *header)
+retirement_modern_geometry(const struct ntfs_disk_record *header)
 {
 	size_t first = ntfs_u16(header->attrs_offset), used = ntfs_u32(header->used);
 
@@ -51,7 +51,7 @@ modern_geometry(const struct ntfs_disk_record *header)
 }
 
 static bool
-record_number(const void *record, uint64_t logical)
+retirement_record_number(const void *record, uint64_t logical)
 {
 	const struct ntfs_disk_record_extension *extension;
 	uint64_t number = logical / NTFS_WRITE_RECORD_BYTES;
@@ -61,8 +61,8 @@ record_number(const void *record, uint64_t logical)
 }
 
 static enum ntfs_result
-admit_output(const struct ntfs_environment *source, const struct ntfs_write_mutation_region *region,
-    struct ntfs_write_retirement_program **out)
+retirement_admit_output(const struct ntfs_environment *source,
+    const struct ntfs_write_mutation_region *region, struct ntfs_write_retirement_program **out)
 {
 	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
 	    (source != NULL &&
@@ -80,8 +80,8 @@ admit_output(const struct ntfs_environment *source, const struct ntfs_write_muta
 }
 
 static enum ntfs_result
-admit_region(const struct ntfs_environment *source, const struct ntfs_write_mutation_region *region,
-    uint16_t key)
+retirement_admit_region(const struct ntfs_environment *source,
+    const struct ntfs_write_mutation_region *region, uint16_t key)
 {
 	const struct ntfs_write_mutation_target *target;
 	size_t index;
@@ -119,7 +119,7 @@ admit_region(const struct ntfs_environment *source, const struct ntfs_write_muta
 }
 
 static void
-publication_fields(void *expected, const void *after)
+retirement_publication_fields(void *expected, const void *after)
 {
 	struct ntfs_disk_record *header = expected;
 	const struct ntfs_disk_record *next = after;
@@ -131,8 +131,8 @@ publication_fields(void *expected, const void *after)
 }
 
 static enum ntfs_result
-admit_records(const struct ntfs_write_mutation_region *region, struct retirement_workspace *work,
-    size_t *count)
+retirement_admit_records(const struct ntfs_write_mutation_region *region,
+    struct ntfs_write_retirement_workspace *work, size_t *count)
 {
 	const struct ntfs_disk_record *before, *after;
 	struct ntfs_disk_record *expected;
@@ -161,15 +161,16 @@ admit_records(const struct ntfs_write_mutation_region *region, struct retirement
 		}
 		before = (const void *)(work->before + offset);
 		after = (const void *)(work->after + offset);
-		if (!modern_geometry(before) || !modern_geometry(after)) {
+		if (!retirement_modern_geometry(before) || !retirement_modern_geometry(after)) {
 			return NTFS_UNSUPPORTED;
 		}
 		logical = region->target.logical_offset + offset;
-		if (!record_number(before, logical) || !record_number(after, logical)) {
+		if (!retirement_record_number(before, logical) ||
+		    !retirement_record_number(after, logical)) {
 			return NTFS_CORRUPT;
 		}
 		ntfs_copy(work->expected, before, NTFS_WRITE_RECORD_BYTES);
-		publication_fields(work->expected, after);
+		retirement_publication_fields(work->expected, after);
 		if (ntfs_equal(work->expected, after, NTFS_WRITE_RECORD_BYTES)) {
 			continue;
 		}
@@ -178,7 +179,8 @@ admit_records(const struct ntfs_write_mutation_region *region, struct retirement
 		    (flags != NTFS_RECORD_IN_USE &&
 			flags != (NTFS_RECORD_IN_USE | NTFS_RECORD_DIRECTORY)) ||
 		    ntfs_u16(after->flags) != 0 || ntfs_u16(before->links) == 0 ||
-		    ntfs_u16(after->sequence) != retired_sequence(ntfs_u16(before->sequence))) {
+		    ntfs_u16(after->sequence) !=
+			retirement_retired_sequence(ntfs_u16(before->sequence))) {
 			return NTFS_UNSUPPORTED;
 		}
 		expected = (void *)work->expected;
@@ -194,8 +196,8 @@ admit_records(const struct ntfs_write_mutation_region *region, struct retirement
 }
 
 static enum ntfs_result
-encode(const struct ntfs_write_mutation_region *region, uint16_t key, size_t slot,
-    const void *before, bool snapshot, struct retirement_step *step)
+retirement_encode(const struct ntfs_write_mutation_region *region, uint16_t key, size_t slot,
+    const void *before, bool snapshot, struct ntfs_write_retirement_step *step)
 {
 	const struct ntfs_disk_record *header = before;
 	struct ntfs_disk_log_update_storage *stored = (void *)step->payload;
@@ -245,14 +247,14 @@ ntfs_write_retirement_program_prepare(const struct ntfs_environment *source,
     struct ntfs_write_retirement_program **out)
 {
 	struct ntfs_write_retirement_program *program = NULL;
-	struct retirement_workspace *work;
+	struct ntfs_write_retirement_workspace *work;
 	struct ntfs_environment allocator;
 	size_t count, bytes, index, ordinal = 0;
 	enum ntfs_result result;
 
-	result = admit_output(source, region, out);
+	result = retirement_admit_output(source, region, out);
 	if (result == NTFS_OK) {
-		result = admit_region(source, region, key);
+		result = retirement_admit_region(source, region, key);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -262,7 +264,7 @@ ntfs_write_retirement_program_prepare(const struct ntfs_environment *source,
 	if (work == NULL) {
 		return NTFS_NO_MEMORY;
 	}
-	result = admit_records(region, work, &count);
+	result = retirement_admit_records(region, work, &count);
 	if (result == NTFS_OK) {
 		bytes = sizeof(*program) + count * sizeof(*program->step);
 		program = allocator.allocate(allocator.context, bytes);
@@ -280,10 +282,11 @@ ntfs_write_retirement_program_prepare(const struct ntfs_environment *source,
 		if (!work->retire[index]) {
 			continue;
 		}
-		result = encode(region, key, index, work->before + index * NTFS_WRITE_RECORD_BYTES,
-		    true, &program->step[ordinal++]);
+		result = retirement_encode(region, key, index,
+		    work->before + index * NTFS_WRITE_RECORD_BYTES, true,
+		    &program->step[ordinal++]);
 		if (result == NTFS_OK) {
-			result = encode(region, key, index,
+			result = retirement_encode(region, key, index,
 			    work->before + index * NTFS_WRITE_RECORD_BYTES, false,
 			    &program->step[ordinal++]);
 		}
@@ -318,14 +321,14 @@ ntfs_write_retirement_program_close(struct ntfs_write_retirement_program *progra
 }
 
 static enum ntfs_result
-admit_restored(const void *memory)
+retirement_admit_restored(const void *memory)
 {
 	const struct ntfs_disk_record *header = memory;
 	struct ntfs_attr_view attribute;
 	uint32_t position;
 	enum ntfs_result result;
 
-	if (!modern_geometry(header)) {
+	if (!retirement_modern_geometry(header)) {
 		return NTFS_CORRUPT;
 	}
 	position = ntfs_u16(header->attrs_offset);
@@ -376,7 +379,7 @@ ntfs_write_retirement_apply(
 	}
 	before = (const void *)((const uint8_t *)payload + update.undo.offset);
 	sequence = ntfs_u16(before->sequence);
-	next_sequence = retired_sequence(sequence);
+	next_sequence = retirement_retired_sequence(sequence);
 	flags = ntfs_u16(before->flags);
 	if (!ntfs_equal(before->mst.magic, "FILE", sizeof(before->mst.magic)) || sequence == 0 ||
 	    ntfs_u16(before->mst.usa_offset) != RETIREMENT_USA_OFFSET ||
@@ -386,13 +389,13 @@ ntfs_write_retirement_apply(
 	    ntfs_u16(before->links) == 0) {
 		return NTFS_CORRUPT;
 	}
-	result = admit_restored(memory);
+	result = retirement_admit_restored(memory);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	logical = update.target_vcn * NTFS_WRITE_CLUSTER_BYTES +
 	    (uint64_t)update.cluster_index * NTFS_WRITE_SECTOR_BYTES;
-	if (!record_number(memory, logical) ||
+	if (!retirement_record_number(memory, logical) ||
 	    ntfs_u16(header->attrs_offset) != ntfs_u16(before->attrs_offset) ||
 	    ntfs_u16(header->links) != ntfs_u16(before->links) ||
 	    !((ntfs_u16(header->sequence) == sequence && ntfs_u16(header->flags) == flags) ||

@@ -8,9 +8,9 @@ static enum ntfs_result ntfs_validation_check_directory_graph(
 
 static int
 ntfs_validation_compare_links(
-    struct ntfs_validation_context *validation, const void *a, const void *b)
+    struct ntfs_validation_context *validation, const void *left_input, const void *right_input)
 {
-	const struct ntfs_validation_link *left = a, *right = b;
+	const struct ntfs_validation_link *left = left_input, *right = right_input;
 	uint16_t left_unit, right_unit;
 	size_t i, length = left->length < right->length ? left->length : right->length;
 

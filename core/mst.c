@@ -8,7 +8,7 @@ _Static_assert(
     NTFS_PROTECTED_RECORD_MAX_BYTES == NTFS_MAX_RECORD_BYTES, "private protected-record policy");
 
 static bool
-supported_magic(const struct ntfs_disk_mst *header)
+mst_supported_magic(const struct ntfs_disk_mst *header)
 {
 	return ntfs_equal(header->magic, "FILE", sizeof(header->magic)) ||
 	    ntfs_equal(header->magic, "INDX", sizeof(header->magic)) ||
@@ -42,7 +42,7 @@ ntfs_record_protect(const void *input, size_t size, void *output, size_t capacit
 					      : source_address - output_address < size)) {
 		return NTFS_INVALID;
 	}
-	if (!supported_magic(header)) {
+	if (!mst_supported_magic(header)) {
 		return NTFS_UNSUPPORTED;
 	}
 	offset = ntfs_u16(header->usa_offset);

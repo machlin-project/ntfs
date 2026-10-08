@@ -74,6 +74,11 @@ owner, monitor, callback or native item identity. Whole method bodies retain the
 original lock, authorization, cleanup and reply order. Extraction qualification
 and the separate installed gate are recorded in [REFACTORING.md](REFACTORING.md).
 
+The private [NTFSWireBytes.h](../adapters/fskit/NTFSWireBytes.h) supplies the
+identical little-endian byte encoder used by the native filename and stream
+manifests. Their callers retain field widths, admission, allocations and
+publication. This pure byte helper owns no native resource or lifetime.
+
 The private `NTFSImageTransport` platform component holds the original authorized
 `FSPathURLResource` and balances successful security-scope access for its lifetime.
 [FSKit transports that scope intact](https://developer.apple.com/documentation/fskit/fspathurlresource).

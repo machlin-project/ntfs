@@ -4,7 +4,7 @@
 #include <ntfs/logfile_tables.h>
 
 static bool
-entry_offset(const struct ntfs_logfile_restart_table *table, uint32_t offset)
+logfile_table_entry_offset(const struct ntfs_logfile_restart_table *table, uint32_t offset)
 {
 	return offset >= table->entries.offset &&
 	    (offset - table->entries.offset) % table->entry_bytes == 0 &&
@@ -52,13 +52,13 @@ ntfs_logfile_restart_table_decode(
 		next = ntfs_u32(bytes + offset);
 		if (next == NTFS_LOG_TABLE_ALLOCATED) {
 			allocated++;
-		} else if (next != 0 && !entry_offset(&table, next)) {
+		} else if (next != 0 && !logfile_table_entry_offset(&table, next)) {
 			return NTFS_CORRUPT;
 		}
 	}
 	if (allocated != table.allocated_count ||
-	    (table.first_free != 0 && !entry_offset(&table, table.first_free)) ||
-	    (table.last_free != 0 && !entry_offset(&table, table.last_free))) {
+	    (table.first_free != 0 && !logfile_table_entry_offset(&table, table.first_free)) ||
+	    (table.last_free != 0 && !logfile_table_entry_offset(&table, table.last_free))) {
 		return NTFS_CORRUPT;
 	}
 	offset = table.first_free;
@@ -85,7 +85,7 @@ ntfs_logfile_restart_table_decode(
 }
 
 static bool
-client_version(uint32_t major, uint32_t minor)
+logfile_table_client_version(uint32_t major, uint32_t minor)
 {
 	return (major == NTFS_LOG_CLIENT_MAJOR_BASE || major == NTFS_LOG_CLIENT_MAJOR_ATTRIBUTES) &&
 	    minor == NTFS_LOG_CLIENT_MINOR;
@@ -107,7 +107,7 @@ ntfs_logfile_open_attribute_decode(const void *input, size_t size, uint32_t majo
 	if (input == NULL) {
 		return NTFS_INVALID;
 	}
-	if (!client_version(major, minor)) {
+	if (!logfile_table_client_version(major, minor)) {
 		return NTFS_UNSUPPORTED;
 	}
 	expected = major == NTFS_LOG_CLIENT_MAJOR_BASE ? sizeof(*base) : sizeof(*attributes);
@@ -151,7 +151,7 @@ ntfs_logfile_dirty_page_decode(const void *input, size_t size, uint32_t major, u
 	if (input == NULL) {
 		return NTFS_INVALID;
 	}
-	if (!client_version(major, minor)) {
+	if (!logfile_table_client_version(major, minor)) {
 		return NTFS_UNSUPPORTED;
 	}
 	if (size > NTFS_LOGFILE_MAX_RECORD_BYTES) {

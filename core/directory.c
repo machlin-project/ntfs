@@ -25,24 +25,24 @@ static int
 ntfs_directory_key_compare(struct ntfs_volume *volume, const struct ntfs_disk_filename *left,
     const struct ntfs_disk_filename *right)
 {
-	const uint8_t *a = (const uint8_t *)left + sizeof(*left);
-	const uint8_t *b = (const uint8_t *)right + sizeof(*right);
+	const uint8_t *left_name = (const uint8_t *)left + sizeof(*left);
+	const uint8_t *right_name = (const uint8_t *)right + sizeof(*right);
 	size_t i, count = left->length < right->length ? left->length : right->length;
-	uint16_t x, y;
+	uint16_t left_unit, right_unit;
 	int sensitive = 0;
 
 	/* Filename collation uses $UpCase first, then the original UTF-16 units
 	 * to order names that differ only in case. Keep both comparisons. */
 	for (i = 0; i < count; i++) {
-		x = ntfs_u16(a + i * NTFS_UTF16_UNIT_BYTES);
-		y = ntfs_u16(b + i * NTFS_UTF16_UNIT_BYTES);
-		if (sensitive == 0 && x != y) {
-			sensitive = x < y ? -1 : 1;
+		left_unit = ntfs_u16(left_name + i * NTFS_UTF16_UNIT_BYTES);
+		right_unit = ntfs_u16(right_name + i * NTFS_UTF16_UNIT_BYTES);
+		if (sensitive == 0 && left_unit != right_unit) {
+			sensitive = left_unit < right_unit ? -1 : 1;
 		}
-		x = ntfs_u16(volume->upcase + (size_t)x * NTFS_UTF16_UNIT_BYTES);
-		y = ntfs_u16(volume->upcase + (size_t)y * NTFS_UTF16_UNIT_BYTES);
-		if (x != y) {
-			return x < y ? -1 : 1;
+		left_unit = ntfs_u16(volume->upcase + (size_t)left_unit * NTFS_UTF16_UNIT_BYTES);
+		right_unit = ntfs_u16(volume->upcase + (size_t)right_unit * NTFS_UTF16_UNIT_BYTES);
+		if (left_unit != right_unit) {
+			return left_unit < right_unit ? -1 : 1;
 		}
 	}
 	return left->length == right->length ? sensitive : left->length < right->length ? -1 : 1;

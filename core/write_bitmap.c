@@ -4,7 +4,7 @@
 
 enum { BITMAP_CLUSTER_BITS = NTFS_WRITE_CLUSTER_BYTES * NTFS_BITS_PER_BYTE };
 
-struct bitmap_step {
+struct ntfs_write_bitmap_step {
 	struct ntfs_logfile_buffer view;
 	uint8_t payload[NTFS_WRITE_BITMAP_PAYLOAD_BYTES];
 };
@@ -13,12 +13,12 @@ struct ntfs_write_bitmap_program {
 	void *context;
 	void (*release)(void *, void *, size_t);
 	size_t bytes, count;
-	struct bitmap_step step[];
+	struct ntfs_write_bitmap_step step[];
 };
 
 static enum ntfs_result
-admit_output(const struct ntfs_environment *source, const struct ntfs_write_mutation_region *region,
-    struct ntfs_write_bitmap_program **out)
+bitmap_admit_output(const struct ntfs_environment *source,
+    const struct ntfs_write_mutation_region *region, struct ntfs_write_bitmap_program **out)
 {
 	if (!ntfs_pointer_range_valid(out, sizeof(*out)) ||
 	    (source != NULL &&
@@ -37,8 +37,8 @@ admit_output(const struct ntfs_environment *source, const struct ntfs_write_muta
 }
 
 static enum ntfs_result
-admit_region(const struct ntfs_environment *source, const struct ntfs_write_mutation_region *region,
-    uint16_t key)
+bitmap_admit_region(const struct ntfs_environment *source,
+    const struct ntfs_write_mutation_region *region, uint16_t key)
 {
 	const struct ntfs_write_mutation_target *target;
 	size_t index;
@@ -82,31 +82,31 @@ admit_region(const struct ntfs_environment *source, const struct ntfs_write_muta
 }
 
 static bool
-bit(const uint8_t *bitmap, size_t index)
+bitmap_bit(const uint8_t *bitmap, size_t index)
 {
 	return (bitmap[index / NTFS_BITS_PER_BYTE] & (1u << (index % NTFS_BITS_PER_BYTE))) != 0;
 }
 
 static bool
-next_range(const struct ntfs_write_mutation_region *region, size_t *position, uint32_t *first,
-    uint32_t *count, bool *set)
+bitmap_next_range(const struct ntfs_write_mutation_region *region, size_t *position,
+    uint32_t *first, uint32_t *count, bool *set)
 {
 	size_t begin;
 	bool state;
 
 	while (*position < BITMAP_CLUSTER_BITS &&
-	    bit(region->before, *position) == bit(region->after, *position)) {
+	    bitmap_bit(region->before, *position) == bitmap_bit(region->after, *position)) {
 		(*position)++;
 	}
 	if (*position == BITMAP_CLUSTER_BITS) {
 		return false;
 	}
 	begin = *position;
-	state = bit(region->after, begin);
+	state = bitmap_bit(region->after, begin);
 	do {
 		(*position)++;
-	} while (*position < BITMAP_CLUSTER_BITS && bit(region->after, *position) == state &&
-	    bit(region->before, *position) != state);
+	} while (*position < BITMAP_CLUSTER_BITS && bitmap_bit(region->after, *position) == state &&
+	    bitmap_bit(region->before, *position) != state);
 	*first = (uint32_t)begin;
 	*count = (uint32_t)(*position - begin);
 	*set = state;
@@ -114,8 +114,8 @@ next_range(const struct ntfs_write_mutation_region *region, size_t *position, ui
 }
 
 static enum ntfs_result
-encode(const struct ntfs_write_mutation_region *region, uint16_t key, uint32_t first,
-    uint32_t count, bool set, struct bitmap_step *step)
+bitmap_encode(const struct ntfs_write_mutation_region *region, uint16_t key, uint32_t first,
+    uint32_t count, bool set, struct ntfs_write_bitmap_step *step)
 {
 	struct ntfs_disk_log_bitmap_range range;
 	struct ntfs_logfile_update_input update = {0};
@@ -150,14 +150,14 @@ ntfs_write_bitmap_program_prepare(const struct ntfs_environment *source,
 	bool set;
 	enum ntfs_result result;
 
-	result = admit_output(source, region, out);
+	result = bitmap_admit_output(source, region, out);
 	if (result == NTFS_OK) {
-		result = admit_region(source, region, key);
+		result = bitmap_admit_region(source, region, key);
 	}
 	if (result != NTFS_OK) {
 		return result;
 	}
-	while (next_range(region, &position, &first, &bits, &set)) {
+	while (bitmap_next_range(region, &position, &first, &bits, &set)) {
 		if (count == NTFS_WRITE_BITMAP_MAX_RANGES) {
 			return NTFS_RANGE;
 		}
@@ -177,13 +177,13 @@ ntfs_write_bitmap_program_prepare(const struct ntfs_environment *source,
 	program->bytes = bytes;
 	program->count = count;
 	position = 0;
-	while (next_range(region, &position, &first, &bits, &set)) {
+	while (bitmap_next_range(region, &position, &first, &bits, &set)) {
 		/* Borrowed source bytes remain immutable throughout preparation. */
 		if (index == count) {
 			result = NTFS_CORRUPT;
 			break;
 		}
-		result = encode(region, key, first, bits, set, &program->step[index]);
+		result = bitmap_encode(region, key, first, bits, set, &program->step[index]);
 		if (result != NTFS_OK) {
 			break;
 		}

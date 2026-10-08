@@ -88,7 +88,8 @@ ntfs_mutation_bitmap_grow(
 }
 
 static enum ntfs_result
-append_run(struct ntfs_run *runs, size_t *count, uint64_t vcn, uint64_t lcn, uint64_t length)
+mutation_allocation_append_run(
+    struct ntfs_run *runs, size_t *count, uint64_t vcn, uint64_t lcn, uint64_t length)
 {
 	struct ntfs_run *last;
 
@@ -135,7 +136,7 @@ ntfs_mutation_allocate_runs(struct ntfs_write_mutation_plan *plan, uint64_t vcn,
 		    ntfs_mutation_bit(bitmap->after, bitmap->bytes, cluster)) {
 			continue;
 		}
-		result = append_run(runs, count, vcn, cluster, 1);
+		result = mutation_allocation_append_run(runs, count, vcn, cluster, 1);
 		if (result != NTFS_OK) {
 			break;
 		}
@@ -213,7 +214,8 @@ ntfs_mutation_resize_runs(struct ntfs_write_mutation_plan *plan, const struct nt
 			if (take > clusters - current) {
 				take = clusters - current;
 			}
-			result = append_run(runs, count, current, stream->runs[index].lcn, take);
+			result = mutation_allocation_append_run(
+			    runs, count, current, stream->runs[index].lcn, take);
 			if (result != NTFS_OK) {
 				goto done;
 			}
@@ -227,7 +229,7 @@ ntfs_mutation_resize_runs(struct ntfs_write_mutation_plan *plan, const struct nt
 			goto done;
 		}
 		for (index = 0; index < additions; index++) {
-			result = append_run(
+			result = mutation_allocation_append_run(
 			    runs, count, added[index].vcn, added[index].lcn, added[index].length);
 			if (result != NTFS_OK) {
 				goto done;
@@ -298,7 +300,7 @@ ntfs_mutation_bitmap_flush(
 }
 
 static enum ntfs_result
-grow_mft(struct ntfs_write_mutation_plan *plan)
+mutation_allocation_grow_mft(struct ntfs_write_mutation_plan *plan)
 {
 	struct ntfs_mutation_record *record, *mft;
 	struct ntfs_stream *stream = NULL;
@@ -382,7 +384,7 @@ ntfs_mutation_new_record(struct ntfs_write_mutation_plan *plan, struct ntfs_muta
 				return result;
 			}
 		}
-		result = grow_mft(plan);
+		result = mutation_allocation_grow_mft(plan);
 		if (result != NTFS_OK) {
 			return result;
 		}

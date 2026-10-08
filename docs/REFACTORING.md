@@ -1,355 +1,132 @@
-# Driver refactoring plan
+# Driver refactoring
 
-This review follows the verified ordinary-mutation preparation checkpoint in
-[ACCEPTANCE.md](ACCEPTANCE.md#ordinary-mutation-planning-and-complete-lfs-placement).
-The checkpoint passes complete local regression; expanded device writing and
-broader interruption coverage retain their separate unfinished gates. Refactoring proceeds in
-focused behavior-preserving commits on `development`.
+The agreed driver refactoring is complete. Reading, mutation construction,
+journal/recovery, security, diagnostics and native FSKit responsibilities have
+explicit components and consistent private helper and owner names. The final
+batch audits every production C and Objective-C translation unit and retains the
+existing Swift application, command and extension boundaries. Public interfaces,
+wire layouts and supported operations retain their original contracts.
 
-The purpose is consistent, readable ownership and module boundaries across the C
-core and FSKit, including reading, namespace traversal, security and diagnostics.
-Formatting already passes the selected-Xcode profile. The larger problems are
-repeated helpers, inconsistent internal names and files that combine several
-responsibilities. Completed writer cleanup does not close the rest of the driver.
+This closes the structural/style work. Remaining product and recovery gates are
+tracked in [ACCEPTANCE.md](ACCEPTANCE.md) and [WRITES.md](WRITES.md). Source history
+belongs to ordinary Git; exact build and artifact identities belong to generated
+reports.
+
+## Completion batch
+
+The last connected batch follows the accepted ordinary-image implementation and
+native-source growth recovery. Its finite plan is complete:
+
+1. Review all 76 C core files and their 818 functions, including mount/bootstrap,
+   metadata, streams/codecs, security and diagnostic admission.
+2. Regularize the remaining private names in both reading and writing: 212
+   helpers, 168 parameter/local declarations and 27 private structure tags.
+   Declaration-bound edits preserve their exact uses and leave member fields intact.
+3. Apply matching ownership conventions to all 14 FSKit implementation files and
+   both POSIX transports. Preserve selectors, locks, authenticated context, reader
+   leases, replies and error order. Review the three unchanged Swift sources and
+   existing public/private headers at their current boundaries.
+4. Consolidate the two identical native manifest byte encoders into the private
+   [NTFSWireBytes.h](../adapters/fskit/NTFSWireBytes.h). The helper preserves the
+   complete original body, byte order and caller-specific admission.
+5. Review complete ordered source tokens, compile both architectures, then run the
+   complete connected local regression and current-code native components once.
+
+Short loop indices and bit-decoder arithmetic names remain local and clear.
+Complete owning operations retain their boundaries; function size alone does not
+justify moving validation, lifetime or error handling elsewhere.
 
 ## Applied cleanup
 
-Ten writer/encoder modules now share the private
-[pointer-range helpers](../core/pointer_range.h). Their equivalent arithmetic
-checks preserve NULL/zero-length admission, overflow refusal and alias behavior.
-Required-pointer rules and failed-output publication remain at each operation's
-owning boundary. Helpers with stricter empty-range/NULL rules, including the
-bounded journal/history/recovery interfaces, retain their existing local policy.
-No allocator, operation governor or native transport policy is combined.
+The component map incorporates the preceding accepted extractions and the final
+driver-wide naming audit. Files within a row cooperate under the same existing
+owner; a private component does not introduce a second allocator or governor.
 
-All fourteen affected writer/encoder suites pass with fatal ASan/UBSan; their
-existing byte, fault, lifetime and alias oracles are retained. Evidence is in
-`artifacts/overwrite/refactor-pointer-ranges-focused-20261007/`.
+| Responsibility | Owning components and preserved boundary |
+| --- | --- |
+| Admission and immutable metadata | [api.c](../core/api.c), [mount.c](../core/mount.c), [record.c](../core/record.c), [attribute.c](../core/attribute.c), [node.c](../core/node.c), [catalog.c](../core/catalog.c): public admission, complete reachable-prefix bootstrap, sequence/instance checks and borrowed attribute lifetime. |
+| Stream content | [stream.c](../core/stream.c), [stream_mapping.c](../core/stream_mapping.c), [stream_read.c](../core/stream_read.c), [wof_stream.c](../core/wof_stream.c): construction/release, mapping pairs, run lookup, sparse/VDL reads and provider-owned decoding/cache lifetime. |
+| Names, indexes and links | [directory.c](../core/directory.c), [index.c](../core/index.c), [links.c](../core/links.c), [reparse.c](../core/reparse.c), [unicode.c](../core/unicode.c): persistent filename cursors, physical allocation inventory, original link provenance and Unicode collation. |
+| Security | [security.c](../core/security.c), [access.c](../core/access.c), [secure.c](../core/secure.c), [secure_index.c](../core/secure_index.c), [secure_store.c](../core/secure_store.c): wire decoding, ordered DACL evaluation, descriptor/snapshot ownership, SII/SDH traversal and whole-store validation. |
+| Whole-volume diagnostics | [validate.c](../core/validate.c), [validate_records.c](../core/validate_records.c), [validate_namespace.c](../core/validate_namespace.c), [validate_media.c](../core/validate_media.c), [validate_security.c](../core/validate_security.c): one context/accounting owner, complete ordered passes and bounded partial reports. |
+| Immutable journal acquisition | [logfile_source.c](../core/logfile_source.c), [logfile_pages.c](../core/logfile_pages.c), [logfile_index.c](../core/logfile_index.c), [logfile_records.c](../core/logfile_records.c): source lifetime, protected-page routing, retained indexing and complete record/history/capture. |
+| Mutation storage | [write_record.c](../core/write_record.c), [write_attribute.c](../core/write_attribute.c), [write_stream.c](../core/write_stream.c), [write_directory.c](../core/write_directory.c), [write_directory_store.c](../core/write_directory_store.c): FILE ownership, attributes/streams, directory keys and complete index construction under one mutation plan. |
+| Mutation planning | [write_namespace.c](../core/write_namespace.c), [write_allocation.c](../core/write_allocation.c), [write_growth.c](../core/write_growth.c), [write_mutation.c](../core/write_mutation.c), [write_mutation_owner.c](../core/write_mutation_owner.c): namespace, allocation/growth and complete owner preview/execution. |
+| Program, journal and execution | [write_program.c](../core/write_program.c), [write_program_packets.c](../core/write_program_packets.c), [write_metadata.c](../core/write_metadata.c), [write_journal.c](../core/write_journal.c), [write_replay.c](../core/write_replay.c), [write_transaction.c](../core/write_transaction.c), [write_execute.c](../core/write_execute.c): retained payloads, compensation/original bindings, complete preparation and ordered physical execution. |
+| Retained recovery and reuse | [write_history.c](../core/write_history.c), [write_batch_capture.c](../core/write_batch_capture.c), [write_batch_pages.c](../core/write_batch_pages.c), [write_batch_execute.c](../core/write_batch_execute.c), [write_batch_recover.c](../core/write_batch_recover.c), [write_checkpoint.c](../core/write_checkpoint.c), [write_retirement.c](../core/write_retirement.c): original history, bounded batch storage, checkpoint/recovery and safe retirement. |
+| Native volume | [NTFSVolume.m](../adapters/fskit/NTFSVolume.m), [NTFSVolumeItems.m](../adapters/fskit/NTFSVolumeItems.m), [NTFSVolumeRead.m](../adapters/fskit/NTFSVolumeRead.m), [NTFSImageVolume.m](../adapters/fskit/NTFSImageVolume.m): lifecycle/admission, canonical items/caches, complete immutable requests and complete image operations under one volume owner. |
+| Native bridges and transports | [NTFSFileSystem.m](../adapters/fskit/NTFSFileSystem.m), [NTFSCheckTask.m](../adapters/fskit/NTFSCheckTask.m), [NTFSResource.m](../adapters/fskit/NTFSResource.m), [NTFSImageTransport.m](../adapters/fskit/NTFSImageTransport.m), [NTFSNames.m](../adapters/fskit/NTFSNames.m), [NTFSLinks.m](../adapters/fskit/NTFSLinks.m): probing/check tasks, native resources, authorized image ownership and name/link conversion. |
+| POSIX and application | [image.c](../adapters/posix/image.c), [overwrite_image.c](../adapters/posix/overwrite_image.c), [App.swift](../adapters/fskit/App.swift), [ImageCommands.swift](../adapters/fskit/ImageCommands.swift), [NTFSExtension.swift](../adapters/fskit/NTFSExtension.swift): immutable input, exclusively claimed persistent image, UI/CLI coordination and extension entry point. |
 
-The complete program is now separated into
-[metadata compilation/application](../core/write_program.c) and
-[packet, original-binding and compensation composition](../core/write_program_packets.c).
-The [private storage contract](../core/write_program_internal.h) preserves one
-retained owner, copied payload lifetime and exact accounting. Internal compiler
-and packet helpers now identify their owning object and action.
-
-The former combined writer header is replaced by component contracts for
-metadata, journal serialization, replay, retained history, overlay validation,
-physical execution, transaction preparation and recovery. The native adapter
-includes only the [image-owner entry points](../core/write_owner.h) and
-[durable reports](../core/write_status.h); it receives no private FILE/journal
-workspace layouts through that boundary. The qualified family's packet-size
-ceiling belongs to replay and is reused by retained history; the original values,
-structure fields and stage ordering are preserved. These are implementation
-boundaries, not expanded operation or recovery admission.
-
-The connected cleanup passes all 181 fatal-ASan/UBSan suites, selected-Xcode
-formatting, 106 freestanding objects (53 core sources per architecture) under
-the 2-KiB frame ceiling, and eleven independent private-header syntax checks.
-FSKit host components remain 63 PASS / 13 explicit runtime-SDK SKIP / 0 FAIL.
-The three actual regular-image postimages are byte-identical to the preceding
-physical-execution checkpoint. Main checks unchanged program function bodies,
-structure fields, prototypes, stage order and policy expressions independently.
-The updated diagram is rendered and visually reviewed. Initial missing budget
-and native wire includes, plus a failed header-check wrapper invocation, remain
-retained separately from their corrected evidence. Reports and the consolidated
-review are in `artifacts/overwrite/refactor-write-components-*` directories.
-
-Broader naming/cleanup review and FSKit extraction remain in the plan;
-this does not complete driver refactoring. Native lifecycle,
-locking, authorization, transfers and reply code are unchanged, so this cleanup
-adds no installed VM acceptance. Functional recovery/write admission retains
-its original native gate.
-
-A subsequent focused cleanup makes successful producer outputs explicit before use
-in nine existing writer modules and the native image-item rebind method. The
-directory constructor retains its exact root allocation size for cleanup; recovery
-selects the last retained transaction only after proving the array is nonempty.
-Fourteen C functions preserve ordered calls and errors. Native item rebinding
-preserves metadata/stat/link/ancestry order, its failure node close and successful
-field publication. Locking, authenticated rights and native replies retain their
-existing code. This is consistent control flow, not the planned FSKit extraction.
-
-The connected recovery working set passes all 184 fatal-ASan/UBSan suites with
-assertions enabled, both freestanding architectures and fifteen standalone headers.
-All nine regular-image writer/recovery postimages are byte-identical before/after
-the C guard changes. Strict Release compilation passes 116 core checks and eleven
-native x86_64 frontend checks; actual unsigned app/extension/archive builds supply
-both architectures. Host FSKit after native guard cleanup remains 63 PASS /
-13 runtime-SDK SKIP / 0 FAIL. Initial compiler refusals remain retained separately.
-The main equivalence and final evidence review is under
-`artifacts/overwrite/batch-recovery-main-review-20261007/`; current acceptance is
-recorded in the existing recovery section of ACCEPTANCE.md.
-
-The retained-history functional checkpoint is followed by a separate mutation
-construction cleanup. [FILE ownership and replacement](../core/write_record.c),
-[resident/nonresident attribute construction](../core/write_attribute.c) and
-[stream binding/I/O](../core/write_stream.c) have separate modules.
-[Directory inspection and key changes](../core/write_directory.c) are separate
-from [complete index storage construction](../core/write_directory_store.c).
-The complete store operation still owns its tree construction, allocation/bitmap
-changes, original index provenance and publication into the same mutation plan.
-
-Private helper names identify their owning record, attribute, mapping-pair or
-index action. A shared bounded wire-rounding helper replaces equivalent local
-arithmetic. Mapping-pair sign width uses its actual `uint64_t` operand width in
-bits rather than the unrelated LFS LSN constant. Exported interfaces, fields,
-limits, allocation/work governors, ordered callbacks and error cleanup are retained.
-The cleanup adds no new format, mutation or FSKit admission.
-
-The connected cleanup passes all 186 suites with assertions and fatal ASan/UBSan.
-All 37 actual regular-image writer/recovery postimages and four modeled recovery
-seeds are byte-identical to the preceding functional checkpoint. Main reviews
-35 moved/renamed function bodies, the unchanged private fields/limits/prototypes,
-and ordered callbacks, cleanup and failure publication independently. Both
-architectures pass 124 freestanding and 124 strict Release compilations under the
-2-KiB frame ceiling, plus seventeen standalone private-header checks. The actual
-unsigned app, both extension copies and core archive contain arm64/x86_64, with
-eighteen required module compilation commands and archive members checked.
-The format book passes 385 links and eighteen SVGs; the changed diagram is rendered
-and visually reviewed. Unchanged host FSKit code retains the preceding 63 PASS /
-13 explicit runtime SKIP evidence; it is not rerun or claimed as installed
-acceptance. The first build-option wrapper misread Meson's human-readable help
-column and ran no tests; its failure remains separate from the machine-readable
-option check and sole full regression. Evidence is retained under
-`artifacts/overwrite/refactor-mutation-components-*`.
-
-The subsequent checkpoint/reuse checkpoint is followed by a separate cleanup of
-three identical restored-record comparisons. The existing private
-[metadata component](../core/write_metadata.c) now owns that pure byte helper.
-Seven caller sites in ordinary restoration, ordinary recovery and checkpoint
-recovery retain their exact lengths, right-hand USA selection and every owning
-validation. LSNs remain significant. Helpers that additionally exclude FILE LSNs
-or unused padding retain their different contracts.
-
-Main verifies the three old bodies against the shared helper and compares all
-surrounding source tokens after the explicit call substitutions. Callbacks,
-identity/history proofs, fields, policies and cleanup remain unchanged. The full
-196-suite fatal-ASan/UBSan regression passes; 38 actual postimages, including the
-640-operation POSIX sequence, and four modeled recovery seeds are byte-identical
-to the functional checkpoint. Style, 128 freestanding and 128 strict Release
-checks across both architectures, 23 standalone headers and the actual unsigned
-universal app/extension/archive all pass. Eight actual affected-module compilation
-commands and archive members are checked. Evidence is in
-`artifacts/overwrite/refactor-restored-metadata-*`.
-
-The first review wrapper substituted an identifier inside a struct tag, and its
-next product check used the preceding report's key names. These wrapper corrections
-are retained separately; source, tests and builds were not repeated. This cleanup
-does not change FSKit code or native admission and requires no new installed
-acceptance. The larger FSKit extraction remains in the plan.
-
-The next cleanup covers read-only streams. [Stream ownership](../core/stream.c),
-[mapping-pair decoding and run lookup](../core/stream_mapping.c) and
-[data reads and LZNT1 unit filling](../core/stream_read.c) now have separate modules.
-The internal `$Bad` mapping profile stays with the mapping decoder, preserving its
-metadata-only description and distinct implicit-hole contract. WOF keeps its
-separate provider owner and shares the existing stream read and decoded-unit APIs.
-
-Internal helpers now identify their stream action, and local variables identify
-streams, volumes, attribute views, disk fields and runs. Seventeen complete
-function bodies retain identical ordered C tokens after these explicit identifier
-substitutions. Internal fields/prototypes, public interfaces, operation admission,
-I/O order, sparse/VDL zeroing, optional-cache policy and release accounting are
-unchanged. No write capability is added to the read-only environment.
-
-The connected regression passes all 197 suites with assertions and fatal
-ASan/UBSan. The 38 actual postimages and four modeled seeds are byte-identical
-to the preceding cleanup, including the complete 640-operation POSIX sequence.
-Selected-Xcode style, 132 freestanding and 132 strict Release compilations across
-66 core sources pass under the 2-KiB frame ceiling. Host FSKit remains 63 PASS /
-13 explicit runtime SKIP / 0 FAIL. The actual unsigned universal app, both
-extension copies and core archive pass, with all core members and six affected
-compilation commands checked. The format reference passes 410 local links and
-nineteen unchanged rendered SVGs. Source/evidence review is under
-`artifacts/overwrite/refactor-stream-components-*`.
-
-The cleanup preserves mounted admission and native lifecycle/authorization code;
-it adds no installed or Windows qualification. MFT/attribute, directory, security,
-validator, journal and FSKit cleanup remain the separate reviewed work below.
-
-The next connected cleanup extracts FSKit at complete existing operation
-boundaries. [Native lifecycle and admission](../adapters/fskit/NTFSVolume.m),
-[item/cache and ancestry ownership](../adapters/fskit/NTFSVolumeItems.m),
-[immutable read operations](../adapters/fskit/NTFSVolumeRead.m) and
-[complete image operations](../adapters/fskit/NTFSImageVolume.m) now have separate
-implementation files. One [private contract](../adapters/fskit/NTFSVolumeInternal.h)
-retains the existing volume, item and continuation fields without reordering them.
-Publication and native replies remain with lifecycle; extracted bodies retain
-their original operation monitors and authenticated rights. No new owner, lock,
-callback or filesystem policy is introduced.
-
-Main compares all 96 complete method bodies, twenty C helper/factory bodies,
-three object layouts and policy constants against the preceding functional
-checkpoint. Their ordered tokens are identical after formatting. The draft first
-passes both-architecture frontend checks and the existing host component suite.
-The applied current-source batch then passes eight strict native compilations,
-selected-Xcode style, the exact 64 PASS / 13 runtime SKIP host verdicts under fatal
-ASan/UBSan, and the universal unsigned Release app with every moved component
-compiled for both architectures. Core, public C headers, tests and POSIX backend
-are unchanged; their independently reviewed 202-suite and 134 strict compilation
-evidence is retained without rerunning unchanged tests.
-
-The current signed extraction is installed once, preserving the preceding app
-and saved images. Its exact public FSClient module is enabled through ordinary
-Settings. The combined current-build installed scenario passes all 81 component
-groups, complete mutation/removal and sixteen reuse cycles, six authenticated
-denials and exact same-URL fresh-remount data/metadata after ordinary unmount.
-Its exact inactive postimage passes independent Windows namespace, bytes,
-identity/ACL, FILETIME, clean-state, read-only chkdsk and matching healthy-event
-review. This closes native qualification of the extraction and preceding
-functional correction together, without repeating completed cases. Earlier
-execution/capture-wrapper failures remain preserved separately. Reports are under
-`artifacts/overwrite/refactor-fskit-*` and
-`artifacts/overwrite/windows-mounted-general-refactor19-20261008/`.
-The next connected C cleanup below applies those separate immutable boundaries.
-
-The current read cleanup keeps existing FILE/attribute/node and filename-cursor
-components, regularizes their private helper/owner names, and separates three
-larger owners. Security descriptor/snapshot ownership, ordered index traversal
-and whole-store validation now have distinct components. The validator retains
-one bounded context while complete record/attribute, namespace, media and
-security passes move into separate files. Immutable journal lifetime, protected
-page/copy routing, retained indexing and complete record/history/capture likewise
-have separate components with the same source and borrowed windows.
-
-Main compares 178 complete function bodies and 21 object layouts against the
-functional baseline under explicit identifier substitutions. Callback order,
-checked fields, allocation/release sizes, ACE order, validator pass order,
-policies and public interfaces remain exact. Both-architecture frontend checks
-and six private-header checks pass before application. Initial parser/name
-collisions and the omitted private transaction-links declaration are retained
-as draft failures, before any driver source is applied.
-
-The applied connected batch passes all 202 unique suites with assertions and
-fatal ASan/UBSan, without failures or core SKIPs. All 41 actual postimages and four
-modeled recovery seeds are byte-identical to the preceding functional checkpoint.
-Every one of the 76 core sources compiles strictly for both architectures under
-the 2-KiB frame ceiling. Host FSKit retains the exact 64 PASS / 13 runtime SKIP
-verdicts. The actual unsigned universal Release app, extension and archive build
-with all sixteen affected C components compiled for each architecture; both
-archives contain all 76 core objects. Public interfaces, tests and native adapters
-are unchanged. Main independently checks the captured evidence and source bodies.
-
-The first local snapshot wrapper selected the wrong emitted recovery-image group;
-it failed before any build or test. The corrected wrapper preserves 45 inputs
-and runs the complete regression once. The first main review miscounted grouped
-layout evidence as individual layouts; that guard failure is also retained without
-repeating tests. Reports are under
-`artifacts/overwrite/refactor-read-components-*` and
-`artifacts/overwrite/refactor-read-draft-frontend-*`.
-The accepted installed package remains in the VM; the new unsigned build is not
-installed, and no native cases are reexecuted for this structural C cleanup.
-Broader helper/local naming, bootstrap and other unchanged components still need
-their own review; these passing boundaries do not complete the full style audit.
+Equivalent pointer arithmetic remains in
+[pointer_range.h](../core/pointer_range.h); equivalent restored-record comparison
+remains in the private metadata component. Required-pointer, empty-range,
+alias/output and differing FILE comparison policies remain at their owning
+boundaries. Read-only code still has no write callback.
 
 ## Concrete findings
 
-| Area | Current finding | Proposed change |
-| --- | --- | --- |
-| Pointer/range checks | Ten modules now use one checked-arithmetic helper; remaining local policies differ in zero-length and NULL admission. | Preserve explicit caller-specific NULL/output rules and audit each further conversion. |
-| Complete program | Metadata compilation/application and packet/compensation composition now have separate modules behind one private retained owner. | Keep public opaque getters, copied byte lifetime and exact accounting at this boundary when adding new families. |
-| Writer contracts | Component contracts replace the combined header; the native image-owner contract exposes entry points and durable reports. | Include the owning interfaces explicitly and preserve structure fields, policy values and public declarations. |
-| Stream reading | Stream ownership, mapping-pair decoding/run lookup and data/LZNT1 reading have separate modules; their existing checks and whole-image comparisons pass. | Preserve the sparse, VDL, extent, compression-cache, metadata-only, failure and lifetime contracts in further changes. |
-| MFT and attributes | Checked FILE records, attribute-list traversal and node metadata retain existing components with more explicit helper/owner names. Bootstrap is unchanged. | Continue the broader naming/cleanup audit without splitting bootstrap's complete reachable-prefix proof or weakening sequence/instance checks. |
-| Directory reading | The persistent cursor now has explicit frame/helper/owner names, with unchanged fields, collation, bounds and credits; physical allocation inventories remain separate. | Preserve ordinal cookies and original cleanup. Keep security view indexes separate from filename indexes. |
-| Security storage | Descriptor/snapshot ownership, complete SII/SDH traversal and whole-store validation have private components; connected regression and unchanged-byte review pass. | Preserve original ACE order, unsupported-feature refusal and native authorization. |
-| Whole-volume validation | One bounded context/accounting owner retains complete passes in private components; pass order, reports and connected regression are verified. | Preserve selected security requirements, partial reports, exact accounting and forbidden bad-cluster I/O. |
-| Immutable journal acquisition | Source lifetime, protected-page routing, retained indexing and complete record/history/capture share the original source/workspace contract; source and regression review pass. | Retain borrowed-buffer lifetimes and the distinction between inventory, framing and owning recovery evidence. |
-| Internal names | Newly added code mixes generic `target`, `append`, `emit`, `prepare`, `allocate` and `release` with explicit mutation/recovery names. Variables alternate between `source`, `reader`, `environment` and `input` for different roles. | Use names that identify the object or action; distinguish immutable source, allocator, owned workspace and borrowed input consistently. |
-| Mutation storage | FILE ownership/replacement, attributes and streams have separate modules; directory inspection/key changes and complete index storage construction are separate. One mutation plan retains memory, work, provenance and cleanup ownership. | Review further duplication against these complete operation boundaries. Keep collation, allocation and durability in their semantic layer. |
-| Memory and cleanup | Program, mutation, bitmap, replay and volume owners have distinct accounting, reservation and lifetime rules, with repeated cleanup patterns. | Make local ownership/cleanup conventions uniform. Share byte helpers, not an allocator framework that would erase different governors or change callback order. |
-| FSKit volume | Lifecycle/admission, item/cache ownership, immutable reads and complete image operations have private components; the combined installed and Windows postimage gate passes. | Preserve serialization, authenticated context, reader leases, exactly-once replies and teardown at their owning boundaries. |
-| Evidence prose | Acceptance has accumulated long historical sections, while format facts, private hypotheses and product gates now have separate documents. | Keep current contracts easy to find, use links for historical evidence, and preserve useful limitations and reproduction paths. Source and artifact identities remain in Git and generated reports. |
+| Finding | Completed resolution |
+| --- | --- |
+| Generic helpers and abbreviated object owners across old/new code | Private names describe their component, object and action; volume, attribute, restart, environment, input/output and comparison operands have explicit roles. Fields and external names retain their original contracts. |
+| Combined program/mutation/read/security/diagnostic implementations | Complete operations have private component interfaces and one retained ownership/accounting boundary, as mapped above. Bootstrap and complete index storage construction retain their indivisible proofs. |
+| Repeated byte helpers | Only contract-equivalent pointer arithmetic, restored-byte comparison, wire rounding and native manifest encoding are shared. Different admission and allocation rules remain explicit. |
+| Native volume responsibilities | Lifecycle, items/caches, immutable reads and complete image operations are extracted with unchanged serialization, context, read leases and exactly-once replies. |
+| Historical refactoring prose obscured current work | This record presents the current map, conventions and final evidence. Earlier implementation and acceptance checkpoints remain available through Git and the acceptance history. |
 
 ## Implementation order
 
-1. **Make internal conventions explicit.** Audit range/alias helpers and their
-   call sites, establish descriptive names and retain the existing declaration,
-   brace and formatting rules. Convert only equivalent helpers in the first
-   code commit. Keep checked arithmetic and zero-length/NULL behavior explicit.
-2. **Separate C contracts and program responsibilities.** Split the large private
-   writer header and complete-program implementation. Keep one opaque owner,
-   copied payload lifetime, exact allocation/release accounting and unchanged
-   exported API. Update code links in the format reference when files move.
-3. **Regularize mutation construction and cleanup.** Review FILE attributes,
-   mapping/bitmap construction and directory byte building. Remove duplicates
-   only when their semantic and ownership contracts agree. Use named local
-   cleanup paths and predictable result publication without combining policies.
-4. **Separate and regularize reading.** Close stream ownership, mapping decoding
-   and data-reading extraction first. Then review MFT/attribute, filename cursor
-   and metadata-cache conventions against their existing owning boundaries. Keep
-   the read-only environment without a write method; reuse the existing content,
-   quota, callback, corruption and lifetime oracles.
-5. **Separate security and diagnostic passes.** Review security view traversal,
-   descriptor/snapshot ownership and whole-store validation before extracting
-   them. Keep a single accounting owner for whole-volume passes and retained
-   journal acquisition. These are structural changes, not stronger validation
-   claims or expanded recovery authority.
-6. **Review and extract FSKit responsibilities.** Start with private item/cache
-   and complete image-operation boundaries. Prepare the exact extraction and
-   locking/lifetime review before moving methods. Preserve native reply timing,
-   authenticated caller rights, read leases and draining unmount/invalidation.
-7. **Close each connected refactoring boundary.** Run the complete local regression once
-   after the connected cleanup. Run installed acceptance where changed native
-   lifecycle, authorization, buffering or persistence requires it. Then resume
-   functional write/recovery integration under its original acceptance contract.
-
-Each step produces a reviewable commit with a stated scope. Do not mix new NTFS
-semantics, allocation policy, native opcode admission or checkpoint advancement
-into cleanup. A discovered behavior defect gets its own failing conformance test
-and functional fix before the cleanup proceeds.
-
-At the committable retained-history checkpoint, the queued cleanup above applies
-step three: complete construction boundaries and equivalent wire rounding.
-Review moved function bodies and compare complete ordinary-file postimages with the
-functional checkpoint. The native FSKit extraction remains a separately reviewed
-boundary; it must preserve authenticated rights, read leases, serialized ownership
-and exactly-once replies before new files or classes are introduced.
-
-At the next committable checkpoint/reuse boundary, review the three identical
-restored-record comparisons in ordinary recovery, ordinary metadata restoration
-and checkpoint recovery. Each compares complete logical bytes while excluding
-only the right-hand image's USA storage. Move this equivalent byte operation
-to the existing private metadata component, retaining each caller's explicit
-record length, validation and owning-history proof. FILE comparisons that also
-exclude LSNs or unused padding have different contracts and remain separate.
-Close this small cleanup with unchanged whole postimages, affected byte/fault/
-interruption suites, complete local regression and strict two-architecture builds.
-The functional checkpoint and cleanup remain separate commits; neither expands
-the native admission policy. FSKit extraction keeps its separately reviewed place
-in the plan.
+The completed sequence was equivalent byte helpers, private writer contracts and
+program composition, mutation storage, stream reading, security/diagnostic/journal
+components, native volume extraction, and the final audit of the remaining core,
+FSKit and POSIX names. Functional changes and their conformance tests have separate
+checkpoints. This batch introduces no new NTFS semantics or write admission.
 
 ## Conventions to apply
 
+These conventions remain the development rules after completion:
+
 | Concern | Convention |
 | --- | --- |
-| Internal function names | Describe the owning object and operation; avoid a generic name when several modules perform materially different versions of it. |
-| Inputs and owners | `source` denotes immutable media capability; `allocator` denotes allocation capability; `input` denotes a borrowed typed request; owned scratch/workspaces remain visibly separate. |
-| Coordinates and lengths | Distinguish physical bytes, logical stream bytes, FILE numbers, VCNs, LCNs, UTF-16 units and bit ranges in names. Retain named wire fields and constants. |
-| Result publication | State alias behavior, ordinary failure output and completed/poisoned execution reporting at each owning boundary. Preserve those contracts independently. |
-| Memory | Every allocation has one owning object, an exact accounted size and a matching release. Keep optional retention separate from required work reservation. |
-| Errors and cleanup | Declare resources at block starts, initialize owners predictably, release only acquired resources and preserve the original failing result. Never hide durable completion with a later allocation failure. |
-| Interfaces | Keep wire decoders, pure byte construction, complete mutation planning and physical execution distinct. FSKit supplies native lifecycle/authorization; C owns NTFS semantics. |
-| Tests | Retain independent byte, object, fault and lifetime oracles. Add tests for missing contracts, not for a mechanical rename or a moved function. |
-
-Public API renaming and new abstractions are not required for this cleanup. In
-particular, the existing overwrite owner must not be presented as a generally
-writable NTFS owner through a cosmetic rename.
+| Names | Private helpers identify their component and action; private core types use `ntfs_`. Use descriptive object owners and units; keep short local indices where unambiguous. |
+| Inputs and owners | Distinguish immutable source capability, allocator, borrowed request and retained workspace. Preserve borrowed-buffer lifetime and exact allocation/release charges. |
+| Coordinates | Keep physical/logical bytes, FILE numbers, VCNs, LCNs, UTF-16 units and bit ranges distinct; use named wire fields and constants. |
+| Errors and publication | Check producer results before use, release acquired owners with their exact size and retain original failure precedence. Preserve completed/poisoned execution reports. |
+| Interfaces | C owns NTFS semantics; FSKit owns native lifecycle, buffering and authorization. Keep decoding, complete planning and physical execution distinct. |
+| Style | Selected-Xcode `.clang-format`, declarations at block starts, braces and one statement per line. Public naming remains stable. |
+| Tests | Preserve independent byte, object, fault and lifetime oracles. Mechanical changes use source equivalence and the existing regression rather than tests that duplicate their implementation. |
 
 ## Verification and completion
 
-Use focused checks for each affected contract during implementation. The connected
-C cleanup closes with fatal ASan/UBSan regression, selected-Xcode formatting and
-freestanding arm64/x86_64 compilation under the 2-KiB stack ceiling. Preserve exact
-packet/page outputs, full projected metadata, inverse prefixes, fault positions,
-input lifetime and accounting. Host FSKit PASS and runtime SKIP counts remain
-separate from installed behavior.
+The final batch passes all **202 registered C suites** with assertions and fatal
+ASan/UBSan, selected-Xcode formatting, and **152 strict freestanding object builds**
+across arm64/x86_64 under the 2-KiB frame ceiling. All **45 retained whole images**
+are byte-identical to the accepted pre-edit baseline: 41 actual postimages and four
+modeled recovery seeds. Draft frontend checks cover both architectures, all native
+and POSIX sources and both changed private headers.
 
-For native changes, use the dedicated macOS VM and the prepared CLI harness,
-followed by the necessary Windows postimage/recovery checks. VM operations remain
-delegated and serialized; UTM and unrelated VMs remain under the user's control.
-The [development workflow](DEVELOPMENT.md) and [write contract](WRITES.md) retain
-their authority. Refactoring is complete when the agreed boundaries/conventions
-are applied and their required evidence passes, not when source formatting alone
-is uniform.
+Host FSKit passes **64 groups**, with **13 explicit runtime SKIPs** and zero failures.
+The current-source standalone component binary then passes **all 81 groups with
+zero SKIPs** in the dedicated macOS 27 VM. Frozen fixture manifests and the current
+binary are verified before and after. The actual unsigned Release app, both
+extension copies and all 76 core archive members build for arm64/x86_64. This
+build is not installed; signed build 19 and its accepted mounted/Windows scenario
+retain their preceding functional baseline.
+
+Main independently compares complete source tokens under the explicit identifier
+substitutions and verifies the shared encoder against both original bodies.
+All operators, literal values, public interfaces, structure members, selectors,
+locking, callback/error order and policies are preserved. The initial draft
+collision/token-review refusals and standalone-header fixture failure are retained;
+successful frontend checks are reused, and the connected regression runs once.
+A launcher argument refusal occurs before any VM command; the native stage
+subsequently completes once with the corrected argument list.
+Documentation links/anchors and all 28 unchanged rendered diagrams pass checks.
+
+Evidence is under `artifacts/overwrite/refactor-completion-*20261008/`, including
+the frozen baseline, declaration/source review, dual-architecture frontend,
+connected local regression, current native component run and final main review.
+VM commands use the CLI harness with serialized delegated ownership. No VM
+lifecycle, UTM, Debian, host installation or installed native mutation is part of
+this batch. New device writing, unsupported operation families and distribution
+qualification retain their separate product gates.

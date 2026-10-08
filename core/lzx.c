@@ -6,14 +6,14 @@
  * prior block lengths live in caller scratch, keeping kernel-sized frames. */
 enum { LZX_PREFIX_BITS = 8, LZX_PREFIX_ENTRIES = 1u << LZX_PREFIX_BITS, LZX_SYMBOL_BITS = 9 };
 
-struct lzx_tree {
+struct ntfs_lzx_tree {
 	uint32_t first[NTFS_LZX_MAX_CODE_BITS + 1];
 	uint16_t count[NTFS_LZX_MAX_CODE_BITS + 1], base[NTFS_LZX_MAX_CODE_BITS + 1];
 	uint16_t prefix[LZX_PREFIX_ENTRIES], used;
 };
 
-struct lzx_workspace {
-	struct lzx_tree main, length, pre, aligned;
+struct ntfs_lzx_workspace {
+	struct ntfs_lzx_tree main, length, pre, aligned;
 	uint16_t main_symbols[NTFS_LZX_MAIN_SYMBOLS], length_symbols[NTFS_LZX_LENGTH_SYMBOLS];
 	uint16_t pre_symbols[NTFS_LZX_PRETREE_SYMBOLS], aligned_symbols[NTFS_LZX_ALIGNED_SYMBOLS];
 	uint8_t main_lengths[NTFS_LZX_MAIN_SYMBOLS], length_lengths[NTFS_LZX_LENGTH_SYMBOLS];
@@ -21,7 +21,7 @@ struct lzx_workspace {
 	uint32_t repeated[NTFS_LZX_REPEATED_OFFSETS];
 };
 
-struct lzx_reader {
+struct ntfs_lzx_reader {
 	const uint8_t *bytes;
 	size_t size, position;
 	uint32_t value;
@@ -31,17 +31,17 @@ struct lzx_reader {
 size_t
 ntfs_lzx_workspace_size(void)
 {
-	return sizeof(struct lzx_workspace);
+	return sizeof(struct ntfs_lzx_workspace);
 }
 
 size_t
 ntfs_lzx_workspace_alignment(void)
 {
-	return _Alignof(struct lzx_workspace);
+	return _Alignof(struct ntfs_lzx_workspace);
 }
 
 static enum ntfs_result
-take_bits(struct lzx_reader *reader, unsigned bits, uint32_t *out)
+lzx_take_bits(struct ntfs_lzx_reader *reader, unsigned bits, uint32_t *out)
 {
 	unsigned take;
 	uint32_t value = 0;
@@ -66,7 +66,7 @@ take_bits(struct lzx_reader *reader, unsigned bits, uint32_t *out)
 }
 
 static enum ntfs_result
-build_tree(struct lzx_tree *tree, const uint8_t *lengths, unsigned count, unsigned maximum,
+lzx_build_tree(struct ntfs_lzx_tree *tree, const uint8_t *lengths, unsigned count, unsigned maximum,
     uint16_t *symbols)
 {
 	uint16_t next[NTFS_LZX_MAX_CODE_BITS + 1];
@@ -123,8 +123,8 @@ build_tree(struct lzx_tree *tree, const uint8_t *lengths, unsigned count, unsign
 }
 
 static enum ntfs_result
-take_symbol(
-    struct lzx_reader *reader, const struct lzx_tree *tree, const uint16_t *symbols, unsigned *out)
+lzx_take_symbol(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree,
+    const uint16_t *symbols, unsigned *out)
 {
 	uint16_t entry;
 	uint32_t code = 0, bit, ignored;
@@ -139,11 +139,11 @@ take_symbol(
 		    (LZX_PREFIX_ENTRIES - 1)];
 		if (entry != UINT16_MAX) {
 			*out = entry & ((1u << LZX_SYMBOL_BITS) - 1);
-			return take_bits(reader, entry >> LZX_SYMBOL_BITS, &ignored);
+			return lzx_take_bits(reader, entry >> LZX_SYMBOL_BITS, &ignored);
 		}
 	}
 	for (bits = 1; bits <= NTFS_LZX_MAX_CODE_BITS; bits++) {
-		result = take_bits(reader, 1, &bit);
+		result = lzx_take_bits(reader, 1, &bit);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -157,34 +157,34 @@ take_symbol(
 }
 
 static enum ntfs_result
-read_lengths(
-    struct lzx_reader *reader, struct lzx_workspace *work, uint8_t *lengths, unsigned count)
+lzx_read_lengths(struct ntfs_lzx_reader *reader, struct ntfs_lzx_workspace *work, uint8_t *lengths,
+    unsigned count)
 {
 	uint32_t value, extra;
 	unsigned index, symbol, repeat, length;
 	enum ntfs_result result;
 
 	for (index = 0; index < NTFS_LZX_PRETREE_SYMBOLS; index++) {
-		result = take_bits(reader, NTFS_LZX_PRETREE_LENGTH_BITS, &value);
+		result = lzx_take_bits(reader, NTFS_LZX_PRETREE_LENGTH_BITS, &value);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		work->pre_lengths[index] = (uint8_t)value;
 	}
-	result = build_tree(&work->pre, work->pre_lengths, NTFS_LZX_PRETREE_SYMBOLS,
+	result = lzx_build_tree(&work->pre, work->pre_lengths, NTFS_LZX_PRETREE_SYMBOLS,
 	    NTFS_LZX_PRETREE_MAX_BITS, work->pre_symbols);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	index = 0;
 	while (index < count) {
-		result = take_symbol(reader, &work->pre, work->pre_symbols, &symbol);
+		result = lzx_take_symbol(reader, &work->pre, work->pre_symbols, &symbol);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		repeat = 1;
 		if (symbol == NTFS_LZX_ZERO_SHORT || symbol == NTFS_LZX_ZERO_LONG) {
-			result = take_bits(reader,
+			result = lzx_take_bits(reader,
 			    symbol == NTFS_LZX_ZERO_SHORT ? NTFS_LZX_ZERO_SHORT_BITS
 							  : NTFS_LZX_ZERO_LONG_BITS,
 			    &extra);
@@ -197,13 +197,13 @@ read_lengths(
 							   : NTFS_LZX_ZERO_LONG_BASE);
 		} else {
 			if (symbol == NTFS_LZX_REPEAT_LENGTH) {
-				result = take_bits(reader, NTFS_LZX_REPEAT_LENGTH_BITS, &extra);
+				result = lzx_take_bits(reader, NTFS_LZX_REPEAT_LENGTH_BITS, &extra);
 				if (result != NTFS_OK) {
 					return result;
 				}
 				repeat = extra + NTFS_LZX_REPEAT_LENGTH_BASE;
 				result =
-				    take_symbol(reader, &work->pre, work->pre_symbols, &symbol);
+				    lzx_take_symbol(reader, &work->pre, work->pre_symbols, &symbol);
 				if (result != NTFS_OK) {
 					return result;
 				}
@@ -228,7 +228,7 @@ read_lengths(
 }
 
 static enum ntfs_result
-read_trees(struct lzx_reader *reader, struct lzx_workspace *work, unsigned type)
+lzx_read_trees(struct ntfs_lzx_reader *reader, struct ntfs_lzx_workspace *work, unsigned type)
 {
 	uint32_t value;
 	unsigned index;
@@ -236,40 +236,42 @@ read_trees(struct lzx_reader *reader, struct lzx_workspace *work, unsigned type)
 
 	if (type == NTFS_LZX_ALIGNED) {
 		for (index = 0; index < NTFS_LZX_ALIGNED_SYMBOLS; index++) {
-			result = take_bits(reader, NTFS_LZX_ALIGNED_LENGTH_BITS, &value);
+			result = lzx_take_bits(reader, NTFS_LZX_ALIGNED_LENGTH_BITS, &value);
 			if (result != NTFS_OK) {
 				return result;
 			}
 			work->aligned_lengths[index] = (uint8_t)value;
 		}
-		result = build_tree(&work->aligned, work->aligned_lengths, NTFS_LZX_ALIGNED_SYMBOLS,
-		    NTFS_LZX_ALIGNED_MAX_BITS, work->aligned_symbols);
+		result = lzx_build_tree(&work->aligned, work->aligned_lengths,
+		    NTFS_LZX_ALIGNED_SYMBOLS, NTFS_LZX_ALIGNED_MAX_BITS, work->aligned_symbols);
 		if (result != NTFS_OK) {
 			return result;
 		}
 	}
-	result = read_lengths(reader, work, work->main_lengths, NTFS_LZX_LITERAL_SYMBOLS);
+	result = lzx_read_lengths(reader, work, work->main_lengths, NTFS_LZX_LITERAL_SYMBOLS);
 	if (result == NTFS_OK) {
-		result = read_lengths(reader, work, work->main_lengths + NTFS_LZX_LITERAL_SYMBOLS,
-		    NTFS_LZX_MAIN_SYMBOLS - NTFS_LZX_LITERAL_SYMBOLS);
+		result =
+		    lzx_read_lengths(reader, work, work->main_lengths + NTFS_LZX_LITERAL_SYMBOLS,
+			NTFS_LZX_MAIN_SYMBOLS - NTFS_LZX_LITERAL_SYMBOLS);
 	}
 	if (result == NTFS_OK) {
-		result = read_lengths(reader, work, work->length_lengths, NTFS_LZX_LENGTH_SYMBOLS);
+		result =
+		    lzx_read_lengths(reader, work, work->length_lengths, NTFS_LZX_LENGTH_SYMBOLS);
 	}
 	if (result == NTFS_OK) {
-		result = build_tree(&work->main, work->main_lengths, NTFS_LZX_MAIN_SYMBOLS,
+		result = lzx_build_tree(&work->main, work->main_lengths, NTFS_LZX_MAIN_SYMBOLS,
 		    NTFS_LZX_MAX_CODE_BITS, work->main_symbols);
 	}
 	if (result == NTFS_OK) {
-		result = build_tree(&work->length, work->length_lengths, NTFS_LZX_LENGTH_SYMBOLS,
-		    NTFS_LZX_MAX_CODE_BITS, work->length_symbols);
+		result = lzx_build_tree(&work->length, work->length_lengths,
+		    NTFS_LZX_LENGTH_SYMBOLS, NTFS_LZX_MAX_CODE_BITS, work->length_symbols);
 	}
 	return result;
 }
 
 static enum ntfs_result
-match_offset(struct lzx_reader *reader, struct lzx_workspace *work, unsigned type, unsigned slot,
-    uint32_t *distance)
+lzx_match_offset(struct ntfs_lzx_reader *reader, struct ntfs_lzx_workspace *work, unsigned type,
+    unsigned slot, uint32_t *distance)
 {
 	unsigned bits, low;
 	uint32_t extra, saved;
@@ -286,17 +288,17 @@ match_offset(struct lzx_reader *reader, struct lzx_workspace *work, unsigned typ
 	    ? NTFS_LZX_INITIAL_OFFSET
 	    : ((2u + (slot & 1u)) << bits) - NTFS_LZX_OFFSET_BIAS;
 	if (type == NTFS_LZX_ALIGNED && bits >= NTFS_LZX_ALIGNED_BITS) {
-		result = take_bits(reader, bits - NTFS_LZX_ALIGNED_BITS, &extra);
+		result = lzx_take_bits(reader, bits - NTFS_LZX_ALIGNED_BITS, &extra);
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = take_symbol(reader, &work->aligned, work->aligned_symbols, &low);
+		result = lzx_take_symbol(reader, &work->aligned, work->aligned_symbols, &low);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		extra = (extra << NTFS_LZX_ALIGNED_BITS) | low;
 	} else {
-		result = take_bits(reader, bits, &extra);
+		result = lzx_take_bits(reader, bits, &extra);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -310,7 +312,8 @@ match_offset(struct lzx_reader *reader, struct lzx_workspace *work, unsigned typ
 }
 
 static enum ntfs_result
-raw_block(struct lzx_reader *reader, struct lzx_workspace *work, uint8_t *output, size_t size)
+lzx_raw_block(
+    struct ntfs_lzx_reader *reader, struct ntfs_lzx_workspace *work, uint8_t *output, size_t size)
 {
 	const struct ntfs_disk_lzx_offsets *offsets;
 	uint32_t ignored;
@@ -318,8 +321,8 @@ raw_block(struct lzx_reader *reader, struct lzx_workspace *work, uint8_t *output
 	enum ntfs_result result;
 
 	/* Even an already aligned header carries a full padding word. */
-	result =
-	    take_bits(reader, reader->valid == 0 ? NTFS_LZX_WORD_BITS : reader->valid, &ignored);
+	result = lzx_take_bits(
+	    reader, reader->valid == 0 ? NTFS_LZX_WORD_BITS : reader->valid, &ignored);
 	if (result != NTFS_OK || reader->size - reader->position < sizeof(*offsets)) {
 		return NTFS_CORRUPT;
 	}
@@ -343,7 +346,7 @@ raw_block(struct lzx_reader *reader, struct lzx_workspace *work, uint8_t *output
 }
 
 static void
-inverse_calls(uint8_t *output, size_t size)
+lzx_inverse_calls(uint8_t *output, size_t size)
 {
 	size_t index = 0, byte;
 	uint32_t word;
@@ -378,8 +381,8 @@ enum ntfs_result
 ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, void *workspace,
     size_t workspace_size, size_t *written)
 {
-	struct lzx_workspace *work = workspace;
-	struct lzx_reader reader;
+	struct ntfs_lzx_workspace *work = workspace;
+	struct ntfs_lzx_reader reader;
 	uint8_t *bytes = output;
 	size_t position = 0, limit, index;
 	uint32_t type, default_size, block_size, distance;
@@ -391,7 +394,7 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 	}
 	*written = 0;
 	if ((input == NULL && size != 0) || (output == NULL && expected != 0) ||
-	    workspace == NULL || (uintptr_t)workspace % _Alignof(struct lzx_workspace) != 0) {
+	    workspace == NULL || (uintptr_t)workspace % _Alignof(struct ntfs_lzx_workspace) != 0) {
 		return NTFS_INVALID;
 	}
 	if (workspace_size < sizeof(*work) || expected > NTFS_LZX_MAX_BLOCK) {
@@ -404,19 +407,19 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 	for (index = 0; index < NTFS_LZX_REPEATED_OFFSETS; index++) {
 		work->repeated[index] = NTFS_LZX_INITIAL_OFFSET;
 	}
-	reader = (struct lzx_reader){.bytes = input, .size = size};
+	reader = (struct ntfs_lzx_reader){.bytes = input, .size = size};
 	while (position < expected) {
-		result = take_bits(&reader, NTFS_LZX_BLOCK_TYPE_BITS, &type);
+		result = lzx_take_bits(&reader, NTFS_LZX_BLOCK_TYPE_BITS, &type);
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = take_bits(&reader, NTFS_LZX_DEFAULT_SIZE_BITS, &default_size);
+		result = lzx_take_bits(&reader, NTFS_LZX_DEFAULT_SIZE_BITS, &default_size);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		block_size = NTFS_LZX_MAX_BLOCK;
 		if (default_size == 0) {
-			result = take_bits(&reader, NTFS_LZX_EXPLICIT_SIZE_BITS, &block_size);
+			result = lzx_take_bits(&reader, NTFS_LZX_EXPLICIT_SIZE_BITS, &block_size);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -425,7 +428,7 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 			return NTFS_CORRUPT;
 		}
 		if (type == NTFS_LZX_RAW) {
-			result = raw_block(&reader, work, bytes + position, block_size);
+			result = lzx_raw_block(&reader, work, bytes + position, block_size);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -435,13 +438,13 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 		if (type != NTFS_LZX_VERBATIM && type != NTFS_LZX_ALIGNED) {
 			return NTFS_CORRUPT;
 		}
-		result = read_trees(&reader, work, type);
+		result = lzx_read_trees(&reader, work, type);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		limit = position + block_size;
 		while (position < limit) {
-			result = take_symbol(&reader, &work->main, work->main_symbols, &symbol);
+			result = lzx_take_symbol(&reader, &work->main, work->main_symbols, &symbol);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -453,14 +456,14 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 			header = symbol & (NTFS_LZX_LENGTH_HEADERS - 1);
 			length = header + NTFS_LZX_MIN_MATCH;
 			if (header == NTFS_LZX_LENGTH_ESCAPE) {
-				result = take_symbol(
+				result = lzx_take_symbol(
 				    &reader, &work->length, work->length_symbols, &length);
 				if (result != NTFS_OK) {
 					return result;
 				}
 				length += NTFS_LZX_SECONDARY_BASE;
 			}
-			result = match_offset(
+			result = lzx_match_offset(
 			    &reader, work, type, symbol >> NTFS_LZX_LENGTH_HEADER_BITS, &distance);
 			if (result != NTFS_OK) {
 				return result;
@@ -481,7 +484,7 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 		ntfs_u16(reader.bytes + reader.position) != 0)) {
 		return NTFS_CORRUPT;
 	}
-	inverse_calls(bytes, expected);
+	lzx_inverse_calls(bytes, expected);
 	*written = expected;
 	return NTFS_OK;
 }

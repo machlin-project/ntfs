@@ -2,7 +2,7 @@
 #include "internal.h"
 
 static size_t
-hash_vcn(uint64_t vcn, uint32_t capacity)
+index_hash_vcn(uint64_t vcn, uint32_t capacity)
 {
 	return (size_t)((vcn * NTFS_VCN_HASH_MULTIPLIER) >> NTFS_VCN_HASH_SHIFT) & (capacity - 1u);
 }
@@ -47,7 +47,7 @@ ntfs_index_visit(struct ntfs_volume *volume, struct ntfs_index_visited *visited,
 			if (visited->values[i] == 0) {
 				continue;
 			}
-			position = hash_vcn(visited->values[i] - 1, capacity);
+			position = index_hash_vcn(visited->values[i] - 1, capacity);
 			while (table[position] != 0) {
 				result = ntfs_index_work(volume, charge, context, 1);
 				if (result != NTFS_OK) {
@@ -62,7 +62,7 @@ ntfs_index_visit(struct ntfs_volume *volume, struct ntfs_index_visited *visited,
 		visited->values = table;
 		visited->capacity = capacity;
 	}
-	position = hash_vcn(vcn, visited->capacity);
+	position = index_hash_vcn(vcn, visited->capacity);
 	while (visited->values[position] != 0) {
 		result = ntfs_index_work(volume, charge, context, 1);
 		if (result != NTFS_OK) {
@@ -79,7 +79,7 @@ ntfs_index_visit(struct ntfs_volume *volume, struct ntfs_index_visited *visited,
 }
 
 static enum ntfs_result
-inventory_slot(struct ntfs_volume *volume, struct ntfs_stream *allocation,
+index_inventory_slot(struct ntfs_volume *volume, struct ntfs_stream *allocation,
     const struct ntfs_index_visited *visited, uint32_t block_size, uint64_t slot,
     enum ntfs_result (*charge)(void *, uint64_t), void *context, uint64_t *cluster)
 {
@@ -98,7 +98,7 @@ inventory_slot(struct ntfs_volume *volume, struct ntfs_stream *allocation,
 						       : volume->info.sector_size;
 	vcn = offset / unit;
 	if (visited->capacity != 0) {
-		position = hash_vcn(vcn, visited->capacity);
+		position = index_hash_vcn(vcn, visited->capacity);
 		while (visited->values[position] != 0) {
 			result = ntfs_index_work(volume, charge, context, 1);
 			if (result != NTFS_OK) {
@@ -159,8 +159,8 @@ ntfs_index_check_allocation(struct ntfs_volume *volume, struct ntfs_stream *allo
 					continue;
 				}
 				slot = (offset + byte) * NTFS_BITS_PER_BYTE + bit;
-				result = inventory_slot(volume, allocation, visited, block_size,
-				    slot, charge, context, cluster);
+				result = index_inventory_slot(volume, allocation, visited,
+				    block_size, slot, charge, context, cluster);
 				if (result != NTFS_OK) {
 					return result;
 				}

@@ -4,7 +4,7 @@
 #include <ntfs/logfile_encode.h>
 #include <ntfs/record.h>
 
-struct update_layout {
+struct ntfs_logfile_update_layout {
 	uint32_t bytes;
 	uint16_t lcn_count;
 	struct ntfs_logfile_span redo, undo;
@@ -62,7 +62,8 @@ ntfs_logfile_record_encode(const struct ntfs_logfile_record *record, const void 
 }
 
 static enum ntfs_result
-update_layout(const struct ntfs_logfile_update_input *input, struct update_layout *layout)
+logfile_encode_update_layout(
+    const struct ntfs_logfile_update_input *input, struct ntfs_logfile_update_layout *layout)
 {
 	size_t prefix, count, bytes, undo_offset;
 
@@ -105,7 +106,7 @@ update_layout(const struct ntfs_logfile_update_input *input, struct update_layou
 }
 
 static bool
-update_inputs_separate(
+logfile_encode_update_inputs_separate(
     const struct ntfs_logfile_update_input *input, const void *output, size_t bytes)
 {
 	return ntfs_pointer_ranges_separate(input, sizeof(*input), output, bytes) &&
@@ -117,17 +118,17 @@ update_inputs_separate(
 enum ntfs_result
 ntfs_logfile_update_measure(const struct ntfs_logfile_update_input *input, uint32_t *bytes)
 {
-	struct update_layout layout = {0};
+	struct ntfs_logfile_update_layout layout = {0};
 	enum ntfs_result result;
 
 	if (bytes == NULL || !ntfs_pointer_range_valid(input, sizeof(*input))) {
 		return NTFS_INVALID;
 	}
-	result = update_layout(input, &layout);
+	result = logfile_encode_update_layout(input, &layout);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	if (!update_inputs_separate(input, bytes, sizeof(*bytes))) {
+	if (!logfile_encode_update_inputs_separate(input, bytes, sizeof(*bytes))) {
 		return NTFS_INVALID;
 	}
 	*bytes = layout.bytes;
@@ -139,7 +140,7 @@ ntfs_logfile_update_encode(
     const struct ntfs_logfile_update_input *input, void *output, size_t capacity)
 {
 	struct ntfs_disk_log_update *header = output;
-	struct update_layout layout = {0};
+	struct ntfs_logfile_update_layout layout = {0};
 	uint8_t *encoded = output;
 	size_t redo_end;
 	enum ntfs_result result;
@@ -147,14 +148,14 @@ ntfs_logfile_update_encode(
 	if (output == NULL || !ntfs_pointer_range_valid(input, sizeof(*input))) {
 		return NTFS_INVALID;
 	}
-	result = update_layout(input, &layout);
+	result = logfile_encode_update_layout(input, &layout);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	if (capacity < layout.bytes) {
 		return NTFS_RANGE;
 	}
-	if (!update_inputs_separate(input, output, layout.bytes)) {
+	if (!logfile_encode_update_inputs_separate(input, output, layout.bytes)) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(header, sizeof(*header));
@@ -189,7 +190,7 @@ ntfs_logfile_update_encode(
 }
 
 static enum ntfs_result
-page_encode(const struct ntfs_logfile_page_input *input, const void *description,
+logfile_encode_page_encode(const struct ntfs_logfile_page_input *input, const void *description,
     size_t description_bytes, bool fast, uint32_t file_offset, void *workspace,
     size_t workspace_bytes, void *output, size_t capacity)
 {
@@ -269,7 +270,7 @@ enum ntfs_result
 ntfs_logfile_page_encode(const struct ntfs_logfile_page_input *input, void *workspace,
     size_t workspace_bytes, void *output, size_t capacity)
 {
-	return page_encode(
+	return logfile_encode_page_encode(
 	    input, input, sizeof(*input), false, 0, workspace, workspace_bytes, output, capacity);
 }
 
@@ -280,6 +281,6 @@ ntfs_logfile_fast_page_encode(const struct ntfs_logfile_fast_page_input *input, 
 	if (!ntfs_pointer_range_valid(input, sizeof(*input))) {
 		return NTFS_INVALID;
 	}
-	return page_encode(&input->common, input, sizeof(*input), true, input->file_offset,
-	    workspace, workspace_bytes, output, capacity);
+	return logfile_encode_page_encode(&input->common, input, sizeof(*input), true,
+	    input->file_offset, workspace, workspace_bytes, output, capacity);
 }

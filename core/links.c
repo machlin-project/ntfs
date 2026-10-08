@@ -3,14 +3,15 @@
 
 enum { LINKS_HEAP_ARITY = 2 };
 
-struct link_location {
+struct ntfs_link_location {
 	uint64_t reference;
 	uint16_t instance;
 	bool seen;
 };
 
 static int
-location_compare(const struct link_location *first, const struct link_location *second)
+link_location_compare(
+    const struct ntfs_link_location *first, const struct ntfs_link_location *second)
 {
 	if (first->reference != second->reference) {
 		return first->reference < second->reference ? -1 : 1;
@@ -22,58 +23,60 @@ location_compare(const struct link_location *first, const struct link_location *
 }
 
 static void
-location_swap(struct link_location *first, struct link_location *second)
+link_location_swap(struct ntfs_link_location *first, struct ntfs_link_location *second)
 {
-	struct link_location saved = *first;
+	struct ntfs_link_location saved = *first;
 
 	*first = *second;
 	*second = saved;
 }
 
 static enum ntfs_result
-location_sift(struct ntfs_volume *v, struct link_location *locations, uint32_t root, uint32_t count)
+link_location_sift(
+    struct ntfs_volume *volume, struct ntfs_link_location *locations, uint32_t root, uint32_t count)
 {
 	uint32_t child;
 	enum ntfs_result result;
 
 	while (root < count / LINKS_HEAP_ARITY) {
-		result = ntfs_work(v, (LINKS_HEAP_ARITY + 1) * sizeof(*locations));
+		result = ntfs_work(volume, (LINKS_HEAP_ARITY + 1) * sizeof(*locations));
 		if (result != NTFS_OK) {
 			return result;
 		}
 		child = root * LINKS_HEAP_ARITY + 1;
 		if (child + 1 < count &&
-		    location_compare(&locations[child], &locations[child + 1]) < 0) {
+		    link_location_compare(&locations[child], &locations[child + 1]) < 0) {
 			child++;
 		}
-		if (location_compare(&locations[root], &locations[child]) >= 0) {
+		if (link_location_compare(&locations[root], &locations[child]) >= 0) {
 			break;
 		}
-		location_swap(&locations[root], &locations[child]);
+		link_location_swap(&locations[root], &locations[child]);
 		root = child;
 	}
 	return NTFS_OK;
 }
 
 static enum ntfs_result
-locations_sort(struct ntfs_volume *v, struct link_location *locations, uint32_t count)
+link_locations_sort(
+    struct ntfs_volume *volume, struct ntfs_link_location *locations, uint32_t count)
 {
 	uint32_t index;
 	enum ntfs_result result;
 
 	for (index = count / LINKS_HEAP_ARITY; index != 0; index--) {
-		result = location_sift(v, locations, index - 1, count);
+		result = link_location_sift(volume, locations, index - 1, count);
 		if (result != NTFS_OK) {
 			return result;
 		}
 	}
 	for (index = count; index > 1; index--) {
-		result = ntfs_work(v, LINKS_HEAP_ARITY * sizeof(*locations));
+		result = ntfs_work(volume, LINKS_HEAP_ARITY * sizeof(*locations));
 		if (result != NTFS_OK) {
 			return result;
 		}
-		location_swap(&locations[0], &locations[index - 1]);
-		result = location_sift(v, locations, 0, index - 1);
+		link_location_swap(&locations[0], &locations[index - 1]);
+		result = link_location_sift(volume, locations, 0, index - 1);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -82,7 +85,7 @@ locations_sort(struct ntfs_volume *v, struct link_location *locations, uint32_t 
 }
 
 static enum ntfs_result
-filename_count(const struct ntfs_attr_view *attribute, struct ntfs_link_counts *counts)
+link_filename_count(const struct ntfs_attr_view *attribute, struct ntfs_link_counts *counts)
 {
 	const struct ntfs_disk_filename *name;
 	const uint8_t *value;
@@ -118,8 +121,9 @@ filename_count(const struct ntfs_attr_view *attribute, struct ntfs_link_counts *
 }
 
 static enum ntfs_result
-record_count(struct ntfs_node *node, const uint8_t *record, struct link_location *locations,
-    uint32_t count, bool listed, struct ntfs_link_counts *counts)
+link_record_count(struct ntfs_node *node, const uint8_t *record,
+    struct ntfs_link_location *locations, uint32_t count, bool listed,
+    struct ntfs_link_counts *counts)
 {
 	const struct ntfs_disk_record *header = (const void *)record;
 	struct ntfs_attr_view attribute;
@@ -164,9 +168,9 @@ record_count(struct ntfs_node *node, const uint8_t *record, struct link_location
 			locations[low].seen = true;
 		} else if (locations != NULL) {
 			locations[seen] =
-			    (struct link_location){node->reference, attribute.instance, false};
+			    (struct ntfs_link_location){node->reference, attribute.instance, false};
 		}
-		result = filename_count(&attribute, counts);
+		result = link_filename_count(&attribute, counts);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -179,9 +183,9 @@ record_count(struct ntfs_node *node, const uint8_t *record, struct link_location
 }
 
 static enum ntfs_result
-local_counts(struct ntfs_node *node, uint16_t physical, struct ntfs_link_counts *counts)
+link_local_counts(struct ntfs_node *node, uint16_t physical, struct ntfs_link_counts *counts)
 {
-	struct link_location *locations = NULL;
+	struct ntfs_link_location *locations = NULL;
 	size_t allocation = (size_t)physical * sizeof(*locations);
 	uint32_t index;
 	enum ntfs_result result;
@@ -192,9 +196,9 @@ local_counts(struct ntfs_node *node, uint16_t physical, struct ntfs_link_counts 
 			return NTFS_NO_MEMORY;
 		}
 	}
-	result = record_count(node, node->record, locations, physical, false, counts);
+	result = link_record_count(node, node->record, locations, physical, false, counts);
 	if (result == NTFS_OK && locations != NULL) {
-		result = locations_sort(node->volume, locations, physical);
+		result = link_locations_sort(node->volume, locations, physical);
 	}
 	for (index = 1; result == NTFS_OK && index < physical; index++) {
 		result = ntfs_work(node->volume, LINKS_HEAP_ARITY * sizeof(*locations));
@@ -208,11 +212,11 @@ local_counts(struct ntfs_node *node, uint16_t physical, struct ntfs_link_counts 
 }
 
 static enum ntfs_result
-listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_t physical,
+link_listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_t physical,
     struct ntfs_link_counts *counts)
 {
-	struct ntfs_volume *v = node->volume;
-	struct link_location *locations;
+	struct ntfs_volume *volume = node->volume;
+	struct ntfs_link_location *locations;
 	const struct ntfs_disk_attr_list *entry;
 	const struct ntfs_disk_record *header;
 	uint8_t *record = NULL;
@@ -222,12 +226,12 @@ listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_
 	bool base_seen = false;
 	enum ntfs_result result;
 
-	locations = ntfs_alloc(v, allocation);
+	locations = ntfs_alloc(volume, allocation);
 	if (locations == NULL) {
 		return NTFS_NO_MEMORY;
 	}
 	while ((result = ntfs_list_entry_at(bytes, size, &offset, &entry)) == NTFS_OK) {
-		result = ntfs_work(v, ntfs_u16(entry->length));
+		result = ntfs_work(volume, ntfs_u16(entry->length));
 		if (result != NTFS_OK) {
 			break;
 		}
@@ -242,16 +246,17 @@ listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_
 			break;
 		}
 		locations[count++] =
-		    (struct link_location){reference, ntfs_u16(entry->instance), false};
+		    (struct ntfs_link_location){reference, ntfs_u16(entry->instance), false};
 	}
 	if (result == NTFS_END) {
-		result = count == physical ? locations_sort(v, locations, count) : NTFS_CORRUPT;
+		result = count == physical ? link_locations_sort(volume, locations, count)
+					   : NTFS_CORRUPT;
 	}
 	for (first = 0; result == NTFS_OK && first < count; first = end) {
 		end = first + 1;
 		reference = locations[first].reference;
 		while (end < count && locations[end].reference == reference) {
-			result = ntfs_work(v, sizeof(*locations));
+			result = ntfs_work(volume, sizeof(*locations));
 			if (result != NTFS_OK) {
 				break;
 			}
@@ -268,8 +273,8 @@ listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_
 			base_seen = true;
 			record = node->record;
 		} else {
-			result =
-			    ntfs_record_read(v, reference & NTFS_REFERENCE_RECORD_MASK, &record);
+			result = ntfs_record_read(
+			    volume, reference & NTFS_REFERENCE_RECORD_MASK, &record);
 			if (result != NTFS_OK) {
 				break;
 			}
@@ -281,27 +286,27 @@ listed_counts(struct ntfs_node *node, const uint8_t *bytes, size_t size, uint16_
 			}
 		}
 		if (result == NTFS_OK) {
-			result = record_count(
+			result = link_record_count(
 			    node, record, locations + first, end - first, true, counts);
 		}
 		if (record != node->record) {
-			ntfs_free(v, record, v->info.record_size);
+			ntfs_free(volume, record, volume->info.record_size);
 		}
 		record = NULL;
 	}
 	if (result == NTFS_OK && !base_seen) {
 		/* Even a list placing all names in extensions must account for every
 		 * physical filename present in the base snapshot. */
-		result = record_count(node, node->record, locations, 0, true, counts);
+		result = link_record_count(node, node->record, locations, 0, true, counts);
 	}
-	ntfs_free(v, locations, allocation);
+	ntfs_free(volume, locations, allocation);
 	return result;
 }
 
 enum ntfs_result
 ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 	struct ntfs_link_count_cache *cached;
 	const struct ntfs_disk_record *header;
 	struct ntfs_link_counts counts = {0};
@@ -322,15 +327,16 @@ ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 		*out = node->link_counts;
 		return NTFS_OK;
 	}
-	v = node->volume;
+	volume = node->volume;
 	header = (const void *)node->record;
 	physical = ntfs_u16(header->links);
 	if (physical == 0) {
 		return NTFS_CORRUPT;
 	}
-	for (index = 0; v->cache != NULL && index < v->limits.record_cache_entries; index++) {
-		cached = &v->cache[index].links;
-		result = ntfs_work(v, sizeof(*cached));
+	for (index = 0; volume->cache != NULL && index < volume->limits.record_cache_entries;
+	    index++) {
+		cached = &volume->cache[index].links;
+		result = ntfs_work(volume, sizeof(*cached));
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -342,18 +348,18 @@ ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 			goto verified;
 		}
 	}
-	if (v->cache != NULL) {
+	if (volume->cache != NULL) {
 		/* Charge publication before cold I/O. Failed inventories never publish. */
-		result = ntfs_work(v, sizeof(*cached));
+		result = ntfs_work(volume, sizeof(*cached));
 		if (result != NTFS_OK) {
 			return result;
 		}
 	}
 	result = ntfs_attribute_list_read(node, &list, &bytes);
 	if (result == NTFS_NOT_FOUND) {
-		result = local_counts(node, physical, &counts);
+		result = link_local_counts(node, physical, &counts);
 	} else if (result == NTFS_OK) {
-		result = listed_counts(node, list, bytes, physical, &counts);
+		result = link_listed_counts(node, list, bytes, physical, &counts);
 	}
 	ntfs_free(node->volume, list, bytes);
 	if (result != NTFS_OK) {
@@ -362,13 +368,13 @@ ntfs_node_link_counts_impl(struct ntfs_node *node, struct ntfs_link_counts *out)
 	if (counts.physical_names != physical || counts.primary_names == 0) {
 		return NTFS_CORRUPT;
 	}
-	if (v->cache != NULL) {
-		cached = &v->cache[v->next_link_cache].links;
+	if (volume->cache != NULL) {
+		cached = &volume->cache[volume->next_link_cache].links;
 		cached->counts = counts;
 		cached->reference = node->reference;
-		v->next_link_cache++;
-		if (v->next_link_cache == v->limits.record_cache_entries) {
-			v->next_link_cache = 0;
+		volume->next_link_cache++;
+		if (volume->next_link_cache == volume->limits.record_cache_entries) {
+			volume->next_link_cache = 0;
 		}
 	}
 verified:

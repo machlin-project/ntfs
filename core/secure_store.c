@@ -38,7 +38,7 @@ ntfs_secure_store_subject(
 
 static enum ntfs_result
 ntfs_secure_find_locator(struct ntfs_volume *volume,
-    const struct ntfs_disk_security_locator *locators, uint32_t count, uint32_t id,
+    const struct ntfs_disk_security_locator *locators, uint32_t count, uint32_t security_id,
     enum ntfs_result (*charge)(void *, uint64_t), void *context,
     const struct ntfs_disk_security_locator **out)
 {
@@ -53,11 +53,11 @@ ntfs_secure_find_locator(struct ntfs_volume *volume,
 		}
 		middle = first + (end - first) / NTFS_VECTOR_GROWTH;
 		found = ntfs_u32(locators[middle].security_id);
-		if (found == id) {
+		if (found == security_id) {
 			*out = &locators[middle];
 			return NTFS_OK;
 		}
-		if (found < id) {
+		if (found < security_id) {
 			first = middle + 1;
 		} else {
 			end = middle;

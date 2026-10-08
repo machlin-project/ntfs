@@ -12,14 +12,14 @@ struct ntfs_write_batch_pages {
 	uint64_t lsn[];
 };
 
-struct batch_window {
+struct ntfs_batch_page_window {
 	struct ntfs_logfile_lsn floor, tail, cursor;
 	uint64_t page, sequence, maximum_sequence, available_pages, next_lsn;
 	uint32_t offset_bits;
 	size_t pages;
 };
 
-struct batch_workspace {
+struct ntfs_batch_page_workspace {
 	uint8_t packet[NTFS_WRITE_BATCH_MAX_PACKET_BYTES];
 	uint8_t data[NTFS_WRITE_BATCH_DATA_BYTES], restored[NTFS_WRITE_CLUSTER_BYTES];
 };
@@ -129,7 +129,7 @@ ntfs_write_batch_pages_packet_copy(const struct ntfs_write_batch_pages *owner, s
 }
 
 static enum ntfs_result
-admit_output(const struct ntfs_environment *source,
+batch_pages_admit_output(const struct ntfs_environment *source,
     const struct ntfs_write_batch_pages_input *input, struct ntfs_write_batch_pages **out)
 {
 	size_t index, array_bytes;
@@ -167,8 +167,8 @@ admit_output(const struct ntfs_environment *source,
 }
 
 static enum ntfs_result
-advance(const struct ntfs_logfile_restart *restart, const struct batch_window *window,
-    uint64_t *page, uint64_t *sequence)
+batch_pages_advance(const struct ntfs_logfile_restart *restart,
+    const struct ntfs_batch_page_window *window, uint64_t *page, uint64_t *sequence)
 {
 	*page += restart->log_page_bytes;
 	if (*page == restart->usable_bytes) {
@@ -182,13 +182,15 @@ advance(const struct ntfs_logfile_restart *restart, const struct batch_window *w
 }
 
 static uint64_t
-encode_lsn(const struct batch_window *window, uint64_t page, uint64_t sequence, size_t within)
+batch_pages_encode_lsn(
+    const struct ntfs_batch_page_window *window, uint64_t page, uint64_t sequence, size_t within)
 {
 	return (sequence << window->offset_bits) | ((page + within) >> NTFS_LFS_LSN_OFFSET_SHIFT);
 }
 
 static enum ntfs_result
-window_prepare(const struct ntfs_write_batch_pages_input *input, struct batch_window *window)
+batch_pages_window_prepare(
+    const struct ntfs_write_batch_pages_input *input, struct ntfs_batch_page_window *window)
 {
 	const struct ntfs_logfile_restart *restart = &input->restart;
 	uint64_t ring_pages;
@@ -231,7 +233,7 @@ window_prepare(const struct ntfs_write_batch_pages_input *input, struct batch_wi
 		return NTFS_OK;
 	}
 	if (window->cursor.record_offset != restart->page_data_offset) {
-		result = advance(restart, window, &window->page, &window->sequence);
+		result = batch_pages_advance(restart, window, &window->page, &window->sequence);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -247,7 +249,7 @@ enum ntfs_result
 ntfs_write_batch_pages_capacity_check(
     const struct ntfs_write_batch_pages_input *input, size_t pages)
 {
-	struct batch_window window = {0};
+	struct ntfs_batch_page_window window = {0};
 	uint64_t page, sequence;
 	size_t index;
 	enum ntfs_result result;
@@ -259,7 +261,7 @@ ntfs_write_batch_pages_capacity_check(
 	if (pages > NTFS_WRITE_BATCH_MAX_PAGES) {
 		return NTFS_RANGE;
 	}
-	result = window_prepare(input, &window);
+	result = batch_pages_window_prepare(input, &window);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -269,7 +271,7 @@ ntfs_write_batch_pages_capacity_check(
 	page = window.page;
 	sequence = window.sequence;
 	for (index = 1; index < pages; index++) {
-		result = advance(&input->restart, &window, &page, &sequence);
+		result = batch_pages_advance(&input->restart, &window, &page, &sequence);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -278,8 +280,8 @@ ntfs_write_batch_pages_capacity_check(
 }
 
 static enum ntfs_result
-link_admit(const struct ntfs_write_batch_pages_input *input, size_t ordinal, size_t target,
-    uint64_t absolute)
+batch_pages_link_admit(const struct ntfs_write_batch_pages_input *input, size_t ordinal,
+    size_t target, uint64_t absolute)
 {
 	const struct ntfs_logfile_record *record = &input->packet[ordinal].record;
 	const struct ntfs_logfile_record *linked;
@@ -306,7 +308,8 @@ link_admit(const struct ntfs_write_batch_pages_input *input, size_t ordinal, siz
 }
 
 static enum ntfs_result
-packets_admit(const struct ntfs_write_batch_pages_input *input, struct batch_window *window)
+batch_pages_packets_admit(
+    const struct ntfs_write_batch_pages_input *input, struct ntfs_batch_page_window *window)
 {
 	const struct ntfs_write_batch_packet *packet;
 	uint16_t known_flags;
@@ -337,9 +340,10 @@ packets_admit(const struct ntfs_write_batch_pages_input *input, struct batch_win
 		    packet->record.data.length != packet->payload.bytes) {
 			return NTFS_INVALID;
 		}
-		result = link_admit(input, index, packet->previous, packet->record.previous_lsn);
+		result = batch_pages_link_admit(
+		    input, index, packet->previous, packet->record.previous_lsn);
 		if (result == NTFS_OK) {
-			result = link_admit(
+			result = batch_pages_link_admit(
 			    input, index, packet->undo_next, packet->record.undo_next_lsn);
 		}
 		if (result != NTFS_OK) {
@@ -354,14 +358,15 @@ packets_admit(const struct ntfs_write_batch_pages_input *input, struct batch_win
 }
 
 static enum ntfs_result
-successor_prepare(const struct ntfs_write_batch_pages_input *input, struct batch_window *window)
+batch_pages_successor_prepare(
+    const struct ntfs_write_batch_pages_input *input, struct ntfs_batch_page_window *window)
 {
 	uint64_t page = window->page, sequence = window->sequence;
 	size_t index, bytes, last_bytes, next;
 	enum ntfs_result result;
 
 	for (index = 1; index < window->pages; index++) {
-		result = advance(&input->restart, window, &page, &sequence);
+		result = batch_pages_advance(&input->restart, window, &page, &sequence);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -372,27 +377,28 @@ successor_prepare(const struct ntfs_write_batch_pages_input *input, struct batch
 	next = (NTFS_WRITE_LOG_DATA_OFFSET + last_bytes + NTFS_WIRE_ALIGNMENT - 1) &
 	    ~(size_t)(NTFS_WIRE_ALIGNMENT - 1);
 	if (!ntfs_bounds(next, sizeof(struct ntfs_disk_log_record), NTFS_WRITE_CLUSTER_BYTES)) {
-		result = advance(&input->restart, window, &page, &sequence);
+		result = batch_pages_advance(&input->restart, window, &page, &sequence);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		next = NTFS_WRITE_LOG_DATA_OFFSET;
 	}
-	window->next_lsn = encode_lsn(window, page, sequence, next);
+	window->next_lsn = batch_pages_encode_lsn(window, page, sequence, next);
 	return NTFS_OK;
 }
 
 static struct ntfs_write_batch_page *
-page_storage(struct ntfs_write_batch_pages *plan)
+batch_pages_page_storage(struct ntfs_write_batch_pages *plan)
 {
 	return (void *)(plan->lsn + plan->packets);
 }
 
 static enum ntfs_result
-pages_encode(const struct ntfs_write_batch_pages_input *input, const struct batch_window *window,
-    struct batch_workspace *work, struct ntfs_write_batch_pages *plan)
+batch_pages_pages_encode(const struct ntfs_write_batch_pages_input *input,
+    const struct ntfs_batch_page_window *window, struct ntfs_batch_page_workspace *work,
+    struct ntfs_write_batch_pages *plan)
 {
-	struct ntfs_write_batch_page *pages = page_storage(plan);
+	struct ntfs_write_batch_page *pages = batch_pages_page_storage(plan);
 	const struct ntfs_write_batch_packet *packet;
 	struct ntfs_logfile_record record;
 	struct ntfs_logfile_page_input frame = {0};
@@ -411,7 +417,8 @@ pages_encode(const struct ntfs_write_batch_pages_input *input, const struct batc
 		packet = &input->packet[ordinal];
 		record = packet->record;
 		bytes = sizeof(struct ntfs_disk_log_record) + packet->payload.bytes;
-		plan->lsn[ordinal] = encode_lsn(window, page, sequence, NTFS_WRITE_LOG_DATA_OFFSET);
+		plan->lsn[ordinal] =
+		    batch_pages_encode_lsn(window, page, sequence, NTFS_WRITE_LOG_DATA_OFFSET);
 		record.lsn = plan->lsn[ordinal];
 		if (packet->previous != SIZE_MAX) {
 			record.previous_lsn = plan->lsn[packet->previous];
@@ -459,7 +466,8 @@ pages_encode(const struct ntfs_write_batch_pages_input *input, const struct batc
 			copied += take;
 			output++;
 			if (output != plan->pages) {
-				result = advance(&input->restart, window, &page, &sequence);
+				result =
+				    batch_pages_advance(&input->restart, window, &page, &sequence);
 				if (result != NTFS_OK) {
 					return result;
 				}
@@ -475,12 +483,12 @@ ntfs_write_batch_pages_prepare(const struct ntfs_environment *source,
 {
 	struct ntfs_write_batch_pages *plan;
 	struct ntfs_environment allocator;
-	struct batch_workspace *work;
-	struct batch_window window = {0};
+	struct ntfs_batch_page_workspace *work;
+	struct ntfs_batch_page_window window = {0};
 	size_t bytes;
 	enum ntfs_result result;
 
-	result = admit_output(source, input, out);
+	result = batch_pages_admit_output(source, input, out);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -488,12 +496,12 @@ ntfs_write_batch_pages_prepare(const struct ntfs_environment *source,
 	    source->release == NULL || input->packets == 0) {
 		return NTFS_INVALID;
 	}
-	result = window_prepare(input, &window);
+	result = batch_pages_window_prepare(input, &window);
 	if (result == NTFS_OK) {
-		result = packets_admit(input, &window);
+		result = batch_pages_packets_admit(input, &window);
 	}
 	if (result == NTFS_OK) {
-		result = successor_prepare(input, &window);
+		result = batch_pages_successor_prepare(input, &window);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -522,7 +530,7 @@ ntfs_write_batch_pages_prepare(const struct ntfs_environment *source,
 		ntfs_write_batch_pages_close(plan);
 		return NTFS_NO_MEMORY;
 	}
-	result = pages_encode(input, &window, work, plan);
+	result = batch_pages_pages_encode(input, &window, work, plan);
 	allocator.release(allocator.context, work, sizeof(*work));
 	if (result != NTFS_OK) {
 		ntfs_write_batch_pages_close(plan);

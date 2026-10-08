@@ -17,7 +17,7 @@ enum {
 	    sizeof(struct ntfs_disk_log_update_storage) + 2 * NTFS_WRITE_CLUSTER_BYTES
 };
 
-struct program_workspace {
+struct ntfs_write_program_workspace {
 	uint8_t before[NTFS_WRITE_CLUSTER_BYTES], after[NTFS_WRITE_CLUSTER_BYTES];
 	uint8_t payload[PROGRAM_PAYLOAD_BYTES];
 };
@@ -68,11 +68,13 @@ ntfs_write_program_close(struct ntfs_write_program *program)
 }
 
 static bool
-program_targets_equal(
-    const struct ntfs_write_mutation_target *a, const struct ntfs_write_mutation_target *b)
+program_targets_equal(const struct ntfs_write_mutation_target *left_target,
+    const struct ntfs_write_mutation_target *right_target)
 {
-	return a->reference == b->reference && a->attribute_type == b->attribute_type &&
-	    a->name_count == b->name_count && ntfs_equal(a->name, b->name, sizeof(a->name));
+	return left_target->reference == right_target->reference &&
+	    left_target->attribute_type == right_target->attribute_type &&
+	    left_target->name_count == right_target->name_count &&
+	    ntfs_equal(left_target->name, right_target->name, sizeof(left_target->name));
 }
 
 static enum ntfs_result
@@ -161,7 +163,7 @@ program_update_append(struct ntfs_write_program *program, size_t region, uint16_
 }
 
 static enum ntfs_result
-program_update_encode(struct ntfs_write_program *program, struct program_workspace *work,
+program_update_encode(struct ntfs_write_program *program, struct ntfs_write_program_workspace *work,
     size_t region, uint16_t flags, const struct ntfs_logfile_update_input *input)
 {
 	uint32_t bytes;
@@ -189,7 +191,7 @@ program_file_bytes_equal(const uint8_t *before, const uint8_t *after)
 }
 
 static enum ntfs_result
-logical_file(const void *record)
+program_logical_file(const void *record)
 {
 	const struct ntfs_disk_record *header = record;
 	struct ntfs_attr_view attribute;
@@ -216,8 +218,8 @@ logical_file(const void *record)
 }
 
 static enum ntfs_result
-program_file_compile(
-    struct ntfs_write_program *program, struct program_workspace *work, size_t ordinal, size_t slot)
+program_file_compile(struct ntfs_write_program *program, struct ntfs_write_program_workspace *work,
+    size_t ordinal, size_t slot)
 {
 	const struct program_region *region = &program->region[ordinal];
 	struct ntfs_logfile_update_input input = {0};
@@ -236,7 +238,7 @@ program_file_compile(
 	ntfs_copy(new, region->after + slot * NTFS_WRITE_RECORD_BYTES, NTFS_WRITE_RECORD_BYTES);
 	result = ntfs_record_decode(new, NTFS_WRITE_RECORD_BYTES, false);
 	if (result == NTFS_OK) {
-		result = logical_file(new);
+		result = program_logical_file(new);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -257,7 +259,7 @@ program_file_compile(
 	if (predecessor) {
 		result = ntfs_record_decode(old, NTFS_WRITE_RECORD_BYTES, false);
 		if (result == NTFS_OK) {
-			result = logical_file(old);
+			result = program_logical_file(old);
 		}
 		if (result != NTFS_OK) {
 			return result;
@@ -327,7 +329,7 @@ program_file_compile(
 
 static enum ntfs_result
 program_region_compile(
-    struct ntfs_write_program *program, struct program_workspace *work, size_t ordinal)
+    struct ntfs_write_program *program, struct ntfs_write_program_workspace *work, size_t ordinal)
 {
 	const struct program_region *region = &program->region[ordinal];
 	struct ntfs_write_bitmap_program *bitmap = NULL;
@@ -391,7 +393,7 @@ ntfs_write_program_prepare(const struct ntfs_environment *source,
     const struct ntfs_write_mutation_plan *plan, struct ntfs_write_program **out)
 {
 	struct ntfs_write_program *program;
-	struct program_workspace *work = NULL;
+	struct ntfs_write_program_workspace *work = NULL;
 	struct ntfs_write_mutation_region region;
 	size_t count, index, selected, pass;
 	uint64_t logical;
@@ -628,7 +630,7 @@ ntfs_write_program_apply(const struct ntfs_write_program *program, size_t index,
 		if (span.length != NTFS_WRITE_RECORD_BYTES) {
 			return NTFS_UNSUPPORTED;
 		}
-		result = logical_file(payload + span.offset);
+		result = program_logical_file(payload + span.offset);
 		if (result != NTFS_OK) {
 			return result;
 		}

@@ -18,14 +18,14 @@ enum {
 };
 
 static const uint8_t *
-body(const struct ntfs_write_replay_input *input, const struct ntfs_write_replay_workspace *work,
-    size_t index)
+write_replay_body(const struct ntfs_write_replay_input *input,
+    const struct ntfs_write_replay_workspace *work, size_t index)
 {
 	return (const uint8_t *)input->packet[index].data + work->record[index].data.offset;
 }
 
 static enum ntfs_result
-decode_packets(const struct ntfs_write_replay_input *input,
+write_replay_decode_packets(const struct ntfs_write_replay_input *input,
     struct ntfs_write_replay_workspace *work, bool committed)
 {
 	const struct ntfs_logfile_buffer *packet;
@@ -46,8 +46,8 @@ decode_packets(const struct ntfs_write_replay_input *input,
 		    (index != 0 && record->client_sequence != work->record[0].client_sequence)) {
 			return NTFS_UNSUPPORTED;
 		}
-		result = ntfs_logfile_update_decode(
-		    body(input, work, index), record->data.length, &work->update[index]);
+		result = ntfs_logfile_update_decode(write_replay_body(input, work, index),
+		    record->data.length, &work->update[index]);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -56,13 +56,13 @@ decode_packets(const struct ntfs_write_replay_input *input,
 }
 
 static uint32_t
-aligned_bytes(uint32_t bytes)
+write_replay_aligned_bytes(uint32_t bytes)
 {
 	return (bytes + NTFS_WIRE_ALIGNMENT - 1u) / NTFS_WIRE_ALIGNMENT * NTFS_WIRE_ALIGNMENT;
 }
 
 static enum ntfs_result
-decode_extra(const struct ntfs_logfile_buffer *packet, uint16_t sequence,
+write_replay_decode_extra(const struct ntfs_logfile_buffer *packet, uint16_t sequence,
     struct ntfs_logfile_record *record, struct ntfs_logfile_update *update)
 {
 	enum ntfs_result result;
@@ -82,7 +82,7 @@ decode_extra(const struct ntfs_logfile_buffer *packet, uint16_t sequence,
 }
 
 static bool
-empty_target(const struct ntfs_logfile_update *update)
+write_replay_empty_target(const struct ntfs_logfile_update *update)
 {
 	return update->target_attribute == NTFS_WRITE_MFT_KEY &&
 	    update->attribute_flags == NTFS_WRITE_MFT_TARGET_FLAG && update->lcn_count == 0 &&
@@ -91,12 +91,12 @@ empty_target(const struct ntfs_logfile_update *update)
 }
 
 static enum ntfs_result
-bind_open(
+write_replay_bind_open(
     const struct ntfs_write_replay_input *input, const struct ntfs_write_replay_workspace *work)
 {
 	const struct ntfs_logfile_record *record = &work->record[NTFS_WRITE_REPLAY_OPEN];
 	const struct ntfs_logfile_update *update = &work->update[NTFS_WRITE_REPLAY_OPEN];
-	const uint8_t *payload = body(input, work, NTFS_WRITE_REPLAY_OPEN);
+	const uint8_t *payload = write_replay_body(input, work, NTFS_WRITE_REPLAY_OPEN);
 	const struct ntfs_disk_log_open_attribute *entry;
 
 	if (input->packet[NTFS_WRITE_REPLAY_OPEN].bytes != REPLAY_OPEN_BYTES ||
@@ -104,7 +104,7 @@ bind_open(
 	    record->transaction != NTFS_WRITE_MFT_KEY || record->previous_lsn != 0 ||
 	    record->undo_next_lsn != 0 ||
 	    update->redo_operation != NTFS_LOG_OP_OPEN_NONRESIDENT_ATTRIBUTE ||
-	    update->undo_operation != NTFS_LOG_OP_NOOP || !empty_target(update) ||
+	    update->undo_operation != NTFS_LOG_OP_NOOP || !write_replay_empty_target(update) ||
 	    update->redo.offset != sizeof(struct ntfs_disk_log_update_storage) ||
 	    update->redo.length != sizeof(*entry) || update->undo.offset != record->data.length ||
 	    update->undo.length != 0 ||
@@ -124,12 +124,12 @@ bind_open(
 }
 
 static enum ntfs_result
-bind_snapshot(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
+write_replay_bind_snapshot(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
     struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out)
 {
 	const struct ntfs_logfile_record *record = &work->record[NTFS_WRITE_REPLAY_SNAPSHOT];
 	const struct ntfs_logfile_update *update = &work->update[NTFS_WRITE_REPLAY_SNAPSHOT];
-	const uint8_t *payload = body(input, work, NTFS_WRITE_REPLAY_SNAPSHOT);
+	const uint8_t *payload = write_replay_body(input, work, NTFS_WRITE_REPLAY_SNAPSHOT);
 	const struct ntfs_disk_record *header;
 	const struct ntfs_disk_record_extension *extension;
 	const struct ntfs_run *run;
@@ -213,12 +213,12 @@ bind_snapshot(struct ntfs_volume *volume, const struct ntfs_write_replay_input *
 }
 
 static enum ntfs_result
-bind_change(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
+write_replay_bind_change(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
     struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out)
 {
 	const struct ntfs_logfile_record *record = &work->record[NTFS_WRITE_REPLAY_UPDATE];
 	const struct ntfs_logfile_update *update = &work->update[NTFS_WRITE_REPLAY_UPDATE];
-	const uint8_t *payload = body(input, work, NTFS_WRITE_REPLAY_UPDATE);
+	const uint8_t *payload = write_replay_body(input, work, NTFS_WRITE_REPLAY_UPDATE);
 	struct ntfs_attr_view standard, list, reparse;
 	struct ntfs_node snapshot_node = {0};
 	struct ntfs_stream *stream = NULL;
@@ -322,8 +322,8 @@ bind_change(struct ntfs_volume *volume, const struct ntfs_write_replay_input *in
 }
 
 static enum ntfs_result
-bind_resident(const struct ntfs_write_replay_input *input, struct ntfs_write_replay_workspace *work,
-    struct ntfs_write_replay_plan *out)
+write_replay_bind_resident(const struct ntfs_write_replay_input *input,
+    struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out)
 {
 	const struct ntfs_logfile_record *record = &work->resident_record;
 	const struct ntfs_logfile_update *update = &work->resident_update;
@@ -335,7 +335,7 @@ bind_resident(const struct ntfs_write_replay_input *input, struct ntfs_write_rep
 	size_t bytes, record_offset, value_offset, offset, redo_end;
 	enum ntfs_result result;
 
-	result = decode_extra(&input->resident, work->record[0].client_sequence,
+	result = write_replay_decode_extra(&input->resident, work->record[0].client_sequence,
 	    &work->resident_record, &work->resident_update);
 	if (result != NTFS_OK) {
 		return result;
@@ -354,7 +354,8 @@ bind_resident(const struct ntfs_write_replay_input *input, struct ntfs_write_rep
 	    update->redo.offset != sizeof(struct ntfs_disk_log_update_storage) ||
 	    update->redo.length == 0 || update->redo.length > NTFS_WRITE_RECORD_BYTES ||
 	    update->undo.length != update->redo.length ||
-	    update->undo.offset != aligned_bytes(update->redo.offset + update->redo.length) ||
+	    update->undo.offset !=
+		write_replay_aligned_bytes(update->redo.offset + update->redo.length) ||
 	    record->data.length != update->undo.offset + update->undo.length) {
 		return NTFS_UNSUPPORTED;
 	}
@@ -396,7 +397,7 @@ bind_resident(const struct ntfs_write_replay_input *input, struct ntfs_write_rep
 }
 
 static enum ntfs_result
-bind_resident_compensation(const struct ntfs_write_replay_input *input,
+write_replay_bind_resident_compensation(const struct ntfs_write_replay_input *input,
     struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out)
 {
 	const struct ntfs_logfile_record *record = &work->resident_compensation_record;
@@ -406,8 +407,9 @@ bind_resident_compensation(const struct ntfs_write_replay_input *input,
 	    (const uint8_t *)input->resident.data + work->resident_record.data.offset;
 	enum ntfs_result result;
 
-	result = decode_extra(&input->resident_compensation, work->record[0].client_sequence,
-	    &work->resident_compensation_record, &work->resident_compensation_update);
+	result = write_replay_decode_extra(&input->resident_compensation,
+	    work->record[0].client_sequence, &work->resident_compensation_record,
+	    &work->resident_compensation_update);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -439,25 +441,26 @@ bind_resident_compensation(const struct ntfs_write_replay_input *input,
 }
 
 static enum ntfs_result
-bind_compensation(const struct ntfs_write_replay_input *input,
+write_replay_bind_compensation(const struct ntfs_write_replay_input *input,
     struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out)
 {
 	const struct ntfs_logfile_record *record = &work->record[NTFS_WRITE_REPLAY_COMMIT];
 	const struct ntfs_logfile_update *update = &work->update[NTFS_WRITE_REPLAY_COMMIT];
-	const uint8_t *payload = body(input, work, NTFS_WRITE_REPLAY_COMMIT);
-	const uint8_t *original = body(input, work, NTFS_WRITE_REPLAY_UPDATE);
+	const uint8_t *payload = write_replay_body(input, work, NTFS_WRITE_REPLAY_COMMIT);
+	const uint8_t *original = write_replay_body(input, work, NTFS_WRITE_REPLAY_UPDATE);
 	struct ntfs_disk_record *header;
 	uint64_t compensation_lsn = work->reservation.commit_lsn;
 	uint64_t previous_lsn = work->reservation.update_lsn;
 	enum ntfs_result result;
 
 	if (out->file.resident_bytes != 0) {
-		result = bind_resident_compensation(input, work, out);
+		result = write_replay_bind_resident_compensation(input, work, out);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		previous_lsn = out->resident_compensation_lsn;
-		compensation_lsn += aligned_bytes((uint32_t)input->resident_compensation.bytes) /
+		compensation_lsn +=
+		    write_replay_aligned_bytes((uint32_t)input->resident_compensation.bytes) /
 		    NTFS_WIRE_ALIGNMENT;
 	}
 	if (input->packet[NTFS_WRITE_REPLAY_COMMIT].bytes != REPLAY_COMPENSATION_BYTES ||
@@ -505,7 +508,8 @@ bind_compensation(const struct ntfs_write_replay_input *input,
 	}
 	update = &work->abort_update;
 	if (update->redo_operation != NTFS_LOG_OP_FORGET_TRANSACTION ||
-	    update->undo_operation != NTFS_LOG_OP_COMPENSATION || !empty_target(update) ||
+	    update->undo_operation != NTFS_LOG_OP_COMPENSATION ||
+	    !write_replay_empty_target(update) ||
 	    update->redo.offset != sizeof(struct ntfs_disk_log_update_storage) ||
 	    update->redo.length != 0 || update->undo.offset != update->redo.offset ||
 	    update->undo.length != 0 || update->compensation_undo_bytes != 0 ||
@@ -522,7 +526,7 @@ bind_compensation(const struct ntfs_write_replay_input *input,
 }
 
 static enum ntfs_result
-prepare(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
+write_replay_prepare(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
     struct ntfs_write_replay_workspace *work, struct ntfs_write_replay_plan *out)
 {
 	const struct ntfs_logfile_record *record;
@@ -554,18 +558,18 @@ prepare(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
 	    input->resident_compensation.bytes > NTFS_WRITE_REPLAY_PACKET_BYTES) {
 		return NTFS_RANGE;
 	}
-	result = decode_packets(input, work, fourth);
+	result = write_replay_decode_packets(input, work, fourth);
 	if (result == NTFS_OK) {
-		result = bind_open(input, work);
+		result = write_replay_bind_open(input, work);
 	}
 	if (result == NTFS_OK) {
-		result = bind_snapshot(volume, input, work, out);
+		result = write_replay_bind_snapshot(volume, input, work, out);
 	}
 	if (result == NTFS_OK) {
-		result = bind_change(volume, input, work, out);
+		result = write_replay_bind_change(volume, input, work, out);
 	}
 	if (result == NTFS_OK && resident) {
-		result = bind_resident(input, work, out);
+		result = write_replay_bind_resident(input, work, out);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -585,14 +589,15 @@ prepare(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
 	if (committed) {
 		record = &work->record[NTFS_WRITE_REPLAY_COMMIT];
 		update = &work->update[NTFS_WRITE_REPLAY_COMMIT];
-		payload = body(input, work, NTFS_WRITE_REPLAY_COMMIT);
+		payload = write_replay_body(input, work, NTFS_WRITE_REPLAY_COMMIT);
 		if (input->packet[NTFS_WRITE_REPLAY_COMMIT].bytes != REPLAY_COMMIT_BYTES ||
 		    record->lsn != work->reservation.commit_lsn ||
 		    record->flags != NTFS_LOGFILE_RECORD_DELETING ||
 		    record->transaction != NTFS_WRITE_TRANSACTION_KEY ||
 		    record->previous_lsn != last_lsn || record->undo_next_lsn != 0 ||
 		    update->redo_operation != NTFS_LOG_OP_FORGET_TRANSACTION ||
-		    update->undo_operation != NTFS_LOG_OP_COMPENSATION || !empty_target(update) ||
+		    update->undo_operation != NTFS_LOG_OP_COMPENSATION ||
+		    !write_replay_empty_target(update) ||
 		    update->redo.offset != sizeof(struct ntfs_disk_log_update_storage) ||
 		    update->redo.length != 0 ||
 		    update->undo.offset != sizeof(struct ntfs_disk_log_update_storage) ||
@@ -602,7 +607,7 @@ prepare(struct ntfs_volume *volume, const struct ntfs_write_replay_input *input,
 		}
 	}
 	if (compensated) {
-		result = bind_compensation(input, work, out);
+		result = write_replay_bind_compensation(input, work, out);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -684,7 +689,7 @@ ntfs_write_replay_prepare(struct ntfs_volume *volume, const struct ntfs_write_re
 	ntfs_zero(out, sizeof(*out));
 	result = ntfs_operation_enter(volume);
 	if (result == NTFS_OK) {
-		result = prepare(volume, input, work, out);
+		result = write_replay_prepare(volume, input, work, out);
 		ntfs_operation_leave(volume);
 	}
 	if (result != NTFS_OK) {

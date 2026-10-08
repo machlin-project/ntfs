@@ -2,7 +2,7 @@
 #include "write_mutation_internal.h"
 
 static enum ntfs_result
-append_ace(uint8_t *output, size_t *used, uint16_t *count, const uint8_t *original,
+inheritance_append_ace(uint8_t *output, size_t *used, uint16_t *count, const uint8_t *original,
     const struct ntfs_ace_info *ace, uint8_t flags, const uint8_t *sid, size_t sid_bytes,
     bool effective)
 {
@@ -27,7 +27,7 @@ append_ace(uint8_t *output, size_t *used, uint16_t *count, const uint8_t *origin
 }
 
 static enum ntfs_result
-inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
+inheritance_inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
     const struct ntfs_acl_info *acl, bool directory, uint8_t *output, size_t *used,
     uint32_t *offset)
 {
@@ -96,7 +96,7 @@ inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
 			} else {
 				replacement = &ace.sid;
 			}
-			result = append_ace(output, used, &count, body, &ace,
+			result = inheritance_append_ace(output, used, &count, body, &ace,
 			    audit_flags | NTFS_ACE_INHERITED,
 			    creator ? parent + replacement->offset : body + replacement->offset,
 			    replacement->length, true);
@@ -108,7 +108,7 @@ inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
 			}
 			flags =
 			    audit_flags | propagation | NTFS_ACE_INHERIT_ONLY | NTFS_ACE_INHERITED;
-			result = append_ace(
+			result = inheritance_append_ace(
 			    output, used, &count, body, &ace, flags, sid, sid_bytes, false);
 		} else {
 			flags = audit_flags | NTFS_ACE_INHERITED;
@@ -118,7 +118,7 @@ inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
 			if (!applies) {
 				flags |= NTFS_ACE_INHERIT_ONLY;
 			}
-			result = append_ace(
+			result = inheritance_append_ace(
 			    output, used, &count, body, &ace, flags, sid, sid_bytes, applies);
 		}
 		if (result != NTFS_OK) {
@@ -134,7 +134,7 @@ inherit_acl(const uint8_t *parent, const struct ntfs_security_info *security,
 }
 
 static enum ntfs_result
-append_sid(uint8_t *output, size_t *used, const uint8_t *parent,
+inheritance_append_sid(uint8_t *output, size_t *used, const uint8_t *parent,
     const struct ntfs_security_span *sid, uint8_t *field)
 {
 	if (sid->length == 0) {
@@ -191,7 +191,8 @@ ntfs_mutation_security_inherit(struct ntfs_write_mutation_plan *plan,
 	header = (void *)output;
 	header->revision = NTFS_MUTATION_SECURITY_REVISION;
 	used = sizeof(*header);
-	result = inherit_acl(parent, &security, &security.dacl, directory, output, &used, &offset);
+	result = inheritance_inherit_acl(
+	    parent, &security, &security.dacl, directory, output, &used, &offset);
 	ntfs_put_u32(header->dacl, offset);
 	if (security.dacl.state != NTFS_ACL_ABSENT) {
 		control |= NTFS_SD_DACL_PRESENT;
@@ -200,7 +201,7 @@ ntfs_mutation_security_inherit(struct ntfs_write_mutation_plan *plan,
 		}
 	}
 	if (result == NTFS_OK) {
-		result = inherit_acl(
+		result = inheritance_inherit_acl(
 		    parent, &security, &security.sacl, directory, output, &used, &offset);
 		ntfs_put_u32(header->sacl, offset);
 	}
@@ -211,10 +212,12 @@ ntfs_mutation_security_inherit(struct ntfs_write_mutation_plan *plan,
 		}
 	}
 	if (result == NTFS_OK) {
-		result = append_sid(output, &used, parent, &security.owner_span, header->owner);
+		result = inheritance_append_sid(
+		    output, &used, parent, &security.owner_span, header->owner);
 	}
 	if (result == NTFS_OK) {
-		result = append_sid(output, &used, parent, &security.group_span, header->group);
+		result = inheritance_append_sid(
+		    output, &used, parent, &security.group_span, header->group);
 	}
 	ntfs_put_u16(header->control, control);
 	if (result == NTFS_OK) {

@@ -8,14 +8,14 @@
 #include <unistd.h>
 
 static void *
-image_allocate(void *context, size_t bytes)
+posix_writer_allocate(void *context, size_t bytes)
 {
 	(void)context;
 	return malloc(bytes);
 }
 
 static void
-image_release(void *context, void *buffer, size_t bytes)
+posix_writer_release(void *context, void *buffer, size_t bytes)
 {
 	(void)context;
 	(void)bytes;
@@ -23,7 +23,7 @@ image_release(void *context, void *buffer, size_t bytes)
 }
 
 static enum ntfs_result
-image_claim(void *context)
+posix_writer_claim(void *context)
 {
 	struct ntfs_overwrite_image *image = context;
 
@@ -41,7 +41,7 @@ image_claim(void *context)
 }
 
 static void
-image_unclaim(void *context)
+posix_writer_unclaim(void *context)
 {
 	struct ntfs_overwrite_image *image = context;
 
@@ -54,7 +54,7 @@ image_unclaim(void *context)
 }
 
 static enum ntfs_result
-image_read(void *context, uint64_t offset, void *buffer, size_t bytes)
+posix_writer_read(void *context, uint64_t offset, void *buffer, size_t bytes)
 {
 	struct ntfs_overwrite_image *image = context;
 	uint8_t *position = buffer;
@@ -80,7 +80,7 @@ image_read(void *context, uint64_t offset, void *buffer, size_t bytes)
 }
 
 static enum ntfs_result
-image_write(void *context, uint64_t offset, const void *buffer, size_t bytes, size_t *actual)
+posix_writer_write(void *context, uint64_t offset, const void *buffer, size_t bytes, size_t *actual)
 {
 	struct ntfs_overwrite_image *image = context;
 	const uint8_t *position = buffer;
@@ -110,7 +110,7 @@ image_write(void *context, uint64_t offset, const void *buffer, size_t bytes, si
 }
 
 static enum ntfs_result
-image_persist(void *context)
+posix_writer_persist(void *context)
 {
 	struct ntfs_overwrite_image *image = context;
 	int status;
@@ -140,7 +140,7 @@ int
 ntfs_overwrite_image_open(const char *path, struct ntfs_overwrite_image *image)
 {
 	struct stat status;
-	int saved;
+	int saved_error;
 
 	*image = (struct ntfs_overwrite_image){.fd = -1};
 	image->fd = open(path, O_RDWR | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK);
@@ -148,20 +148,20 @@ ntfs_overwrite_image_open(const char *path, struct ntfs_overwrite_image *image)
 		return errno;
 	}
 	if (fstat(image->fd, &status) != 0) {
-		saved = errno;
+		saved_error = errno;
 		ntfs_overwrite_image_close(image);
-		return saved;
+		return saved_error;
 	}
 	if (!S_ISREG(status.st_mode) || status.st_size <= 0 || status.st_nlink != 1 ||
 	    (status.st_mode & (S_IWUSR | S_IWGRP | S_IWOTH)) == 0) {
 		ntfs_overwrite_image_close(image);
 		return EINVAL;
 	}
-	image->environment =
-	    (struct ntfs_overwrite_environment){{NTFS_API_VERSION, image, (uint64_t)status.st_size,
-						    image_read, image_allocate, image_release},
-		NTFS_OVERWRITE_API_VERSION, NTFS_OVERWRITE_MIN_ALIGNMENT, image_claim,
-		image_unclaim, image_write, image_persist};
+	image->environment = (struct ntfs_overwrite_environment){
+	    {NTFS_API_VERSION, image, (uint64_t)status.st_size, posix_writer_read,
+		posix_writer_allocate, posix_writer_release},
+	    NTFS_OVERWRITE_API_VERSION, NTFS_OVERWRITE_MIN_ALIGNMENT, posix_writer_claim,
+	    posix_writer_unclaim, posix_writer_write, posix_writer_persist};
 	return 0;
 }
 
@@ -169,7 +169,7 @@ void
 ntfs_overwrite_image_close(struct ntfs_overwrite_image *image)
 {
 	if (image->fd >= 0) {
-		image_unclaim(image);
+		posix_writer_unclaim(image);
 		close(image->fd);
 		image->fd = -1;
 	}

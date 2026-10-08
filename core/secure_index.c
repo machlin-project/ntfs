@@ -23,12 +23,12 @@ static enum ntfs_result ntfs_secure_cursor_descend(
 
 static int
 ntfs_secure_compare_key(
-    struct ntfs_secure_index_key a, struct ntfs_secure_index_key b, bool by_hash)
+    struct ntfs_secure_index_key left_key, struct ntfs_secure_index_key right_key, bool by_hash)
 {
-	if (by_hash && a.hash != b.hash) {
-		return a.hash < b.hash ? -1 : 1;
+	if (by_hash && left_key.hash != right_key.hash) {
+		return left_key.hash < right_key.hash ? -1 : 1;
 	}
-	return a.id == b.id ? 0 : a.id < b.id ? -1 : 1;
+	return left_key.id == right_key.id ? 0 : left_key.id < right_key.id ? -1 : 1;
 }
 
 static bool
@@ -185,7 +185,7 @@ enum ntfs_result
 ntfs_secure_index_seek(struct ntfs_node *node, bool by_hash, struct ntfs_secure_index_key target,
     uint64_t store_size, struct ntfs_disk_security_locator *out)
 {
-	struct ntfs_volume *v = node->volume;
+	struct ntfs_volume *volume = node->volume;
 	struct ntfs_stream *root = NULL, *allocation = NULL, *bitmap = NULL;
 	const struct ntfs_disk_index_block *block;
 	const uint16_t *name = by_hash ? sdh_name : sii_name;
@@ -208,12 +208,13 @@ ntfs_secure_index_seek(struct ntfs_node *node, bool by_hash, struct ntfs_secure_
 	if (result != NTFS_OK) {
 		goto finish;
 	}
-	unit = v->info.cluster_size <= block_size ? v->info.cluster_size : v->info.sector_size;
+	unit = volume->info.cluster_size <= block_size ? volume->info.cluster_size
+						       : volume->info.sector_size;
 	bytes = root->value;
 	size = (size_t)root->size;
 	header_offset = sizeof(struct ntfs_disk_index_root);
 	for (;;) {
-		result = ntfs_work(v, size);
+		result = ntfs_work(volume, size);
 		if (result != NTFS_OK) {
 			goto finish;
 		}
@@ -239,7 +240,7 @@ ntfs_secure_index_seek(struct ntfs_node *node, bool by_hash, struct ntfs_secure_
 			}
 		}
 		if (depth == NTFS_SECURITY_INDEX_DEPTH - 1 ||
-		    depth == v->limits.max_directory_nodes) {
+		    depth == volume->limits.max_directory_nodes) {
 			result = NTFS_RANGE;
 			goto finish;
 		}
@@ -265,7 +266,7 @@ ntfs_secure_index_seek(struct ntfs_node *node, bool by_hash, struct ntfs_secure_
 				result = NTFS_CORRUPT;
 				goto finish;
 			}
-			buffer = ntfs_alloc(v, block_size);
+			buffer = ntfs_alloc(volume, block_size);
 			if (buffer == NULL) {
 				result = NTFS_NO_MEMORY;
 				goto finish;
@@ -314,7 +315,7 @@ ntfs_secure_index_seek(struct ntfs_node *node, bool by_hash, struct ntfs_secure_
 		header_offset = offsetof(struct ntfs_disk_index_block, header);
 	}
 finish:
-	ntfs_free(v, buffer, block_size);
+	ntfs_free(volume, buffer, block_size);
 	ntfs_stream_close(bitmap);
 	ntfs_stream_close(allocation);
 	ntfs_stream_close(root);

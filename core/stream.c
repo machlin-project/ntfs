@@ -2,7 +2,7 @@
 #include "internal.h"
 
 static enum ntfs_result
-stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view *attr,
+stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view *attribute_view,
     bool metadata_only, struct ntfs_stream **out)
 {
 	struct ntfs_stream *stream;
@@ -12,14 +12,15 @@ stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view
 	enum ntfs_result result;
 
 	*out = NULL;
-	if ((attr->flags &
+	if ((attribute_view->flags &
 		~(NTFS_ATTR_SPARSE | NTFS_ATTR_ENCRYPTED | NTFS_ATTR_COMPRESSION_MASK)) != 0) {
 		return NTFS_UNSUPPORTED;
 	}
 	if (!metadata_only &&
-	    ((attr->flags & NTFS_ATTR_ENCRYPTED) != 0 ||
-		((attr->flags & NTFS_ATTR_COMPRESSION_MASK) != 0 &&
-		    (attr->flags & NTFS_ATTR_COMPRESSION_MASK) != NTFS_ATTR_COMPRESSED))) {
+	    ((attribute_view->flags & NTFS_ATTR_ENCRYPTED) != 0 ||
+		((attribute_view->flags & NTFS_ATTR_COMPRESSION_MASK) != 0 &&
+		    (attribute_view->flags & NTFS_ATTR_COMPRESSION_MASK) !=
+			NTFS_ATTR_COMPRESSED))) {
 		return NTFS_UNSUPPORTED;
 	}
 	stream = ntfs_alloc(volume, sizeof(*stream));
@@ -27,13 +28,13 @@ stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view
 		return NTFS_NO_MEMORY;
 	}
 	stream->volume = volume;
-	stream->flags = attr->flags;
+	stream->flags = attribute_view->flags;
 	stream->metadata_only = metadata_only;
 	ntfs_unit_cache_initialize(&stream->decoded);
 	result = NTFS_OK;
-	if (!attr->disk->nonresident) {
-		result = ntfs_attr_value(attr, &value, &length);
-		if (attr->flags != 0) {
+	if (!attribute_view->disk->nonresident) {
+		result = ntfs_attr_value(attribute_view, &value, &length);
+		if (attribute_view->flags != 0) {
 			result = NTFS_CORRUPT;
 		}
 		if (result == NTFS_OK) {
@@ -52,7 +53,7 @@ stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view
 			}
 		}
 	} else {
-		disk = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr));
+		disk = (const void *)(attribute_view->bytes + sizeof(struct ntfs_disk_attr));
 		stream->size = ntfs_u64(disk->size);
 		stream->initialized = ntfs_u64(disk->initialized);
 		stream->allocated = ntfs_u64(disk->allocated);
@@ -69,8 +70,8 @@ stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view
 			    sizeof(struct ntfs_disk_attr) + sizeof(*disk) + sizeof(*tail)) {
 				result = NTFS_CORRUPT;
 			} else {
-				tail = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr) +
-				    sizeof(*disk));
+				tail = (const void *)(attribute_view->bytes +
+				    sizeof(struct ntfs_disk_attr) + sizeof(*disk));
 				stream->physical_size = ntfs_u64(tail->physical_size);
 				if (stream->physical_size > INT64_MAX ||
 				    stream->physical_size % volume->info.cluster_size != 0) {
@@ -88,7 +89,7 @@ stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view
 			result = NTFS_UNSUPPORTED;
 		}
 		if (result == NTFS_OK) {
-			result = ntfs_stream_append(stream, attr);
+			result = ntfs_stream_append(stream, attribute_view);
 		}
 	}
 	if (result != NTFS_OK) {
@@ -100,17 +101,17 @@ stream_acquire_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view
 }
 
 enum ntfs_result
-ntfs_stream_from_attr(
-    struct ntfs_volume *volume, const struct ntfs_attr_view *attr, struct ntfs_stream **out)
+ntfs_stream_from_attr(struct ntfs_volume *volume, const struct ntfs_attr_view *attribute_view,
+    struct ntfs_stream **out)
 {
-	return stream_acquire_from_attr(volume, attr, false, out);
+	return stream_acquire_from_attr(volume, attribute_view, false, out);
 }
 
 enum ntfs_result
-ntfs_stream_metadata_from_attr(
-    struct ntfs_volume *volume, const struct ntfs_attr_view *attr, struct ntfs_stream **out)
+ntfs_stream_metadata_from_attr(struct ntfs_volume *volume,
+    const struct ntfs_attr_view *attribute_view, struct ntfs_stream **out)
 {
-	return stream_acquire_from_attr(volume, attr, true, out);
+	return stream_acquire_from_attr(volume, attribute_view, true, out);
 }
 
 uint64_t

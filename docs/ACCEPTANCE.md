@@ -1,5 +1,47 @@
 # Acceptance
 
+## Completed driver refactoring
+
+The agreed structural/style scope is complete across the C reader/writer,
+security, validation, immutable journal, FSKit and POSIX transports. The final
+audit covers 76 C files/818 functions, all 14 native implementation files,
+both POSIX sources and existing Swift/private-header boundaries. It regularizes
+212 core private helpers, 168 parameter/local declarations and 27 private tags,
+and shares the two identical native manifest byte encoders. Main independently
+compares complete ordered source tokens and original encoder bodies; public
+interfaces, fields, selectors, operators/literals, policy checks, locks, leases,
+callback/reply order and failure precedence remain unchanged. The current
+[refactoring record](REFACTORING.md) closes the findings and maps the components.
+
+One complete connected regression passes all 202 registered C suites with
+assertions and fatal ASan/UBSan, zero failures and zero C SKIPs. All 45 frozen
+pre-edit whole images match exactly: 41 actual postimages and four modeled
+recovery seeds. Selected-Xcode formatting and all 152 strict freestanding
+compilations pass for arm64/x86_64 with the 2-KiB frame ceiling. Draft frontend
+checks also cover all native/POSIX files and both changed private headers on
+both architectures. The universal unsigned Release app, both extension copies
+and every one of the 76 core archive members are verified.
+
+Host FSKit passes 64 groups with 13 explicit runtime SKIPs and zero failures.
+A separately built and signed current-code component test then passes all
+81 native groups with zero SKIPs in the dedicated macOS 27 VM as UID 501.
+Both frozen fixture manifests (871+12 files), the mutation source and exact
+binary are unchanged before/after. The new app is not signed or installed;
+installed signed build 19 and its accepted mounted mutation/Windows postimage
+remain the functional baseline. This batch executes no mounted mutation or
+new Windows candidate and expands no writing/recovery admission.
+
+Initial draft collision/token-review refusals, the standalone-header fixture
+failure and a launcher argument refusal are preserved separately. The latter
+issues no VM command; the native stage subsequently runs once with the
+correct argument list. Successful frontend checks are reused, and completed
+regression/native tests are not repeated. Documentation links/anchors and
+all 28 unchanged rendered diagrams pass. Evidence is retained under
+`artifacts/overwrite/refactor-completion-*20261008/`, including the frozen
+baseline, main source review, local/native runs and final main acceptance.
+Unsupported operations, wider recovery coverage and distribution readiness
+remain product work beyond the completed refactoring.
+
 ## Native-source growth recovery
 
 The current C reader-cleanup source passes a separate growth fault batch:
@@ -251,8 +293,9 @@ are under `refactor-read-components-connected-complete-20261008/`,
 `refactor-read-draft-frontend-final-20261008/` in `artifacts/overwrite/`.
 The new app is unsigned and uninstalled. The preceding signed installed package
 and accepted native/Windows postimage remain the baseline; no VM command or native
-case repeat occurs. This closes the structural C cleanup boundary, with broader
-style review and functional write/recovery limitations still open.
+case repeat occurs. That checkpoint closes the structural C cleanup boundary.
+The complete driver audit above now closes its remaining style review; functional
+write/recovery limitations retain their separate product gates.
 
 The new exclusive owner joins fresh image-only recovery, reconstructed-volume
 admission, ordinary mutation, automatic checkpoint preparation and one-shot

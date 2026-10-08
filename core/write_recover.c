@@ -6,24 +6,26 @@
 enum { RECOVER_ORIGIN_PACKETS = 2 };
 
 static bool
-separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
+write_recovery_separate(
+    const void *left_input, size_t a_bytes, const void *right_input, size_t b_bytes)
 {
-	uintptr_t left = (uintptr_t)a, right = (uintptr_t)b;
+	uintptr_t left = (uintptr_t)left_input, right = (uintptr_t)right_input;
 
-	return a != NULL && b != NULL && a_bytes <= UINTPTR_MAX - left &&
+	return left_input != NULL && right_input != NULL && a_bytes <= UINTPTR_MAX - left &&
 	    b_bytes <= UINTPTR_MAX - right && (left + a_bytes <= right || right + b_bytes <= left);
 }
 
 static bool
-physical_separate(uint64_t a, uint64_t b)
+write_recovery_physical_separate(uint64_t left_offset, uint64_t right_offset)
 {
-	return a <= UINT64_MAX - NTFS_WRITE_CLUSTER_BYTES &&
-	    b <= UINT64_MAX - NTFS_WRITE_CLUSTER_BYTES &&
-	    (a + NTFS_WRITE_CLUSTER_BYTES <= b || b + NTFS_WRITE_CLUSTER_BYTES <= a);
+	return left_offset <= UINT64_MAX - NTFS_WRITE_CLUSTER_BYTES &&
+	    right_offset <= UINT64_MAX - NTFS_WRITE_CLUSTER_BYTES &&
+	    (left_offset + NTFS_WRITE_CLUSTER_BYTES <= right_offset ||
+		right_offset + NTFS_WRITE_CLUSTER_BYTES <= left_offset);
 }
 
 static enum ntfs_result
-physical(struct ntfs_stream *log, uint64_t offset, uint64_t *out)
+write_recovery_physical(struct ntfs_stream *log, uint64_t offset, uint64_t *out)
 {
 	const struct ntfs_run *run;
 	uint64_t vcn, lcn;
@@ -47,7 +49,7 @@ physical(struct ntfs_stream *log, uint64_t offset, uint64_t *out)
 }
 
 static enum ntfs_result
-roots(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
+write_recovery_roots(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 {
 	struct ntfs_logfile_restart parsed;
 	struct ntfs_disk_log_restart_area *area;
@@ -55,8 +57,8 @@ roots(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 	enum ntfs_result result;
 
 	for (index = 0; index < NTFS_LFS_RESTART_PAGES; index++) {
-		result =
-		    physical(log, index * NTFS_WRITE_CLUSTER_BYTES, &work->restart_physical[index]);
+		result = write_recovery_physical(
+		    log, index * NTFS_WRITE_CLUSTER_BYTES, &work->restart_physical[index]);
 		if (result == NTFS_OK) {
 			result = ntfs_stream_read(log, index * NTFS_WRITE_CLUSTER_BYTES,
 			    work->restart[index], NTFS_WRITE_CLUSTER_BYTES, &bytes);
@@ -124,7 +126,7 @@ roots(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 }
 
 static enum ntfs_result
-log_home(
+write_recovery_log_home(
     struct ntfs_stream *log, size_t first, size_t count, struct ntfs_write_recovery_workspace *work)
 {
 	struct ntfs_logfile_page_input input = {0};
@@ -176,7 +178,7 @@ log_home(
 	result = ntfs_logfile_page_encode(&input, work->guard.restored, NTFS_WRITE_CLUSTER_BYTES,
 	    output, NTFS_WRITE_CLUSTER_BYTES);
 	if (result == NTFS_OK) {
-		result = physical(log, page, &work->log_physical[work->logs]);
+		result = write_recovery_physical(log, page, &work->log_physical[work->logs]);
 	}
 	if (result == NTFS_OK) {
 		result = work->backend.reader.read(work->backend.reader.context,
@@ -205,7 +207,7 @@ log_home(
 }
 
 static enum ntfs_result
-journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
+write_recovery_journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 {
 	struct ntfs_write_replay_plan *current;
 	size_t index, first = RECOVER_ORIGIN_PACKETS, count;
@@ -213,13 +215,13 @@ journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 
 	for (index = 0; index < work->history.transactions; index++) {
 		current = &work->history.transaction[index];
-		result = log_home(log, first, current->prepared_packets, work);
+		result = write_recovery_log_home(log, first, current->prepared_packets, work);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		count = current->packets;
 		if (current->committed || current->compensated) {
-			result = log_home(log, first + current->prepared_packets,
+			result = write_recovery_log_home(log, first + current->prepared_packets,
 			    count - current->prepared_packets, work);
 			if (result != NTFS_OK) {
 				return result;
@@ -240,11 +242,11 @@ journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 	result = ntfs_write_abort_encode(&work->history.origin, work->history.client.sequence,
 	    &work->history_work.replay.reservation, &current->file, &work->guard, &work->abort);
 	if (result == NTFS_OK) {
-		result = physical(log, work->abort.offset, &work->abort_physical);
+		result = write_recovery_physical(log, work->abort.offset, &work->abort_physical);
 	}
 	if (result == NTFS_OK) {
-		result = physical(log, (NTFS_LFS_RESTART_PAGES + 1) * NTFS_WRITE_CLUSTER_BYTES,
-		    &work->copy_physical);
+		result = write_recovery_physical(log,
+		    (NTFS_LFS_RESTART_PAGES + 1) * NTFS_WRITE_CLUSTER_BYTES, &work->copy_physical);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -275,7 +277,8 @@ journal(struct ntfs_stream *log, struct ntfs_write_recovery_workspace *work)
 }
 
 static bool
-same_file(const uint8_t *actual, const struct ntfs_write_file_plan *file, const uint8_t *expected)
+write_recovery_same_file(
+    const uint8_t *actual, const struct ntfs_write_file_plan *file, const uint8_t *expected)
 {
 	const struct ntfs_disk_record *header = (const void *)expected;
 	size_t first = ntfs_u16(header->mst.usa_offset);
@@ -288,8 +291,8 @@ same_file(const uint8_t *actual, const struct ntfs_write_file_plan *file, const 
 }
 
 static bool
-apply_home_redo(struct ntfs_write_recovery_workspace *work, size_t packet, uint16_t record_offset,
-    uint16_t attribute_offset, uint16_t bytes, uint64_t lsn)
+write_recovery_apply_home_redo(struct ntfs_write_recovery_workspace *work, size_t packet,
+    uint16_t record_offset, uint16_t attribute_offset, uint16_t bytes, uint64_t lsn)
 {
 	struct ntfs_logfile_record record;
 	struct ntfs_logfile_update update;
@@ -313,7 +316,7 @@ apply_home_redo(struct ntfs_write_recovery_workspace *work, size_t packet, uint1
 }
 
 static bool
-known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
+write_recovery_known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
     struct ntfs_write_recovery_workspace *work, bool torn)
 {
 	const struct ntfs_write_replay_plan *transaction;
@@ -352,38 +355,42 @@ known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
 					    lsn == work->abort.compensation_lsn))) {
 					return true;
 				}
-			} else if (same_file(
+			} else if (write_recovery_same_file(
 				       actual, &transaction->file, transaction->file.before) ||
-			    same_file(actual, &transaction->file, transaction->file.after)) {
+			    write_recovery_same_file(
+				actual, &transaction->file, transaction->file.after)) {
 				return true;
 			} else {
 				/* Even a complete uncommitted redo home belongs to the log's
 				 * full snapshot and exact change; it must be compensated. */
 				ntfs_copy(work->guard.page, transaction->file.before,
 				    NTFS_WRITE_RECORD_BYTES);
-				if (!apply_home_redo(work, first + NTFS_WRITE_REPLAY_UPDATE,
+				if (!write_recovery_apply_home_redo(work,
+					first + NTFS_WRITE_REPLAY_UPDATE,
 					transaction->file.record_offset,
 					transaction->file.attribute_offset,
 					transaction->file.change_bytes, transaction->update_lsn)) {
 					return false;
 				}
-				if (same_file(actual, &transaction->file, work->guard.page)) {
+				if (write_recovery_same_file(
+					actual, &transaction->file, work->guard.page)) {
 					return true;
 				}
 				if (transaction->file.resident_bytes != 0) {
-					if (!apply_home_redo(work, first + NTFS_WRITE_REPLAY_COMMIT,
+					if (!write_recovery_apply_home_redo(work,
+						first + NTFS_WRITE_REPLAY_COMMIT,
 						transaction->file.resident_record_offset,
 						transaction->file.resident_attribute_offset,
 						transaction->file.resident_bytes,
 						transaction->resident_lsn)) {
 						return false;
 					}
-					if (same_file(
+					if (write_recovery_same_file(
 						actual, &transaction->file, work->guard.page)) {
 						return true;
 					}
 					if (transaction->compensated) {
-						if (!apply_home_redo(work,
+						if (!write_recovery_apply_home_redo(work,
 							first + transaction->prepared_packets,
 							transaction->file.resident_record_offset,
 							transaction->file.resident_attribute_offset,
@@ -391,8 +398,8 @@ known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
 							transaction->resident_compensation_lsn)) {
 							return false;
 						}
-						if (same_file(actual, &transaction->file,
-							work->guard.page)) {
+						if (write_recovery_same_file(actual,
+							&transaction->file, work->guard.page)) {
 							return true;
 						}
 					}
@@ -405,7 +412,7 @@ known_file(const uint8_t *actual, const struct ntfs_write_file_plan *file,
 }
 
 static enum ntfs_result
-files(struct ntfs_write_recovery_workspace *work)
+write_recovery_files(struct ntfs_write_recovery_workspace *work)
 {
 	const struct ntfs_write_file_plan *file;
 	size_t index, later, cluster, offset;
@@ -440,11 +447,13 @@ files(struct ntfs_write_recovery_workspace *work)
 		ntfs_copy(work->scratch, work->home[cluster] + offset, NTFS_WRITE_RECORD_BYTES);
 		ntfs_copy(work->guard.restored, work->scratch, NTFS_WRITE_RECORD_BYTES);
 		result = ntfs_fixup(work->guard.restored, NTFS_WRITE_RECORD_BYTES, "FILE");
-		if (result == NTFS_OK && same_file(work->guard.restored, file, file->after)) {
+		if (result == NTFS_OK &&
+		    write_recovery_same_file(work->guard.restored, file, file->after)) {
 			continue;
 		}
-		if (!known_file(result == NTFS_OK ? work->guard.restored : work->scratch, file,
-			work, result != NTFS_OK)) {
+		if (!write_recovery_known_file(
+			result == NTFS_OK ? work->guard.restored : work->scratch, file, work,
+			result != NTFS_OK)) {
 			return NTFS_STALE;
 		}
 		ntfs_copy(
@@ -461,7 +470,7 @@ files(struct ntfs_write_recovery_workspace *work)
 }
 
 static enum ntfs_result
-prepare(struct ntfs_volume *volume, struct ntfs_write_recovery_workspace *work)
+write_recovery_prepare(struct ntfs_volume *volume, struct ntfs_write_recovery_workspace *work)
 {
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *log = NULL;
@@ -487,12 +496,12 @@ prepare(struct ntfs_volume *volume, struct ntfs_write_recovery_workspace *work)
 		result = NTFS_UNSUPPORTED;
 		goto done;
 	}
-	result = roots(log, work);
+	result = write_recovery_roots(log, work);
 	if (result == NTFS_OK) {
-		result = journal(log, work);
+		result = write_recovery_journal(log, work);
 	}
 	if (result == NTFS_OK) {
-		result = files(work);
+		result = write_recovery_files(work);
 	}
 	if (result != NTFS_OK) {
 		goto done;
@@ -501,22 +510,24 @@ prepare(struct ntfs_volume *volume, struct ntfs_write_recovery_workspace *work)
 	 * explicit physical disjointness checks also bind the prepared I/O set. */
 	for (index = 0; index < work->homes; index++) {
 		for (other = 0; other < work->logs; other++) {
-			if (!physical_separate(
+			if (!write_recovery_physical_separate(
 				work->home_physical[index], work->log_physical[other])) {
 				result = NTFS_CORRUPT;
 				goto done;
 			}
 		}
 		for (other = 0; other < NTFS_LFS_RESTART_PAGES; other++) {
-			if (!physical_separate(
+			if (!write_recovery_physical_separate(
 				work->home_physical[index], work->restart_physical[other])) {
 				result = NTFS_CORRUPT;
 				goto done;
 			}
 		}
 		if (work->close_transaction &&
-		    (!physical_separate(work->home_physical[index], work->abort_physical) ||
-			!physical_separate(work->home_physical[index], work->copy_physical))) {
+		    (!write_recovery_physical_separate(
+			 work->home_physical[index], work->abort_physical) ||
+			!write_recovery_physical_separate(
+			    work->home_physical[index], work->copy_physical))) {
 			result = NTFS_CORRUPT;
 			goto done;
 		}
@@ -545,8 +556,8 @@ ntfs_write_recover_prepare(struct ntfs_volume *volume,
 	enum ntfs_result result;
 
 	if (volume == NULL || backend == NULL || work == NULL ||
-	    !separate(volume, sizeof(*volume), work, sizeof(*work)) ||
-	    !separate(backend, sizeof(*backend), work, sizeof(*work))) {
+	    !write_recovery_separate(volume, sizeof(*volume), work, sizeof(*work)) ||
+	    !write_recovery_separate(backend, sizeof(*backend), work, sizeof(*work))) {
 		return NTFS_INVALID;
 	}
 	alignment = backend->alignment;
@@ -565,7 +576,7 @@ ntfs_write_recover_prepare(struct ntfs_volume *volume,
 	work->backend = *backend;
 	result = ntfs_operation_enter(volume);
 	if (result == NTFS_OK) {
-		result = prepare(volume, work);
+		result = write_recovery_prepare(volume, work);
 		ntfs_operation_leave(volume);
 	}
 	if (result != NTFS_OK) {
@@ -575,8 +586,9 @@ ntfs_write_recover_prepare(struct ntfs_volume *volume,
 }
 
 static enum ntfs_result
-publish(struct ntfs_write_recovery_workspace *work, uint64_t physical, const void *bytes,
-    enum ntfs_write_recovery_stage stage, bool *poisoned, struct ntfs_write_recovery_report *report)
+write_recovery_publish(struct ntfs_write_recovery_workspace *work, uint64_t physical,
+    const void *bytes, enum ntfs_write_recovery_stage stage, bool *poisoned,
+    struct ntfs_write_recovery_report *report)
 {
 	size_t transferred = 0;
 	enum ntfs_result result;
@@ -609,9 +621,9 @@ ntfs_write_recover_execute(struct ntfs_write_recovery_workspace *work, bool *poi
 	enum ntfs_result result = NTFS_OK;
 
 	if (work == NULL || poisoned == NULL || report == NULL ||
-	    !separate(work, sizeof(*work), poisoned, sizeof(*poisoned)) ||
-	    !separate(work, sizeof(*work), report, sizeof(*report)) ||
-	    !separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
+	    !write_recovery_separate(work, sizeof(*work), poisoned, sizeof(*poisoned)) ||
+	    !write_recovery_separate(work, sizeof(*work), report, sizeof(*report)) ||
+	    !write_recovery_separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(report, sizeof(*report));
@@ -637,7 +649,8 @@ ntfs_write_recover_execute(struct ntfs_write_recovery_workspace *work, bool *poi
 		goto done;
 	}
 	for (index = 0; index < NTFS_LFS_RESTART_PAGES; index++) {
-		result = publish(work, work->restart_physical[index], work->dirty[index],
+		result = write_recovery_publish(work, work->restart_physical[index],
+		    work->dirty[index],
 		    index == 0 ? NTFS_WRITE_RECOVERY_DIRTY_FIRST : NTFS_WRITE_RECOVERY_DIRTY_SECOND,
 		    poisoned, report);
 		if (result != NTFS_OK) {
@@ -648,21 +661,21 @@ ntfs_write_recover_execute(struct ntfs_write_recovery_workspace *work, bool *poi
 	 * slot or allowing a later append to remove their only durable witness. */
 	for (index = 0; index < work->logs; index++) {
 		if (work->log_changed[index]) {
-			result = publish(work, work->log_physical[index], work->log_home[index],
-			    NTFS_WRITE_RECOVERY_LOG_HOMES, poisoned, report);
+			result = write_recovery_publish(work, work->log_physical[index],
+			    work->log_home[index], NTFS_WRITE_RECOVERY_LOG_HOMES, poisoned, report);
 			if (result != NTFS_OK) {
 				goto done;
 			}
 		}
 	}
 	if (work->close_transaction) {
-		result = publish(work, work->copy_physical, work->abort_copy,
+		result = write_recovery_publish(work, work->copy_physical, work->abort_copy,
 		    NTFS_WRITE_RECOVERY_ABORT_COPY, poisoned, report);
 		if (result != NTFS_OK) {
 			goto done;
 		}
 		report->compensation_persisted = true;
-		result = publish(work, work->abort_physical, work->abort_page,
+		result = write_recovery_publish(work, work->abort_physical, work->abort_page,
 		    NTFS_WRITE_RECOVERY_ABORT_HOME, poisoned, report);
 		if (result != NTFS_OK) {
 			goto done;
@@ -670,8 +683,8 @@ ntfs_write_recover_execute(struct ntfs_write_recovery_workspace *work, bool *poi
 	}
 	for (index = 0; index < work->homes; index++) {
 		if (work->home_changed[index]) {
-			result = publish(work, work->home_physical[index], work->home[index],
-			    NTFS_WRITE_RECOVERY_FILE_HOMES, poisoned, report);
+			result = write_recovery_publish(work, work->home_physical[index],
+			    work->home[index], NTFS_WRITE_RECOVERY_FILE_HOMES, poisoned, report);
 			if (result != NTFS_OK) {
 				goto done;
 			}
@@ -679,7 +692,8 @@ ntfs_write_recover_execute(struct ntfs_write_recovery_workspace *work, bool *poi
 	}
 	report->homes_persisted = true;
 	for (index = 0; index < NTFS_LFS_RESTART_PAGES; index++) {
-		result = publish(work, work->restart_physical[index], work->clean[index],
+		result = write_recovery_publish(work, work->restart_physical[index],
+		    work->clean[index],
 		    index == 0 ? NTFS_WRITE_RECOVERY_CLEAN_FIRST : NTFS_WRITE_RECOVERY_CLEAN_SECOND,
 		    poisoned, report);
 		if (result != NTFS_OK) {

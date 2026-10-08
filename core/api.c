@@ -379,7 +379,7 @@ ntfs_reparse_name(const struct ntfs_reparse *snapshot, enum ntfs_reparse_name_ty
 }
 
 enum ntfs_result
-ntfs_security_resolve(struct ntfs_volume *volume, uint32_t id, struct ntfs_security **out)
+ntfs_security_resolve(struct ntfs_volume *volume, uint32_t security_id, struct ntfs_security **out)
 {
 	struct ntfs_volume *owner = volume;
 	enum ntfs_result result;
@@ -394,7 +394,7 @@ ntfs_security_resolve(struct ntfs_volume *volume, uint32_t id, struct ntfs_secur
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_security_resolve_impl(volume, id, out);
+	result = ntfs_security_resolve_impl(volume, security_id, out);
 	ntfs_operation_leave(owner);
 	return result;
 }

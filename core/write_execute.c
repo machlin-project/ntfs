@@ -14,14 +14,15 @@ enum {
 };
 
 static bool
-physical_separate(uint64_t a, uint64_t a_bytes, uint64_t b, uint64_t b_bytes)
+write_execution_physical_separate(
+    uint64_t left_offset, uint64_t a_bytes, uint64_t right_offset, uint64_t b_bytes)
 {
-	return a_bytes <= UINT64_MAX - a && b_bytes <= UINT64_MAX - b &&
-	    (a + a_bytes <= b || b + b_bytes <= a);
+	return a_bytes <= UINT64_MAX - left_offset && b_bytes <= UINT64_MAX - right_offset &&
+	    (left_offset + a_bytes <= right_offset || right_offset + b_bytes <= left_offset);
 }
 
 static enum ntfs_result
-admit(const struct ntfs_overwrite_environment *backend,
+write_execution_admit(const struct ntfs_overwrite_environment *backend,
     const struct ntfs_write_execution_input *input, struct ntfs_write_execution_workspace *work)
 {
 	const struct ntfs_write_data_span *span;
@@ -67,13 +68,15 @@ admit(const struct ntfs_overwrite_environment *backend,
 		if (input->physical[index] % NTFS_WRITE_CLUSTER_BYTES != 0 ||
 		    !ntfs_bounds(input->physical[index], NTFS_WRITE_CLUSTER_BYTES,
 			backend->reader.size_bytes) ||
-		    !physical_separate(input->physical[index], NTFS_WRITE_CLUSTER_BYTES,
-			file->cluster_physical, NTFS_WRITE_CLUSTER_BYTES)) {
+		    !write_execution_physical_separate(input->physical[index],
+			NTFS_WRITE_CLUSTER_BYTES, file->cluster_physical,
+			NTFS_WRITE_CLUSTER_BYTES)) {
 			return NTFS_INVALID;
 		}
 		for (previous = 0; previous < index; previous++) {
-			if (!physical_separate(input->physical[index], NTFS_WRITE_CLUSTER_BYTES,
-				input->physical[previous], NTFS_WRITE_CLUSTER_BYTES)) {
+			if (!write_execution_physical_separate(input->physical[index],
+				NTFS_WRITE_CLUSTER_BYTES, input->physical[previous],
+				NTFS_WRITE_CLUSTER_BYTES)) {
 				return NTFS_INVALID;
 			}
 		}
@@ -91,18 +94,18 @@ admit(const struct ntfs_overwrite_environment *backend,
 		    (uintptr_t)span->image % alignment != 0 ||
 		    !ntfs_bounds(span->physical, span->bytes, backend->reader.size_bytes) ||
 		    !ntfs_pointer_ranges_separate(span->image, span->bytes, work, sizeof(*work)) ||
-		    !physical_separate(span->physical, span->bytes, file->cluster_physical,
-			NTFS_WRITE_CLUSTER_BYTES)) {
+		    !write_execution_physical_separate(span->physical, span->bytes,
+			file->cluster_physical, NTFS_WRITE_CLUSTER_BYTES)) {
 			return NTFS_INVALID;
 		}
 		for (previous = 0; previous < NTFS_WRITE_EXECUTE_LOG_LOCATIONS; previous++) {
-			if (!physical_separate(span->physical, span->bytes,
+			if (!write_execution_physical_separate(span->physical, span->bytes,
 				input->physical[previous], NTFS_WRITE_CLUSTER_BYTES)) {
 				return NTFS_INVALID;
 			}
 		}
 		for (previous = 0; previous < index; previous++) {
-			if (!physical_separate(span->physical, span->bytes,
+			if (!write_execution_physical_separate(span->physical, span->bytes,
 				input->data[previous].physical, input->data[previous].bytes)) {
 				return NTFS_INVALID;
 			}
@@ -113,7 +116,7 @@ admit(const struct ntfs_overwrite_environment *backend,
 }
 
 static enum ntfs_result
-prepare(const struct ntfs_overwrite_environment *backend,
+write_execution_prepare(const struct ntfs_overwrite_environment *backend,
     const struct ntfs_write_execution_input *input, struct ntfs_write_execution_workspace *work)
 {
 	const struct ntfs_write_journal_plan *journal = input->journal;
@@ -208,12 +211,12 @@ ntfs_write_execute_prepare(const struct ntfs_overwrite_environment *backend,
 {
 	enum ntfs_result result;
 
-	result = admit(backend, input, work);
+	result = write_execution_admit(backend, input, work);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	ntfs_zero(work, sizeof(*work));
-	result = prepare(backend, input, work);
+	result = write_execution_prepare(backend, input, work);
 	if (result != NTFS_OK) {
 		ntfs_zero(work, sizeof(*work));
 	}
@@ -221,8 +224,8 @@ ntfs_write_execute_prepare(const struct ntfs_overwrite_environment *backend,
 }
 
 static enum ntfs_result
-write_exact(struct ntfs_write_execution_workspace *work, uint64_t physical, const void *image,
-    size_t bytes, bool *poisoned, struct ntfs_write_execution_report *report)
+write_execution_write_exact(struct ntfs_write_execution_workspace *work, uint64_t physical,
+    const void *image, size_t bytes, bool *poisoned, struct ntfs_write_execution_report *report)
 {
 	size_t transferred = 0;
 	enum ntfs_result result;
@@ -241,8 +244,9 @@ write_exact(struct ntfs_write_execution_workspace *work, uint64_t physical, cons
 }
 
 static enum ntfs_result
-persist(struct ntfs_write_execution_workspace *work, enum ntfs_write_execution_stage stage,
-    bool *poisoned, struct ntfs_write_execution_report *report)
+write_execution_persist(struct ntfs_write_execution_workspace *work,
+    enum ntfs_write_execution_stage stage, bool *poisoned,
+    struct ntfs_write_execution_report *report)
 {
 	enum ntfs_result result;
 
@@ -257,15 +261,16 @@ persist(struct ntfs_write_execution_workspace *work, enum ntfs_write_execution_s
 }
 
 static enum ntfs_result
-publish(struct ntfs_write_execution_workspace *work, uint64_t physical, const void *image,
-    enum ntfs_write_execution_stage stage, bool *poisoned,
+write_execution_publish(struct ntfs_write_execution_workspace *work, uint64_t physical,
+    const void *image, enum ntfs_write_execution_stage stage, bool *poisoned,
     struct ntfs_write_execution_report *report)
 {
 	enum ntfs_result result;
 
-	result = write_exact(work, physical, image, NTFS_WRITE_CLUSTER_BYTES, poisoned, report);
+	result = write_execution_write_exact(
+	    work, physical, image, NTFS_WRITE_CLUSTER_BYTES, poisoned, report);
 	if (result == NTFS_OK) {
-		result = persist(work, stage, poisoned, report);
+		result = write_execution_persist(work, stage, poisoned, report);
 	}
 	return result;
 }
@@ -319,29 +324,30 @@ ntfs_write_execute(struct ntfs_write_execution_workspace *work, bool *poisoned,
 	for (index = 0; index < NTFS_WRITE_EXECUTE_FRAMES; index++) {
 		if (index == FRAME_COMMIT_COPY && work->spans != 0) {
 			for (span = 0; span < work->spans; span++) {
-				result = write_exact(work, work->data[span].physical,
-				    work->data[span].image, work->data[span].bytes, poisoned,
-				    report);
+				result = write_execution_write_exact(work,
+				    work->data[span].physical, work->data[span].image,
+				    work->data[span].bytes, poisoned, report);
 				if (result != NTFS_OK) {
 					goto done;
 				}
 				report->data_bytes += work->data[span].bytes;
 			}
-			result = persist(work, NTFS_WRITE_EXECUTION_DATA, poisoned, report);
+			result = write_execution_persist(
+			    work, NTFS_WRITE_EXECUTION_DATA, poisoned, report);
 			if (result != NTFS_OK) {
 				goto done;
 			}
 			report->data_persisted = true;
 		}
 		if (index == FRAME_CLEAN_FIRST) {
-			result = publish(work, work->home_physical, work->home,
+			result = write_execution_publish(work, work->home_physical, work->home,
 			    NTFS_WRITE_EXECUTION_FILE_HOME, poisoned, report);
 			if (result != NTFS_OK) {
 				goto done;
 			}
 		}
-		result = publish(work, work->physical[frame_location[index]], work->frame[index],
-		    stage[index], poisoned, report);
+		result = write_execution_publish(work, work->physical[frame_location[index]],
+		    work->frame[index], stage[index], poisoned, report);
 		if (result != NTFS_OK) {
 			goto done;
 		}

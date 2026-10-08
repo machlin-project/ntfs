@@ -8,7 +8,7 @@ enum {
 	    NTFS_WRITE_MUTATION_TARGET_NAME_UNITS * sizeof(uint16_t)
 };
 
-struct packet_workspace {
+struct ntfs_write_packet_workspace {
 	struct ntfs_write_batch_packet *packet;
 	uint8_t *payload;
 	size_t count, packet_bytes, payload_bytes, stride;
@@ -16,7 +16,7 @@ struct packet_workspace {
 
 static enum ntfs_result
 packet_workspace_allocate(const struct ntfs_environment *source, size_t count, size_t stride,
-    struct packet_workspace *work)
+    struct ntfs_write_packet_workspace *work)
 {
 	if (count == 0 || count > NTFS_WRITE_BATCH_MAX_PACKETS ||
 	    count > SIZE_MAX / sizeof(*work->packet) || stride == 0 || count > SIZE_MAX / stride) {
@@ -41,7 +41,8 @@ packet_workspace_allocate(const struct ntfs_environment *source, size_t count, s
 }
 
 static void
-packet_workspace_release(const struct ntfs_environment *source, struct packet_workspace *work)
+packet_workspace_release(
+    const struct ntfs_environment *source, struct ntfs_write_packet_workspace *work)
 {
 	if (work->packet != NULL) {
 		source->release(source->context, work->packet, work->packet_bytes);
@@ -52,7 +53,7 @@ packet_workspace_release(const struct ntfs_environment *source, struct packet_wo
 }
 
 static enum ntfs_result
-program_packet_encode(struct packet_workspace *work, size_t ordinal,
+program_packet_encode(struct ntfs_write_packet_workspace *work, size_t ordinal,
     const struct ntfs_logfile_update_input *update, uint16_t sequence, uint32_t transaction,
     uint16_t flags, size_t previous, size_t undo)
 {
@@ -111,7 +112,7 @@ ntfs_write_program_pages_prepare(const struct ntfs_environment *source,
     const struct ntfs_write_program *program, const struct ntfs_logfile_client *client,
     const struct ntfs_write_batch_pages_input *input, struct ntfs_write_batch_pages **out)
 {
-	struct packet_workspace work = {0};
+	struct ntfs_write_packet_workspace work = {0};
 	struct ntfs_write_batch_pages_input placement;
 	struct ntfs_write_batch_pages *draft = NULL;
 	struct ntfs_logfile_update_input update = {0};
@@ -317,7 +318,7 @@ ntfs_write_program_compensation_prepare(const struct ntfs_environment *source,
     size_t prefix, const struct ntfs_logfile_client *client,
     const struct ntfs_write_batch_pages_input *input, struct ntfs_write_batch_pages **out)
 {
-	struct packet_workspace work = {0};
+	struct ntfs_write_packet_workspace work = {0};
 	struct ntfs_write_batch_pages_input placement;
 	struct ntfs_logfile_update_input inverse = {0};
 	struct ntfs_logfile_update update;

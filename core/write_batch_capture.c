@@ -156,22 +156,30 @@ static bool
 recovery_compensation_matches(const struct ntfs_batch_recovery_packet *original,
     const struct ntfs_batch_recovery_packet *inverse)
 {
-	const struct ntfs_logfile_update *a = &original->update, *b = &inverse->update;
+	const struct ntfs_logfile_update *left_update = &original->update,
+					 *right_update = &inverse->update;
 	const uint8_t *old = original->bytes + original->record.data.offset;
 	const uint8_t *payload = inverse->bytes + inverse->record.data.offset;
 	uint16_t expected_flags =
-	    a->undo_operation == NTFS_LOG_OP_NOOP ? NTFS_LOGFILE_RECORD_DELETING : 0;
+	    left_update->undo_operation == NTFS_LOG_OP_NOOP ? NTFS_LOGFILE_RECORD_DELETING : 0;
 
-	return b->redo_operation == a->undo_operation &&
-	    b->undo_operation == NTFS_LOG_OP_COMPENSATION &&
-	    b->target_attribute == a->target_attribute && b->target_vcn == a->target_vcn &&
-	    b->record_offset == a->record_offset && b->attribute_offset == a->attribute_offset &&
-	    b->cluster_index == a->cluster_index && b->attribute_flags == a->attribute_flags &&
-	    b->lcn_count == a->lcn_count && b->lcns.length == a->lcns.length &&
-	    b->redo.length == a->undo.length && b->undo.length == 0 &&
-	    b->compensation_undo_bytes == b->redo.length &&
-	    ntfs_equal(payload + b->lcns.offset, old + a->lcns.offset, b->lcns.length) &&
-	    ntfs_equal(payload + b->redo.offset, old + a->undo.offset, b->redo.length) &&
+	return right_update->redo_operation == left_update->undo_operation &&
+	    right_update->undo_operation == NTFS_LOG_OP_COMPENSATION &&
+	    right_update->target_attribute == left_update->target_attribute &&
+	    right_update->target_vcn == left_update->target_vcn &&
+	    right_update->record_offset == left_update->record_offset &&
+	    right_update->attribute_offset == left_update->attribute_offset &&
+	    right_update->cluster_index == left_update->cluster_index &&
+	    right_update->attribute_flags == left_update->attribute_flags &&
+	    right_update->lcn_count == left_update->lcn_count &&
+	    right_update->lcns.length == left_update->lcns.length &&
+	    right_update->redo.length == left_update->undo.length &&
+	    right_update->undo.length == 0 &&
+	    right_update->compensation_undo_bytes == right_update->redo.length &&
+	    ntfs_equal(payload + right_update->lcns.offset, old + left_update->lcns.offset,
+		right_update->lcns.length) &&
+	    ntfs_equal(payload + right_update->redo.offset, old + left_update->undo.offset,
+		right_update->redo.length) &&
 	    (inverse->record.flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) == expected_flags &&
 	    inverse->record.undo_next_lsn == original->record.undo_next_lsn;
 }

@@ -16,6 +16,31 @@ remain with the main agent. Sol owns VM preparation and installed FSKit work.
 Record reports in artifacts, source history in Git, and summaries in acceptance.
 Never interpret an unsigned build as an installed mount or a commercial release.
 
+## Completed driver refactoring
+
+The final connected batch closes the audit of all 76 core C files, 14 native
+implementation files, both POSIX transports and existing Swift boundaries.
+Private helper/owner/type conventions now apply across reading and writing.
+Complete operations, public interfaces, layouts, policies and callback/error
+order retain their original contracts. See the [component map](REFACTORING.md).
+
+All 202 registered C suites pass with assertions and fatal ASan/UBSan. The
+45 pre-edit whole images match exactly; all 152 strict freestanding targets
+pass the 2-KiB frame ceiling. Host FSKit passes 64 groups with 13 explicit
+runtime SKIPs; the current-source component binary passes all 81 native groups
+in the macOS 27 VM with zero SKIPs. Its 883 frozen fixture files, mutation
+source and binary are verified before/after. The new unsigned universal app
+build is not installed. Signed build 19 retains the preceding functional gate.
+
+Current evidence is in `artifacts/overwrite/refactor-completion-local-20261008/`,
+`refactor-completion-native-20261008/` and `refactor-completion-final-review-20261008/`.
+The complete ordered source review and first draft/launcher refusals are
+retained separately; no completed regression or native test is repeated.
+VM preparation and the sole component run use the existing CLI harness and
+an explicit Sol/main/Luna handoff. No GUI, VM lifecycle or installation is
+needed. Plan future functional changes as complete connected batches with
+their independent local oracles and required installed/Windows gates.
+
 ## Connected general mutation batch
 
 The general C owner, FSKit callbacks and independent descriptor correction now

@@ -61,16 +61,19 @@ ntfs_logfile_source_read(struct ntfs_logfile *source, uint64_t offset, void *buf
 }
 
 static bool
-ntfs_logfile_same_geometry(
-    const struct ntfs_logfile_restart *a, const struct ntfs_logfile_restart *b)
+ntfs_logfile_same_geometry(const struct ntfs_logfile_restart *left_restart,
+    const struct ntfs_logfile_restart *right_restart)
 {
-	return a->major == b->major && a->minor == b->minor &&
-	    a->system_page_bytes == b->system_page_bytes &&
-	    a->log_page_bytes == b->log_page_bytes && a->file_bytes == b->file_bytes &&
-	    a->usable_bytes == b->usable_bytes && a->circular_offset == b->circular_offset &&
-	    a->sequence_bits == b->sequence_bits &&
-	    a->record_header_bytes == b->record_header_bytes &&
-	    a->page_data_offset == b->page_data_offset;
+	return left_restart->major == right_restart->major &&
+	    left_restart->minor == right_restart->minor &&
+	    left_restart->system_page_bytes == right_restart->system_page_bytes &&
+	    left_restart->log_page_bytes == right_restart->log_page_bytes &&
+	    left_restart->file_bytes == right_restart->file_bytes &&
+	    left_restart->usable_bytes == right_restart->usable_bytes &&
+	    left_restart->circular_offset == right_restart->circular_offset &&
+	    left_restart->sequence_bits == right_restart->sequence_bits &&
+	    left_restart->record_header_bytes == right_restart->record_header_bytes &&
+	    left_restart->page_data_offset == right_restart->page_data_offset;
 }
 
 static enum ntfs_result
@@ -129,28 +132,33 @@ ntfs_logfile_probe_restart(struct ntfs_logfile *source, struct ntfs_logfile_prob
 }
 
 static enum ntfs_result
-ntfs_logfile_retained_hint_difference(const struct ntfs_logfile_restart *a, const uint8_t *left,
-    const struct ntfs_logfile_restart *b, const uint8_t *right)
+ntfs_logfile_retained_hint_difference(const struct ntfs_logfile_restart *left_restart,
+    const uint8_t *left, const struct ntfs_logfile_restart *right_restart, const uint8_t *right)
 {
 	size_t flags = offsetof(struct ntfs_disk_log_restart_area, flags);
 	size_t end = flags + sizeof(((struct ntfs_disk_log_restart_area *)0)->flags);
 
-	if (a->major != NTFS_LFS_MAJOR_LEGACY || a->minor != NTFS_LFS_MINOR_LEGACY ||
-	    a->system_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
-	    a->log_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
-	    a->record_header_bytes != sizeof(struct ntfs_disk_log_record) ||
-	    a->page_data_offset != sizeof(struct ntfs_disk_log_fast_page) || a->client_count != 1 ||
-	    a->in_use_head != 0 || a->free_head != NTFS_LOGFILE_NO_CLIENT ||
-	    b->client_count != a->client_count || b->in_use_head != a->in_use_head ||
-	    b->free_head != a->free_head || a->area.length != b->area.length ||
-	    a->area.length < end || a->flags == b->flags ||
-	    (a->flags != 0 && a->flags != NTFS_LOGFILE_RESTART_CLEAN) ||
-	    (b->flags != 0 && b->flags != NTFS_LOGFILE_RESTART_CLEAN)) {
+	if (left_restart->major != NTFS_LFS_MAJOR_LEGACY ||
+	    left_restart->minor != NTFS_LFS_MINOR_LEGACY ||
+	    left_restart->system_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+	    left_restart->log_page_bytes != NTFS_LFS_FAST_PAGE_BYTES ||
+	    left_restart->record_header_bytes != sizeof(struct ntfs_disk_log_record) ||
+	    left_restart->page_data_offset != sizeof(struct ntfs_disk_log_fast_page) ||
+	    left_restart->client_count != 1 || left_restart->in_use_head != 0 ||
+	    left_restart->free_head != NTFS_LOGFILE_NO_CLIENT ||
+	    right_restart->client_count != left_restart->client_count ||
+	    right_restart->in_use_head != left_restart->in_use_head ||
+	    right_restart->free_head != left_restart->free_head ||
+	    left_restart->area.length != right_restart->area.length ||
+	    left_restart->area.length < end || left_restart->flags == right_restart->flags ||
+	    (left_restart->flags != 0 && left_restart->flags != NTFS_LOGFILE_RESTART_CLEAN) ||
+	    (right_restart->flags != 0 && right_restart->flags != NTFS_LOGFILE_RESTART_CLEAN)) {
 		return NTFS_UNSUPPORTED;
 	}
-	return ntfs_equal(left + a->area.offset, right + b->area.offset, flags) &&
-		ntfs_equal(
-		    left + a->area.offset + end, right + b->area.offset + end, a->area.length - end)
+	return ntfs_equal(
+		   left + left_restart->area.offset, right + right_restart->area.offset, flags) &&
+		ntfs_equal(left + left_restart->area.offset + end,
+		    right + right_restart->area.offset + end, left_restart->area.length - end)
 	    ? NTFS_OK
 	    : NTFS_UNSUPPORTED;
 }

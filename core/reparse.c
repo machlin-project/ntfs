@@ -2,21 +2,21 @@
 #include "internal.h"
 #include <ntfs/wof.h>
 
-struct reparse_values {
+struct ntfs_reparse_values {
 	struct ntfs_reparse_info info;
 	size_t substitute_offset, print_offset;
 };
 
 struct ntfs_reparse {
 	struct ntfs_volume *volume;
-	struct reparse_values values;
+	struct ntfs_reparse_values values;
 	uint8_t *bytes;
 	size_t size;
 	uint64_t allocated;
 };
 
 static bool
-valid_name(const uint8_t *path, size_t size, size_t offset, size_t length)
+reparse_valid_name(const uint8_t *path, size_t size, size_t offset, size_t length)
 {
 	size_t i;
 
@@ -33,7 +33,7 @@ valid_name(const uint8_t *path, size_t size, size_t offset, size_t length)
 }
 
 static enum ntfs_result
-decode_reparse(const void *buffer, size_t size, struct reparse_values *values)
+reparse_decode_reparse(const void *buffer, size_t size, struct ntfs_reparse_values *values)
 {
 	const struct ntfs_disk_reparse *header = buffer;
 	const struct ntfs_disk_reparse_names *names;
@@ -102,8 +102,8 @@ decode_reparse(const void *buffer, size_t size, struct reparse_values *values)
 	substitute_length = ntfs_u16(names->substitute_length);
 	print_length = ntfs_u16(names->print_length);
 	if (path_size % NTFS_UTF16_UNIT_BYTES != 0 || substitute_length == 0 ||
-	    !valid_name(path, path_size, values->substitute_offset, substitute_length) ||
-	    !valid_name(path, path_size, values->print_offset, print_length)) {
+	    !reparse_valid_name(path, path_size, values->substitute_offset, substitute_length) ||
+	    !reparse_valid_name(path, path_size, values->print_offset, print_length)) {
 		return NTFS_CORRUPT;
 	}
 	values->info.substitute_length = substitute_length / NTFS_UTF16_UNIT_BYTES;
@@ -116,7 +116,7 @@ decode_reparse(const void *buffer, size_t size, struct reparse_values *values)
 enum ntfs_result
 ntfs_reparse_decode(const void *buffer, size_t size, struct ntfs_reparse_info *info)
 {
-	struct reparse_values values;
+	struct ntfs_reparse_values values;
 	enum ntfs_result result;
 
 	if (info == NULL) {
@@ -126,7 +126,7 @@ ntfs_reparse_decode(const void *buffer, size_t size, struct ntfs_reparse_info *i
 	if (buffer == NULL) {
 		return NTFS_INVALID;
 	}
-	result = decode_reparse(buffer, size, &values);
+	result = reparse_decode_reparse(buffer, size, &values);
 	if (result == NTFS_OK) {
 		*info = values.info;
 	}
@@ -136,10 +136,10 @@ ntfs_reparse_decode(const void *buffer, size_t size, struct ntfs_reparse_info *i
 enum ntfs_result
 ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_reparse *reparse;
-	struct reparse_values values;
+	struct ntfs_reparse_values values;
 	struct ntfs_stat stat;
 	uint8_t *bytes = NULL;
 	size_t size = 0;
@@ -152,8 +152,8 @@ ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out)
 	if (node == NULL) {
 		return NTFS_INVALID;
 	}
-	v = node->volume;
-	if (v->children == UINT32_MAX) {
+	volume = node->volume;
+	if (volume->children == UINT32_MAX) {
 		return NTFS_RANGE;
 	}
 	result = ntfs_node_metadata(node, &stat);
@@ -179,7 +179,7 @@ ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out)
 		stream->value = NULL;
 		stream->value_allocation = 0;
 	} else {
-		bytes = ntfs_alloc(v, size);
+		bytes = ntfs_alloc(volume, size);
 		if (bytes == NULL) {
 			result = NTFS_NO_MEMORY;
 			goto finish;
@@ -189,7 +189,7 @@ ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out)
 			goto finish;
 		}
 	}
-	result = decode_reparse(bytes, size, &values);
+	result = reparse_decode_reparse(bytes, size, &values);
 	if (result != NTFS_OK) {
 		goto finish;
 	}
@@ -197,21 +197,21 @@ ntfs_reparse_open_impl(struct ntfs_node *node, struct ntfs_reparse **out)
 		result = NTFS_CORRUPT;
 		goto finish;
 	}
-	reparse = ntfs_alloc(v, sizeof(*reparse));
+	reparse = ntfs_alloc(volume, sizeof(*reparse));
 	if (reparse == NULL) {
 		result = NTFS_NO_MEMORY;
 		goto finish;
 	}
-	reparse->volume = v;
+	reparse->volume = volume;
 	reparse->values = values;
 	reparse->bytes = bytes;
 	reparse->size = size;
 	reparse->allocated = stream->physical_size;
 	bytes = NULL;
-	v->children++;
+	volume->children++;
 	*out = reparse;
 finish:
-	ntfs_free(v, bytes, size);
+	ntfs_free(volume, bytes, size);
 	ntfs_stream_close(stream);
 	return result;
 }
@@ -219,15 +219,15 @@ finish:
 void
 ntfs_reparse_close(struct ntfs_reparse *reparse)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 
 	if (reparse == NULL) {
 		return;
 	}
-	v = reparse->volume;
-	v->children--;
-	ntfs_free(v, reparse->bytes, reparse->size);
-	ntfs_free(v, reparse, sizeof(*reparse));
+	volume = reparse->volume;
+	volume->children--;
+	ntfs_free(volume, reparse->bytes, reparse->size);
+	ntfs_free(volume, reparse, sizeof(*reparse));
 }
 
 void

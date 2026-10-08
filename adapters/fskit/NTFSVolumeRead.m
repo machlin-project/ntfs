@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSVolumeInternal.h"
+#include "NTFSWireBytes.h"
 #include <errno.h>
 #include <limits.h>
 #include <ntfs/wof.h>
@@ -16,7 +17,7 @@ static const FSDirectoryCookie namesOnlyCookieTag = UINT64_C(1)
     << (sizeof(FSDirectoryCookie) * CHAR_BIT - 1);
 
 static NSError *
-invalid_directory_cookie(void)
+native_directory_cookie_error(void)
 {
 	return [NSError errorWithDomain:NSPOSIXErrorDomain
 				   code:FSErrorInvalidDirectoryCookie
@@ -24,14 +25,14 @@ invalid_directory_cookie(void)
 }
 
 static FSDirectoryCookie
-directory_cookie(uint64_t position, BOOL attributes)
+native_directory_cookie(uint64_t position, BOOL attributes)
 {
 	return attributes ? position
 			  : namesOnlyCookieTag | (position + NTFS_DIRECTORY_VIRTUAL_ENTRIES);
 }
 
 static BOOL
-directory_lookup_name(FSFileName *name, BOOL *parent)
+native_directory_lookup_name(FSFileName *name, BOOL *parent)
 {
 	NSData *data = name.data;
 
@@ -48,36 +49,26 @@ directory_lookup_name(FSFileName *name, BOOL *parent)
 
 /* Native xattrs have a bounded name; the immutable catalog supplies the reverse
  * mapping. These byte-array records preserve original UTF-16 without NSString. */
-struct stream_manifest_header {
+struct ntfs_native_stream_manifest_header {
 	uint8_t magic[8], version[4], count[4], reference[8];
 };
 
-struct stream_manifest_entry {
+struct ntfs_native_stream_manifest_entry {
 	uint8_t index[4], name_length[2], reserved[2];
 };
 
-_Static_assert(sizeof(struct stream_manifest_header) == 24, "stream manifest header");
-_Static_assert(sizeof(struct stream_manifest_entry) == 8, "stream manifest entry");
-
-static void
-store_little(uint8_t *bytes, size_t width, uint64_t value)
-{
-	size_t i;
-
-	for (i = 0; i < width; i++) {
-		bytes[i] = (uint8_t)(value >> (i * CHAR_BIT));
-	}
-}
+_Static_assert(sizeof(struct ntfs_native_stream_manifest_header) == 24, "stream manifest header");
+_Static_assert(sizeof(struct ntfs_native_stream_manifest_entry) == 8, "stream manifest entry");
 
 static FSFileName *
-stream_alias(uint32_t index)
+native_stream_alias(uint32_t index)
 {
 	return [FSFileName nameWithString:[NSString stringWithFormat:@"%@%0*x", streamAliasPrefix,
 					      NTFS_STREAM_ALIAS_DIGITS, index]];
 }
 
 static BOOL
-ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
+native_ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 {
 	NSData *prefix = [aliasPrefix dataUsingEncoding:NSASCIIStringEncoding];
 	NSData *data = name.data;
@@ -145,7 +136,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 						 userInfo:nil];
 			return nil;
 		}
-		if (directory_lookup_name(name, &virtualParent)) {
+		if (native_directory_lookup_name(name, &virtualParent)) {
 			path = parent->directoryPath;
 			if (virtualParent && path.parent != nil) {
 				path = path.parent;
@@ -419,7 +410,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 				if (name.length != 0 &&
 				    !(value->wof &&
 					ntfs_wof_is_backing_stream(name.units, name.length))) {
-					[names addObject:stream_alias(i)];
+					[names addObject:native_stream_alias(i)];
 				}
 			}
 			result = [self admissionResult];
@@ -438,8 +429,8 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 		   catalog:(struct ntfs_stream_catalog *)catalog
 		     error:(NSError **)error
 {
-	struct stream_manifest_header *header;
-	struct stream_manifest_entry *entry;
+	struct ntfs_native_stream_manifest_header *header;
+	struct ntfs_native_stream_manifest_entry *entry;
 	struct ntfs_stream_name name;
 	NSMutableData *data;
 	uint8_t *bytes;
@@ -466,9 +457,11 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 	bytes = data.mutableBytes;
 	header = (void *)bytes;
 	memcpy(header->magic, "NTFSADS", sizeof(header->magic));
-	store_little(header->version, sizeof(header->version), NTFS_STREAM_MANIFEST_VERSION);
-	store_little(header->count, sizeof(header->count), count);
-	store_little(header->reference, sizeof(header->reference), item->stat.reference);
+	ntfs_native_store_little(
+	    header->version, sizeof(header->version), NTFS_STREAM_MANIFEST_VERSION);
+	ntfs_native_store_little(header->count, sizeof(header->count), count);
+	ntfs_native_store_little(
+	    header->reference, sizeof(header->reference), item->stat.reference);
 	position = sizeof(*header);
 	for (i = 0; i < ntfs_stream_catalog_count(catalog); i++) {
 		result = ntfs_stream_catalog_entry(catalog, i, &name);
@@ -480,11 +473,12 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 			continue;
 		}
 		entry = (void *)(bytes + position);
-		store_little(entry->index, sizeof(entry->index), i);
-		store_little(entry->name_length, sizeof(entry->name_length), name.length);
+		ntfs_native_store_little(entry->index, sizeof(entry->index), i);
+		ntfs_native_store_little(
+		    entry->name_length, sizeof(entry->name_length), name.length);
 		position += sizeof(*entry);
 		for (j = 0; j < name.length; j++) {
-			store_little(bytes + position, sizeof(uint16_t), name.units[j]);
+			ntfs_native_store_little(bytes + position, sizeof(uint16_t), name.units[j]);
 			position += sizeof(uint16_t);
 		}
 	}
@@ -555,7 +549,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 			}
 			if ([name.data
 				isEqualToData:[FSFileName nameWithString:namesManifestName].data] ||
-			    ordinal_xattr_index(name, nameEntryPrefix, &index)) {
+			    native_ordinal_xattr_index(name, nameEntryPrefix, &index)) {
 				if (!value->stat.directory) {
 					*error = [NSError errorWithDomain:NSPOSIXErrorDomain
 								     code:ENOATTR
@@ -605,7 +599,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 				}
 				return manifest;
 			}
-			if (!ordinal_xattr_index(name, streamAliasPrefix, &index) ||
+			if (!native_ordinal_xattr_index(name, streamAliasPrefix, &index) ||
 			    ntfs_stream_catalog_entry(catalog, index, &streamName) != NTFS_OK ||
 			    streamName.length == 0 ||
 			    (value->wof &&
@@ -700,7 +694,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 			    (!attributes && cookie != FSDirectoryCookieInitial &&
 				(cookie & namesOnlyCookieTag) == 0) ||
 			    cookie == namesOnlyCookieTag || requestedPosition > maximumPosition) {
-				return invalid_directory_cookie();
+				return native_directory_cookie_error();
 			}
 			if (!attributes) {
 				while (requestedPosition < NTFS_DIRECTORY_VIRTUAL_ENTRIES) {
@@ -772,7 +766,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 							return ntfs_error(result);
 						}
 						return continuation->position < requestedPosition
-						    ? invalid_directory_cookie()
+						    ? native_directory_cookie_error()
 						    : nil;
 					}
 					if (result != NTFS_OK) {
@@ -898,7 +892,7 @@ ordinal_xattr_index(FSFileName *name, NSString *aliasPrefix, uint32_t *out)
 				    packEntryWithName:name
 					     itemType:type
 					       itemID:item_id(continuation->pending_entry.reference)
-					   nextCookie:directory_cookie(
+					   nextCookie:native_directory_cookie(
 							  continuation->position + 1, attributes)
 					   attributes:attrs];
 				result = [self admissionResult];

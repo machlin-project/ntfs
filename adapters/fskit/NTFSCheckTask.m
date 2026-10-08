@@ -10,19 +10,19 @@
 @end
 
 static void *
-check_allocate(void *context, size_t size)
+native_check_allocate(void *context, size_t size)
 {
 	return [(__bridge NTFSCheckTask *)context allocateSize:size];
 }
 
 static void
-check_release(void *context, void *bytes, size_t size)
+native_check_release(void *context, void *bytes, size_t size)
 {
 	[(__bridge NTFSCheckTask *)context releaseBytes:bytes size:size];
 }
 
 static enum ntfs_result
-check_read(void *context, uint64_t offset, void *bytes, size_t length)
+native_check_read(void *context, uint64_t offset, void *bytes, size_t length)
 {
 	return [(__bridge NTFSCheckTask *)context readAt:offset bytes:bytes length:length];
 }
@@ -125,9 +125,9 @@ check_read(void *context, uint64_t offset, void *bytes, size_t length)
 	}
 	environment = [_resource environment];
 	environment.context = (__bridge void *)self;
-	environment.read = check_read;
-	environment.allocate = check_allocate;
-	environment.release = check_release;
+	environment.read = native_check_read;
+	environment.allocate = native_check_allocate;
+	environment.release = native_check_release;
 	ntfs_operation_default_limits(&limits);
 	if (!_quick) {
 		limits.read_calls = _limits.max_read_calls;

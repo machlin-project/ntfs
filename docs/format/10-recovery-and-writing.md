@@ -323,8 +323,8 @@ allocation accounting. Metadata, journal, replay, history, overlay, execution,
 transaction and recovery have separate private contracts. The native image-owner
 boundary exposes entry points and durable reports instead of private preparation
 workspaces. These module boundaries add no native operation semantics or writable
-admission; the [refactoring plan](../REFACTORING.md#applied-cleanup) records their
-verification and remaining review.
+admission; the [refactoring record](../REFACTORING.md#applied-cleanup) records their
+component map and verification.
 
 ## Experimental fresh ordinary-operation recovery
 

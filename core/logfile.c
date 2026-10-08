@@ -12,20 +12,20 @@ _Static_assert(NTFS_LOGFILE_CLIENT_NAME_UNITS * sizeof(uint16_t) == NTFS_LFS_CLI
     "public client name capacity");
 
 static bool
-page_size(uint32_t size)
+logfile_page_size(uint32_t size)
 {
 	return size >= NTFS_MST_STRIDE && (size & (size - 1)) == 0;
 }
 
 static bool
-version(uint16_t major, uint16_t minor)
+logfile_version(uint16_t major, uint16_t minor)
 {
 	return (major == NTFS_LFS_MAJOR_LEGACY && minor == NTFS_LFS_MINOR_LEGACY) ||
 	    (major == NTFS_LFS_MAJOR_FAST && minor == NTFS_LFS_MINOR_FAST);
 }
 
 static uint32_t
-sequence_bits(uint64_t file_bytes)
+logfile_sequence_bits(uint64_t file_bytes)
 {
 	uint32_t width = 0;
 
@@ -37,39 +37,45 @@ sequence_bits(uint64_t file_bytes)
 }
 
 static bool
-geometry(const struct ntfs_logfile_restart *r)
+logfile_geometry(const struct ntfs_logfile_restart *restart)
 {
 	uint64_t minimum, circular, usable;
 
-	if (r == NULL || !version(r->major, r->minor) || !page_size(r->system_page_bytes) ||
-	    !page_size(r->log_page_bytes) || r->system_page_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES ||
-	    r->log_page_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES || r->file_bytes == 0 ||
-	    r->file_bytes > NTFS_LOGFILE_MAX_FILE_BYTES ||
-	    r->record_header_bytes < sizeof(struct ntfs_disk_log_record) ||
-	    r->record_header_bytes % NTFS_WIRE_ALIGNMENT != 0 ||
-	    ((uint64_t)NTFS_LFS_RESTART_PAGES * r->system_page_bytes) % r->log_page_bytes != 0 ||
-	    r->page_data_offset < sizeof(struct ntfs_disk_log_page) ||
-	    r->page_data_offset < sizeof(struct ntfs_disk_log_page) +
-		    (r->log_page_bytes / NTFS_MST_STRIDE + 1u) * NTFS_MST_WORD_BYTES ||
-	    r->page_data_offset % NTFS_WIRE_ALIGNMENT != 0 ||
-	    !ntfs_bounds(r->page_data_offset, r->record_header_bytes, r->log_page_bytes)) {
+	if (restart == NULL || !logfile_version(restart->major, restart->minor) ||
+	    !logfile_page_size(restart->system_page_bytes) ||
+	    !logfile_page_size(restart->log_page_bytes) ||
+	    restart->system_page_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES ||
+	    restart->log_page_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES || restart->file_bytes == 0 ||
+	    restart->file_bytes > NTFS_LOGFILE_MAX_FILE_BYTES ||
+	    restart->record_header_bytes < sizeof(struct ntfs_disk_log_record) ||
+	    restart->record_header_bytes % NTFS_WIRE_ALIGNMENT != 0 ||
+	    ((uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes) %
+		    restart->log_page_bytes !=
+		0 ||
+	    restart->page_data_offset < sizeof(struct ntfs_disk_log_page) ||
+	    restart->page_data_offset < sizeof(struct ntfs_disk_log_page) +
+		    (restart->log_page_bytes / NTFS_MST_STRIDE + 1u) * NTFS_MST_WORD_BYTES ||
+	    restart->page_data_offset % NTFS_WIRE_ALIGNMENT != 0 ||
+	    !ntfs_bounds(
+		restart->page_data_offset, restart->record_header_bytes, restart->log_page_bytes)) {
 		return false;
 	}
-	minimum = (uint64_t)NTFS_LFS_RESTART_PAGES * r->system_page_bytes +
-	    (uint64_t)NTFS_LFS_MIN_RECORD_PAGES * r->log_page_bytes;
-	circular = (uint64_t)NTFS_LFS_RESTART_PAGES * r->system_page_bytes +
-	    (uint64_t)(r->major == NTFS_LFS_MAJOR_FAST ? NTFS_LOGFILE_FAST_COPY_PAGES
-						       : NTFS_LFS_LEGACY_TAIL_PAGES) *
-		r->log_page_bytes;
-	usable = r->file_bytes - r->file_bytes % r->log_page_bytes;
-	return usable >= minimum && r->usable_bytes == usable && r->circular_offset == circular &&
-	    r->sequence_bits >= NTFS_LFS_LSN_OFFSET_SHIFT &&
-	    r->sequence_bits <= sequence_bits(r->file_bytes);
+	minimum = (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes +
+	    (uint64_t)NTFS_LFS_MIN_RECORD_PAGES * restart->log_page_bytes;
+	circular = (uint64_t)NTFS_LFS_RESTART_PAGES * restart->system_page_bytes +
+	    (uint64_t)(restart->major == NTFS_LFS_MAJOR_FAST ? NTFS_LOGFILE_FAST_COPY_PAGES
+							     : NTFS_LFS_LEGACY_TAIL_PAGES) *
+		restart->log_page_bytes;
+	usable = restart->file_bytes - restart->file_bytes % restart->log_page_bytes;
+	return usable >= minimum && restart->usable_bytes == usable &&
+	    restart->circular_offset == circular &&
+	    restart->sequence_bits >= NTFS_LFS_LSN_OFFSET_SHIFT &&
+	    restart->sequence_bits <= logfile_sequence_bits(restart->file_bytes);
 }
 
 enum ntfs_result
 ntfs_logfile_lsn_decode(
-    const struct ntfs_logfile_restart *r, uint64_t lsn, struct ntfs_logfile_lsn *out)
+    const struct ntfs_logfile_restart *restart, uint64_t lsn, struct ntfs_logfile_lsn *out)
 {
 	struct ntfs_logfile_lsn info = {0};
 	uint64_t mask;
@@ -79,22 +85,23 @@ ntfs_logfile_lsn_decode(
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
-	if (!geometry(r)) {
+	if (!logfile_geometry(restart)) {
 		return NTFS_INVALID;
 	}
 	if (lsn == 0) {
 		return NTFS_NOT_FOUND;
 	}
-	offset_bits = NTFS_LFS_LSN_BITS - r->sequence_bits;
+	offset_bits = NTFS_LFS_LSN_BITS - restart->sequence_bits;
 	mask = (UINT64_C(1) << offset_bits) - 1;
 	info.sequence = lsn >> offset_bits;
 	info.file_offset = (lsn & mask) << NTFS_LFS_LSN_OFFSET_SHIFT;
-	info.page_offset = info.file_offset - info.file_offset % r->log_page_bytes;
-	info.record_offset = (uint32_t)(info.file_offset % r->log_page_bytes);
-	if (info.file_offset < r->circular_offset ||
-	    !ntfs_bounds(info.file_offset, r->record_header_bytes, r->usable_bytes) ||
-	    info.record_offset < r->page_data_offset ||
-	    !ntfs_bounds(info.record_offset, r->record_header_bytes, r->log_page_bytes)) {
+	info.page_offset = info.file_offset - info.file_offset % restart->log_page_bytes;
+	info.record_offset = (uint32_t)(info.file_offset % restart->log_page_bytes);
+	if (info.file_offset < restart->circular_offset ||
+	    !ntfs_bounds(info.file_offset, restart->record_header_bytes, restart->usable_bytes) ||
+	    info.record_offset < restart->page_data_offset ||
+	    !ntfs_bounds(
+		info.record_offset, restart->record_header_bytes, restart->log_page_bytes)) {
 		return NTFS_CORRUPT;
 	}
 	*out = info;
@@ -179,12 +186,12 @@ ntfs_logfile_client_decode(const void *buffer, size_t size, struct ntfs_logfile_
 }
 
 static enum ntfs_result
-client_lists(const uint8_t *page, const struct ntfs_logfile_restart *r)
+logfile_client_lists(const uint8_t *page, const struct ntfs_logfile_restart *restart)
 {
 	struct ntfs_logfile_client client;
 	struct ntfs_logfile_lsn lsn;
 	uint8_t visited[LOG_CLIENT_BITMAP_BYTES] = {0};
-	uint16_t index, previous, heads[] = {r->free_head, r->in_use_head};
+	uint16_t index, previous, heads[] = {restart->free_head, restart->in_use_head};
 	size_t list, count = 0;
 	enum ntfs_result result;
 
@@ -192,7 +199,7 @@ client_lists(const uint8_t *page, const struct ntfs_logfile_restart *r)
 		previous = NTFS_LOGFILE_NO_CLIENT;
 		index = heads[list];
 		while (index != NTFS_LOGFILE_NO_CLIENT) {
-			if (index >= r->client_count || count >= r->client_count ||
+			if (index >= restart->client_count || count >= restart->client_count ||
 			    (visited[index / NTFS_BITS_PER_BYTE] &
 				(1u << (index % NTFS_BITS_PER_BYTE))) != 0) {
 				return NTFS_CORRUPT;
@@ -200,7 +207,7 @@ client_lists(const uint8_t *page, const struct ntfs_logfile_restart *r)
 			visited[index / NTFS_BITS_PER_BYTE] |=
 			    (uint8_t)(1u << (index % NTFS_BITS_PER_BYTE));
 			count++;
-			result = ntfs_logfile_client_decode(page + r->clients.offset +
+			result = ntfs_logfile_client_decode(page + restart->clients.offset +
 				(size_t)index * sizeof(struct ntfs_disk_log_client),
 			    sizeof(struct ntfs_disk_log_client), &client);
 			if (result != NTFS_OK || client.previous != previous) {
@@ -209,14 +216,14 @@ client_lists(const uint8_t *page, const struct ntfs_logfile_restart *r)
 			/* Free records may retain stale LSNs from a prior client lifetime.
 			 * Only active clients participate in restart LSN bounds. */
 			if (list != 0) {
-				if (client.oldest_lsn > r->current_lsn ||
-				    client.restart_lsn > r->current_lsn ||
+				if (client.oldest_lsn > restart->current_lsn ||
+				    client.restart_lsn > restart->current_lsn ||
 				    (client.oldest_lsn != 0 &&
-					ntfs_logfile_lsn_decode(r, client.oldest_lsn, &lsn) !=
+					ntfs_logfile_lsn_decode(restart, client.oldest_lsn, &lsn) !=
 					    NTFS_OK) ||
 				    (client.restart_lsn != 0 &&
-					ntfs_logfile_lsn_decode(r, client.restart_lsn, &lsn) !=
-					    NTFS_OK)) {
+					ntfs_logfile_lsn_decode(
+					    restart, client.restart_lsn, &lsn) != NTFS_OK)) {
 					return NTFS_CORRUPT;
 				}
 			}
@@ -224,11 +231,11 @@ client_lists(const uint8_t *page, const struct ntfs_logfile_restart *r)
 			index = client.next;
 		}
 	}
-	return count == r->client_count ? NTFS_OK : NTFS_CORRUPT;
+	return count == restart->client_count ? NTFS_OK : NTFS_CORRUPT;
 }
 
 static enum ntfs_result
-restore_page(const void *input, size_t size, size_t header_bytes, size_t data_offset,
+logfile_restore_page(const void *input, size_t size, size_t header_bytes, size_t data_offset,
     const char *magic, void *scratch, size_t scratch_bytes)
 {
 	const struct ntfs_disk_mst *mst = input;
@@ -282,14 +289,14 @@ ntfs_logfile_restart_decode(const void *input, size_t size, uint64_t available_f
 	}
 	info.major = ntfs_u16(header->major);
 	info.minor = ntfs_u16(header->minor);
-	if (!version(info.major, info.minor)) {
+	if (!logfile_version(info.major, info.minor)) {
 		/* An unknown version may use different integrity protection. Do not
 		 * first apply this version's USA contract and mislabel it corrupt. */
 		return NTFS_UNSUPPORTED;
 	}
 	info.system_page_bytes = ntfs_u32(header->system_page_bytes);
 	info.log_page_bytes = ntfs_u32(header->log_page_bytes);
-	if (!page_size(info.system_page_bytes) || !page_size(info.log_page_bytes)) {
+	if (!logfile_page_size(info.system_page_bytes) || !logfile_page_size(info.log_page_bytes)) {
 		return NTFS_CORRUPT;
 	}
 	if (info.system_page_bytes > NTFS_LOGFILE_MAX_PAGE_BYTES ||
@@ -302,7 +309,7 @@ ntfs_logfile_restart_decode(const void *input, size_t size, uint64_t available_f
 	    !ntfs_bounds(info.area.offset, sizeof(*area), NTFS_MST_STRIDE - NTFS_MST_WORD_BYTES)) {
 		return NTFS_CORRUPT;
 	}
-	result = restore_page(
+	result = logfile_restore_page(
 	    input, size, sizeof(*header), info.area.offset, "RSTR", scratch, scratch_bytes);
 	if (result != NTFS_OK) {
 		return result;
@@ -332,7 +339,7 @@ ntfs_logfile_restart_decode(const void *input, size_t size, uint64_t available_f
 	clients_offset = ntfs_u16(area->clients_offset);
 	info.clients.offset = info.area.offset + (uint32_t)clients_offset;
 	info.clients.length = (uint32_t)info.client_count * sizeof(struct ntfs_disk_log_client);
-	if (!geometry(&info) || info.file_bytes > available_file_bytes ||
+	if (!logfile_geometry(&info) || info.file_bytes > available_file_bytes ||
 	    info.client_count > LOG_MAX_CLIENTS ||
 	    !ntfs_bounds(info.area.offset, info.area.length, size) ||
 	    clients_offset < sizeof(*area) || clients_offset % NTFS_WIRE_ALIGNMENT != 0 ||
@@ -345,7 +352,7 @@ ntfs_logfile_restart_decode(const void *input, size_t size, uint64_t available_f
 	if (info.last_data_bytes > NTFS_LOGFILE_MAX_RECORD_BYTES - info.record_header_bytes) {
 		return NTFS_RANGE;
 	}
-	result = client_lists(scratch, &info);
+	result = logfile_client_lists(scratch, &info);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -368,14 +375,14 @@ ntfs_logfile_page_decode(const void *input, size_t size, const struct ntfs_logfi
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
-	if (!geometry(restart)) {
+	if (!logfile_geometry(restart)) {
 		return NTFS_INVALID;
 	}
 	if (size != restart->log_page_bytes) {
 		return NTFS_CORRUPT;
 	}
-	result = restore_page(input, size, sizeof(*header), restart->page_data_offset, "RCRD",
-	    scratch, scratch_bytes);
+	result = logfile_restore_page(input, size, sizeof(*header), restart->page_data_offset,
+	    "RCRD", scratch, scratch_bytes);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -474,7 +481,7 @@ ntfs_logfile_record_decode(
 }
 
 static bool
-update_span(struct ntfs_logfile_span span, size_t prefix, size_t size)
+logfile_update_span(struct ntfs_logfile_span span, size_t prefix, size_t size)
 {
 	return span.offset % NTFS_WIRE_ALIGNMENT == 0 &&
 	    ntfs_bounds(span.offset, span.length, size) &&
@@ -521,10 +528,10 @@ ntfs_logfile_update_decode(const void *input, size_t size, struct ntfs_logfile_u
 	 * when lcn_count is zero; it changes span admission, never the vector count. */
 	prefix = info.lcn_count == 0 ? sizeof(struct ntfs_disk_log_update_storage)
 				     : sizeof(*header) + info.lcns.length;
-	if (prefix > size || !update_span(info.redo, prefix, size)) {
+	if (prefix > size || !logfile_update_span(info.redo, prefix, size)) {
 		return NTFS_CORRUPT;
 	}
-	if (!update_span(info.undo, prefix, size)) {
+	if (!logfile_update_span(info.undo, prefix, size)) {
 		if (info.undo_operation != NTFS_LOG_OP_COMPENSATION || info.redo.length == 0 ||
 		    (size_t)info.redo.offset + info.redo.length != size ||
 		    info.undo.offset != size || info.undo.length != info.redo.length) {

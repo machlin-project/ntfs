@@ -6,25 +6,32 @@ static int
 mutation_key_compare(struct ntfs_write_mutation_plan *plan, const struct ntfs_mutation_key *left,
     const struct ntfs_mutation_key *right)
 {
-	const struct ntfs_disk_filename *a = (const void *)left->value;
-	const struct ntfs_disk_filename *b = (const void *)right->value;
-	size_t index, count = a->length < b->length ? a->length : b->length;
-	uint16_t x, y, folded_x, folded_y;
+	const struct ntfs_disk_filename *left_name = (const void *)left->value;
+	const struct ntfs_disk_filename *right_name = (const void *)right->value;
+	size_t index,
+	    count = left_name->length < right_name->length ? left_name->length : right_name->length;
+	uint16_t left_unit, right_unit, folded_x, folded_y;
 	int exact = 0;
 
 	for (index = 0; index < count; index++) {
-		x = ntfs_u16(left->value + sizeof(*a) + index * NTFS_UTF16_UNIT_BYTES);
-		y = ntfs_u16(right->value + sizeof(*b) + index * NTFS_UTF16_UNIT_BYTES);
-		if (exact == 0 && x != y) {
-			exact = x < y ? -1 : 1;
+		left_unit =
+		    ntfs_u16(left->value + sizeof(*left_name) + index * NTFS_UTF16_UNIT_BYTES);
+		right_unit =
+		    ntfs_u16(right->value + sizeof(*right_name) + index * NTFS_UTF16_UNIT_BYTES);
+		if (exact == 0 && left_unit != right_unit) {
+			exact = left_unit < right_unit ? -1 : 1;
 		}
-		folded_x = ntfs_u16(plan->volume->upcase + (size_t)x * NTFS_UTF16_UNIT_BYTES);
-		folded_y = ntfs_u16(plan->volume->upcase + (size_t)y * NTFS_UTF16_UNIT_BYTES);
+		folded_x =
+		    ntfs_u16(plan->volume->upcase + (size_t)left_unit * NTFS_UTF16_UNIT_BYTES);
+		folded_y =
+		    ntfs_u16(plan->volume->upcase + (size_t)right_unit * NTFS_UTF16_UNIT_BYTES);
 		if (folded_x != folded_y) {
 			return folded_x < folded_y ? -1 : 1;
 		}
 	}
-	return a->length == b->length ? exact : a->length < b->length ? -1 : 1;
+	return left_name->length == right_name->length ? exact
+	    : left_name->length < right_name->length   ? -1
+						       : 1;
 }
 
 static enum ntfs_result

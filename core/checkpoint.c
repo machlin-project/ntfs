@@ -5,7 +5,7 @@
 #include <ntfs/checkpoint.h>
 
 static enum ntfs_result
-validate_entries(const uint8_t *bytes, const struct ntfs_logfile_restart_table *table,
+checkpoint_validate_entries(const uint8_t *bytes, const struct ntfs_logfile_restart_table *table,
     enum ntfs_logfile_checkpoint_kind kind, uint32_t major, uint32_t minor)
 {
 	struct ntfs_logfile_open_attribute attribute;
@@ -175,8 +175,8 @@ ntfs_logfile_checkpoint_table_decode(const struct ntfs_logfile *source,
 	} else {
 		result = ntfs_logfile_restart_table_decode(bytes, value.body.length, &value.table);
 		if (result == NTFS_OK) {
-			result =
-			    validate_entries(bytes, &value.table, kind, client.major, client.minor);
+			result = checkpoint_validate_entries(
+			    bytes, &value.table, kind, client.major, client.minor);
 		}
 	}
 	if (result != NTFS_OK) {
@@ -191,8 +191,8 @@ ntfs_logfile_checkpoint_table_decode(const struct ntfs_logfile *source,
 }
 
 static enum ntfs_result
-attribute_index(const uint8_t *body, const struct ntfs_logfile_restart_table *table, uint32_t key,
-    size_t *index)
+checkpoint_attribute_index(const uint8_t *body, const struct ntfs_logfile_restart_table *table,
+    uint32_t key, size_t *index)
 {
 	uint32_t relative;
 
@@ -210,7 +210,7 @@ attribute_index(const uint8_t *body, const struct ntfs_logfile_restart_table *ta
 }
 
 static enum ntfs_result
-validate_names(const uint8_t *body, const struct ntfs_logfile_attribute_names *names,
+checkpoint_validate_names(const uint8_t *body, const struct ntfs_logfile_attribute_names *names,
     const uint8_t *attributes, const struct ntfs_logfile_restart_table *table, uint8_t *workspace,
     size_t workspace_bytes)
 {
@@ -243,7 +243,8 @@ validate_names(const uint8_t *body, const struct ntfs_logfile_attribute_names *n
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = attribute_index(attributes, table, name.target_attribute, &index);
+		result =
+		    checkpoint_attribute_index(attributes, table, name.target_attribute, &index);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -258,8 +259,9 @@ validate_names(const uint8_t *body, const struct ntfs_logfile_attribute_names *n
 }
 
 static enum ntfs_result
-validate_dirty_targets(const uint8_t *body, const struct ntfs_logfile_checkpoint_table *dirty,
-    const uint8_t *attributes, const struct ntfs_logfile_restart_table *table)
+checkpoint_validate_dirty_targets(const uint8_t *body,
+    const struct ntfs_logfile_checkpoint_table *dirty, const uint8_t *attributes,
+    const struct ntfs_logfile_restart_table *table)
 {
 	struct ntfs_logfile_dirty_page page;
 	size_t index, target;
@@ -275,7 +277,8 @@ validate_dirty_targets(const uint8_t *body, const struct ntfs_logfile_checkpoint
 		if (result != NTFS_OK) {
 			return result;
 		}
-		result = attribute_index(attributes, table, page.target_attribute, &target);
+		result =
+		    checkpoint_attribute_index(attributes, table, page.target_attribute, &target);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -339,7 +342,7 @@ ntfs_logfile_checkpoint_decode(const struct ntfs_logfile *source, const void *ch
 		return NTFS_CORRUPT;
 	}
 	if ((value.present_mask & (1u << NTFS_LOGFILE_CHECKPOINT_ATTRIBUTE_NAMES)) != 0) {
-		result = validate_names(
+		result = checkpoint_validate_names(
 		    (const uint8_t *)dumps[NTFS_LOGFILE_CHECKPOINT_ATTRIBUTE_NAMES].data +
 			names->body.offset,
 		    &names->names, attributes, &open->table, workspace, workspace_bytes);
@@ -348,7 +351,7 @@ ntfs_logfile_checkpoint_decode(const struct ntfs_logfile *source, const void *ch
 		}
 	}
 	if ((value.present_mask & (1u << NTFS_LOGFILE_CHECKPOINT_DIRTY_PAGES)) != 0) {
-		result = validate_dirty_targets(
+		result = checkpoint_validate_dirty_targets(
 		    (const uint8_t *)dumps[NTFS_LOGFILE_CHECKPOINT_DIRTY_PAGES].data +
 			dirty->body.offset,
 		    dirty, attributes, &open->table);

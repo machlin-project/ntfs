@@ -6,7 +6,7 @@
  * canonical buckets; all scratch belongs to the caller, not the C stack. */
 enum { XPRESS_PREFIX_BITS = 8, XPRESS_PREFIX_ENTRIES = 1u << XPRESS_PREFIX_BITS };
 
-struct xpress_workspace {
+struct ntfs_xpress_workspace {
 	uint32_t first[NTFS_XPRESS_MAX_CODE_BITS + 1];
 	uint16_t count[NTFS_XPRESS_MAX_CODE_BITS + 1];
 	uint16_t base[NTFS_XPRESS_MAX_CODE_BITS + 1];
@@ -14,7 +14,7 @@ struct xpress_workspace {
 	uint16_t prefix[XPRESS_PREFIX_ENTRIES];
 };
 
-struct xpress_reader {
+struct ntfs_xpress_reader {
 	const uint8_t *bytes;
 	size_t size, position;
 	uint32_t value;
@@ -24,17 +24,17 @@ struct xpress_reader {
 size_t
 ntfs_xpress_workspace_size(void)
 {
-	return sizeof(struct xpress_workspace);
+	return sizeof(struct ntfs_xpress_workspace);
 }
 
 size_t
 ntfs_xpress_workspace_alignment(void)
 {
-	return _Alignof(struct xpress_workspace);
+	return _Alignof(struct ntfs_xpress_workspace);
 }
 
 static unsigned
-symbol_length(const struct ntfs_disk_xpress *header, unsigned symbol)
+xpress_symbol_length(const struct ntfs_disk_xpress *header, unsigned symbol)
 {
 	return (header->lengths[symbol / NTFS_XPRESS_LENGTHS_PER_BYTE] >>
 		   ((symbol % NTFS_XPRESS_LENGTHS_PER_BYTE) * NTFS_XPRESS_LENGTH_BITS)) &
@@ -42,7 +42,7 @@ symbol_length(const struct ntfs_disk_xpress *header, unsigned symbol)
 }
 
 static enum ntfs_result
-build_tree(const struct ntfs_disk_xpress *header, struct xpress_workspace *tree)
+xpress_build_tree(const struct ntfs_disk_xpress *header, struct ntfs_xpress_workspace *tree)
 {
 	uint16_t next[NTFS_XPRESS_MAX_CODE_BITS + 1];
 	uint32_t slots = 1, code = 0;
@@ -50,7 +50,7 @@ build_tree(const struct ntfs_disk_xpress *header, struct xpress_workspace *tree)
 
 	ntfs_zero(tree, sizeof(*tree));
 	for (symbol = 0; symbol < NTFS_XPRESS_SYMBOLS; symbol++) {
-		bits = symbol_length(header, symbol);
+		bits = xpress_symbol_length(header, symbol);
 		if (bits != 0) {
 			tree->count[bits]++;
 		}
@@ -71,7 +71,7 @@ build_tree(const struct ntfs_disk_xpress *header, struct xpress_workspace *tree)
 		return NTFS_CORRUPT;
 	}
 	for (symbol = 0; symbol < NTFS_XPRESS_SYMBOLS; symbol++) {
-		bits = symbol_length(header, symbol);
+		bits = xpress_symbol_length(header, symbol);
 		if (bits != 0) {
 			tree->symbols[next[bits]++] = (uint16_t)symbol;
 		}
@@ -94,7 +94,7 @@ build_tree(const struct ntfs_disk_xpress *header, struct xpress_workspace *tree)
 }
 
 static enum ntfs_result
-take_bits(struct xpress_reader *reader, unsigned bits, uint32_t *out)
+xpress_take_bits(struct ntfs_xpress_reader *reader, unsigned bits, uint32_t *out)
 {
 	*out = 0;
 	if (bits == 0) {
@@ -116,7 +116,8 @@ take_bits(struct xpress_reader *reader, unsigned bits, uint32_t *out)
 }
 
 static enum ntfs_result
-take_symbol(struct xpress_reader *reader, const struct xpress_workspace *tree, unsigned *out)
+xpress_take_symbol(
+    struct ntfs_xpress_reader *reader, const struct ntfs_xpress_workspace *tree, unsigned *out)
 {
 	uint16_t entry;
 	uint32_t code = 0, bit, ignored;
@@ -126,10 +127,10 @@ take_symbol(struct xpress_reader *reader, const struct xpress_workspace *tree, u
 	entry = tree->prefix[reader->value >> (NTFS_XPRESS_RESERVOIR_BITS - XPRESS_PREFIX_BITS)];
 	if (entry != UINT16_MAX) {
 		*out = entry & (NTFS_XPRESS_SYMBOLS - 1);
-		return take_bits(reader, entry >> NTFS_XPRESS_SYMBOL_BITS, &ignored);
+		return xpress_take_bits(reader, entry >> NTFS_XPRESS_SYMBOL_BITS, &ignored);
 	}
 	for (bits = 1; bits <= NTFS_XPRESS_MAX_CODE_BITS; bits++) {
-		result = take_bits(reader, 1, &bit);
+		result = xpress_take_bits(reader, 1, &bit);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -143,7 +144,7 @@ take_symbol(struct xpress_reader *reader, const struct xpress_workspace *tree, u
 }
 
 static enum ntfs_result
-match_length(struct xpress_reader *reader, unsigned code, uint32_t *length)
+xpress_match_length(struct ntfs_xpress_reader *reader, unsigned code, uint32_t *length)
 {
 	uint32_t extra;
 
@@ -179,8 +180,8 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 {
 	const uint8_t *src = input;
 	uint8_t *dst = output;
-	struct xpress_workspace *tree = workspace;
-	struct xpress_reader reader;
+	struct ntfs_xpress_workspace *tree = workspace;
+	struct ntfs_xpress_reader reader;
 	size_t position = 0, i;
 	uint32_t distance, low, length;
 	unsigned symbol, distance_bits;
@@ -191,7 +192,8 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 	}
 	*written = 0;
 	if ((size != 0 && input == NULL) || (expected != 0 && output == NULL) ||
-	    workspace == NULL || (uintptr_t)workspace % _Alignof(struct xpress_workspace) != 0) {
+	    workspace == NULL ||
+	    (uintptr_t)workspace % _Alignof(struct ntfs_xpress_workspace) != 0) {
 		return NTFS_INVALID;
 	}
 	if (expected > NTFS_XPRESS_MAX_BLOCK || workspace_size < sizeof(*tree)) {
@@ -201,7 +203,7 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 		NTFS_XPRESS_LOOKAHEAD_WORDS * NTFS_XPRESS_WORD_BYTES) {
 		return NTFS_CORRUPT;
 	}
-	result = build_tree(input, tree);
+	result = xpress_build_tree(input, tree);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -214,7 +216,7 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 	reader.position += NTFS_XPRESS_WORD_BYTES;
 	reader.valid = NTFS_XPRESS_RESERVOIR_BITS;
 	while (position < expected) {
-		result = take_symbol(&reader, tree, &symbol);
+		result = xpress_take_symbol(&reader, tree, &symbol);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -223,12 +225,13 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 			continue;
 		}
 		symbol -= NTFS_XPRESS_LITERAL_SYMBOLS;
-		result = match_length(&reader, symbol & NTFS_XPRESS_MATCH_LENGTH_MASK, &length);
+		result =
+		    xpress_match_length(&reader, symbol & NTFS_XPRESS_MATCH_LENGTH_MASK, &length);
 		if (result != NTFS_OK) {
 			return result;
 		}
 		distance_bits = symbol >> NTFS_XPRESS_MATCH_LENGTH_BITS;
-		result = take_bits(&reader, distance_bits, &low);
+		result = xpress_take_bits(&reader, distance_bits, &low);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -245,7 +248,7 @@ ntfs_xpress_huffman_decode(const void *input, size_t size, void *output, size_t 
 	 * Otherwise one EOF must exhaust the input. Lookahead/padding bits are not
 	 * required to be zero by the decoder contract. */
 	if (reader.position != size) {
-		result = take_symbol(&reader, tree, &symbol);
+		result = xpress_take_symbol(&reader, tree, &symbol);
 		if (result != NTFS_OK || symbol != NTFS_XPRESS_END_SYMBOL ||
 		    reader.position != size) {
 			return NTFS_CORRUPT;

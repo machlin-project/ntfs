@@ -169,18 +169,19 @@ recovery_home_bind(
 static bool
 recovery_file_pair(const struct ntfs_write_batch_recovery *owner, size_t ordinal)
 {
-	const struct ntfs_batch_recovery_packet *a, *b;
+	const struct ntfs_batch_recovery_packet *left_packet, *right_packet;
 
 	if (ordinal == owner->first_update) {
 		return false;
 	}
-	a = &owner->packet[ordinal - 1];
-	b = &owner->packet[ordinal];
-	return a->home == b->home && a->update.cluster_index == b->update.cluster_index &&
-	    ((a->update.redo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD &&
-		 a->update.undo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD) ||
-		(a->update.redo_operation == NTFS_LOG_OP_NOOP &&
-		    a->update.undo_operation == NTFS_LOG_OP_DEALLOCATE_FILE_RECORD));
+	left_packet = &owner->packet[ordinal - 1];
+	right_packet = &owner->packet[ordinal];
+	return left_packet->home == right_packet->home &&
+	    left_packet->update.cluster_index == right_packet->update.cluster_index &&
+	    ((left_packet->update.redo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD &&
+		 left_packet->update.undo_operation == NTFS_LOG_OP_INITIALIZE_FILE_RECORD) ||
+		(left_packet->update.redo_operation == NTFS_LOG_OP_NOOP &&
+		    left_packet->update.undo_operation == NTFS_LOG_OP_DEALLOCATE_FILE_RECORD));
 }
 
 static enum ntfs_result

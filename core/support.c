@@ -2,44 +2,44 @@
 #include "internal.h"
 
 uint16_t
-ntfs_u16(const void *p)
+ntfs_u16(const void *input)
 {
-	const uint8_t *b = p;
+	const uint8_t *bytes = input;
 
-	return (uint16_t)(b[0] | (uint16_t)b[1] << NTFS_BITS_PER_BYTE);
+	return (uint16_t)(bytes[0] | (uint16_t)bytes[1] << NTFS_BITS_PER_BYTE);
 }
 
 uint32_t
-ntfs_u32(const void *p)
+ntfs_u32(const void *input)
 {
-	const uint8_t *b = p;
+	const uint8_t *bytes = input;
 
-	return (uint32_t)ntfs_u16(b) |
-	    (uint32_t)ntfs_u16(b + sizeof(uint16_t)) << (sizeof(uint16_t) * NTFS_BITS_PER_BYTE);
+	return (uint32_t)ntfs_u16(bytes) |
+	    (uint32_t)ntfs_u16(bytes + sizeof(uint16_t)) << (sizeof(uint16_t) * NTFS_BITS_PER_BYTE);
 }
 
 uint64_t
-ntfs_u64(const void *p)
+ntfs_u64(const void *input)
 {
-	const uint8_t *b = p;
+	const uint8_t *bytes = input;
 
-	return (uint64_t)ntfs_u32(b) |
-	    (uint64_t)ntfs_u32(b + sizeof(uint32_t)) << (sizeof(uint32_t) * NTFS_BITS_PER_BYTE);
+	return (uint64_t)ntfs_u32(bytes) |
+	    (uint64_t)ntfs_u32(bytes + sizeof(uint32_t)) << (sizeof(uint32_t) * NTFS_BITS_PER_BYTE);
 }
 
 void
-ntfs_put_u16(void *p, uint16_t value)
+ntfs_put_u16(void *output, uint16_t value)
 {
-	uint8_t *bytes = p;
+	uint8_t *bytes = output;
 
 	bytes[0] = (uint8_t)value;
 	bytes[1] = (uint8_t)(value >> NTFS_BITS_PER_BYTE);
 }
 
 void
-ntfs_put_u32(void *p, uint32_t value)
+ntfs_put_u32(void *output, uint32_t value)
 {
-	uint8_t *bytes = p;
+	uint8_t *bytes = output;
 
 	ntfs_put_u16(bytes, (uint16_t)value);
 	ntfs_put_u16(
@@ -47,9 +47,9 @@ ntfs_put_u32(void *p, uint32_t value)
 }
 
 void
-ntfs_put_u64(void *p, uint64_t value)
+ntfs_put_u64(void *output, uint64_t value)
 {
-	uint8_t *bytes = p;
+	uint8_t *bytes = output;
 
 	ntfs_put_u32(bytes, (uint32_t)value);
 	ntfs_put_u32(
@@ -57,36 +57,36 @@ ntfs_put_u64(void *p, uint64_t value)
 }
 
 void
-ntfs_copy(void *to, const void *from, size_t n)
+ntfs_copy(void *destination, const void *source, size_t bytes)
 {
-	uint8_t *d = to;
-	const uint8_t *s = from;
+	uint8_t *destination_bytes = destination;
+	const uint8_t *source_bytes = source;
 	size_t i;
 
-	for (i = 0; i < n; i++) {
-		d[i] = s[i];
+	for (i = 0; i < bytes; i++) {
+		destination_bytes[i] = source_bytes[i];
 	}
 }
 
 void
-ntfs_zero(void *to, size_t n)
+ntfs_zero(void *destination, size_t bytes)
 {
-	uint8_t *d = to;
+	uint8_t *destination_bytes = destination;
 	size_t i;
 
-	for (i = 0; i < n; i++) {
-		d[i] = 0;
+	for (i = 0; i < bytes; i++) {
+		destination_bytes[i] = 0;
 	}
 }
 
 bool
-ntfs_equal(const void *a, const void *b, size_t n)
+ntfs_equal(const void *left, const void *right, size_t bytes)
 {
-	const uint8_t *x = a, *y = b;
+	const uint8_t *left_bytes = left, *right_bytes = right;
 	size_t i;
 
-	for (i = 0; i < n; i++) {
-		if (x[i] != y[i]) {
+	for (i = 0; i < bytes; i++) {
+		if (left_bytes[i] != right_bytes[i]) {
 			return false;
 		}
 	}
@@ -100,75 +100,75 @@ ntfs_bounds(uint64_t offset, uint64_t length, uint64_t size)
 }
 
 static void *
-allocate(struct ntfs_volume *v, size_t n, bool optional)
+volume_allocate(struct ntfs_volume *volume, size_t bytes, bool optional)
 {
-	void *p;
+	void *allocation;
 
-	if (n == 0 || !ntfs_operation_allocate(v, n, optional)) {
+	if (bytes == 0 || !ntfs_operation_allocate(volume, bytes, optional)) {
 		return NULL;
 	}
-	p = v->env.allocate(v->env.context, n);
-	if (p != NULL) {
-		ntfs_operation_allocated(v, n);
-		ntfs_zero(p, n);
+	allocation = volume->env.allocate(volume->env.context, bytes);
+	if (allocation != NULL) {
+		ntfs_operation_allocated(volume, bytes);
+		ntfs_zero(allocation, bytes);
 	}
-	return p;
+	return allocation;
 }
 
 void *
-ntfs_alloc(struct ntfs_volume *v, size_t n)
+ntfs_alloc(struct ntfs_volume *volume, size_t bytes)
 {
-	return allocate(v, n, false);
+	return volume_allocate(volume, bytes, false);
 }
 
 void *
-ntfs_alloc_optional(struct ntfs_volume *v, size_t n)
+ntfs_alloc_optional(struct ntfs_volume *volume, size_t bytes)
 {
-	return allocate(v, n, true);
+	return volume_allocate(volume, bytes, true);
 }
 
 void
-ntfs_free(struct ntfs_volume *v, void *p, size_t n)
+ntfs_free(struct ntfs_volume *volume, void *allocation, size_t bytes)
 {
-	if (p != NULL) {
-		v->live_bytes -= n;
-		v->env.release(v->env.context, p, n);
+	if (allocation != NULL) {
+		volume->live_bytes -= bytes;
+		volume->env.release(volume->env.context, allocation, bytes);
 	}
 }
 
 enum ntfs_result
-ntfs_io(struct ntfs_volume *v, uint64_t offset, void *buffer, size_t size)
+ntfs_io(struct ntfs_volume *volume, uint64_t offset, void *buffer, size_t size)
 {
 	enum ntfs_result result;
 
-	if (!ntfs_bounds(offset, size, v->info.size_bytes)) {
+	if (!ntfs_bounds(offset, size, volume->info.size_bytes)) {
 		return NTFS_CORRUPT;
 	}
 	if (size == 0) {
 		return NTFS_OK;
 	}
-	result = ntfs_operation_read(v, size);
+	result = ntfs_operation_read(volume, size);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	v->stats.read_calls++;
-	v->stats.read_bytes += size;
-	return v->env.read(v->env.context, offset, buffer, size);
+	volume->stats.read_calls++;
+	volume->stats.read_bytes += size;
+	return volume->env.read(volume->env.context, offset, buffer, size);
 }
 
 void
-ntfs_default_limits(struct ntfs_limits *l)
+ntfs_default_limits(struct ntfs_limits *limits)
 {
-	l->max_runs = NTFS_DEFAULT_MAX_RUNS;
-	l->max_attribute_list = NTFS_DEFAULT_MAX_ATTRIBUTE_LIST;
-	l->record_cache_entries = NTFS_DEFAULT_RECORD_CACHE_ENTRIES;
-	l->max_directory_nodes = NTFS_DEFAULT_MAX_DIRECTORY_NODES;
-	l->max_live_bytes = NTFS_DEFAULT_MAX_LIVE_BYTES;
-	ntfs_operation_default_limits(&l->operation);
+	limits->max_runs = NTFS_DEFAULT_MAX_RUNS;
+	limits->max_attribute_list = NTFS_DEFAULT_MAX_ATTRIBUTE_LIST;
+	limits->record_cache_entries = NTFS_DEFAULT_RECORD_CACHE_ENTRIES;
+	limits->max_directory_nodes = NTFS_DEFAULT_MAX_DIRECTORY_NODES;
+	limits->max_live_bytes = NTFS_DEFAULT_MAX_LIVE_BYTES;
+	ntfs_operation_default_limits(&limits->operation);
 }
 
 const char *
-ntfs_result_string(enum ntfs_result r)
+ntfs_result_string(enum ntfs_result result)
 {
 	static const char *const names[] = {"success", "not NTFS", "corrupt metadata",
 	    "unsupported format", "I/O error", "out of memory", "not found", "not a directory",
@@ -176,7 +176,8 @@ ntfs_result_string(enum ntfs_result r)
 	    "read-only filesystem", "volume requires Windows recovery", "end of directory",
 	    "objects still open", "too many symbolic links", "insufficient free space",
 	    "name already exists", "directory is not empty"};
-	return (unsigned)r < sizeof(names) / sizeof(names[0]) ? names[r] : "unknown error";
+	return (unsigned)result < sizeof(names) / sizeof(names[0]) ? names[result]
+								   : "unknown error";
 }
 
 void

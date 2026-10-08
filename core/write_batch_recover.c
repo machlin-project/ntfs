@@ -273,19 +273,29 @@ recovery_publication(struct ntfs_write_batch_recovery *owner, uint64_t physical,
 }
 
 static bool
-recovery_restart_matches(const struct ntfs_logfile_restart *a, const struct ntfs_logfile_restart *b)
+recovery_restart_matches(const struct ntfs_logfile_restart *left_restart,
+    const struct ntfs_logfile_restart *right_restart)
 {
-	return a->current_lsn == b->current_lsn && a->file_bytes == b->file_bytes &&
-	    a->usable_bytes == b->usable_bytes && a->circular_offset == b->circular_offset &&
-	    a->system_page_bytes == b->system_page_bytes &&
-	    a->log_page_bytes == b->log_page_bytes && a->sequence_bits == b->sequence_bits &&
-	    a->last_data_bytes == b->last_data_bytes && a->open_count == b->open_count &&
-	    a->major == b->major && a->minor == b->minor && a->client_count == b->client_count &&
-	    a->free_head == b->free_head && a->in_use_head == b->in_use_head &&
-	    a->record_header_bytes == b->record_header_bytes &&
-	    a->page_data_offset == b->page_data_offset && a->area.offset == b->area.offset &&
-	    a->area.length == b->area.length && a->clients.offset == b->clients.offset &&
-	    a->clients.length == b->clients.length;
+	return left_restart->current_lsn == right_restart->current_lsn &&
+	    left_restart->file_bytes == right_restart->file_bytes &&
+	    left_restart->usable_bytes == right_restart->usable_bytes &&
+	    left_restart->circular_offset == right_restart->circular_offset &&
+	    left_restart->system_page_bytes == right_restart->system_page_bytes &&
+	    left_restart->log_page_bytes == right_restart->log_page_bytes &&
+	    left_restart->sequence_bits == right_restart->sequence_bits &&
+	    left_restart->last_data_bytes == right_restart->last_data_bytes &&
+	    left_restart->open_count == right_restart->open_count &&
+	    left_restart->major == right_restart->major &&
+	    left_restart->minor == right_restart->minor &&
+	    left_restart->client_count == right_restart->client_count &&
+	    left_restart->free_head == right_restart->free_head &&
+	    left_restart->in_use_head == right_restart->in_use_head &&
+	    left_restart->record_header_bytes == right_restart->record_header_bytes &&
+	    left_restart->page_data_offset == right_restart->page_data_offset &&
+	    left_restart->area.offset == right_restart->area.offset &&
+	    left_restart->area.length == right_restart->area.length &&
+	    left_restart->clients.offset == right_restart->clients.offset &&
+	    left_restart->clients.length == right_restart->clients.length;
 }
 
 static enum ntfs_result

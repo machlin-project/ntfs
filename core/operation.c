@@ -19,7 +19,7 @@ ntfs_operation_limits_valid(const struct ntfs_operation_limits *limits)
 }
 
 static enum ntfs_result
-limit_result(enum ntfs_operation_limit limit)
+operation_limit_result(enum ntfs_operation_limit limit)
 {
 	if (limit == NTFS_OPERATION_LIMIT_NONE) {
 		return NTFS_OK;
@@ -32,30 +32,31 @@ limit_result(enum ntfs_operation_limit limit)
 }
 
 static enum ntfs_result
-exhausted(const struct ntfs_volume *volume)
+operation_exhausted(const struct ntfs_volume *volume)
 {
 	const struct ntfs_operation *operation = volume->operation;
 
 	/* Required refusal latches every active ancestor, and begin rejects an
 	 * exhausted parent. The head therefore carries the whole stack's result.
 	 * Admission still preflights every ancestor before committing any credit. */
-	return operation == NULL ? NTFS_OK : limit_result(operation->usage.exhausted);
+	return operation == NULL ? NTFS_OK : operation_limit_result(operation->usage.exhausted);
 }
 
 enum ntfs_result
 ntfs_operation_check(const struct ntfs_volume *volume)
 {
-	return volume == NULL ? NTFS_INVALID : exhausted(volume);
+	return volume == NULL ? NTFS_INVALID : operation_exhausted(volume);
 }
 
 enum ntfs_result
 ntfs_operation_result(const struct ntfs_operation *operation)
 {
-	return operation == NULL ? NTFS_INVALID : limit_result(operation->usage.exhausted);
+	return operation == NULL ? NTFS_INVALID
+				 : operation_limit_result(operation->usage.exhausted);
 }
 
 static enum ntfs_result
-refuse(struct ntfs_volume *volume, enum ntfs_operation_limit limit, bool optional)
+operation_refuse(struct ntfs_volume *volume, enum ntfs_operation_limit limit, bool optional)
 {
 	struct ntfs_operation *operation;
 
@@ -67,7 +68,7 @@ refuse(struct ntfs_volume *volume, enum ntfs_operation_limit limit, bool optiona
 			}
 		}
 	}
-	return limit_result(limit);
+	return operation_limit_result(limit);
 }
 
 void
@@ -115,7 +116,7 @@ ntfs_operation_begin(struct ntfs_volume *volume, const struct ntfs_operation_lim
 	    selected.work > volume->limits.operation.work) {
 		return NTFS_INVALID;
 	}
-	result = exhausted(volume);
+	result = operation_exhausted(volume);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -174,7 +175,7 @@ ntfs_operation_enter(struct ntfs_volume *volume)
 			return result;
 		}
 	}
-	result = exhausted(volume);
+	result = operation_exhausted(volume);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -211,17 +212,17 @@ ntfs_operation_read(struct ntfs_volume *volume, size_t size)
 	struct ntfs_operation *operation;
 	enum ntfs_result result;
 
-	result = exhausted(volume);
+	result = operation_exhausted(volume);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	/* Check every dimension/ancestor before committing any callback credit. */
 	for (operation = volume->operation; operation != NULL; operation = operation->_previous) {
 		if (operation->usage.read_calls == operation->limits.read_calls) {
-			return refuse(volume, NTFS_OPERATION_LIMIT_READ_CALLS, false);
+			return operation_refuse(volume, NTFS_OPERATION_LIMIT_READ_CALLS, false);
 		}
 		if (size > operation->limits.read_bytes - operation->usage.read_bytes) {
-			return refuse(volume, NTFS_OPERATION_LIMIT_READ_BYTES, false);
+			return operation_refuse(volume, NTFS_OPERATION_LIMIT_READ_BYTES, false);
 		}
 	}
 	for (operation = volume->operation; operation != NULL; operation = operation->_previous) {
@@ -236,20 +237,22 @@ ntfs_operation_allocate(struct ntfs_volume *volume, size_t size, bool optional)
 {
 	struct ntfs_operation *operation;
 
-	if (exhausted(volume) != NTFS_OK) {
+	if (operation_exhausted(volume) != NTFS_OK) {
 		return false;
 	}
 	if (size > volume->limits.max_live_bytes - volume->live_bytes) {
-		(void)refuse(volume, NTFS_OPERATION_LIMIT_LIVE_BYTES, optional);
+		(void)operation_refuse(volume, NTFS_OPERATION_LIMIT_LIVE_BYTES, optional);
 		return false;
 	}
 	for (operation = volume->operation; operation != NULL; operation = operation->_previous) {
 		if (operation->usage.allocation_calls == operation->limits.allocation_calls) {
-			(void)refuse(volume, NTFS_OPERATION_LIMIT_ALLOCATION_CALLS, optional);
+			(void)operation_refuse(
+			    volume, NTFS_OPERATION_LIMIT_ALLOCATION_CALLS, optional);
 			return false;
 		}
 		if (size > operation->limits.allocation_bytes - operation->usage.allocation_bytes) {
-			(void)refuse(volume, NTFS_OPERATION_LIMIT_ALLOCATION_BYTES, optional);
+			(void)operation_refuse(
+			    volume, NTFS_OPERATION_LIMIT_ALLOCATION_BYTES, optional);
 			return false;
 		}
 	}
@@ -279,13 +282,13 @@ ntfs_work(struct ntfs_volume *volume, uint64_t count)
 	struct ntfs_operation *operation;
 	enum ntfs_result result;
 
-	result = exhausted(volume);
+	result = operation_exhausted(volume);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	for (operation = volume->operation; operation != NULL; operation = operation->_previous) {
 		if (count > operation->limits.work - operation->usage.work) {
-			return refuse(volume, NTFS_OPERATION_LIMIT_WORK, false);
+			return operation_refuse(volume, NTFS_OPERATION_LIMIT_WORK, false);
 		}
 	}
 	for (operation = volume->operation; operation != NULL; operation = operation->_previous) {

@@ -11,7 +11,7 @@ enum {
 };
 
 static enum ntfs_result
-decode_sid(const uint8_t *bytes, size_t available, struct ntfs_sid *sid, uint32_t *length)
+security_decode_sid(const uint8_t *bytes, size_t available, struct ntfs_sid *sid, uint32_t *length)
 {
 	const struct ntfs_disk_sid *header;
 	size_t size, i;
@@ -55,7 +55,7 @@ ntfs_security_sid_decode(const void *buffer, size_t size, struct ntfs_sid *out)
 	if (buffer == NULL) {
 		return NTFS_INVALID;
 	}
-	result = decode_sid(buffer, size, &sid, &length);
+	result = security_decode_sid(buffer, size, &sid, &length);
 	if (result != NTFS_OK || length != size) {
 		return NTFS_CORRUPT;
 	}
@@ -64,7 +64,7 @@ ntfs_security_sid_decode(const void *buffer, size_t size, struct ntfs_sid *out)
 }
 
 static bool
-object_ace(uint8_t type)
+security_object_ace(uint8_t type)
 {
 	return type == NTFS_ACE_ALLOW_OBJECT || type == NTFS_ACE_DENY_OBJECT ||
 	    type == NTFS_ACE_AUDIT_OBJECT || type == NTFS_ACE_ALLOW_CALLBACK_OBJECT ||
@@ -72,7 +72,7 @@ object_ace(uint8_t type)
 }
 
 static bool
-application_ace(uint8_t type)
+security_application_ace(uint8_t type)
 {
 	return type == NTFS_ACE_ALLOW_CALLBACK || type == NTFS_ACE_DENY_CALLBACK ||
 	    type == NTFS_ACE_AUDIT_CALLBACK || type == NTFS_ACE_ALLOW_CALLBACK_OBJECT ||
@@ -81,11 +81,11 @@ application_ace(uint8_t type)
 }
 
 static bool
-known_ace(uint8_t type)
+security_known_ace(uint8_t type)
 {
-	return object_ace(type) || application_ace(type) || type == NTFS_ACE_ALLOW ||
-	    type == NTFS_ACE_DENY || type == NTFS_ACE_AUDIT || type == NTFS_ACE_MANDATORY_LABEL ||
-	    type == NTFS_ACE_SCOPED_POLICY;
+	return security_object_ace(type) || security_application_ace(type) ||
+	    type == NTFS_ACE_ALLOW || type == NTFS_ACE_DENY || type == NTFS_ACE_AUDIT ||
+	    type == NTFS_ACE_MANDATORY_LABEL || type == NTFS_ACE_SCOPED_POLICY;
 }
 
 enum ntfs_result
@@ -111,7 +111,7 @@ ntfs_security_ace_decode(const void *buffer, size_t size, struct ntfs_ace_info *
 	info.type = header->type;
 	info.flags = header->flags;
 	info.length = (uint16_t)size;
-	info.opaque = !known_ace(info.type);
+	info.opaque = !security_known_ace(info.type);
 	if (info.opaque) {
 		*out = info;
 		return NTFS_OK;
@@ -122,7 +122,7 @@ ntfs_security_ace_decode(const void *buffer, size_t size, struct ntfs_ace_info *
 	}
 	info.mask = ntfs_u32(bytes + position);
 	position += sizeof(info.mask);
-	info.object = object_ace(info.type);
+	info.object = security_object_ace(info.type);
 	if (info.object) {
 		if (!ntfs_bounds(position, sizeof(info.object_flags), size)) {
 			return NTFS_CORRUPT;
@@ -152,12 +152,13 @@ ntfs_security_ace_decode(const void *buffer, size_t size, struct ntfs_ace_info *
 		}
 	}
 	info.sid.offset = (uint32_t)position;
-	result = decode_sid(bytes + position, size - position, &info.trustee, &info.sid.length);
+	result =
+	    security_decode_sid(bytes + position, size - position, &info.trustee, &info.sid.length);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	position += info.sid.length;
-	if (application_ace(info.type)) {
+	if (security_application_ace(info.type)) {
 		info.application =
 		    (struct ntfs_security_span){(uint32_t)position, (uint32_t)(size - position)};
 		info.application_data = info.application.length != 0;
@@ -169,7 +170,7 @@ ntfs_security_ace_decode(const void *buffer, size_t size, struct ntfs_ace_info *
 }
 
 static enum ntfs_result
-decode_acl(
+security_decode_acl(
     const uint8_t *bytes, size_t size, uint32_t offset, bool present, struct ntfs_acl_info *info)
 {
 	const struct ntfs_disk_acl *header;
@@ -258,8 +259,8 @@ ntfs_security_decode(const void *buffer, size_t size, struct ntfs_security_info 
 		if (info.owner_span.offset < sizeof(*header) || info.owner_span.offset > size) {
 			return NTFS_CORRUPT;
 		}
-		result = decode_sid(bytes + info.owner_span.offset, size - info.owner_span.offset,
-		    &info.owner, &info.owner_span.length);
+		result = security_decode_sid(bytes + info.owner_span.offset,
+		    size - info.owner_span.offset, &info.owner, &info.owner_span.length);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -268,16 +269,16 @@ ntfs_security_decode(const void *buffer, size_t size, struct ntfs_security_info 
 		if (info.group_span.offset < sizeof(*header) || info.group_span.offset > size) {
 			return NTFS_CORRUPT;
 		}
-		result = decode_sid(bytes + info.group_span.offset, size - info.group_span.offset,
-		    &info.group, &info.group_span.length);
+		result = security_decode_sid(bytes + info.group_span.offset,
+		    size - info.group_span.offset, &info.group, &info.group_span.length);
 		if (result != NTFS_OK) {
 			return result;
 		}
 	}
-	result = decode_acl(bytes, size, ntfs_u32(header->sacl),
+	result = security_decode_acl(bytes, size, ntfs_u32(header->sacl),
 	    (info.control & NTFS_SD_SACL_PRESENT) != 0, &info.sacl);
 	if (result == NTFS_OK) {
-		result = decode_acl(bytes, size, ntfs_u32(header->dacl),
+		result = security_decode_acl(bytes, size, ntfs_u32(header->dacl),
 		    (info.control & NTFS_SD_DACL_PRESENT) != 0, &info.dacl);
 	}
 	if (result == NTFS_OK) {

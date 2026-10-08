@@ -2,16 +2,18 @@
 #include "write_transaction.h"
 
 static bool
-separate(const void *a, size_t a_bytes, const void *b, size_t b_bytes)
+write_transaction_separate(
+    const void *left_input, size_t a_bytes, const void *right_input, size_t b_bytes)
 {
-	uintptr_t left = (uintptr_t)a, right = (uintptr_t)b;
+	uintptr_t left = (uintptr_t)left_input, right = (uintptr_t)right_input;
 
-	return a != NULL && b != NULL && a_bytes <= UINTPTR_MAX - left &&
+	return left_input != NULL && right_input != NULL && a_bytes <= UINTPTR_MAX - left &&
 	    b_bytes <= UINTPTR_MAX - right && (left + a_bytes <= right || right + b_bytes <= left);
 }
 
 static enum ntfs_result
-settled_plans(struct ntfs_volume *volume, const struct ntfs_write_replay_plan *plans, size_t count)
+write_transaction_settled_plans(
+    struct ntfs_volume *volume, const struct ntfs_write_replay_plan *plans, size_t count)
 {
 	const struct ntfs_write_file_plan *file;
 	const struct ntfs_disk_record *header;
@@ -61,12 +63,12 @@ settled_plans(struct ntfs_volume *volume, const struct ntfs_write_replay_plan *p
 }
 
 static enum ntfs_result
-settled(struct ntfs_volume *volume, const struct ntfs_write_history *history)
+write_transaction_settled(struct ntfs_volume *volume, const struct ntfs_write_history *history)
 {
 	if (history->checkpoint_observed) {
 		return NTFS_UNSUPPORTED;
 	}
-	return settled_plans(volume, history->transaction, history->transactions);
+	return write_transaction_settled_plans(volume, history->transaction, history->transactions);
 }
 
 enum ntfs_result
@@ -80,7 +82,7 @@ ntfs_write_history_settled_plans(
 	}
 	result = ntfs_operation_enter(volume);
 	if (result == NTFS_OK) {
-		result = settled_plans(volume, plans, count);
+		result = write_transaction_settled_plans(volume, plans, count);
 		ntfs_operation_leave(volume);
 	}
 	return result;
@@ -96,15 +98,15 @@ ntfs_write_history_settled(struct ntfs_volume *volume, const struct ntfs_write_h
 	}
 	result = ntfs_operation_enter(volume);
 	if (result == NTFS_OK) {
-		result = settled(volume, history);
+		result = write_transaction_settled(volume, history);
 		ntfs_operation_leave(volume);
 	}
 	return result;
 }
 
 static enum ntfs_result
-prepare(struct ntfs_node *node, uint64_t filetime, uint64_t offset, const void *data,
-    size_t resident_bytes, struct ntfs_write_transaction_workspace *out)
+write_transaction_prepare(struct ntfs_node *node, uint64_t filetime, uint64_t offset,
+    const void *data, size_t resident_bytes, struct ntfs_write_transaction_workspace *out)
 {
 	struct ntfs_volume *volume = node->volume;
 	struct ntfs_node *log_node = NULL;
@@ -127,7 +129,7 @@ prepare(struct ntfs_node *node, uint64_t filetime, uint64_t offset, const void *
 	}
 	result = ntfs_write_history_capture(volume, &out->history_work, &out->history);
 	if (result == NTFS_OK) {
-		result = settled(volume, &out->history);
+		result = write_transaction_settled(volume, &out->history);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -223,15 +225,17 @@ ntfs_write_prepare_transaction(
 {
 	enum ntfs_result result;
 
-	if (node == NULL || out == NULL || !separate(node, sizeof(*node), out, sizeof(*out)) ||
-	    !separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
-	    !separate(node->record, node->volume->info.record_size, out, sizeof(*out))) {
+	if (node == NULL || out == NULL ||
+	    !write_transaction_separate(node, sizeof(*node), out, sizeof(*out)) ||
+	    !write_transaction_separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
+	    !write_transaction_separate(
+		node->record, node->volume->info.record_size, out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
 	result = ntfs_operation_enter(node->volume);
 	if (result == NTFS_OK) {
-		result = prepare(node, filetime, 0, NULL, 0, out);
+		result = write_transaction_prepare(node, filetime, 0, NULL, 0, out);
 		ntfs_operation_leave(node->volume);
 	}
 	if (result != NTFS_OK) {
@@ -247,16 +251,17 @@ ntfs_write_prepare_resident_transaction(struct ntfs_node *node, uint64_t filetim
 	enum ntfs_result result;
 
 	if (node == NULL || data == NULL || bytes == 0 || out == NULL ||
-	    !separate(node, sizeof(*node), out, sizeof(*out)) ||
-	    !separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
-	    !separate(node->record, node->volume->info.record_size, out, sizeof(*out)) ||
-	    !separate(data, bytes, out, sizeof(*out))) {
+	    !write_transaction_separate(node, sizeof(*node), out, sizeof(*out)) ||
+	    !write_transaction_separate(node->volume, sizeof(*node->volume), out, sizeof(*out)) ||
+	    !write_transaction_separate(
+		node->record, node->volume->info.record_size, out, sizeof(*out)) ||
+	    !write_transaction_separate(data, bytes, out, sizeof(*out))) {
 		return NTFS_INVALID;
 	}
 	ntfs_zero(out, sizeof(*out));
 	result = ntfs_operation_enter(node->volume);
 	if (result == NTFS_OK) {
-		result = prepare(node, filetime, offset, data, bytes, out);
+		result = write_transaction_prepare(node, filetime, offset, data, bytes, out);
 		ntfs_operation_leave(node->volume);
 	}
 	if (result != NTFS_OK) {

@@ -15,7 +15,7 @@ struct ntfs_write_batch_execution {
 	bool prepared;
 };
 
-struct batch_execute_workspace {
+struct ntfs_batch_execute_workspace {
 	struct ntfs_write_batch_history history;
 	struct ntfs_write_journal_workspace guard;
 	struct ntfs_validation_report validation;
@@ -23,7 +23,7 @@ struct batch_execute_workspace {
 	uint8_t copy[NTFS_LFS_LEGACY_TAIL_PAGES][NTFS_WRITE_CLUSTER_BYTES];
 };
 
-struct batch_home {
+struct ntfs_batch_home {
 	size_t publication;
 	uint8_t changed_slots;
 };
@@ -102,8 +102,8 @@ ntfs_write_batch_execution_get(const struct ntfs_write_batch_execution *owner, s
 }
 
 static uint8_t *
-publication(struct ntfs_write_batch_execution *owner, size_t index, uint64_t physical,
-    enum ntfs_write_execution_stage stage, bool barrier)
+batch_execution_publication(struct ntfs_write_batch_execution *owner, size_t index,
+    uint64_t physical, enum ntfs_write_execution_stage stage, bool barrier)
 {
 	uint8_t *image = owner->frames + index * NTFS_WRITE_CLUSTER_BYTES;
 
@@ -113,7 +113,7 @@ publication(struct ntfs_write_batch_execution *owner, size_t index, uint64_t phy
 }
 
 static enum ntfs_result
-log_physical(const struct ntfs_stream *log, uint64_t offset, uint64_t *physical)
+batch_execution_log_physical(const struct ntfs_stream *log, uint64_t offset, uint64_t *physical)
 {
 	const struct ntfs_run *run;
 	uint64_t vcn;
@@ -133,8 +133,8 @@ log_physical(const struct ntfs_stream *log, uint64_t offset, uint64_t *physical)
 }
 
 static enum ntfs_result
-prepare_restarts(struct ntfs_write_batch_execution *owner, struct ntfs_stream *log,
-    struct batch_execute_workspace *work)
+batch_execution_prepare_restarts(struct ntfs_write_batch_execution *owner, struct ntfs_stream *log,
+    struct ntfs_batch_execute_workspace *work)
 {
 	struct ntfs_logfile_restart restart;
 	struct ntfs_logfile_client client;
@@ -145,7 +145,8 @@ prepare_restarts(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 	enum ntfs_result result;
 
 	for (index = 0; index < NTFS_LFS_RESTART_PAGES; index++) {
-		result = log_physical(log, index * NTFS_WRITE_CLUSTER_BYTES, &physical);
+		result =
+		    batch_execution_log_physical(log, index * NTFS_WRITE_CLUSTER_BYTES, &physical);
 		if (result == NTFS_OK) {
 			result = batch_read(owner, physical, work->before, sizeof(work->before));
 		}
@@ -182,7 +183,7 @@ prepare_restarts(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 		}
 		area = (void *)(work->image + restart.area.offset);
 		ntfs_put_u16(area->flags, 0);
-		dirty = publication(owner, index, physical,
+		dirty = batch_execution_publication(owner, index, physical,
 		    index == 0 ? NTFS_WRITE_EXECUTION_DIRTY_FIRST
 			       : NTFS_WRITE_EXECUTION_DIRTY_SECOND,
 		    true);
@@ -196,7 +197,8 @@ prepare_restarts(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 			return result;
 		}
 		ntfs_put_u16(area->flags, NTFS_LOGFILE_RESTART_CLEAN);
-		clean = publication(owner, owner->count - NTFS_LFS_RESTART_PAGES + index, physical,
+		clean = batch_execution_publication(owner,
+		    owner->count - NTFS_LFS_RESTART_PAGES + index, physical,
 		    index == 0 ? NTFS_WRITE_EXECUTION_CLEAN_FIRST
 			       : NTFS_WRITE_EXECUTION_CLEAN_SECOND,
 		    true);
@@ -214,8 +216,8 @@ prepare_restarts(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 }
 
 static enum ntfs_result
-prepare_log_page(struct ntfs_write_batch_execution *owner, struct ntfs_stream *log,
-    struct batch_execute_workspace *work, const struct ntfs_write_batch_page *page,
+batch_execution_prepare_log_page(struct ntfs_write_batch_execution *owner, struct ntfs_stream *log,
+    struct ntfs_batch_execute_workspace *work, const struct ntfs_write_batch_page *page,
     size_t page_index, size_t output, bool terminal)
 {
 	uint64_t physical, copy_physical;
@@ -223,11 +225,11 @@ prepare_log_page(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 	size_t slot = page_index % NTFS_LFS_LEGACY_TAIL_PAGES;
 	enum ntfs_result result;
 
-	result = log_physical(log, page->offset, &physical);
+	result = batch_execution_log_physical(log, page->offset, &physical);
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = log_physical(
+	result = batch_execution_log_physical(
 	    log, (NTFS_LFS_RESTART_PAGES + slot) * NTFS_WRITE_CLUSTER_BYTES, &copy_physical);
 	if (result != NTFS_OK) {
 		return result;
@@ -236,9 +238,9 @@ prepare_log_page(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 	if (result != NTFS_OK) {
 		return result;
 	}
-	copy = publication(owner, output, copy_physical,
+	copy = batch_execution_publication(owner, output, copy_physical,
 	    terminal ? NTFS_WRITE_EXECUTION_COMMIT_COPY : NTFS_WRITE_EXECUTION_PREPARE_COPY, true);
-	home = publication(owner, output + 1, physical,
+	home = batch_execution_publication(owner, output + 1, physical,
 	    terminal ? NTFS_WRITE_EXECUTION_COMMIT_HOME : NTFS_WRITE_EXECUTION_PREPARE_HOME, true);
 	ntfs_copy(home, page->protected_bytes, NTFS_WRITE_CLUSTER_BYTES);
 	result = ntfs_write_guard_frame(work->before, sizeof(work->before), home, &work->guard);
@@ -256,10 +258,10 @@ prepare_log_page(struct ntfs_write_batch_execution *owner, struct ntfs_stream *l
 }
 
 static enum ntfs_result
-prepare_homes(struct ntfs_write_batch_execution *owner, const struct ntfs_write_program *program,
-    const struct ntfs_write_batch_pages *pages, const struct ntfs_stream *log,
-    struct batch_execute_workspace *work, struct batch_home *homes, size_t data_start,
-    size_t metadata_start)
+batch_execution_prepare_homes(struct ntfs_write_batch_execution *owner,
+    const struct ntfs_write_program *program, const struct ntfs_write_batch_pages *pages,
+    const struct ntfs_stream *log, struct ntfs_batch_execute_workspace *work,
+    struct ntfs_batch_home *homes, size_t data_start, size_t metadata_start)
 {
 	struct ntfs_write_mutation_region region, primary;
 	const struct ntfs_write_program_update *step;
@@ -302,7 +304,8 @@ prepare_homes(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 		}
 		homes[index].publication =
 		    region.kind == NTFS_WRITE_MUTATION_DATA ? data++ : metadata++;
-		image = publication(owner, homes[index].publication, region.physical,
+		image = batch_execution_publication(owner, homes[index].publication,
+		    region.physical,
 		    region.kind == NTFS_WRITE_MUTATION_DATA ? NTFS_WRITE_EXECUTION_DATA
 							    : NTFS_WRITE_EXECUTION_METADATA_HOME,
 		    region.kind != NTFS_WRITE_MUTATION_DATA);
@@ -440,7 +443,7 @@ prepare_homes(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 }
 
 static enum ntfs_result
-overlay_read(void *context, uint64_t physical, void *memory, size_t bytes)
+batch_execution_overlay_read(void *context, uint64_t physical, void *memory, size_t bytes)
 {
 	struct ntfs_write_batch_execution *owner = context;
 	const struct ntfs_write_batch_publication *home;
@@ -471,7 +474,7 @@ overlay_read(void *context, uint64_t physical, void *memory, size_t bytes)
 }
 
 static enum ntfs_result
-prepare_recovery_capacity(struct ntfs_write_batch_execution *owner,
+batch_execution_prepare_recovery_capacity(struct ntfs_write_batch_execution *owner,
     const struct ntfs_write_program *program, const struct ntfs_write_batch_pages *pages,
     const struct ntfs_logfile_client *client, const struct ntfs_write_batch_pages_input *input,
     size_t retained_packets)
@@ -520,10 +523,11 @@ prepare_recovery_capacity(struct ntfs_write_batch_execution *owner,
 }
 
 static enum ntfs_result
-prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_program *program)
+batch_execution_prepare_batch(
+    struct ntfs_write_batch_execution *owner, const struct ntfs_write_program *program)
 {
-	struct batch_execute_workspace *work = NULL;
-	struct batch_home *homes = NULL;
+	struct ntfs_batch_execute_workspace *work = NULL;
+	struct ntfs_batch_home *homes = NULL;
 	struct ntfs_volume *volume = NULL;
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *log = NULL;
@@ -576,8 +580,8 @@ prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 	result = ntfs_write_program_pages_prepare(
 	    &owner->reader, program, &work->history.client, &window, &pages);
 	if (result == NTFS_OK) {
-		result = prepare_recovery_capacity(owner, program, pages, &work->history.client,
-		    &window, work->history.history.visited_records);
+		result = batch_execution_prepare_recovery_capacity(owner, program, pages,
+		    &work->history.client, &window, work->history.history.visited_records);
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_node_by_number(volume, NTFS_LOGFILE_RECORD, &node);
@@ -616,9 +620,9 @@ prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 	}
 	owner->frames = (void *)(((uintptr_t)owner->allocation + owner->backend.alignment - 1u) &
 	    ~(uintptr_t)(owner->backend.alignment - 1u));
-	result = prepare_restarts(owner, log, work);
+	result = batch_execution_prepare_restarts(owner, log, work);
 	for (index = 0; result == NTFS_OK && index < NTFS_LFS_LEGACY_TAIL_PAGES; index++) {
-		result = log_physical(
+		result = batch_execution_log_physical(
 		    log, (NTFS_LFS_RESTART_PAGES + index) * NTFS_WRITE_CLUSTER_BYTES, &physical);
 		if (result == NTFS_OK) {
 			result = batch_read(
@@ -626,24 +630,24 @@ prepare_batch(struct ntfs_write_batch_execution *owner, const struct ntfs_write_
 		}
 	}
 	for (index = 0; result == NTFS_OK && index + 1 < page_count; index++) {
-		result =
-		    prepare_log_page(owner, log, work, ntfs_write_batch_pages_get(pages, index),
-			index, NTFS_LFS_RESTART_PAGES + 2 * index, false);
+		result = batch_execution_prepare_log_page(owner, log, work,
+		    ntfs_write_batch_pages_get(pages, index), index,
+		    NTFS_LFS_RESTART_PAGES + 2 * index, false);
 	}
 	data_start = NTFS_LFS_RESTART_PAGES + 2 * (page_count - 1);
 	metadata_start = data_start + data_count + 2;
 	if (result == NTFS_OK) {
-		result = prepare_log_page(owner, log, work,
+		result = batch_execution_prepare_log_page(owner, log, work,
 		    ntfs_write_batch_pages_get(pages, page_count - 1), page_count - 1,
 		    data_start + data_count, true);
 	}
 	if (result == NTFS_OK) {
-		result = prepare_homes(
+		result = batch_execution_prepare_homes(
 		    owner, program, pages, log, work, homes, data_start, metadata_start);
 	}
 	if (result == NTFS_OK) {
 		overlay = owner->reader;
-		overlay.read = overlay_read;
+		overlay.read = batch_execution_overlay_read;
 		result = ntfs_validate(&overlay, &limits, NULL, &work->validation);
 		if (result == NTFS_OK && !work->validation.complete) {
 			result = NTFS_CORRUPT;
@@ -696,7 +700,7 @@ ntfs_write_batch_execute_prepare(const struct ntfs_overwrite_environment *backen
 	owner->live = sizeof(*owner);
 	owner->reader = (struct ntfs_environment){NTFS_API_VERSION, owner,
 	    backend->reader.size_bytes, batch_read, batch_allocate, batch_release};
-	result = prepare_batch(owner, program);
+	result = batch_execution_prepare_batch(owner, program);
 	if (result != NTFS_OK) {
 		ntfs_write_batch_execution_close(owner);
 		return result;
@@ -707,7 +711,8 @@ ntfs_write_batch_execute_prepare(const struct ntfs_overwrite_environment *backen
 }
 
 static bool
-output_separate(const struct ntfs_write_batch_execution *owner, const void *out, size_t bytes)
+batch_execution_output_separate(
+    const struct ntfs_write_batch_execution *owner, const void *out, size_t bytes)
 {
 	return ntfs_pointer_ranges_separate(owner, sizeof(*owner), out, bytes) &&
 	    ntfs_pointer_ranges_separate(
@@ -724,8 +729,8 @@ ntfs_write_batch_execute(struct ntfs_write_batch_execution *owner, bool *poisone
 	enum ntfs_result result = NTFS_OK;
 
 	if (owner == NULL || poisoned == NULL || report == NULL ||
-	    !output_separate(owner, poisoned, sizeof(*poisoned)) ||
-	    !output_separate(owner, report, sizeof(*report)) ||
+	    !batch_execution_output_separate(owner, poisoned, sizeof(*poisoned)) ||
+	    !batch_execution_output_separate(owner, report, sizeof(*report)) ||
 	    !ntfs_pointer_ranges_separate(poisoned, sizeof(*poisoned), report, sizeof(*report))) {
 		return NTFS_INVALID;
 	}

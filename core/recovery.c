@@ -17,7 +17,7 @@ struct ntfs_recovery {
 	uint32_t record_count, transaction_count, history_size;
 };
 
-struct recovery_work {
+struct ntfs_recovery_workspace {
 	struct ntfs_recovery *owner;
 	struct ntfs_recovery_report *report;
 };
@@ -43,7 +43,7 @@ ntfs_recovery_default_limits(struct ntfs_recovery_limits *limits)
 }
 
 static bool
-valid_limits(const struct ntfs_recovery_limits *limits)
+recovery_valid_limits(const struct ntfs_recovery_limits *limits)
 {
 	return limits->max_records != 0 && limits->max_records <= NTFS_RECOVERY_MAX_RECORDS &&
 	    limits->max_history_bytes != 0 &&
@@ -53,7 +53,7 @@ valid_limits(const struct ntfs_recovery_limits *limits)
 }
 
 static void
-release(struct ntfs_recovery *owner, void *bytes, size_t size)
+recovery_release(struct ntfs_recovery *owner, void *bytes, size_t size)
 {
 	if (bytes != NULL) {
 		owner->environment.release(owner->environment.context, bytes, size);
@@ -73,11 +73,11 @@ ntfs_recovery_close(struct ntfs_recovery *owner)
 	environment = owner->environment;
 	backing = owner->backing;
 	count = owner->limits.max_records;
-	release(owner, owner->records, count * sizeof(*owner->records));
-	release(owner, owner->transactions, count * sizeof(*owner->transactions));
-	release(owner, owner->slots, count * sizeof(*owner->slots));
-	release(owner, owner->checkpoint_bytes, NTFS_LOGFILE_CHECKPOINT_MAX_BYTES);
-	release(owner, owner->history_bytes, owner->limits.max_history_bytes);
+	recovery_release(owner, owner->records, count * sizeof(*owner->records));
+	recovery_release(owner, owner->transactions, count * sizeof(*owner->transactions));
+	recovery_release(owner, owner->slots, count * sizeof(*owner->slots));
+	recovery_release(owner, owner->checkpoint_bytes, NTFS_LOGFILE_CHECKPOINT_MAX_BYTES);
+	recovery_release(owner, owner->history_bytes, owner->limits.max_history_bytes);
 	environment.release(environment.context, owner, sizeof(*owner));
 	if (backing != NULL) {
 		backing->children--;
@@ -85,7 +85,7 @@ ntfs_recovery_close(struct ntfs_recovery *owner)
 }
 
 static uint32_t
-find_record(const struct ntfs_recovery *owner, uint64_t lsn)
+recovery_find_record(const struct ntfs_recovery *owner, uint64_t lsn)
 {
 	uint32_t low = 0, high = owner->record_count, middle;
 
@@ -103,8 +103,8 @@ find_record(const struct ntfs_recovery *owner, uint64_t lsn)
 }
 
 static enum ntfs_result
-checkpoint_dump_flag(const struct ntfs_recovery *owner, const struct ntfs_logfile_record *record,
-    const struct ntfs_logfile_update *update)
+recovery_checkpoint_dump_flag(const struct ntfs_recovery *owner,
+    const struct ntfs_logfile_record *record, const struct ntfs_logfile_update *update)
 {
 	enum ntfs_logfile_checkpoint_kind kind;
 	uint16_t operation;
@@ -123,9 +123,10 @@ checkpoint_dump_flag(const struct ntfs_recovery *owner, const struct ntfs_logfil
 }
 
 static enum ntfs_result
-retain_record(void *context, const struct ntfs_logfile_record_view *view, const void *bytes)
+recovery_retain_record(
+    void *context, const struct ntfs_logfile_record_view *view, const void *bytes)
 {
-	struct recovery_work *work = context;
+	struct ntfs_recovery_workspace *work = context;
 	struct ntfs_recovery *owner = work->owner;
 	const struct ntfs_logfile_record *record = &view->record;
 	struct ntfs_recovery_record *retained;
@@ -145,7 +146,7 @@ retain_record(void *context, const struct ntfs_logfile_record_view *view, const 
 		if ((record->flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) != 0 &&
 		    ((record->flags & ~NTFS_LOGFILE_RECORD_MULTI_PAGE) !=
 			    RECOVERY_CHECKPOINT_DUMP_FLAG ||
-			checkpoint_dump_flag(owner, record, &update) != NTFS_OK)) {
+			recovery_checkpoint_dump_flag(owner, record, &update) != NTFS_OK)) {
 			return NTFS_UNSUPPORTED;
 		}
 	} else if (record->type != NTFS_LOGFILE_RECORD_RESTART) {
@@ -169,7 +170,7 @@ retain_record(void *context, const struct ntfs_logfile_record_view *view, const 
 }
 
 static enum ntfs_result
-bind_packet(const struct ntfs_recovery *owner, struct ntfs_logfile_span span)
+recovery_bind_packet(const struct ntfs_recovery *owner, struct ntfs_logfile_span span)
 {
 	const struct ntfs_disk_log_record *header;
 	const struct ntfs_recovery_record *record;
@@ -179,7 +180,7 @@ bind_packet(const struct ntfs_recovery *owner, struct ntfs_logfile_span span)
 		return NTFS_OK;
 	}
 	header = (const void *)(owner->checkpoint_bytes + span.offset);
-	ordinal = find_record(owner, ntfs_u64(header->lsn));
+	ordinal = recovery_find_record(owner, ntfs_u64(header->lsn));
 	if (ordinal == NTFS_RECOVERY_NO_EPOCH) {
 		return NTFS_STALE;
 	}
@@ -191,7 +192,7 @@ bind_packet(const struct ntfs_recovery *owner, struct ntfs_logfile_span span)
 }
 
 static bool
-independent_operation(uint16_t operation)
+recovery_independent_operation(uint16_t operation)
 {
 	return operation == NTFS_LOG_OP_NOOP ||
 	    operation == NTFS_LOG_OP_OPEN_ATTRIBUTE_TABLE_DUMP ||
@@ -201,7 +202,7 @@ independent_operation(uint16_t operation)
 }
 
 static enum ntfs_result
-transaction_slot(const struct ntfs_recovery *owner, uint32_t key, uint32_t *slot)
+recovery_transaction_slot(const struct ntfs_recovery *owner, uint32_t key, uint32_t *slot)
 {
 	uint32_t relative;
 
@@ -217,7 +218,7 @@ transaction_slot(const struct ntfs_recovery *owner, uint32_t key, uint32_t *slot
 }
 
 static enum ntfs_result
-advance_transaction(struct ntfs_recovery_transaction *transaction,
+recovery_advance_transaction(struct ntfs_recovery_transaction *transaction,
     const struct ntfs_logfile_record *record, const struct ntfs_logfile_update *update)
 {
 	if (transaction->records != 0 &&
@@ -259,7 +260,7 @@ advance_transaction(struct ntfs_recovery_transaction *transaction,
 }
 
 static enum ntfs_result
-analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *report)
+recovery_analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *report)
 {
 	struct ntfs_recovery_record *packet;
 	struct ntfs_recovery_transaction *transaction;
@@ -283,7 +284,7 @@ analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *r
 		if (result != NTFS_OK) {
 			return result;
 		}
-		if (independent_operation(update.redo_operation) &&
+		if (recovery_independent_operation(update.redo_operation) &&
 		    (update.redo_operation != NTFS_LOG_OP_NOOP || record->transaction == 0)) {
 			/* Checkpoint packets have their own framing, not transaction edges. */
 			continue;
@@ -291,7 +292,7 @@ analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *r
 		if (record->transaction == 0) {
 			return NTFS_UNSUPPORTED;
 		}
-		result = transaction_slot(owner, record->transaction, &slot);
+		result = recovery_transaction_slot(owner, record->transaction, &slot);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -320,7 +321,7 @@ analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *r
 			}
 		}
 		if (record->undo_next_lsn != 0) {
-			undo = find_record(owner, record->undo_next_lsn);
+			undo = recovery_find_record(owner, record->undo_next_lsn);
 			if (undo == NTFS_RECOVERY_NO_EPOCH) {
 				if (transaction->complete_chain ||
 				    record->undo_next_lsn >= owner->checkpoint.client.oldest_lsn) {
@@ -332,7 +333,7 @@ analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *r
 			}
 		}
 		packet->transaction_epoch = epoch;
-		result = advance_transaction(transaction, record, &update);
+		result = recovery_advance_transaction(transaction, record, &update);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -365,7 +366,7 @@ analyze_transactions(struct ntfs_recovery *owner, struct ntfs_recovery_report *r
 }
 
 static enum ntfs_result
-verify_seeds(const struct ntfs_recovery *owner, struct ntfs_recovery_report *report)
+recovery_verify_seeds(const struct ntfs_recovery *owner, struct ntfs_recovery_report *report)
 {
 	const struct ntfs_logfile_checkpoint_table *table;
 	const struct ntfs_recovery_record *packet;
@@ -403,7 +404,7 @@ verify_seeds(const struct ntfs_recovery *owner, struct ntfs_recovery_report *rep
 			report->verified_seeds++;
 			continue;
 		}
-		ordinal = find_record(owner, seed.previous_lsn);
+		ordinal = recovery_find_record(owner, seed.previous_lsn);
 		if (ordinal == NTFS_RECOVERY_NO_EPOCH || seed.previous_lsn >= table->table_lsn) {
 			return NTFS_STALE;
 		}
@@ -417,7 +418,7 @@ verify_seeds(const struct ntfs_recovery *owner, struct ntfs_recovery_report *rep
 			return NTFS_CORRUPT;
 		}
 		if (seed.undo_next_lsn != 0) {
-			undo = find_record(owner, seed.undo_next_lsn);
+			undo = recovery_find_record(owner, seed.undo_next_lsn);
 			if (undo == NTFS_RECOVERY_NO_EPOCH || undo > ordinal ||
 			    owner->records[undo].transaction_epoch != packet->transaction_epoch) {
 				return NTFS_CORRUPT;
@@ -440,7 +441,7 @@ ntfs_recovery_open(struct ntfs_logfile *source, uint16_t index, uint16_t sequenc
 	struct ntfs_logfile_lsn location;
 	struct ntfs_recovery *owner;
 	struct ntfs_volume *backing;
-	struct recovery_work work;
+	struct ntfs_recovery_workspace work;
 	uint8_t *staging = NULL, *names = NULL;
 	uint64_t reserved, retained;
 	size_t records;
@@ -462,7 +463,7 @@ ntfs_recovery_open(struct ntfs_logfile *source, uint16_t index, uint16_t sequenc
 	} else {
 		policy = *limits;
 	}
-	if (!valid_limits(&policy)) {
+	if (!recovery_valid_limits(&policy)) {
 		return NTFS_INVALID;
 	}
 	result = ntfs_logfile_environment(source, &environment, &source_limits, &backing);
@@ -547,10 +548,10 @@ ntfs_recovery_open(struct ntfs_logfile *source, uint16_t index, uint16_t sequenc
 	}
 	budget.max_read_calls -= report->read_calls;
 	budget.max_read_bytes -= report->read_bytes;
-	work = (struct recovery_work){owner, report};
+	work = (struct ntfs_recovery_workspace){owner, report};
 	result = ntfs_logfile_visit_records_limited(source, owner->checkpoint.client.oldest_lsn,
-	    policy.max_records, &budget, staging, RECOVERY_STAGE_BYTES, retain_record, &work,
-	    &report->history);
+	    policy.max_records, &budget, staging, RECOVERY_STAGE_BYTES, recovery_retain_record,
+	    &work, &report->history);
 	report->read_calls += report->history.read_calls;
 	report->read_bytes += report->history.read_bytes;
 	if (result != NTFS_OK) {
@@ -560,23 +561,24 @@ ntfs_recovery_open(struct ntfs_logfile *source, uint16_t index, uint16_t sequenc
 		result = NTFS_UNSUPPORTED;
 		goto done;
 	}
-	if (find_record(owner, owner->checkpoint.restart.analysis_lsn) == NTFS_RECOVERY_NO_EPOCH) {
+	if (recovery_find_record(owner, owner->checkpoint.restart.analysis_lsn) ==
+	    NTFS_RECOVERY_NO_EPOCH) {
 		result = NTFS_STALE;
 		goto done;
 	}
-	result = bind_packet(owner, owner->checkpoint.checkpoint);
+	result = recovery_bind_packet(owner, owner->checkpoint.checkpoint);
 	for (kind = 0; result == NTFS_OK && kind < NTFS_LOGFILE_CHECKPOINT_KINDS; kind++) {
-		result = bind_packet(owner, owner->checkpoint.dumps[kind]);
+		result = recovery_bind_packet(owner, owner->checkpoint.dumps[kind]);
 	}
 	if (result == NTFS_OK) {
-		result = analyze_transactions(owner, report);
+		result = recovery_analyze_transactions(owner, report);
 	}
 	if (result == NTFS_OK) {
-		result = verify_seeds(owner, report);
+		result = recovery_verify_seeds(owner, report);
 	}
 done:
-	release(owner, staging, RECOVERY_STAGE_BYTES);
-	release(owner, names, NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES);
+	recovery_release(owner, staging, RECOVERY_STAGE_BYTES);
+	recovery_release(owner, names, NTFS_LOGFILE_CHECKPOINT_NAME_WORKSPACE_BYTES);
 	if (result != NTFS_OK) {
 		ntfs_recovery_close(owner);
 		return result;

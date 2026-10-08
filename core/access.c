@@ -13,7 +13,7 @@ enum { OWNER_RIGHTS_AUTHORITY = 3, OWNER_RIGHTS_RID = 4 };
 	(NTFS_ACE_OBJECT_INHERIT | NTFS_ACE_CONTAINER_INHERIT | NTFS_ACE_NO_PROPAGATE |            \
 	    NTFS_ACE_INHERITED)
 
-struct dacl_work {
+struct ntfs_dacl_work {
 	const struct ntfs_access_token *token;
 	struct ntfs_volume *volume;
 	uint32_t comparisons, maximum;
@@ -51,25 +51,25 @@ ntfs_dacl_default_limits(struct ntfs_dacl_limits *limits)
 }
 
 static bool
-valid_sid(const struct ntfs_sid *sid)
+access_valid_sid(const struct ntfs_sid *sid)
 {
 	return sid->authority <= SID_AUTHORITY_MAX && sid->count <= NTFS_SID_MAX_SUBAUTHORITIES;
 }
 
 static bool
-owner_rights_sid(const struct ntfs_sid *sid)
+access_owner_rights_sid(const struct ntfs_sid *sid)
 {
 	return sid->authority == OWNER_RIGHTS_AUTHORITY && sid->count == 1 &&
 	    sid->subauthorities[0] == OWNER_RIGHTS_RID;
 }
 
 static enum ntfs_result
-validate_token(const struct ntfs_access_token *token, const struct ntfs_dacl_limits *limits)
+access_validate_token(const struct ntfs_access_token *token, const struct ntfs_dacl_limits *limits)
 {
 	size_t i;
 	uint32_t flags;
 
-	if (token == NULL || !valid_sid(&token->user) ||
+	if (token == NULL || !access_valid_sid(&token->user) ||
 	    (token->group_count != 0 && token->groups == NULL) ||
 	    (token->restricting_count != 0 && token->restricting == NULL) ||
 	    (!token->restricted && token->restricting_count != 0)) {
@@ -80,7 +80,7 @@ validate_token(const struct ntfs_access_token *token, const struct ntfs_dacl_lim
 	}
 	for (i = 0; i < token->group_count; i++) {
 		flags = token->groups[i].attributes;
-		if (!valid_sid(&token->groups[i].sid) ||
+		if (!access_valid_sid(&token->groups[i].sid) ||
 		    (flags & (NTFS_GROUP_ENABLED | NTFS_GROUP_DENY_ONLY)) ==
 			(NTFS_GROUP_ENABLED | NTFS_GROUP_DENY_ONLY)) {
 			return NTFS_INVALID;
@@ -90,7 +90,7 @@ validate_token(const struct ntfs_access_token *token, const struct ntfs_dacl_lim
 		}
 	}
 	for (i = 0; i < token->restricting_count; i++) {
-		if (!valid_sid(&token->restricting[i])) {
+		if (!access_valid_sid(&token->restricting[i])) {
 			return NTFS_INVALID;
 		}
 	}
@@ -98,7 +98,8 @@ validate_token(const struct ntfs_access_token *token, const struct ntfs_dacl_lim
 }
 
 static enum ntfs_result
-compare_sid(struct dacl_work *work, const struct ntfs_sid *a, const struct ntfs_sid *b, bool *same)
+access_compare_sid(struct ntfs_dacl_work *work, const struct ntfs_sid *left_sid,
+    const struct ntfs_sid *right_sid, bool *same)
 {
 	size_t i;
 	enum ntfs_result result;
@@ -114,11 +115,11 @@ compare_sid(struct dacl_work *work, const struct ntfs_sid *a, const struct ntfs_
 		}
 	}
 	work->comparisons++;
-	if (a->authority != b->authority || a->count != b->count) {
+	if (left_sid->authority != right_sid->authority || left_sid->count != right_sid->count) {
 		return NTFS_OK;
 	}
-	for (i = 0; i < a->count; i++) {
-		if (a->subauthorities[i] != b->subauthorities[i]) {
+	for (i = 0; i < left_sid->count; i++) {
+		if (left_sid->subauthorities[i] != right_sid->subauthorities[i]) {
 			return NTFS_OK;
 		}
 	}
@@ -127,8 +128,8 @@ compare_sid(struct dacl_work *work, const struct ntfs_sid *a, const struct ntfs_
 }
 
 static enum ntfs_result
-token_match(struct dacl_work *work, const struct ntfs_sid *sid, bool deny, bool ownership,
-    bool restricting, bool *match)
+access_token_match(struct ntfs_dacl_work *work, const struct ntfs_sid *sid, bool deny,
+    bool ownership, bool restricting, bool *match)
 {
 	const struct ntfs_access_token *token = work->token;
 	uint32_t flags;
@@ -138,7 +139,7 @@ token_match(struct dacl_work *work, const struct ntfs_sid *sid, bool deny, bool 
 	*match = false;
 	if (restricting) {
 		for (i = 0; i < token->restricting_count; i++) {
-			result = compare_sid(work, sid, &token->restricting[i], match);
+			result = access_compare_sid(work, sid, &token->restricting[i], match);
 			if (result != NTFS_OK || *match) {
 				return result;
 			}
@@ -146,7 +147,7 @@ token_match(struct dacl_work *work, const struct ntfs_sid *sid, bool deny, bool 
 		return NTFS_OK;
 	}
 	if (deny || !token->user_deny_only) {
-		result = compare_sid(work, sid, &token->user, match);
+		result = access_compare_sid(work, sid, &token->user, match);
 		if (result != NTFS_OK || *match) {
 			return result;
 		}
@@ -162,7 +163,7 @@ token_match(struct dacl_work *work, const struct ntfs_sid *sid, bool deny, bool 
 			(NTFS_GROUP_OWNER | NTFS_GROUP_ENABLED)) {
 			continue;
 		}
-		result = compare_sid(work, sid, &token->groups[i].sid, match);
+		result = access_compare_sid(work, sid, &token->groups[i].sid, match);
 		if (result != NTFS_OK || *match) {
 			return result;
 		}
@@ -172,7 +173,7 @@ token_match(struct dacl_work *work, const struct ntfs_sid *sid, bool deny, bool 
 
 /* Called only after the complete descriptor decoder has checked every span. */
 static enum ntfs_result
-next_ace(const uint8_t *bytes, size_t *position, struct ntfs_ace_info *ace)
+access_next_ace(const uint8_t *bytes, size_t *position, struct ntfs_ace_info *ace)
 {
 	const struct ntfs_disk_ace *header = (const void *)(bytes + *position);
 	enum ntfs_result result;
@@ -185,7 +186,7 @@ next_ace(const uint8_t *bytes, size_t *position, struct ntfs_ace_info *ace)
 }
 
 static enum ntfs_result
-validate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, bool *owner_rights)
+access_validate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, bool *owner_rights)
 {
 	struct ntfs_ace_info ace;
 	size_t position = acl->span.offset + sizeof(struct ntfs_disk_acl), i;
@@ -193,7 +194,7 @@ validate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, bool *owner
 
 	*owner_rights = false;
 	for (i = 0; i < acl->entries; i++) {
-		result = next_ace(bytes, &position, &ace);
+		result = access_next_ace(bytes, &position, &ace);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -208,14 +209,14 @@ validate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, bool *owner
 			 * access the original descriptor did not specify. */
 			return NTFS_UNSUPPORTED;
 		}
-		*owner_rights |= owner_rights_sid(&ace.trustee);
+		*owner_rights |= access_owner_rights_sid(&ace.trustee);
 	}
 	return NTFS_OK;
 }
 
 static enum ntfs_result
-evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, struct dacl_work *work,
-    uint32_t requested, bool owner, bool restricting, bool *allowed)
+access_evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl,
+    struct ntfs_dacl_work *work, uint32_t requested, bool owner, bool restricting, bool *allowed)
 {
 	struct ntfs_ace_info ace;
 	size_t position = acl->span.offset + sizeof(struct ntfs_disk_acl), i;
@@ -229,7 +230,7 @@ evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, struct dacl
 		return NTFS_OK;
 	}
 	for (i = 0; i < acl->entries && remaining != 0; i++) {
-		result = next_ace(bytes, &position, &ace);
+		result = access_next_ace(bytes, &position, &ace);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -240,11 +241,11 @@ evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl, struct dacl
 		if ((mask & remaining) == 0) {
 			continue;
 		}
-		if (owner_rights_sid(&ace.trustee)) {
+		if (access_owner_rights_sid(&ace.trustee)) {
 			match = owner;
 		} else {
-			result = token_match(work, &ace.trustee, ace.type == NTFS_ACE_DENY, false,
-			    restricting, &match);
+			result = access_token_match(work, &ace.trustee, ace.type == NTFS_ACE_DENY,
+			    false, restricting, &match);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -268,7 +269,7 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 {
 	struct ntfs_security_info info;
 	struct ntfs_dacl_limits defaults;
-	struct dacl_work work = {.token = token, .volume = volume};
+	struct ntfs_dacl_work work = {.token = token, .volume = volume};
 	struct ntfs_dacl_decision decision = {0};
 	uint32_t remaining;
 	bool owner, owner_rights;
@@ -287,7 +288,7 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	    limits->max_sid_comparisons > NTFS_ACCESS_MAX_COMPARISONS) {
 		return NTFS_INVALID;
 	}
-	result = validate_token(token, limits);
+	result = access_validate_token(token, limits);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -310,12 +311,12 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	if (info.owner_span.length == 0 || info.group_span.length == 0) {
 		return NTFS_CORRUPT;
 	}
-	result = validate_dacl(buffer, &info.dacl, &owner_rights);
+	result = access_validate_dacl(buffer, &info.dacl, &owner_rights);
 	if (result != NTFS_OK) {
 		return result;
 	}
 	work.maximum = limits->max_sid_comparisons;
-	result = token_match(&work, &info.owner, false, true, false, &owner);
+	result = access_token_match(&work, &info.owner, false, true, false, &owner);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -329,10 +330,10 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	if (owner && !owner_rights) {
 		remaining &= ~OWNER_IMPLIED_ACCESS;
 	}
-	result =
-	    evaluate_dacl(buffer, &info.dacl, &work, remaining, owner, false, &decision.allowed);
+	result = access_evaluate_dacl(
+	    buffer, &info.dacl, &work, remaining, owner, false, &decision.allowed);
 	if (result == NTFS_OK && decision.allowed && token->restricted) {
-		result = evaluate_dacl(
+		result = access_evaluate_dacl(
 		    buffer, &info.dacl, &work, remaining, false, true, &decision.allowed);
 	}
 	if (result != NTFS_OK) {

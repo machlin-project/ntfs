@@ -1,6 +1,21 @@
 # Handoff to Sol
 
-The current large batch adds 264 actual current-C growth recoveries: 181 MFT and
+The requested driver refactoring is complete. Main accepts the whole-source
+equivalence review and one complete local/native boundary: 202 fatal-sanitizer
+C suites, 45 byte-identical images, 152 strict dual-architecture objects,
+64 host FSKit PASS with 13 explicit runtime SKIPs, and all 81 current-code
+native component groups with zero SKIPs. Sol prepares only the exact current
+standalone tool; Luna runs the component test once through the CLI harness.
+All 883 frozen fixture files, mutation source and tool bytes remain unchanged.
+The universal unsigned app is built and uninstalled; installed signed build 19
+retains its previous mounted/Windows acceptance. No lifecycle, GUI, mount or
+application update occurs. macOS ownership returns to main idle. Current
+source/map and evidence are in [REFACTORING.md](REFACTORING.md) and
+`artifacts/overwrite/refactor-completion-final-review-20261008/result.json`.
+Preserve the first parser refusal: it issues no VM command. The native stage
+subsequently completes once with the correct argument list.
+
+The preceding growth batch adds 264 actual current-C growth recoveries: 181 MFT and
 83 index states, all with full validation and quiet fresh reopen. The preceding
 891 operations are reused, not rerun. All 32 preselected unrecovered native inputs
 have independent whole-crash/container byte oracles. Main accepts the input and

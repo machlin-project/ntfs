@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #import "NTFSNames.h"
+#include "NTFSWireBytes.h"
 #include <string.h>
 
 enum {
@@ -12,26 +13,16 @@ enum {
 
 static const char aliasPrefix[] = "~ntfs-";
 
-struct names_header {
+struct ntfs_native_names_manifest_header {
 	uint8_t magic[8], version[4], count[4], reference[8];
 };
 
-struct names_entry {
+struct ntfs_native_names_manifest_entry {
 	uint8_t ordinal[4], reference[8], units[2], name_namespace, reserved;
 };
 
-_Static_assert(sizeof(struct names_header) == 24, "native names header");
-_Static_assert(sizeof(struct names_entry) == 16, "native names entry");
-
-static void
-store_little(uint8_t *bytes, size_t width, uint64_t value)
-{
-	size_t i;
-
-	for (i = 0; i < width; i++) {
-		bytes[i] = (uint8_t)(value >> (i * CHAR_BIT));
-	}
-}
+_Static_assert(sizeof(struct ntfs_native_names_manifest_header) == 24, "native names header");
+_Static_assert(sizeof(struct ntfs_native_names_manifest_entry) == 16, "native names entry");
 
 BOOL
 ntfs_native_entry_visible(const struct ntfs_dirent *entry)
@@ -51,7 +42,7 @@ ntfs_native_name_reserved(FSFileName *name)
 }
 
 static BOOL
-valid_stored_name(const struct ntfs_dirent *entry)
+native_name_valid_stored_name(const struct ntfs_dirent *entry)
 {
 	size_t i;
 
@@ -80,7 +71,7 @@ ntfs_native_entry_name(
 	if (ordinal >= NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT) {
 		return NTFS_RANGE;
 	}
-	if (!valid_stored_name(entry)) {
+	if (!native_name_valid_stored_name(entry)) {
 		return NTFS_CORRUPT;
 	}
 	reserved = entry->name[0] == '~' ||
@@ -100,20 +91,20 @@ ntfs_native_entry_name(
 }
 
 static uint8_t
-ascii_lower(uint8_t byte)
+native_name_ascii_lower(uint8_t byte)
 {
 	return byte >= 'A' && byte <= 'Z' ? (uint8_t)(byte - 'A' + 'a') : byte;
 }
 
 static BOOL
-parse_hex(const uint8_t *bytes, size_t digits, uint64_t *out)
+native_name_parse_hex(const uint8_t *bytes, size_t digits, uint64_t *out)
 {
 	size_t i;
 	uint8_t byte, digit;
 	uint64_t value = 0;
 
 	for (i = 0; i < digits; i++) {
-		byte = ascii_lower(bytes[i]);
+		byte = native_name_ascii_lower(bytes[i]);
 		if (byte >= '0' && byte <= '9') {
 			digit = byte - '0';
 		} else if (byte >= 'a' && byte <= 'f') {
@@ -142,16 +133,16 @@ ntfs_native_alias_parse(FSFileName *name, uint64_t *reference, uint32_t *ordinal
 		return NO;
 	}
 	for (i = 0; i < position; i++) {
-		if (ascii_lower(bytes[i]) != (uint8_t)aliasPrefix[i]) {
+		if (native_name_ascii_lower(bytes[i]) != (uint8_t)aliasPrefix[i]) {
 			return NO;
 		}
 	}
-	if (!parse_hex(bytes + position, NTFS_NATIVE_REFERENCE_DIGITS, reference)) {
+	if (!native_name_parse_hex(bytes + position, NTFS_NATIVE_REFERENCE_DIGITS, reference)) {
 		return NO;
 	}
 	position += NTFS_NATIVE_REFERENCE_DIGITS;
 	if (bytes[position++] != '-' ||
-	    !parse_hex(bytes + position, NTFS_NATIVE_ORDINAL_DIGITS, &index) ||
+	    !native_name_parse_hex(bytes + position, NTFS_NATIVE_ORDINAL_DIGITS, &index) ||
 	    index >= NTFS_FSKIT_DIRECTORY_ENTRY_LIMIT ||
 	    *reference >> NTFS_REFERENCE_SEQUENCE_SHIFT == 0) {
 		*reference = 0;
@@ -204,8 +195,8 @@ ntfs_native_names_manifest(struct ntfs_node *node, uint64_t reference, uint32_t 
 {
 	struct ntfs_directory *cursor = NULL;
 	struct ntfs_dirent entry;
-	struct names_header header = {0};
-	struct names_entry wire = {0};
+	struct ntfs_native_names_manifest_header header = {0};
+	struct ntfs_native_names_manifest_entry wire = {0};
 	uint8_t unit[sizeof(uint16_t)];
 	uint32_t seen = 0, count = 0;
 	size_t i, size;
@@ -234,7 +225,7 @@ ntfs_native_names_manifest(struct ntfs_node *node, uint64_t reference, uint32_t 
 			break;
 		}
 		if (ntfs_native_entry_visible(&entry)) {
-			if (!valid_stored_name(&entry)) {
+			if (!native_name_valid_stored_name(&entry)) {
 				result = NTFS_CORRUPT;
 				break;
 			}
@@ -243,13 +234,15 @@ ntfs_native_names_manifest(struct ntfs_node *node, uint64_t reference, uint32_t 
 				result = NTFS_RANGE;
 				break;
 			}
-			store_little(wire.ordinal, sizeof(wire.ordinal), single ? ordinal : count);
-			store_little(wire.reference, sizeof(wire.reference), entry.reference);
-			store_little(wire.units, sizeof(wire.units), entry.name_length);
+			ntfs_native_store_little(
+			    wire.ordinal, sizeof(wire.ordinal), single ? ordinal : count);
+			ntfs_native_store_little(
+			    wire.reference, sizeof(wire.reference), entry.reference);
+			ntfs_native_store_little(wire.units, sizeof(wire.units), entry.name_length);
 			wire.name_namespace = entry.name_namespace;
 			[data appendBytes:&wire length:sizeof(wire)];
 			for (i = 0; i < entry.name_length; i++) {
-				store_little(unit, sizeof(unit), entry.name[i]);
+				ntfs_native_store_little(unit, sizeof(unit), entry.name[i]);
 				[data appendBytes:unit length:sizeof(unit)];
 			}
 			count++;
@@ -267,9 +260,9 @@ ntfs_native_names_manifest(struct ntfs_node *node, uint64_t reference, uint32_t 
 		return NTFS_NOT_FOUND;
 	}
 	memcpy(header.magic, "NTFSNAM", sizeof(header.magic));
-	store_little(header.version, sizeof(header.version), NTFS_NATIVE_NAMES_VERSION);
-	store_little(header.count, sizeof(header.count), count);
-	store_little(header.reference, sizeof(header.reference), reference);
+	ntfs_native_store_little(header.version, sizeof(header.version), NTFS_NATIVE_NAMES_VERSION);
+	ntfs_native_store_little(header.count, sizeof(header.count), count);
+	ntfs_native_store_little(header.reference, sizeof(header.reference), reference);
 	memcpy(data.mutableBytes, &header, sizeof(header));
 	*out = data;
 	return NTFS_OK;

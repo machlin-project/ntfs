@@ -8,7 +8,7 @@ static const char ntPrefix[] = "\\??\\";
 static const char win32Prefix[] = "\\\\?\\";
 
 static NSString *
-canonical_root(NSString *root)
+native_link_canonical_root(NSString *root)
 {
 	NSString *guid;
 	NSUUID *uuid;
@@ -51,7 +51,7 @@ canonical_root(NSString *root)
 		if (![root isKindOfClass:NSString.class]) {
 			return nil;
 		}
-		value = canonical_root(root);
+		value = native_link_canonical_root(root);
 		if (value == nil || [canonical containsObject:value]) {
 			return nil;
 		}
@@ -67,7 +67,7 @@ canonical_root(NSString *root)
 
 - (BOOL)ownsWindowsRoot:(NSString *)root
 {
-	NSString *value = canonical_root(root);
+	NSString *value = native_link_canonical_root(root);
 
 	return value != nil && [_windowsRoots containsObject:value];
 }
@@ -143,13 +143,13 @@ ntfs_native_link_policy(uint64_t serial, NSArray<NSString *> *options, NTFSLinkP
 }
 
 static BOOL
-separator(uint16_t unit)
+native_link_separator(uint16_t unit)
 {
 	return unit == '\\' || unit == '/';
 }
 
 static BOOL
-prefix_matches(const uint16_t *units, size_t count, const char *prefix, size_t length)
+native_link_prefix_matches(const uint16_t *units, size_t count, const char *prefix, size_t length)
 {
 	size_t i;
 
@@ -165,7 +165,7 @@ prefix_matches(const uint16_t *units, size_t count, const char *prefix, size_t l
 }
 
 static enum ntfs_result
-append_component(NSMutableData *output, FSFileName *component)
+native_link_append_component(NSMutableData *output, FSFileName *component)
 {
 	static const uint8_t slash = '/';
 	size_t prefix = output.length != 0 ? sizeof(slash) : 0;
@@ -182,7 +182,7 @@ append_component(NSMutableData *output, FSFileName *component)
 }
 
 static enum ntfs_result
-plain_component(const uint16_t *units, size_t count, FSFileName **out)
+native_link_plain_component(const uint16_t *units, size_t count, FSFileName **out)
 {
 	struct ntfs_dirent entry = {0};
 	BOOL projected;
@@ -198,16 +198,18 @@ plain_component(const uint16_t *units, size_t count, FSFileName **out)
 }
 
 static BOOL
-same_entry(const struct ntfs_dirent *a, const struct ntfs_dirent *b)
+native_link_same_entry(const struct ntfs_dirent *left_entry, const struct ntfs_dirent *right_entry)
 {
-	return a->reference == b->reference && a->name_namespace == b->name_namespace &&
-	    a->name_length == b->name_length &&
-	    memcmp(a->name, b->name, (size_t)a->name_length * sizeof(a->name[0])) == 0;
+	return left_entry->reference == right_entry->reference &&
+	    left_entry->name_namespace == right_entry->name_namespace &&
+	    left_entry->name_length == right_entry->name_length &&
+	    memcmp(left_entry->name, right_entry->name,
+		(size_t)left_entry->name_length * sizeof(left_entry->name[0])) == 0;
 }
 
 static enum ntfs_result
-target_entry_name(struct ntfs_node *parent, const struct ntfs_dirent *target, uint32_t *remaining,
-    FSFileName **out)
+native_link_target_entry_name(struct ntfs_node *parent, const struct ntfs_dirent *target,
+    uint32_t *remaining, FSFileName **out)
 {
 	struct ntfs_directory *cursor = NULL;
 	struct ntfs_dirent entry;
@@ -234,7 +236,8 @@ target_entry_name(struct ntfs_node *parent, const struct ntfs_dirent *target, ui
 		if (!ntfs_native_entry_visible(&entry)) {
 			continue;
 		}
-		if (dos ? entry.reference == target->reference : same_entry(&entry, target)) {
+		if (dos ? entry.reference == target->reference
+			: native_link_same_entry(&entry, target)) {
 			result = ntfs_native_entry_name(&entry, ordinal, out, &projected);
 			break;
 		}
@@ -250,14 +253,14 @@ struct link_resolution {
 	uint32_t remaining;
 };
 
-static enum ntfs_result translate_link(struct ntfs_volume *, const struct ntfs_reparse *,
-    NTFSDirectoryPath *, NTFSLinkPolicy *, struct link_resolution *, FSFileName **,
-    NTFSDirectoryPath **, NSUInteger *, BOOL *);
+static enum ntfs_result native_link_translate_link(struct ntfs_volume *,
+    const struct ntfs_reparse *, NTFSDirectoryPath *, NTFSLinkPolicy *, struct link_resolution *,
+    FSFileName **, NTFSDirectoryPath **, NSUInteger *, BOOL *);
 
 static enum ntfs_result
-resolve_link_directory(struct ntfs_volume *volume, struct ntfs_node *node, uint64_t reference,
-    NTFSDirectoryPath *source, NTFSLinkPolicy *policy, struct link_resolution *resolution,
-    NTFSDirectoryPath **path, NSUInteger *depth, BOOL *dangling)
+native_link_resolve_link_directory(struct ntfs_volume *volume, struct ntfs_node *node,
+    uint64_t reference, NTFSDirectoryPath *source, NTFSLinkPolicy *policy,
+    struct link_resolution *resolution, NTFSDirectoryPath **path, NSUInteger *depth, BOOL *dangling)
 {
 	struct ntfs_reparse *snapshot = NULL;
 	FSFileName *projection = nil;
@@ -278,8 +281,8 @@ resolve_link_directory(struct ntfs_volume *volume, struct ntfs_node *node, uint6
 	resolution->expansions++;
 	result = ntfs_reparse_open(node, &snapshot);
 	if (result == NTFS_OK) {
-		result = translate_link(volume, snapshot, source, policy, resolution, &projection,
-		    path, depth, dangling);
+		result = native_link_translate_link(volume, snapshot, source, policy, resolution,
+		    &projection, path, depth, dangling);
 	}
 	ntfs_reparse_close(snapshot);
 	resolution->activeCount--;
@@ -287,7 +290,7 @@ resolve_link_directory(struct ntfs_volume *volume, struct ntfs_node *node, uint6
 }
 
 static enum ntfs_result
-translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
+native_link_translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
     NTFSDirectoryPath *source, NTFSLinkPolicy *policy, struct link_resolution *resolution,
     FSFileName **out, NTFSDirectoryPath **resolvedPath, NSUInteger *resolvedDepth,
     BOOL *resolvedDangling)
@@ -328,21 +331,22 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 	relative =
 	    info.kind == NTFS_REPARSE_SYMLINK && (info.flags & NTFS_REPARSE_SYMLINK_RELATIVE) != 0;
 	if (relative) {
-		if (separator(units[0])) {
-			if (count > 1 && separator(units[1])) {
+		if (native_link_separator(units[0])) {
+			if (count > 1 && native_link_separator(units[1])) {
 				return NTFS_UNSUPPORTED;
 			}
 			fromRoot = YES;
 			position++;
 		}
 	} else {
-		if (prefix_matches(units, count, ntPrefix, sizeof(ntPrefix) - 1)) {
+		if (native_link_prefix_matches(units, count, ntPrefix, sizeof(ntPrefix) - 1)) {
 			position = sizeof(ntPrefix) - 1;
-		} else if (prefix_matches(units, count, win32Prefix, sizeof(win32Prefix) - 1)) {
+		} else if (native_link_prefix_matches(
+			       units, count, win32Prefix, sizeof(win32Prefix) - 1)) {
 			position = sizeof(win32Prefix) - 1;
 		}
 		start = position;
-		while (position < count && !separator(units[position])) {
+		while (position < count && !native_link_separator(units[position])) {
 			position++;
 		}
 		if (position == count || position == start) {
@@ -362,7 +366,8 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 	}
 	if (fromRoot) {
 		for (i = 0; i < source.depth; i++) {
-			result = append_component(output, [FSFileName nameWithString:@".."]);
+			result =
+			    native_link_append_component(output, [FSFileName nameWithString:@".."]);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -372,7 +377,7 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 	depth = path.depth;
 	result = NTFS_OK;
 	while (position < count) {
-		while (position < count && separator(units[position])) {
+		while (position < count && native_link_separator(units[position])) {
 			position++;
 		}
 		if (position == count) {
@@ -383,7 +388,7 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 			break;
 		}
 		start = position;
-		while (position < count && !separator(units[position])) {
+		while (position < count && !native_link_separator(units[position])) {
 			if (units[position] == ':') {
 				result = NTFS_UNSUPPORTED;
 				goto finish;
@@ -397,7 +402,7 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 		}
 		last = YES;
 		for (i = position; i < count; i++) {
-			if (!separator(units[i])) {
+			if (!native_link_separator(units[i])) {
 				last = NO;
 				break;
 			}
@@ -416,7 +421,7 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 			}
 			name = [FSFileName nameWithString:length == 1 ? @"." : @".."];
 		} else if (dangling) {
-			result = plain_component(units + start, length, &name);
+			result = native_link_plain_component(units + start, length, &name);
 			depth++;
 		} else {
 			result = ntfs_node_open(volume, path.reference, &parent);
@@ -425,11 +430,11 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 				    parent, units + start, length, &child, &entry);
 			}
 			if (result == NTFS_NOT_FOUND) {
-				result = plain_component(units + start, length, &name);
+				result = native_link_plain_component(units + start, length, &name);
 				dangling = YES;
 				depth++;
 			} else if (result == NTFS_OK) {
-				result = target_entry_name(
+				result = native_link_target_entry_name(
 				    parent, &entry, &resolution->remaining, &name);
 				if (result == NTFS_OK && (!last || resolvedPath != NULL)) {
 					result = ntfs_node_metadata(child, &stat);
@@ -442,10 +447,10 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 						if (result == NTFS_OK) {
 							result = links.primary_names != 1
 							    ? NTFS_UNSUPPORTED
-							    : resolve_link_directory(volume, child,
-								  stat.reference, path, policy,
-								  resolution, &destination,
-								  &destinationDepth,
+							    : native_link_resolve_link_directory(
+								  volume, child, stat.reference,
+								  path, policy, resolution,
+								  &destination, &destinationDepth,
 								  &destinationDangling);
 						}
 						if (result == NTFS_OK) {
@@ -476,7 +481,7 @@ translate_link(struct ntfs_volume *volume, const struct ntfs_reparse *snapshot,
 		if (result != NTFS_OK) {
 			break;
 		}
-		result = append_component(output, name);
+		result = native_link_append_component(output, name);
 		if (result != NTFS_OK) {
 			break;
 		}
@@ -485,7 +490,7 @@ finish:
 	ntfs_node_close(child);
 	ntfs_node_close(parent);
 	/* Keep the native directory requirement of a trailing separator. */
-	if (result == NTFS_OK && separator(units[count - 1]) && output.length != 0) {
+	if (result == NTFS_OK && native_link_separator(units[count - 1]) && output.length != 0) {
 		static const uint8_t slash = '/';
 
 		if (output.length == NTFS_FSKIT_LINK_TARGET_BYTES) {
@@ -527,5 +532,6 @@ ntfs_native_link_target(struct ntfs_volume *volume, const struct ntfs_reparse *s
 		return NTFS_INVALID;
 	}
 	resolution.active[0] = reference;
-	return translate_link(volume, snapshot, source, policy, &resolution, out, NULL, NULL, NULL);
+	return native_link_translate_link(
+	    volume, snapshot, source, policy, &resolution, out, NULL, NULL, NULL);
 }

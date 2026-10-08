@@ -29,7 +29,7 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
     const struct ntfs_disk_security_locator *locator, struct ntfs_security *snapshot,
     enum ntfs_result (*charge)(void *, uint64_t), void *context)
 {
-	struct ntfs_volume *v = store->volume;
+	struct ntfs_volume *volume = store->volume;
 	struct ntfs_disk_security_locator primary, duplicate;
 	uint64_t offset = ntfs_u64(locator->offset);
 	uint8_t *compare = NULL;
@@ -40,7 +40,7 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_index_work(v, charge, context, sizeof(primary));
+	result = ntfs_index_work(volume, charge, context, sizeof(primary));
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -48,7 +48,7 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 		return NTFS_CORRUPT;
 	}
 	snapshot->size = ntfs_u32(primary.length) - sizeof(primary);
-	snapshot->bytes = ntfs_alloc(v, snapshot->size);
+	snapshot->bytes = ntfs_alloc(volume, snapshot->size);
 	if (snapshot->bytes == NULL) {
 		return NTFS_NO_MEMORY;
 	}
@@ -57,7 +57,7 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_index_work(v, charge, context, snapshot->size);
+	result = ntfs_index_work(volume, charge, context, snapshot->size);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -65,7 +65,7 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 	    ntfs_u32(primary.hash)) {
 		return NTFS_CORRUPT;
 	}
-	result = ntfs_index_work(v, charge, context, snapshot->size);
+	result = ntfs_index_work(volume, charge, context, snapshot->size);
 	if (result == NTFS_OK) {
 		result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
 	}
@@ -77,14 +77,14 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 	if (result != NTFS_OK) {
 		return result;
 	}
-	result = ntfs_index_work(v, charge, context, sizeof(primary));
+	result = ntfs_index_work(volume, charge, context, sizeof(primary));
 	if (result != NTFS_OK) {
 		return result;
 	}
 	if (!ntfs_equal(&primary, &duplicate, sizeof(primary))) {
 		return NTFS_CORRUPT;
 	}
-	compare = ntfs_alloc(v, NTFS_SECURITY_COMPARE_BYTES);
+	compare = ntfs_alloc(volume, NTFS_SECURITY_COMPARE_BYTES);
 	if (compare == NULL) {
 		return NTFS_NO_MEMORY;
 	}
@@ -93,7 +93,7 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 		if (length > NTFS_SECURITY_COMPARE_BYTES) {
 			length = NTFS_SECURITY_COMPARE_BYTES;
 		}
-		result = ntfs_index_work(v, charge, context, length);
+		result = ntfs_index_work(volume, charge, context, length);
 		if (result == NTFS_OK) {
 			result = ntfs_stream_exact(
 			    store, offset + sizeof(duplicate) + position, compare, length);
@@ -106,26 +106,27 @@ ntfs_secure_read_descriptor(struct ntfs_stream *store,
 			break;
 		}
 	}
-	ntfs_free(v, compare, NTFS_SECURITY_COMPARE_BYTES);
+	ntfs_free(volume, compare, NTFS_SECURITY_COMPARE_BYTES);
 	return result;
 }
 
 enum ntfs_result
-ntfs_security_resolve_impl(struct ntfs_volume *volume, uint32_t id, struct ntfs_security **out)
+ntfs_security_resolve_impl(
+    struct ntfs_volume *volume, uint32_t security_id, struct ntfs_security **out)
 {
 	struct ntfs_node *node = NULL;
 	struct ntfs_stream *store = NULL;
 	struct ntfs_security *snapshot = NULL;
 	struct ntfs_stat stat;
 	struct ntfs_disk_security_locator sii, sdh;
-	struct ntfs_secure_index_key key = {.id = id};
+	struct ntfs_secure_index_key key = {.id = security_id};
 	enum ntfs_result result;
 
 	if (out == NULL) {
 		return NTFS_INVALID;
 	}
 	*out = NULL;
-	if (volume == NULL || id == 0) {
+	if (volume == NULL || security_id == 0) {
 		return NTFS_INVALID;
 	}
 	if (volume->children == UINT32_MAX) {
@@ -177,7 +178,7 @@ ntfs_security_resolve_impl(struct ntfs_volume *volume, uint32_t id, struct ntfs_
 		goto finish;
 	}
 	snapshot->volume = volume;
-	snapshot->id = id;
+	snapshot->id = security_id;
 	volume->children++;
 	result = ntfs_secure_read_descriptor(store, &sii, snapshot, NULL, NULL);
 finish:
@@ -195,12 +196,12 @@ static enum ntfs_result
 ntfs_secure_open_file_descriptor(struct ntfs_node *node, struct ntfs_security **out,
     enum ntfs_result (*charge)(void *, uint64_t), void *context)
 {
-	struct ntfs_volume *v = node->volume;
+	struct ntfs_volume *volume = node->volume;
 	struct ntfs_stream *stream = NULL;
 	struct ntfs_security *snapshot = NULL;
 	enum ntfs_result result;
 
-	if (v->children == UINT32_MAX) {
+	if (volume->children == UINT32_MAX) {
 		return NTFS_RANGE;
 	}
 	result = ntfs_attribute_open(node, NTFS_ATTR_SECURITY_DESCRIPTOR, NULL, 0, &stream);
@@ -216,20 +217,20 @@ ntfs_secure_open_file_descriptor(struct ntfs_node *node, struct ntfs_security **
 		result = NTFS_RANGE;
 		goto finish;
 	}
-	snapshot = ntfs_alloc(v, sizeof(*snapshot));
+	snapshot = ntfs_alloc(volume, sizeof(*snapshot));
 	if (snapshot == NULL) {
 		result = NTFS_NO_MEMORY;
 		goto finish;
 	}
-	snapshot->volume = v;
+	snapshot->volume = volume;
 	snapshot->size = (size_t)stream->size;
-	v->children++;
+	volume->children++;
 	if (stream->resident) {
 		snapshot->bytes = stream->value;
 		stream->value = NULL;
 		stream->value_allocation = 0;
 	} else {
-		snapshot->bytes = ntfs_alloc(v, snapshot->size);
+		snapshot->bytes = ntfs_alloc(volume, snapshot->size);
 		if (snapshot->bytes == NULL) {
 			result = NTFS_NO_MEMORY;
 			goto finish;
@@ -239,7 +240,7 @@ ntfs_secure_open_file_descriptor(struct ntfs_node *node, struct ntfs_security **
 			goto finish;
 		}
 	}
-	result = ntfs_index_work(v, charge, context, snapshot->size);
+	result = ntfs_index_work(volume, charge, context, snapshot->size);
 	if (result == NTFS_OK) {
 		result = ntfs_security_decode(snapshot->bytes, snapshot->size, &snapshot->info);
 	}
@@ -293,15 +294,15 @@ ntfs_security_open_impl(struct ntfs_node *node, struct ntfs_security **out)
 void
 ntfs_security_close(struct ntfs_security *snapshot)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 
 	if (snapshot == NULL) {
 		return;
 	}
-	v = snapshot->volume;
-	ntfs_free(v, snapshot->bytes, snapshot->size);
-	v->children--;
-	ntfs_free(v, snapshot, sizeof(*snapshot));
+	volume = snapshot->volume;
+	ntfs_free(volume, snapshot->bytes, snapshot->size);
+	volume->children--;
+	ntfs_free(volume, snapshot, sizeof(*snapshot));
 }
 
 uint32_t

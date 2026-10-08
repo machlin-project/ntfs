@@ -17,12 +17,12 @@ enum {
 	OVERWRITE_PATH_SEPARATOR = '/'
 };
 
-struct overwrite_span {
+struct ntfs_overwrite_span {
 	uint64_t physical, logical;
 	uint32_t offset, bytes;
 };
 
-struct overwrite_journal_workspace {
+struct ntfs_overwrite_journal_workspace {
 	struct ntfs_logfile_restart restart;
 	struct ntfs_logfile_client client;
 	struct ntfs_logfile_report discovery;
@@ -31,8 +31,9 @@ struct overwrite_journal_workspace {
 	struct ntfs_recovery_record record;
 };
 
-static enum ntfs_result transaction_write(void *, uint64_t, const void *, size_t, size_t *);
-static enum ntfs_result transaction_persist(void *);
+static enum ntfs_result overwrite_transaction_write(
+    void *, uint64_t, const void *, size_t, size_t *);
+static enum ntfs_result overwrite_transaction_persist(void *);
 
 static void *
 overwrite_allocate(void *context, size_t bytes)
@@ -128,10 +129,10 @@ ntfs_write_owner_begin(struct ntfs_overwrite *owner)
 }
 
 static enum ntfs_result
-quiet_journal(struct ntfs_overwrite *owner, struct ntfs_volume *volume,
+overwrite_quiet_journal(struct ntfs_overwrite *owner, struct ntfs_volume *volume,
     struct ntfs_overwrite_admission *admission)
 {
-	struct overwrite_journal_workspace *work;
+	struct ntfs_overwrite_journal_workspace *work;
 	struct ntfs_logfile *source = NULL;
 	struct ntfs_recovery *recovery = NULL;
 	struct ntfs_logfile_limits limits;
@@ -266,7 +267,7 @@ ntfs_write_owner_check_hibernation(struct ntfs_volume *volume)
 }
 
 static enum ntfs_result
-open_owner(const struct ntfs_overwrite_environment *environment,
+overwrite_open_owner(const struct ntfs_overwrite_environment *environment,
     struct ntfs_overwrite_admission *admission, struct ntfs_overwrite **out,
     struct ntfs_write_recovery_report *recovery)
 {
@@ -316,7 +317,7 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 	}
 	result = ntfs_write_owner_check_hibernation(volume);
 	if (result == NTFS_OK && recovery == NULL) {
-		result = quiet_journal(owner, volume, admission);
+		result = overwrite_quiet_journal(owner, volume, admission);
 	} else if (result == NTFS_OK) {
 		result = ntfs_write_owner_check_change_journal(volume);
 		if (result != NTFS_OK) {
@@ -332,8 +333,8 @@ open_owner(const struct ntfs_overwrite_environment *environment,
 		work = (void *)aligned;
 		backend = owner->backend;
 		backend.reader = owner->reader;
-		backend.write = transaction_write;
-		backend.persist = transaction_persist;
+		backend.write = overwrite_transaction_write;
+		backend.persist = overwrite_transaction_persist;
 		result = ntfs_write_recover_prepare(volume, &backend, work);
 		if (result == NTFS_OK) {
 			admission->validation = work->validation;
@@ -370,7 +371,7 @@ enum ntfs_result
 ntfs_overwrite_open(const struct ntfs_overwrite_environment *environment,
     struct ntfs_overwrite_admission *admission, struct ntfs_overwrite **out)
 {
-	return open_owner(environment, admission, out, NULL);
+	return overwrite_open_owner(environment, admission, out, NULL);
 }
 
 enum ntfs_result
@@ -391,7 +392,7 @@ ntfs_write_owner_open(const struct ntfs_overwrite_environment *environment,
 		return NTFS_INVALID;
 	}
 	ntfs_zero(recovery, sizeof(*recovery));
-	return open_owner(environment, admission, out, recovery);
+	return overwrite_open_owner(environment, admission, out, recovery);
 }
 
 void
@@ -494,8 +495,9 @@ ntfs_overwrite_resolve(
 }
 
 static enum ntfs_result
-prepare_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t offset, size_t bytes,
-    struct overwrite_span *spans, uint32_t *count, uint8_t *image, uint64_t first, uint64_t end)
+overwrite_prepare_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t offset,
+    size_t bytes, struct ntfs_overwrite_span *spans, uint32_t *count, uint8_t *image,
+    uint64_t first, uint64_t end)
 {
 	struct ntfs_volume *volume = NULL;
 	struct ntfs_node *node = NULL;
@@ -555,7 +557,7 @@ prepare_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t offset,
 			result = NTFS_CORRUPT;
 			goto done;
 		}
-		spans[*count] = (struct overwrite_span){
+		spans[*count] = (struct ntfs_overwrite_span){
 		    physical, cursor, (uint32_t)(cursor - first), (uint32_t)available};
 		(*count)++;
 		result = overwrite_read(owner, physical, image + cursor - first, (size_t)available);
@@ -575,7 +577,7 @@ enum ntfs_result
 ntfs_overwrite_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t offset,
     const void *data, size_t bytes, struct ntfs_overwrite_report *report)
 {
-	struct overwrite_span *spans;
+	struct ntfs_overwrite_span *spans;
 	uint8_t *image, *allocation;
 	uint64_t first, end, covered_first, covered_end;
 	size_t image_bytes, allocation_bytes, transferred;
@@ -622,7 +624,8 @@ ntfs_overwrite_range(struct ntfs_overwrite *owner, uint64_t reference, uint64_t 
 	    ~(uintptr_t)(owner->backend.alignment - 1u));
 	owner->read_calls = 0;
 	owner->read_bytes = 0;
-	result = prepare_range(owner, reference, offset, bytes, spans, &count, image, first, end);
+	result = overwrite_prepare_range(
+	    owner, reference, offset, bytes, spans, &count, image, first, end);
 	if (result != NTFS_OK) {
 		goto done;
 	}
@@ -706,7 +709,8 @@ done:
 }
 
 static enum ntfs_result
-transaction_write(void *context, uint64_t offset, const void *image, size_t bytes, size_t *actual)
+overwrite_transaction_write(
+    void *context, uint64_t offset, const void *image, size_t bytes, size_t *actual)
 {
 	struct ntfs_overwrite *owner = context;
 
@@ -714,7 +718,7 @@ transaction_write(void *context, uint64_t offset, const void *image, size_t byte
 }
 
 static enum ntfs_result
-transaction_persist(void *context)
+overwrite_transaction_persist(void *context)
 {
 	struct ntfs_overwrite *owner = context;
 
@@ -727,8 +731,8 @@ ntfs_write_owner_backend(struct ntfs_overwrite *owner)
 	struct ntfs_overwrite_environment backend = owner->backend;
 
 	backend.reader = owner->reader;
-	backend.write = transaction_write;
-	backend.persist = transaction_persist;
+	backend.write = overwrite_transaction_write;
+	backend.persist = overwrite_transaction_persist;
 	return backend;
 }
 
@@ -741,7 +745,7 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 	struct ntfs_write_replay_plan *overlay = NULL;
 	struct ntfs_validation_report *validation = NULL;
 	struct ntfs_write_data_span *data_spans = NULL;
-	struct overwrite_span *spans = NULL;
+	struct ntfs_overwrite_span *spans = NULL;
 	struct ntfs_volume *volume = NULL;
 	struct ntfs_node *node = NULL;
 	struct ntfs_attr_view attribute;
@@ -843,7 +847,7 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 		goto done;
 	}
 	if (transaction->file.resident_bytes == 0) {
-		result = prepare_range(
+		result = overwrite_prepare_range(
 		    owner, reference, offset, bytes, spans, &count, image, first, end);
 		if (result != NTFS_OK) {
 			goto done;
@@ -864,8 +868,8 @@ ntfs_write_existing_range(struct ntfs_overwrite *owner, uint64_t reference, uint
 	}
 	backend = owner->backend;
 	backend.reader = owner->reader;
-	backend.write = transaction_write;
-	backend.persist = transaction_persist;
+	backend.write = overwrite_transaction_write;
+	backend.persist = overwrite_transaction_persist;
 	result = ntfs_write_execute_prepare(&backend, &transaction->execution, execution);
 	if (result == NTFS_OK) {
 		result = ntfs_write_execute(execution, &owner->poisoned, &report->execution);

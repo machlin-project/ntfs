@@ -31,7 +31,7 @@ ntfs_wof_is_backing_stream(const uint16_t *name, size_t length)
 }
 
 static enum ntfs_result
-provider_info(struct ntfs_node *node, struct ntfs_wof_info *info)
+wof_stream_provider_info(struct ntfs_node *node, struct ntfs_wof_info *info)
 {
 	struct ntfs_reparse *snapshot = NULL;
 	struct ntfs_stat metadata;
@@ -52,7 +52,7 @@ provider_info(struct ntfs_node *node, struct ntfs_wof_info *info)
 }
 
 static enum ntfs_result
-storage(struct ntfs_node *node, const struct ntfs_wof_info *info, bool readable,
+wof_stream_storage(struct ntfs_node *node, const struct ntfs_wof_info *info, bool readable,
     struct ntfs_stream **backing, struct ntfs_wof_layout *layout)
 {
 	struct ntfs_stream *placeholder = NULL, *data = NULL;
@@ -105,12 +105,12 @@ ntfs_wof_sizes(struct ntfs_node *node, uint64_t *size, uint64_t *allocated)
 	struct ntfs_stream *backing = NULL;
 	enum ntfs_result result;
 
-	result = provider_info(node, &info);
+	result = wof_stream_provider_info(node, &info);
 	if (result == NTFS_UNSUPPORTED) {
 		return NTFS_NOT_FOUND;
 	}
 	if (result == NTFS_OK) {
-		result = storage(node, &info, false, &backing, &layout);
+		result = wof_stream_storage(node, &info, false, &backing, &layout);
 	}
 	if (result == NTFS_OK) {
 		*size = layout.logical_size;
@@ -121,7 +121,7 @@ ntfs_wof_sizes(struct ntfs_node *node, uint64_t *size, uint64_t *allocated)
 }
 
 static enum ntfs_result
-table_offset(struct ntfs_wof_stream *wof, uint32_t index, uint64_t *value)
+wof_stream_table_offset(struct ntfs_wof_stream *wof, uint32_t index, uint64_t *value)
 {
 	uint64_t offset = (uint64_t)index * wof->layout.offset_size;
 	uint64_t page = offset - offset % NTFS_WOF_TABLE_PAGE_BYTES;
@@ -148,7 +148,7 @@ table_offset(struct ntfs_wof_stream *wof, uint32_t index, uint64_t *value)
 }
 
 static enum ntfs_result
-table_validate(struct ntfs_wof_stream *wof)
+wof_stream_table_validate(struct ntfs_wof_stream *wof)
 {
 	struct ntfs_wof_span span;
 	uint64_t start = 0, end;
@@ -164,7 +164,7 @@ table_validate(struct ntfs_wof_stream *wof)
 	for (chunk = 0; chunk < wof->layout.chunks; chunk++) {
 		end = wof->layout.stored_size - wof->layout.table_size;
 		if (chunk != wof->layout.chunks - 1) {
-			result = table_offset(wof, chunk, &end);
+			result = wof_stream_table_offset(wof, chunk, &end);
 			if (result != NTFS_OK) {
 				return result;
 			}
@@ -203,7 +203,7 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	struct ntfs_wof_stream *wof = NULL;
 	enum ntfs_result result;
 
-	result = provider_info(node, &info);
+	result = wof_stream_provider_info(node, &info);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -212,7 +212,7 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 		    ? NTFS_UNSUPPORTED
 		    : ntfs_attribute_open(node, NTFS_ATTRIBUTE_DATA, name, length, out);
 	}
-	result = storage(node, &info, true, &backing, &layout);
+	result = wof_stream_storage(node, &info, true, &backing, &layout);
 	if (result != NTFS_OK) {
 		return result;
 	}
@@ -225,7 +225,7 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 	wof->layout = layout;
 	wof->cached_page = UINT64_MAX;
 	ntfs_unit_cache_initialize(&wof->decoded);
-	result = table_validate(wof);
+	result = wof_stream_table_validate(wof);
 	if (result == NTFS_OK) {
 		stream = ntfs_alloc(node->volume, sizeof(*stream));
 		if (stream == NULL) {
@@ -247,7 +247,7 @@ ntfs_wof_open(struct ntfs_node *node, const uint16_t *name, size_t length, struc
 }
 
 static enum ntfs_result
-decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
+wof_stream_decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 {
 	struct ntfs_wof_span span;
 	uint64_t start = 0, end = wof->layout.stored_size - wof->layout.table_size;
@@ -271,13 +271,13 @@ decoded_unit(struct ntfs_wof_stream *wof, uint32_t chunk)
 	}
 	output = ntfs_unit_cache_prepare(wof->backing->volume, &wof->decoded, wof->buffers, unit);
 	if (chunk != 0) {
-		result = table_offset(wof, chunk - 1, &start);
+		result = wof_stream_table_offset(wof, chunk - 1, &start);
 		if (result != NTFS_OK) {
 			return result;
 		}
 	}
 	if (chunk != wof->layout.chunks - 1) {
-		result = table_offset(wof, chunk, &end);
+		result = wof_stream_table_offset(wof, chunk, &end);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -324,7 +324,7 @@ ntfs_wof_read(
 	while (length != 0) {
 		within = (size_t)(offset % unit);
 		take = length < unit - within ? length : unit - within;
-		result = decoded_unit(wof, (uint32_t)(offset / unit));
+		result = wof_stream_decoded_unit(wof, (uint32_t)(offset / unit));
 		if (result != NTFS_OK) {
 			return result;
 		}

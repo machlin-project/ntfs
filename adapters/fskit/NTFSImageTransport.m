@@ -36,25 +36,26 @@
 @end
 
 static enum ntfs_result
-image_claim(void *context)
+native_image_claim(void *context)
 {
 	return [(__bridge NTFSImageTransport *)context claimImage];
 }
 
 static void
-image_unclaim(void *context)
+native_image_unclaim(void *context)
 {
 	[(__bridge NTFSImageTransport *)context unclaimImage];
 }
 
 static enum ntfs_result
-image_read(void *context, uint64_t offset, void *bytes, size_t length)
+native_image_read(void *context, uint64_t offset, void *bytes, size_t length)
 {
 	return [(__bridge NTFSImageTransport *)context readAt:offset bytes:bytes length:length];
 }
 
 static enum ntfs_result
-image_write(void *context, uint64_t offset, const void *bytes, size_t length, size_t *completed)
+native_image_write(
+    void *context, uint64_t offset, const void *bytes, size_t length, size_t *completed)
 {
 	return [(__bridge NTFSImageTransport *)context writeAt:offset
 							 bytes:bytes
@@ -63,19 +64,19 @@ image_write(void *context, uint64_t offset, const void *bytes, size_t length, si
 }
 
 static enum ntfs_result
-image_persist(void *context)
+native_image_persist(void *context)
 {
 	return [(__bridge NTFSImageTransport *)context persistImage];
 }
 
 static void *
-image_allocate(void *context, size_t size)
+native_image_allocate(void *context, size_t size)
 {
 	return [(__bridge NTFSImageTransport *)context allocateSize:size];
 }
 
 static void
-image_release(void *context, void *bytes, size_t size)
+native_image_release(void *context, void *bytes, size_t size)
 {
 	[(__bridge NTFSImageTransport *)context releaseBytes:bytes size:size];
 }
@@ -280,9 +281,9 @@ image_release(void *context, void *bytes, size_t size)
 {
 	return (struct ntfs_overwrite_environment){
 	    {NTFS_API_VERSION, (__bridge void *)self, _image.environment.reader.size_bytes,
-		image_read, image_allocate, image_release},
-	    NTFS_OVERWRITE_API_VERSION, NTFS_OVERWRITE_MIN_ALIGNMENT, image_claim, image_unclaim,
-	    image_write, image_persist};
+		native_image_read, native_image_allocate, native_image_release},
+	    NTFS_OVERWRITE_API_VERSION, NTFS_OVERWRITE_MIN_ALIGNMENT, native_image_claim,
+	    native_image_unclaim, native_image_write, native_image_persist};
 }
 
 - (BOOL)isAvailable

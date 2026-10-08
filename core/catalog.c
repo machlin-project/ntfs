@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 
-struct catalog_entry {
+struct ntfs_stream_catalog_entry {
 	struct ntfs_stream_name name;
 	uint64_t reference;
 	uint16_t instance;
@@ -9,7 +9,7 @@ struct catalog_entry {
 
 struct ntfs_stream_catalog {
 	struct ntfs_volume *volume;
-	struct catalog_entry *entries;
+	struct ntfs_stream_catalog_entry *entries;
 	uint32_t count, capacity, maximum;
 	bool external;
 };
@@ -44,8 +44,8 @@ catalog_compare_work(const struct ntfs_stream_catalog *catalog, const struct ntf
 static enum ntfs_result
 catalog_sift(struct ntfs_stream_catalog *catalog, uint32_t root, uint32_t count)
 {
-	struct catalog_entry *entries = catalog->entries;
-	struct catalog_entry temporary;
+	struct ntfs_stream_catalog_entry *entries = catalog->entries;
+	struct ntfs_stream_catalog_entry temporary;
 	uint32_t child;
 	int comparison;
 	enum ntfs_result result;
@@ -81,7 +81,7 @@ catalog_sift(struct ntfs_stream_catalog *catalog, uint32_t root, uint32_t count)
 static enum ntfs_result
 catalog_sort(struct ntfs_stream_catalog *catalog)
 {
-	struct catalog_entry temporary;
+	struct ntfs_stream_catalog_entry temporary;
 	uint32_t i;
 	int comparison;
 	enum ntfs_result result;
@@ -118,7 +118,7 @@ static enum ntfs_result
 catalog_add(struct ntfs_stream_catalog *catalog, const uint8_t *name, uint8_t length,
     uint64_t reference, uint16_t instance)
 {
-	struct catalog_entry *entries, *entry;
+	struct ntfs_stream_catalog_entry *entries, *entry;
 	uint32_t capacity;
 	size_t i;
 
@@ -152,14 +152,14 @@ catalog_add(struct ntfs_stream_catalog *catalog, const uint8_t *name, uint8_t le
 }
 
 static uint64_t
-attribute_lowest(const struct ntfs_attr_view *attr)
+catalog_attribute_lowest(const struct ntfs_attr_view *attribute_view)
 {
 	const struct ntfs_disk_nonresident *nonresident;
 
-	if (!attr->disk->nonresident) {
+	if (!attribute_view->disk->nonresident) {
 		return 0;
 	}
-	nonresident = (const void *)(attr->bytes + sizeof(struct ntfs_disk_attr));
+	nonresident = (const void *)(attribute_view->bytes + sizeof(struct ntfs_disk_attr));
 	return ntfs_u64(nonresident->lowest);
 }
 
@@ -167,7 +167,7 @@ static enum ntfs_result
 catalog_from_record(struct ntfs_node *node, struct ntfs_stream_catalog *catalog)
 {
 	const struct ntfs_disk_record *header = (const void *)node->record;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	uint32_t position = ntfs_u16(header->attrs_offset);
 	enum ntfs_result result;
 
@@ -175,16 +175,17 @@ catalog_from_record(struct ntfs_node *node, struct ntfs_stream_catalog *catalog)
 	if (result != NTFS_OK) {
 		return result;
 	}
-	while ((result = ntfs_attr_at(node->record, ntfs_u32(header->used), &position, &attr)) ==
-	    NTFS_OK) {
-		if (attr.type != NTFS_ATTRIBUTE_DATA) {
+	while ((result = ntfs_attr_at(
+		    node->record, ntfs_u32(header->used), &position, &attribute_view)) == NTFS_OK) {
+		if (attribute_view.type != NTFS_ATTRIBUTE_DATA) {
 			continue;
 		}
-		if (attribute_lowest(&attr) != 0) {
+		if (catalog_attribute_lowest(&attribute_view) != 0) {
 			return NTFS_CORRUPT;
 		}
-		result = catalog_add(catalog, attr.bytes + ntfs_u16(attr.disk->name_offset),
-		    attr.disk->name_length, node->reference, attr.instance);
+		result = catalog_add(catalog,
+		    attribute_view.bytes + ntfs_u16(attribute_view.disk->name_offset),
+		    attribute_view.disk->name_length, node->reference, attribute_view.instance);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -196,10 +197,10 @@ static enum ntfs_result
 catalog_from_list(
     struct ntfs_node *node, struct ntfs_stream_catalog *catalog, const uint8_t *bytes, size_t size)
 {
-	struct ntfs_volume *v = node->volume;
+	struct ntfs_volume *volume = node->volume;
 	const struct ntfs_disk_attr_list *entry;
 	const struct ntfs_disk_record *header;
-	struct ntfs_attr_view attr;
+	struct ntfs_attr_view attribute_view;
 	struct ntfs_stream_name name = {0};
 	uint8_t *record = NULL;
 	uint64_t reference, loaded_reference = 0;
@@ -207,7 +208,7 @@ catalog_from_list(
 	enum ntfs_result result;
 
 	while ((result = ntfs_list_entry_at(bytes, size, &offset, &entry)) == NTFS_OK) {
-		result = ntfs_work(v, ntfs_u16(entry->length));
+		result = ntfs_work(volume, ntfs_u16(entry->length));
 		if (result != NTFS_OK) {
 			break;
 		}
@@ -229,14 +230,14 @@ catalog_from_list(
 		}
 		if (reference != loaded_reference) {
 			if (record != node->record) {
-				ntfs_free(v, record, v->info.record_size);
+				ntfs_free(volume, record, volume->info.record_size);
 			}
 			record = NULL;
 			if (reference == node->reference) {
 				record = node->record;
 			} else {
 				result = ntfs_record_read(
-				    v, reference & NTFS_REFERENCE_RECORD_MASK, &record);
+				    volume, reference & NTFS_REFERENCE_RECORD_MASK, &record);
 				if (result != NTFS_OK) {
 					break;
 				}
@@ -255,22 +256,23 @@ catalog_from_list(
 			name.units[i] = ntfs_u16((const uint8_t *)entry + entry->name_offset +
 			    i * NTFS_UTF16_UNIT_BYTES);
 		}
-		result = ntfs_work(v, v->info.record_size);
+		result = ntfs_work(volume, volume->info.record_size);
 		if (result == NTFS_OK) {
 			result = ntfs_listed_attribute(record, NTFS_ATTRIBUTE_DATA, name.units,
-			    name.length, ntfs_u16(entry->instance), 0, &attr);
+			    name.length, ntfs_u16(entry->instance), 0, &attribute_view);
 		}
 		if (result != NTFS_OK) {
 			break;
 		}
-		result = catalog_add(catalog, attr.bytes + ntfs_u16(attr.disk->name_offset),
-		    attr.disk->name_length, reference, attr.instance);
+		result = catalog_add(catalog,
+		    attribute_view.bytes + ntfs_u16(attribute_view.disk->name_offset),
+		    attribute_view.disk->name_length, reference, attribute_view.instance);
 		if (result != NTFS_OK) {
 			break;
 		}
 	}
 	if (record != node->record) {
-		ntfs_free(v, record, v->info.record_size);
+		ntfs_free(volume, record, volume->info.record_size);
 	}
 	return result == NTFS_END ? NTFS_OK : result;
 }
@@ -279,8 +281,8 @@ static enum ntfs_result
 catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *catalog)
 {
 	const struct ntfs_disk_record *header = (const void *)node->record;
-	const struct catalog_entry *entry;
-	struct ntfs_attr_view attr;
+	const struct ntfs_stream_catalog_entry *entry;
+	struct ntfs_attr_view attribute_view;
 	struct ntfs_stream_name name = {0};
 	uint32_t position = ntfs_u16(header->attrs_offset), low, high, middle;
 	size_t i;
@@ -291,15 +293,16 @@ catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *cat
 	if (result != NTFS_OK) {
 		return result;
 	}
-	while ((result = ntfs_attr_at(node->record, ntfs_u32(header->used), &position, &attr)) ==
-	    NTFS_OK) {
-		if (attr.type != NTFS_ATTRIBUTE_DATA || attribute_lowest(&attr) != 0) {
+	while ((result = ntfs_attr_at(
+		    node->record, ntfs_u32(header->used), &position, &attribute_view)) == NTFS_OK) {
+		if (attribute_view.type != NTFS_ATTRIBUTE_DATA ||
+		    catalog_attribute_lowest(&attribute_view) != 0) {
 			continue;
 		}
-		name.length = attr.disk->name_length;
+		name.length = attribute_view.disk->name_length;
 		for (i = 0; i < name.length; i++) {
-			name.units[i] = ntfs_u16(attr.bytes + ntfs_u16(attr.disk->name_offset) +
-			    i * NTFS_UTF16_UNIT_BYTES);
+			name.units[i] = ntfs_u16(attribute_view.bytes +
+			    ntfs_u16(attribute_view.disk->name_offset) + i * NTFS_UTF16_UNIT_BYTES);
 		}
 		low = 0;
 		high = catalog->count;
@@ -325,7 +328,7 @@ catalog_check_base(struct ntfs_node *node, const struct ntfs_stream_catalog *cat
 			return result;
 		}
 		if (comparison != 0 || entry->reference != node->reference ||
-		    entry->instance != attr.instance) {
+		    entry->instance != attribute_view.instance) {
 			return NTFS_CORRUPT;
 		}
 	}
@@ -418,17 +421,17 @@ ntfs_stream_catalog_entry_impl(
 void
 ntfs_stream_catalog_close(struct ntfs_stream_catalog *catalog)
 {
-	struct ntfs_volume *v;
+	struct ntfs_volume *volume;
 
 	if (catalog == NULL) {
 		return;
 	}
-	v = catalog->volume;
+	volume = catalog->volume;
 	if (catalog->external) {
-		v->children--;
+		volume->children--;
 	}
-	ntfs_free(v, catalog->entries, (size_t)catalog->capacity * sizeof(*catalog->entries));
-	ntfs_free(v, catalog, sizeof(*catalog));
+	ntfs_free(volume, catalog->entries, (size_t)catalog->capacity * sizeof(*catalog->entries));
+	ntfs_free(volume, catalog, sizeof(*catalog));
 }
 
 struct ntfs_volume *

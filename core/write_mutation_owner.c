@@ -4,7 +4,7 @@
 #include "write_batch_execute.h"
 #include "write_batch_recover.h"
 
-struct mutation_projection {
+struct ntfs_write_mutation_projection {
 	struct ntfs_overwrite_environment source;
 	const struct ntfs_write_batch_recovery *recovery;
 	const struct ntfs_write_checkpoint *checkpoint;
@@ -14,7 +14,7 @@ struct mutation_projection {
 static void *
 projection_allocate(void *context, size_t bytes)
 {
-	struct mutation_projection *view = context;
+	struct ntfs_write_mutation_projection *view = context;
 
 	return view->source.reader.allocate(view->source.reader.context, bytes);
 }
@@ -22,7 +22,7 @@ projection_allocate(void *context, size_t bytes)
 static void
 projection_release(void *context, void *memory, size_t bytes)
 {
-	struct mutation_projection *view = context;
+	struct ntfs_write_mutation_projection *view = context;
 
 	view->source.reader.release(view->source.reader.context, memory, bytes);
 }
@@ -30,7 +30,7 @@ projection_release(void *context, void *memory, size_t bytes)
 static enum ntfs_result
 projection_read(void *context, uint64_t offset, void *output, size_t bytes)
 {
-	struct mutation_projection *view = context;
+	struct ntfs_write_mutation_projection *view = context;
 	const struct ntfs_write_batch_recovery_publication *recovery;
 	const struct ntfs_write_checkpoint_publication *checkpoint;
 	const uint8_t *image;
@@ -86,7 +86,7 @@ projection_read(void *context, uint64_t offset, void *output, size_t bytes)
 static enum ntfs_result
 projection_write(void *context, uint64_t offset, const void *image, size_t bytes, size_t *actual)
 {
-	struct mutation_projection *view = context;
+	struct ntfs_write_mutation_projection *view = context;
 
 	return view->source.write(view->source.reader.context, offset, image, bytes, actual);
 }
@@ -94,13 +94,13 @@ projection_write(void *context, uint64_t offset, const void *image, size_t bytes
 static enum ntfs_result
 projection_persist(void *context)
 {
-	struct mutation_projection *view = context;
+	struct ntfs_write_mutation_projection *view = context;
 
 	return view->source.persist(view->source.reader.context);
 }
 
 static struct ntfs_overwrite_environment
-projection_backend(struct mutation_projection *view)
+projection_backend(struct ntfs_write_mutation_projection *view)
 {
 	struct ntfs_overwrite_environment backend = view->source;
 
@@ -114,7 +114,8 @@ projection_backend(struct mutation_projection *view)
 }
 
 static enum ntfs_result
-check_policy(const struct ntfs_environment *reader, uint32_t alignment, struct ntfs_info *info)
+mutation_owner_check_policy(
+    const struct ntfs_environment *reader, uint32_t alignment, struct ntfs_info *info)
 {
 	struct ntfs_volume *volume = NULL;
 	enum ntfs_result result, closed;
@@ -145,7 +146,7 @@ ntfs_write_mutation_owner_open(const struct ntfs_overwrite_environment *environm
 {
 	struct ntfs_overwrite *owner = NULL;
 	struct ntfs_write_batch_recovery *recovery = NULL;
-	struct mutation_projection view = {0};
+	struct ntfs_write_mutation_projection view = {0};
 	struct ntfs_overwrite_environment backend, projected;
 	enum ntfs_result result;
 
@@ -178,7 +179,8 @@ ntfs_write_mutation_owner_open(const struct ntfs_overwrite_environment *environm
 	projected = projection_backend(&view);
 	result = ntfs_validate(&projected.reader, NULL, NULL, &admission->validation);
 	if (result == NTFS_OK) {
-		result = check_policy(&projected.reader, backend.alignment, &admission->info);
+		result = mutation_owner_check_policy(
+		    &projected.reader, backend.alignment, &admission->info);
 	}
 	if (result == NTFS_OK) {
 		result = ntfs_write_batch_recover_execute(recovery, &owner->poisoned, report);
@@ -198,8 +200,8 @@ done:
 }
 
 static bool
-name_output_separate(const struct ntfs_overwrite *owner, const struct ntfs_write_name *name,
-    const struct ntfs_write_mutation_report *report)
+mutation_owner_name_output_separate(const struct ntfs_overwrite *owner,
+    const struct ntfs_write_name *name, const struct ntfs_write_mutation_report *report)
 {
 	return name != NULL &&
 	    ntfs_pointer_ranges_separate(name, sizeof(*name), report, sizeof(*report)) &&
@@ -209,7 +211,7 @@ name_output_separate(const struct ntfs_overwrite *owner, const struct ntfs_write
 struct ntfs_write_mutation_execution {
 	struct ntfs_overwrite *owner;
 	struct ntfs_overwrite_environment backend;
-	struct mutation_projection projection;
+	struct ntfs_write_mutation_projection projection;
 	struct ntfs_write_batch_execution *execution;
 	struct ntfs_write_checkpoint *checkpoint;
 	struct ntfs_write_mutation_preview preview;
@@ -217,7 +219,8 @@ struct ntfs_write_mutation_execution {
 };
 
 static enum ntfs_result
-read_item(struct ntfs_volume *volume, uint64_t reference, struct ntfs_write_mutation_item *out)
+mutation_owner_read_item(
+    struct ntfs_volume *volume, uint64_t reference, struct ntfs_write_mutation_item *out)
 {
 	struct ntfs_node *node = NULL;
 	struct ntfs_write_mutation_item item = {0};
@@ -241,7 +244,7 @@ read_item(struct ntfs_volume *volume, uint64_t reference, struct ntfs_write_muta
 }
 
 static enum ntfs_result
-find_over_item(struct ntfs_volume *volume, const struct ntfs_write_name *name,
+mutation_owner_find_over_item(struct ntfs_volume *volume, const struct ntfs_write_name *name,
     struct ntfs_write_mutation_item *out)
 {
 	struct ntfs_node *parent = NULL, *node = NULL;
@@ -257,15 +260,16 @@ find_over_item(struct ntfs_volume *volume, const struct ntfs_write_name *name,
 	}
 	ntfs_node_close(node);
 	ntfs_node_close(parent);
-	return result == NTFS_OK ? read_item(volume, stat.reference, out) : result;
+	return result == NTFS_OK ? mutation_owner_read_item(volume, stat.reference, out) : result;
 }
 
 static enum ntfs_result
-read_retirement(struct ntfs_volume *volume, struct ntfs_write_mutation_item *item, bool *exists)
+mutation_owner_read_retirement(
+    struct ntfs_volume *volume, struct ntfs_write_mutation_item *item, bool *exists)
 {
 	enum ntfs_result result;
 
-	result = read_item(volume, item->stat.reference, item);
+	result = mutation_owner_read_item(volume, item->stat.reference, item);
 	if (result == NTFS_OK) {
 		*exists = true;
 		return NTFS_OK;
@@ -284,7 +288,7 @@ read_retirement(struct ntfs_volume *volume, struct ntfs_write_mutation_item *ite
 }
 
 static enum ntfs_result
-prepare_preview(struct ntfs_write_mutation_execution *prepared,
+mutation_owner_prepare_preview(struct ntfs_write_mutation_execution *prepared,
     const struct ntfs_write_mutation_request *request, const struct ntfs_write_mutation_plan *plan)
 {
 	struct ntfs_write_mutation_preview *preview = &prepared->preview;
@@ -302,10 +306,11 @@ prepare_preview(struct ntfs_write_mutation_execution *prepared,
 	if (removing || request->kind == NTFS_WRITE_RENAME) {
 		result = ntfs_mount(&prepared->backend.reader, NULL, &volume);
 		if (result == NTFS_OK && removing) {
-			result = read_item(volume, reference, &preview->item);
+			result = mutation_owner_read_item(volume, reference, &preview->item);
 		}
 		if (result == NTFS_OK && request->kind == NTFS_WRITE_RENAME) {
-			result = find_over_item(volume, &request->destination, &preview->over_item);
+			result = mutation_owner_find_over_item(
+			    volume, &request->destination, &preview->over_item);
 			if (result == NTFS_NOT_FOUND) {
 				result = NTFS_OK;
 			} else if (result == NTFS_OK) {
@@ -327,23 +332,25 @@ prepare_preview(struct ntfs_write_mutation_execution *prepared,
 	}
 	if (result == NTFS_OK) {
 		if (removing) {
-			result = read_retirement(volume, &preview->item, &preview->item_exists);
+			result = mutation_owner_read_retirement(
+			    volume, &preview->item, &preview->item_exists);
 		} else {
-			result = read_item(volume, reference, &preview->item);
+			result = mutation_owner_read_item(volume, reference, &preview->item);
 			preview->item_exists = result == NTFS_OK;
 		}
 	}
 	if (result == NTFS_OK && preview->over_item_present) {
-		result = read_retirement(volume, &preview->over_item, &preview->over_item_exists);
+		result = mutation_owner_read_retirement(
+		    volume, &preview->over_item, &preview->over_item_exists);
 	}
 	if (result == NTFS_OK && request->kind != NTFS_WRITE_RESIZE_FILE &&
 	    request->kind != NTFS_WRITE_GROWING_RANGE) {
-		result =
-		    read_item(volume, request->source.parent_reference, &preview->source_directory);
+		result = mutation_owner_read_item(
+		    volume, request->source.parent_reference, &preview->source_directory);
 		preview->source_directory_present = result == NTFS_OK;
 	}
 	if (result == NTFS_OK && request->kind == NTFS_WRITE_RENAME) {
-		result = read_item(
+		result = mutation_owner_read_item(
 		    volume, request->destination.parent_reference, &preview->destination_directory);
 		preview->destination_directory_present = result == NTFS_OK;
 	}
@@ -441,12 +448,13 @@ ntfs_write_mutation_execution_prepare(struct ntfs_overwrite *owner,
 	owner->mutation = prepared;
 	ntfs_write_owner_begin(owner);
 	prepared->backend = ntfs_write_owner_backend(owner);
-	result = check_policy(&prepared->backend.reader, prepared->backend.alignment, &info);
+	result = mutation_owner_check_policy(
+	    &prepared->backend.reader, prepared->backend.alignment, &info);
 	if (result == NTFS_OK) {
 		result = ntfs_write_mutation_prepare(&prepared->backend.reader, request, &plan);
 	}
 	if (result == NTFS_OK) {
-		result = prepare_preview(prepared, request, plan);
+		result = mutation_owner_prepare_preview(prepared, request, plan);
 		prepared->noop = ntfs_write_mutation_plan_count(plan) == 0;
 	}
 	if (result == NTFS_OK && !prepared->noop) {
@@ -547,8 +555,8 @@ ntfs_write_mutation_execution_execute(
 }
 
 static enum ntfs_result
-execute_request(struct ntfs_overwrite *owner, const struct ntfs_write_mutation_request *request,
-    struct ntfs_write_mutation_report *report)
+mutation_owner_execute_request(struct ntfs_overwrite *owner,
+    const struct ntfs_write_mutation_request *request, struct ntfs_write_mutation_report *report)
 {
 	struct ntfs_write_mutation_execution *prepared = NULL;
 	enum ntfs_result result;
@@ -580,13 +588,13 @@ ntfs_write_create_file(struct ntfs_overwrite *owner, const struct ntfs_write_nam
 {
 	struct ntfs_write_mutation_request request = {0};
 
-	if (!name_output_separate(owner, name, report)) {
+	if (!mutation_owner_name_output_separate(owner, name, report)) {
 		return NTFS_INVALID;
 	}
 	request.kind = NTFS_WRITE_CREATE_FILE;
 	request.source = *name;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }
 
 enum ntfs_result
@@ -595,13 +603,13 @@ ntfs_write_create_directory(struct ntfs_overwrite *owner, const struct ntfs_writ
 {
 	struct ntfs_write_mutation_request request = {0};
 
-	if (!name_output_separate(owner, name, report)) {
+	if (!mutation_owner_name_output_separate(owner, name, report)) {
 		return NTFS_INVALID;
 	}
 	request.kind = NTFS_WRITE_CREATE_DIRECTORY;
 	request.source = *name;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }
 
 enum ntfs_result
@@ -614,7 +622,7 @@ ntfs_write_resize_file(struct ntfs_overwrite *owner, uint64_t reference, uint64_
 	request.reference = reference;
 	request.size = bytes;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }
 
 enum ntfs_result
@@ -629,7 +637,7 @@ ntfs_write_growing_range(struct ntfs_overwrite *owner, uint64_t reference, uint6
 	request.data = data;
 	request.bytes = bytes;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }
 
 enum ntfs_result
@@ -638,13 +646,13 @@ ntfs_write_remove_file(struct ntfs_overwrite *owner, const struct ntfs_write_nam
 {
 	struct ntfs_write_mutation_request request = {0};
 
-	if (!name_output_separate(owner, name, report)) {
+	if (!mutation_owner_name_output_separate(owner, name, report)) {
 		return NTFS_INVALID;
 	}
 	request.kind = NTFS_WRITE_REMOVE_FILE;
 	request.source = *name;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }
 
 enum ntfs_result
@@ -653,13 +661,13 @@ ntfs_write_remove_directory(struct ntfs_overwrite *owner, const struct ntfs_writ
 {
 	struct ntfs_write_mutation_request request = {0};
 
-	if (!name_output_separate(owner, name, report)) {
+	if (!mutation_owner_name_output_separate(owner, name, report)) {
 		return NTFS_INVALID;
 	}
 	request.kind = NTFS_WRITE_REMOVE_DIRECTORY;
 	request.source = *name;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }
 
 enum ntfs_result
@@ -669,8 +677,8 @@ ntfs_write_rename(struct ntfs_overwrite *owner, const struct ntfs_write_name *so
 {
 	struct ntfs_write_mutation_request request = {0};
 
-	if (!name_output_separate(owner, source, report) ||
-	    !name_output_separate(owner, destination, report)) {
+	if (!mutation_owner_name_output_separate(owner, source, report) ||
+	    !mutation_owner_name_output_separate(owner, destination, report)) {
 		return NTFS_INVALID;
 	}
 	request.kind = NTFS_WRITE_RENAME;
@@ -678,5 +686,5 @@ ntfs_write_rename(struct ntfs_overwrite *owner, const struct ntfs_write_name *so
 	request.destination = *destination;
 	request.replace = replace;
 	request.filetime = filetime;
-	return execute_request(owner, &request, report);
+	return mutation_owner_execute_request(owner, &request, report);
 }

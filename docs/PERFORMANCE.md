@@ -124,6 +124,151 @@ and saturation matrix. Their retained command records explicitly disable LSan
 for this ptraced environment, so these are supplementary fatal ASan/UBSan results,
 not the full hosted sanitizer gate. No matched timing result follows from them.
 
+## Cloud codec continuation
+
+This continuation optimizes the existing LZNT1 encoder/decoder and canonical
+XPRESS/LZX fallback searches. The private encoder advances its position-dependent
+token widths once per chunk and omits exact premeasurement when the checked raw
+bound already proves output capacity. Smaller admitted buffers still use exact
+measurement before any output publication. Encoded bytes, the one-MiB input
+policy, 12-KiB caller workspace, complete alias admission and refusal guarantees
+remain unchanged. It adds no compressed filesystem write admission.
+
+The LZNT1 decoder advances the same monotone widths and copies complete eight-
+literal groups only after input, chunk and destination bounds all pass. Its
+scalar tail preserves partial output and the existing corruption/range error
+order. XPRESS and LZX retain their eight-bit prefix tables and direct first
+fallback width. A fixed bounded decision tree locates later canonical widths
+using normalized monotone bucket ends; the final bucket still checks its lower
+bound and count. Reader consumption, LZX lookahead availability and XPRESS raw
+extension-byte order are unchanged. Workspace stays 1,664 bytes for XPRESS and
+4,940 bytes for LZX. No new table, allocation or architecture-specific instruction
+is introduced.
+
+`check_lznt1.py` compares complete success/failure output with the immutable
+pre-change source and retains independent literal/flag/chunk-end oracles. Each
+of userspace, portable memory plus portable wire access, and GPR-only host
+execution passes 82,614 decoder checks and 2,978 encoder capacity checks. The
+independent original encoder suite also passes in each context. The same three
+contexts each pass 229,388 Huffman boundary, truncation and mutation checks over
+662 original packets. These local ASan/UBSan runs explicitly disable LSan because
+the interactive sandbox's ptrace restriction prevents it; they supplement the
+mandatory full hosted sanitizer gate. They establish no kernel execution or
+new native Windows verdict.
+
+The expanded fuzz corpus retains all legal Huffman widths/word offsets and
+LZNT1 literal-group lengths, all 256 flag combinations, width transitions,
+chunk resets and the chunk-end error-order case. Seeds augment the existing
+malformed corpus. Ordinary seed replays and bounded fuzz campaigns remain
+separate evidence from the differential checks.
+
+The matched Release experiments freeze the same committed pre-change source,
+original fixtures and identical harness per comparison. Linux GCC 14 `-O2`,
+unaligned buffers, userspace/GPR contexts and alternating pair order are retained.
+The decoder harness now measures process CPU as well as monotonic wall time;
+the earlier wall-only experiment remains preserved and is not relabeled as CPU
+evidence. The encoder harness separates measurement, exact-capacity output and
+raw-bound-capacity output across 18 original workloads. Timed calls perform no
+core allocation or I/O; successful outputs have independent original-byte
+inspection outside timing. No mounted or durable-storage throughput follows
+from these complete in-memory codec calls.
+
+The retained local baseline is `d7762a27d3c82e24d0091c0787f0bd8747b0a050`, with the
+same source tree as published `3d28cba`. Both identify the pre-optimization
+private encoder. Reports, exact commands, candidate variants and raw paired
+samples are under `artifacts/dots-codec-optimization/`; the process-CPU decoder
+preparation is separate at `decoder-cpu/`, and the encoder preparation is under
+`encoder/`. This is an implementation comparison on a shared cloud runner,
+not an independent-driver comparison.
+
+### Local paired decoder measurements
+
+The final decoder has 68 configurations with nine alternating pairs and 100-ms
+pilot-calibrated samples. Thirty selected configurations additionally have
+thirteen pairs at 250 ms. The table gives the **median of paired process-CPU
+reference/candidate ratios** from that longer confirmation; it is not the ratio
+of aggregate medians. The JSON `cpuSpeedup` field uses the latter statistic:
+`median(before CPU) / median(after CPU)`. The paired statistic below is
+`median(before[i] CPU / after[i] CPU)` computed from its raw `samples` arrays.
+A value above one means faster complete decoding. Wall uses the same paired
+aggregation of the separately retained monotonic-clock measurements.
+
+| Complete decode | Userspace CPU | GPR CPU | Userspace wall | GPR wall |
+| --- | ---: | ---: | ---: | ---: |
+| LZNT1 literal groups | 1.555× | 2.307× | 1.554× | 2.307× |
+| LZNT1 period-31, 4 KiB | 1.139× | 1.255× | 1.140× | 1.255× |
+| XPRESS 15-bit codes | 1.642× | 1.615× | 1.642× | 1.615× |
+| LZX 16-bit codes | 1.534× | 1.588× | 1.533× | 1.588× |
+| LZX mixed widths | 1.094× | 1.137× | 1.093× | 1.137× |
+| XPRESS 9-bit literals | 0.995× | 0.993× | 0.996× | 0.994× |
+| LZX short codes | 1.008× | 0.998× | 1.008× | 0.998× |
+| LZNT1 raw storage | 0.989× | 0.970× | 0.988× | 0.971× |
+
+Every long-confirmation pair improves for the three principal literal/long-code
+profiles. Their CPU ratio ranges are 1.452–1.671 / 2.134–2.807 for LZNT1 literals,
+1.295–1.792 / 1.495–1.748 for XPRESS long codes, and 1.384–1.702 /
+1.340–1.676 for LZX long codes. Wall paired medians closely follow CPU here.
+The fixed-tree candidate removes the preceding candidate's approximately 11%
+nine-bit XPRESS regression. The preceding candidate and its measurements remain
+retained, not folded into the final statistics.
+
+Controls are not universally faster. Raw LZNT1's longer median remains about
+1.2%/3.0% slower, with paired ranges 0.923–1.108 / 0.874–1.168 crossing parity.
+Other long-confirmation memory and short-code controls also have mixed pairs.
+Shared-runner noise is material: even unchanged userspace 64-byte equality has
+CPU ratios 0.734–2.445 around a 0.999 median. These ranges are observations, not
+confidence intervals or a guarantee for other workloads. A 0.61-second unrelated
+ZIP extraction potentially overlaps the original userspace 64-KiB zero control;
+its timing note and every sample remain retained. The distinct longer zero
+control is approximately at parity (0.997×/0.996×). No observation was deleted.
+
+Final decoder evidence is in
+`artifacts/dots-codec-optimization/decoder-cpu/candidate-v4/result.json` and
+`artifacts/dots-codec-optimization/decoder-cpu/candidate-v4-long-controls/result.json`;
+each report contains every raw sample and its directory preserves each command's
+stdout/stderr. Full hosted sanitizer, architecture and native-codec qualification
+is tracked separately in CLOUD-STATUS.
+
+### Local paired encoder measurements
+
+The full encoder experiment retains 108 configurations: eighteen original inputs,
+three operations and two contexts, each with nine alternating pairs at 50 ms.
+Sixteen selected configurations have a further thirteen pairs at 250 ms.
+The encoder algorithm is unchanged between these experiments; the later source
+only incorporates the selected-Xcode formatting patch. Both use the same frozen
+reference, harness and original inputs. The table uses the longer confirmation
+and the same median-of-paired-ratios statistic as the decoder table.
+
+| Encoder operation/input | Userspace CPU | GPR CPU | Userspace wall | GPR wall |
+| --- | ---: | ---: | ---: | ---: |
+| Raw-bound output, 4-KiB noise | 3.067× | 3.510× | 3.067× | 3.510× |
+| Raw-bound output, 64-KiB zeros | 1.966× | 1.955× | 1.966× | 1.955× |
+| Raw-bound output, 64-KiB mixed chunks | 3.371× | 3.863× | 3.372× | 3.871× |
+| Exact output, 4-KiB period-3 | 0.952× | 0.946× | 0.951× | 0.946× |
+| Exact output, 64-KiB period-63 | 0.986× | 0.970× | 0.986× | 0.970× |
+| Exact output, one-MiB zeros | 0.973× | 0.983× | 0.973× | 0.983× |
+| Measure, 4-KiB period-31 | 1.016× | 0.960× | 1.016× | 0.960× |
+| Measure, 64-KiB period-31 | 0.982× | 0.975× | 0.982× | 0.975× |
+
+Every longer raw-bound-output pair improves for these three input classes:
+CPU ratio ranges are 2.688–3.429 / 3.057–4.741 for noise, 1.554–2.124 /
+1.867–2.150 for zeros, and 2.431–4.658 / 3.159–4.484 for mixed chunks.
+Smaller exact-capacity buffers retain their premeasurement cost and do not
+universally benefit. Period-3 exact output remains about 5.1%/5.7% slower by
+paired CPU median; its ranges are 0.739–1.091 / 0.871–1.112. Other selected
+measurement/exact controls range from 0.960× to 1.016×, also with pairs crossing
+parity. The raw-bound improvement therefore does not imply a universal encoder
+gain or a compression-ratio improvement.
+
+All matched rows agree on plaintext bytes, encoded bytes/checksum, declared
+capacity and 12,288-byte workspace. Zero core allocations and I/O follow the
+encoder's no-callback/no-allocation contract; those fields are not instrumentation
+of process-wide allocation or peak RSS. The fixtures include empty/tiny, patterned,
+incompressible, mixed, record-like and one-MiB inputs, and no failed or slow row is
+excluded from the complete retained reports:
+`artifacts/dots-codec-optimization/encoder/candidate-v3/result.json` and
+`artifacts/dots-codec-optimization/encoder/candidate-v4-long-controls/result.json`.
+
 ## Incremental directory and journal preparation
 
 This connected C batch changes four preparation paths: local `$I30` editing,
@@ -1536,13 +1681,14 @@ is established by the native-link component checkpoint.
 
 ## Standalone XPRESS measurement scope
 
-The original XPRESS decoder now uses 1,664 bytes of caller scratch with an
-eight-bit prefix table and canonical fallback. Exact-byte vectors and bounded
-fuzz qualify correctness within WOF.md's single-block contract; they establish
-no throughput gain. Add matched codec profiles for short/long codes, literals,
-overlapping copies, extended lengths and WOF unit sizes. Record decode CPU,
-latency and scratch separately from compressed-input reads and future unit-cache
-hits/misses. Integrated provider/cache and native comparisons remain open.
+The original XPRESS checkpoint established 1,664 bytes of caller scratch with an
+eight-bit prefix table and canonical fallback. Its exact-byte vectors and bounded
+fuzz qualified WOF.md's single-block contract without a throughput claim. The
+later [Huffman measurements](#huffman-decoding) and
+[cloud codec continuation](#cloud-codec-continuation) provide matched CPU results
+for short/long codes, literals and overlapping copies. Keep decode CPU and scratch
+separate from compressed-input reads and unit-cache hits/misses. Those codec
+results do not establish an integrated provider or mounted native speedup.
 
 ## FSKit resource transfer measurements
 

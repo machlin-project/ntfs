@@ -37,7 +37,7 @@ def main():
         return result.strip()
 
     results = []
-    for context, flags in (('userspace', []), ('portable', ['-DNTFS_MEMORY_PORTABLE']),
+    for context, flags in (('userspace', []), ('portable', ['-DNTFS_MEMORY_PORTABLE', '-DNTFS_WIRE_BYTES_PORTABLE']),
                            ('general-registers', ['-DKERNEL', '-mgeneral-regs-only'])):
         objects = []
         support_exports = ('u16', 'u32', 'u64', 'put_u16', 'put_u32', 'put_u64', 'bounds',

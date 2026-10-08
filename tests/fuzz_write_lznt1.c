@@ -5,8 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { FUZZ_GUARD_BYTES = 32, FUZZ_GUARD = 0xa5, FUZZ_SMOKE_CASES = 512,
-	FUZZ_SMOKE_BYTES = 65536 };
+enum { FUZZ_GUARD_BYTES = 32, FUZZ_GUARD = 0xa5, FUZZ_SMOKE_CASES = 512, FUZZ_SMOKE_BYTES = 65536 };
 
 static void
 check_guard(const uint8_t *bytes, size_t count)
@@ -23,7 +22,7 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
 	uint8_t *scratch, *output, *second, *decoded;
 	size_t workspace, bound = SIZE_MAX, required = SIZE_MAX, written = SIZE_MAX,
-	       done = SIZE_MAX, capacity, alignment;
+			  done = SIZE_MAX, capacity, alignment;
 	enum ntfs_result result;
 
 	if (size > NTFS_WRITE_LZNT1_MAX_BYTES) {
@@ -38,25 +37,28 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 	second = malloc(bound + FUZZ_GUARD_BYTES);
 	decoded = malloc(size + alignment);
 	assert(scratch && output && second && (decoded || size + alignment == 0));
-	assert(ntfs_write_lznt1_measure(data, size, scratch + alignment, workspace,
-	    &required) == NTFS_OK && required <= bound);
+	assert(ntfs_write_lznt1_measure(data, size, scratch + alignment, workspace, &required) ==
+		NTFS_OK &&
+	    required <= bound);
 	memset(output, FUZZ_GUARD, bound + FUZZ_GUARD_BYTES);
 	capacity = required != 0 && (data[0] & 1u) != 0 ? required - 1 : required;
-	result = ntfs_write_lznt1_encode(data, size, scratch + alignment, workspace,
-	    output, capacity, &written);
+	result = ntfs_write_lznt1_encode(
+	    data, size, scratch + alignment, workspace, output, capacity, &written);
 	if (capacity < required) {
 		assert(result == NTFS_RANGE && written == SIZE_MAX);
 		check_guard(output, bound + FUZZ_GUARD_BYTES);
-		result = ntfs_write_lznt1_encode(data, size, scratch + alignment, workspace,
-		    output, required, &written);
+		result = ntfs_write_lznt1_encode(
+		    data, size, scratch + alignment, workspace, output, required, &written);
 	}
 	assert(result == NTFS_OK && written == required);
 	check_guard(output + written, bound + FUZZ_GUARD_BYTES - written);
-	assert(ntfs_write_lznt1_encode(data, size, scratch + alignment, workspace,
-	    second, bound, &done) == NTFS_OK && done == written);
+	assert(ntfs_write_lznt1_encode(
+		   data, size, scratch + alignment, workspace, second, bound, &done) == NTFS_OK &&
+	    done == written);
 	assert(memcmp(output, second, written) == 0);
-	assert(ntfs_lznt1_decode(output, written, size == 0 ? NULL : decoded + alignment,
-	    size, &done) == NTFS_OK && done == size);
+	assert(ntfs_lznt1_decode(output, written, size == 0 ? NULL : decoded + alignment, size,
+		   &done) == NTFS_OK &&
+	    done == size);
 	if (size != 0) {
 		assert(memcmp(data, decoded + alignment, size) == 0);
 	}
@@ -84,8 +86,8 @@ main(void)
 			state ^= state << 13;
 			state ^= state >> 17;
 			state ^= state << 5;
-			input[index] = run % 3 == 0 ? (uint8_t)state
-						  : (uint8_t)(index % (run % 29 + 1));
+			input[index] =
+			    run % 3 == 0 ? (uint8_t)state : (uint8_t)(index % (run % 29 + 1));
 		}
 		(void)LLVMFuzzerTestOneInput(input, size);
 	}

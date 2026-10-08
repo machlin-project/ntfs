@@ -7,7 +7,7 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 	const uint8_t *source_bytes = input;
 	uint8_t *destination_bytes = output;
 	size_t input_offset = 0, output_offset = 0, end, base, chunk, displacement, length,
-	       position;
+	       position, threshold;
 	uint16_t header, token, mask;
 	unsigned bit, shift;
 	uint8_t flags;
@@ -46,8 +46,23 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 			output_offset += chunk;
 			input_offset = end;
 		} else {
+			mask = NTFS_LZNT1_LENGTH_MASK;
+			shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
+			threshold = NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD;
 			while (input_offset < end) {
 				flags = source_bytes[input_offset++];
+				/* Batch only a complete, admitted literal group. The scalar
+				 * tail retains partial writes and CORRUPT-before-RANGE order
+				 * at a chunk boundary or short caller destination. */
+				if (flags == 0 && end - input_offset >= NTFS_BITS_PER_BYTE &&
+				    NTFS_LZNT1_CHUNK - (output_offset - base) >= NTFS_BITS_PER_BYTE &&
+				    capacity - output_offset >= NTFS_BITS_PER_BYTE) {
+					ntfs_copy(destination_bytes + output_offset,
+					    source_bytes + input_offset, NTFS_BITS_PER_BYTE);
+					input_offset += NTFS_BITS_PER_BYTE;
+					output_offset += NTFS_BITS_PER_BYTE;
+					continue;
+				}
 				for (bit = 0; bit < NTFS_BITS_PER_BYTE && input_offset < end;
 				    bit++) {
 					if ((flags & (1u << bit)) == 0) {
@@ -66,14 +81,13 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 						}
 						token = ntfs_u16(source_bytes + input_offset);
 						input_offset += NTFS_LZNT1_TOKEN_BYTES;
-						mask = NTFS_LZNT1_LENGTH_MASK;
-						shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
-						position = output_offset - base - 1;
-						while (
-						    position >= NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD) {
+						position = output_offset - base;
+						/* Output is monotone within this chunk. Advance each
+						 * width boundary once, including jumps over several. */
+						while (position > threshold) {
 							mask >>= 1;
 							shift--;
-							position >>= 1;
+							threshold *= 2;
 						}
 						displacement = (token >> shift) + 1u;
 						length = (token & mask) + NTFS_LZNT1_MIN_MATCH;

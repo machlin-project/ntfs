@@ -12,8 +12,8 @@ enum {
 };
 
 _Static_assert(NTFS_LZNT1_CHUNK < UINT16_MAX, "chunk positions fit hash entries");
-_Static_assert((LZNT1_HASH_BUCKETS & (LZNT1_HASH_BUCKETS - 1)) == 0,
-    "hash bucket count is a power of two");
+_Static_assert(
+    (LZNT1_HASH_BUCKETS & (LZNT1_HASH_BUCKETS - 1)) == 0, "hash bucket count is a power of two");
 
 size_t
 ntfs_write_lznt1_workspace_size(void)
@@ -41,8 +41,8 @@ ntfs_write_lznt1_bound(size_t bytes, size_t *bound)
 }
 
 static enum ntfs_result
-lznt1_write_admit(const void *input, size_t bytes, void *workspace, size_t workspace_capacity,
-    size_t *written)
+lznt1_write_admit(
+    const void *input, size_t bytes, void *workspace, size_t workspace_capacity, size_t *written)
 {
 	if (bytes > NTFS_WRITE_LZNT1_MAX_BYTES) {
 		return NTFS_RANGE;
@@ -52,7 +52,8 @@ lznt1_write_admit(const void *input, size_t bytes, void *workspace, size_t works
 	    !ntfs_pointer_range_valid(written, sizeof(*written)) ||
 	    !ntfs_pointer_ranges_separate(input, bytes, workspace, workspace_capacity) ||
 	    !ntfs_pointer_ranges_separate(input, bytes, written, sizeof(*written)) ||
-	    !ntfs_pointer_ranges_separate(workspace, workspace_capacity, written, sizeof(*written))) {
+	    !ntfs_pointer_ranges_separate(
+		workspace, workspace_capacity, written, sizeof(*written))) {
 		return NTFS_INVALID;
 	}
 	if (bytes != 0 && workspace_capacity < LZNT1_WORKSPACE_BYTES) {
@@ -78,9 +79,9 @@ lznt1_write_chunk(const uint8_t *input, size_t bytes, uint8_t *workspace)
 {
 	uint8_t *body = workspace + LZNT1_HASH_BYTES;
 	size_t position = 0, stored = 0, flag_at = 0, hash, previous, length, maximum,
-	       displacement = 0, next, index, threshold;
-	uint16_t candidate, token, mask;
-	unsigned bit = 0, shift;
+	       displacement = 0, next, index, threshold = NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD;
+	uint16_t candidate, token, mask = NTFS_LZNT1_LENGTH_MASK;
+	unsigned bit = 0, shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
 
 	ntfs_zero(workspace, LZNT1_HASH_BYTES);
 	while (position < bytes) {
@@ -92,11 +93,8 @@ lznt1_write_chunk(const uint8_t *input, size_t bytes, uint8_t *workspace)
 			body[flag_at] = 0;
 		}
 		length = 0;
-		shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
-		mask = NTFS_LZNT1_LENGTH_MASK;
-		/* MS-XCA width transitions occur after positions 16, 32, ...,
-		 * 2048. Position zero never produces a backward reference. */
-		threshold = NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD;
+		/* Width boundaries advance once per chunk, even when a match jumps
+		 * across several. Position zero never produces a reference. */
 		while (position > threshold) {
 			threshold *= 2;
 			shift--;
@@ -180,8 +178,8 @@ lznt1_write_walk(const uint8_t *input, size_t bytes, uint8_t *workspace, uint8_t
 }
 
 enum ntfs_result
-ntfs_write_lznt1_measure(const void *input, size_t bytes, void *workspace,
-    size_t workspace_capacity, size_t *written)
+ntfs_write_lznt1_measure(
+    const void *input, size_t bytes, void *workspace, size_t workspace_capacity, size_t *written)
 {
 	enum ntfs_result result;
 	size_t required;
@@ -196,8 +194,8 @@ ntfs_write_lznt1_measure(const void *input, size_t bytes, void *workspace,
 }
 
 enum ntfs_result
-ntfs_write_lznt1_encode(const void *input, size_t bytes, void *workspace,
-    size_t workspace_capacity, void *output, size_t capacity, size_t *written)
+ntfs_write_lznt1_encode(const void *input, size_t bytes, void *workspace, size_t workspace_capacity,
+    void *output, size_t capacity, size_t *written)
 {
 	enum ntfs_result result;
 	size_t required;
@@ -212,13 +210,20 @@ ntfs_write_lznt1_encode(const void *input, size_t bytes, void *workspace,
 	    !ntfs_pointer_ranges_separate(output, capacity, written, sizeof(*written))) {
 		return NTFS_INVALID;
 	}
-	required = lznt1_write_walk(input, bytes, workspace, NULL);
-	if (capacity < required) {
-		return NTFS_RANGE;
+	result = ntfs_write_lznt1_bound(bytes, &required);
+	if (result != NTFS_OK) {
+		return result;
 	}
-	/* Every possible failure precedes publication. The source remains immutable
-	 * and the second deterministic walk needs no further resource admission. */
-	(void)lznt1_write_walk(input, bytes, workspace, output);
+	if (capacity < required) {
+		required = lznt1_write_walk(input, bytes, workspace, NULL);
+		if (capacity < required) {
+			return NTFS_RANGE;
+		}
+	}
+	/* The raw bound already proves capacity for every chunk. Smaller buffers
+	 * retain exact premeasurement. Both paths complete every fallible check
+	 * before publication and keep the source immutable throughout the call. */
+	required = lznt1_write_walk(input, bytes, workspace, output);
 	*written = required;
 	return NTFS_OK;
 }

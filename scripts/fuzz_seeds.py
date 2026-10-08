@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Author independent small inputs for each parser fuzz target."""
 from pathlib import Path
+from itertools import chain
 import json
 import struct
 import sys
@@ -12,6 +13,10 @@ import access_transport as access_wire
 from stat_fixtures import change_flags, UNKNOWN_COMPRESSION_FORMAT
 from wof_fixtures import generate as generate_wof
 from lzx_fixtures import author as generate_lzx
+from lzx_fixtures import KIND_LZX as FUZZ_LZX_KIND
+from wof_fixtures import HEADER as WOF_FUZZ_HEADER, KIND_XPRESS as FUZZ_XPRESS_KIND
+from cpu_fixtures import lznt_period, LZNT_UNIT, LZNT_PACKED, LZNT_MIN_MATCH
+from huffman_fixtures import vectors as huffman_vectors, workloads as huffman_workloads
 from logfile_fixtures import author as generate_logfile
 import logfile_fixtures as logfile_wire
 from logfile_source_fixtures import author as generate_logfile_sources
@@ -165,6 +170,39 @@ def security_seeds():
     return output
 
 
+def compression_path_seeds():
+    """Original literal groups, width crossings and chunk-limit error ordering."""
+    cases = {}
+    for count in (7, 8, 9, 15, 16, 17, 24):
+        original = bytes(range(count))
+        body = b''.join(b'\0' + original[index:index + BITS_PER_BYTE]
+                        for index in range(0, count, BITS_PER_BYTE))
+        cases[f'literal-group-{count}'] = struct.pack(
+            '<H', wire.LZNT1_SIGNATURE | LZNT_PACKED | (len(body) - 1)) + body
+    for period in (1, 3, 7, 8, 15, 16, 17, 31, 32, 63):
+        packet, _ = lznt_period(bytes(range(period)), LZNT_UNIT)
+        cases[f'width-period-{period}'] = packet
+        cases[f'chunk-reset-period-{period}'] = packet + packet
+    for flags in range(1 << BITS_PER_BYTE):
+        body = bytearray(b'\0abcdefgh')
+        body.append(flags)
+        for bit in range(BITS_PER_BYTE):
+            body.extend(b'\0\0' if flags & (1 << bit) else bytes([ord('A') + bit]))
+        body.extend(b'\0' + b'01234567')
+        cases[f'flag-combination-{flags:02x}'] = struct.pack(
+            '<H', wire.LZNT1_SIGNATURE | LZNT_PACKED | (len(body) - 1)) + body
+    # One literal and an overlapping 4085-byte match leave ten chunk bytes.
+    # Six literals finish that flag group; an eight-literal group crosses the
+    # remaining four bytes. CORRUPT must win at byte 4096, even at exact capacity.
+    prefix_literals, first_group_literals, remaining_literals = 1, BITS_PER_BYTE - 2, BITS_PER_BYTE // 2
+    match_bytes = LZNT_UNIT - prefix_literals - first_group_literals - remaining_literals
+    body = (bytes([1 << prefix_literals]) + b'A' + struct.pack('<H', match_bytes - LZNT_MIN_MATCH)
+            + b'BCDEFG' + b'\0HIJKLMNO')
+    cases['literal-chunk-overrun'] = struct.pack(
+        '<H', wire.LZNT1_SIGNATURE | LZNT_PACKED | (len(body) - 1)) + body
+    return cases
+
+
 def generate(output):
     seeds = {
         'mapping-pairs': {
@@ -209,6 +247,7 @@ def generate(output):
         'security': security_seeds(),
         'access': {},
     }
+    seeds['lznt1'].update(compression_path_seeds())
     for name, descriptor in security_seeds().items():
         if name.endswith('-ace') or name.startswith('sid-'):
             continue
@@ -260,6 +299,12 @@ def generate(output):
             (directory / (name + '.seed')).write_bytes(data)
     generate_wof(output)
     generate_lzx(output)
+    # Keep all legal code widths and bit-word offsets in the mutation corpus,
+    # including short final codes, empty secondary trees and interleaved bytes.
+    for codec, name, packed, original in chain(huffman_vectors(), huffman_workloads()):
+        kind = FUZZ_XPRESS_KIND if codec == 'xpress' else FUZZ_LZX_KIND
+        envelope = WOF_FUZZ_HEADER.pack(kind, 0, 0, 0, len(original))
+        (output / 'wof' / f'huffman-{codec}-{name}.seed').write_bytes(envelope + packed)
     log_packets = output / 'logfile-packets'
     log_seeds = output / 'logfile'
     log_seeds.mkdir(parents=True, exist_ok=True)

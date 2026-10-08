@@ -17,7 +17,7 @@ import tarfile
 from environment import sanitizer_environment
 from benchmark_toolchain import (command, PROFILES, select, sdk_flags, host_flags,
                                  section_flags, linker_flags, identity, matching,
-                                 validate_comparison, retained_hashes, verify_hashes)
+                                 validate_comparison, retained_hashes, verify_hashes, digest)
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
@@ -88,6 +88,7 @@ def main():
         command([binary, boundary_fixtures], output, 'before-huffman-check', sanitizer_environment())
         hashes = retained_hashes(output, [harness, *fixtures.iterdir(),
                                           *boundary_fixtures.iterdir(),
+                                          *(path for path in source.rglob('*') if path.is_file()),
                                           *(output / f'before-{name}' for name in PROFILES)])
         report = dict(reference=revision, compiler=compiler, toolchain=toolchain, hashes=hashes,
                       profiles=profiles, buildCommands=commands, prepared=True)
@@ -139,11 +140,20 @@ def main():
             assert len({row['checksum'] for group in rows for row in group}) == 1
             assert len({row['bytes'] for group in rows for row in group}) == 1
             medians = [statistics.median(row['ns'] for row in group) for group in rows]
+            # Historical frozen harnesses only supplied monotonic wall time.
+            # Do not silently label their elapsed samples as process CPU time.
+            cpu = ([statistics.median(row['cpuNs'] for row in group) for group in rows]
+                   if all('cpuNs' in row for group in rows for row in group) else None)
             results.append(dict(context=context, name=name, bytes=rows[0][0]['bytes'],
-                                iterations=iterations, medianNs=medians,
-                                speedup=medians[0] / medians[1], samples=rows))
+                                iterations=iterations, medianNs=medians, medianCpuNs=cpu,
+                                speedup=medians[0] / medians[1],
+                                cpuSpeedup=cpu[0] / cpu[1] if cpu else None, samples=rows))
     verify_hashes(output, prepared['hashes'])
+    products = retained_hashes(current, [pair[1] for pair in binaries.values()])
+    sources = {name: digest(ROOT / 'core' / name)
+               for name in ('lznt1.c', 'xpress.c', 'lzx.c', 'memory.c', 'support.c')}
     report = dict(complete=True, reference=prepared['reference'], compiler=compiler, toolchain=toolchain,
+                  candidateProducts=products, candidateSources=sources,
                   repetitions=args.repetitions, sampleMilliseconds=args.sample_ms, selectedCases=args.case,
                   buildCommands=commands, results=results)
     (current / 'result.json').write_text(json.dumps(report, indent=2) + '\n')

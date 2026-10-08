@@ -119,6 +119,18 @@ xpress_take_bits(struct ntfs_xpress_reader *reader, unsigned bits, uint32_t *out
 	return NTFS_OK;
 }
 
+/* A fixed split of the six widths after the usual nine-bit code avoids
+ * carrying loop bounds across the overwhelmingly common prefix/9-bit path. */
+_Static_assert(NTFS_XPRESS_MAX_CODE_BITS == XPRESS_PREFIX_BITS + 7,
+    "fixed canonical search covers the remaining six widths");
+
+static inline bool
+xpress_before_bucket_end(const struct ntfs_xpress_workspace *tree, uint32_t code, unsigned bits)
+{
+	return code < ((tree->first[bits] + tree->count[bits]) <<
+			  (NTFS_XPRESS_MAX_CODE_BITS - bits));
+}
+
 static enum ntfs_result
 xpress_take_symbol(
     struct ntfs_xpress_reader *reader, const struct ntfs_xpress_workspace *tree, unsigned *out)
@@ -136,15 +148,34 @@ xpress_take_symbol(
 	 * all shorter codes; inspect the remaining buckets without consuming bits.
 	 * One final take preserves the mandatory post-consumption refill, including
 	 * its position relative to raw match-length extension bytes. */
-	for (bits = XPRESS_PREFIX_BITS + 1; bits <= NTFS_XPRESS_MAX_CODE_BITS; bits++) {
+	bits = XPRESS_PREFIX_BITS + 1;
+	code = reader->value >> (NTFS_XPRESS_RESERVOIR_BITS - bits);
+	offset = code - tree->first[bits];
+	if (offset >= tree->count[bits]) {
+		/* Normalized canonical bucket ends are monotone. Every table
+		 * index here is constant and below the validated maximum width. */
+		code = reader->value >> (NTFS_XPRESS_RESERVOIR_BITS - NTFS_XPRESS_MAX_CODE_BITS);
+		if (xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 4)) {
+			if (xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 3)) {
+				bits = xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 2)
+				    ? XPRESS_PREFIX_BITS + 2 : XPRESS_PREFIX_BITS + 3;
+			} else {
+				bits = XPRESS_PREFIX_BITS + 4;
+			}
+		} else if (xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 6)) {
+			bits = xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 5)
+			    ? XPRESS_PREFIX_BITS + 5 : XPRESS_PREFIX_BITS + 6;
+		} else {
+			bits = NTFS_XPRESS_MAX_CODE_BITS;
+		}
 		code = reader->value >> (NTFS_XPRESS_RESERVOIR_BITS - bits);
 		offset = code - tree->first[bits];
-		if (offset < tree->count[bits]) {
-			*out = tree->symbols[tree->base[bits] + offset];
-			return xpress_take_bits(reader, bits, &ignored);
+		if (offset >= tree->count[bits]) {
+			return NTFS_CORRUPT;
 		}
 	}
-	return NTFS_CORRUPT;
+	*out = tree->symbols[tree->base[bits] + offset];
+	return xpress_take_bits(reader, bits, &ignored);
 }
 
 static enum ntfs_result

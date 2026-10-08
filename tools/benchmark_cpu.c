@@ -10,11 +10,11 @@
 enum { MAX_BYTES = 65536, INPUT_LIMIT = MAX_BYTES * 2, UNALIGNED = 3 };
 
 static uint64_t
-now(void)
+now(clockid_t clock)
 {
 	struct timespec time;
 
-	assert(clock_gettime(CLOCK_MONOTONIC, &time) == 0);
+	assert(clock_gettime(clock, &time) == 0);
 	return (uint64_t)time.tv_sec * UINT64_C(1000000000) + (uint64_t)time.tv_nsec;
 }
 
@@ -56,7 +56,7 @@ main(int argc, char **argv)
 {
 	uint8_t *input, *expected, *output, *workspace, *destination;
 	size_t input_size, size, workspace_size, written, index, iterations;
-	uint64_t start, elapsed, checksum = 0;
+	uint64_t start, cpu_start, elapsed, cpu_elapsed, checksum = 0;
 	bool matched = true, codec;
 
 	assert(argc == 5);
@@ -98,7 +98,8 @@ main(int argc, char **argv)
 		    written == size);
 		assert(memcmp(destination, expected + UNALIGNED, size) == 0);
 	}
-	start = now();
+	start = now(CLOCK_MONOTONIC);
+	cpu_start = now(CLOCK_PROCESS_CPUTIME_ID);
 	for (index = 0; index < iterations; index++) {
 		if (codec) {
 			assert(decode(argv[1], input + UNALIGNED, input_size, destination, size,
@@ -113,13 +114,15 @@ main(int argc, char **argv)
 			matched &= ntfs_equal(destination, input + UNALIGNED, size);
 		}
 	}
-	elapsed = now() - start;
+	cpu_elapsed = now(CLOCK_PROCESS_CPUTIME_ID) - cpu_start;
+	elapsed = now(CLOCK_MONOTONIC) - start;
 	assert(matched && memcmp(destination, expected + UNALIGNED, size) == 0);
 	for (index = 0; index < size; index++) {
 		checksum = checksum * 31u + destination[index];
 	}
-	printf("{\"bytes\":%zu,\"iterations\":%zu,\"ns\":%llu,\"checksum\":\"%016llx\"}\n", size,
-	    iterations, (unsigned long long)elapsed, (unsigned long long)checksum);
+	printf("{\"bytes\":%zu,\"iterations\":%zu,\"ns\":%llu,\"cpuNs\":%llu,\"checksum\":\"%016llx\"}\n", size,
+	    iterations, (unsigned long long)elapsed, (unsigned long long)cpu_elapsed,
+	    (unsigned long long)checksum);
 	free(output);
 	free(expected);
 	free(input);

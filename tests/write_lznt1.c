@@ -53,8 +53,8 @@ wire_word(const uint8_t *bytes)
  * Widths use an explicit range table, not the core's shifting algorithm; every
  * matched byte must equal the earlier original byte it references. */
 static struct wire_stats
-inspect(const uint8_t *packed, size_t packed_bytes, const uint8_t *original,
-    size_t original_bytes, size_t requested_position)
+inspect(const uint8_t *packed, size_t packed_bytes, const uint8_t *original, size_t original_bytes,
+    size_t requested_position)
 {
 	static const size_t highest_position[] = {16, 32, 64, 128, 256, 512, 1024, 2048, 4096};
 	static const unsigned length_bits[] = {12, 11, 10, 9, 8, 7, 6, 5, 4};
@@ -87,17 +87,21 @@ inspect(const uint8_t *packed, size_t packed_bytes, const uint8_t *original,
 						assert(plain < original_bytes);
 						assert(packed[cursor++] == original[plain++]);
 					} else {
-						assert(end - cursor >= TEST_HEADER_BYTES && plain > base);
+						assert(end - cursor >= TEST_HEADER_BYTES &&
+						    plain > base);
 						token = wire_word(packed + cursor);
 						cursor += TEST_HEADER_BYTES;
-						for (width = 0; plain - base > highest_position[width];
+						for (width = 0;
+						    plain - base > highest_position[width];
 						    width++) {
-							assert(width + 1 < sizeof(length_bits) / sizeof(*length_bits));
+							assert(width + 1 < sizeof(length_bits) /
+								sizeof(*length_bits));
 						}
 						bits = length_bits[width];
 						length = token % (1u << bits) + TEST_MIN_MATCH;
 						distance = token / (1u << bits) + 1u;
-						assert(distance <= plain - base && length <= original_bytes - plain);
+						assert(distance <= plain - base &&
+						    length <= original_bytes - plain);
 						assert(length <= TEST_CHUNK_BYTES - (plain - base));
 						stats.widths |= 1u << width;
 						stats.matches++;
@@ -109,7 +113,8 @@ inspect(const uint8_t *packed, size_t packed_bytes, const uint8_t *original,
 							stats.requested_position = true;
 						}
 						for (index = 0; index < length; index++) {
-							assert(original[plain + index] == original[plain - distance + index]);
+							assert(original[plain + index] ==
+							    original[plain - distance + index]);
 						}
 						plain += length;
 					}
@@ -131,13 +136,14 @@ check(const uint8_t *input, size_t bytes, const uint8_t *golden, size_t golden_b
 	struct wire_stats stats;
 	uint8_t *source, *workspace, *output, *decoded, *again;
 	size_t workspace_bytes, bound = SIZE_MAX, required = SIZE_MAX, written = SIZE_MAX,
-	       done = SIZE_MAX, capacity, original_written;
+				done = SIZE_MAX, capacity, original_written;
 	char path[1024];
 	FILE *file;
 	int count;
 
 	assert(ntfs_write_lznt1_bound(bytes, &bound) == NTFS_OK);
-	assert(bound == bytes + ((bytes + TEST_CHUNK_BYTES - 1) / TEST_CHUNK_BYTES) * TEST_HEADER_BYTES);
+	assert(bound ==
+	    bytes + ((bytes + TEST_CHUNK_BYTES - 1) / TEST_CHUNK_BYTES) * TEST_HEADER_BYTES);
 	workspace_bytes = ntfs_write_lznt1_workspace_size();
 	source = malloc(alignment + bytes + TEST_GUARD_BYTES);
 	workspace = malloc(alignment + workspace_bytes + TEST_GUARD_BYTES);
@@ -149,7 +155,7 @@ check(const uint8_t *input, size_t bytes, const uint8_t *golden, size_t golden_b
 	memcpy(source + alignment, input, bytes);
 	memset(workspace, TEST_SENTINEL, alignment + workspace_bytes + TEST_GUARD_BYTES);
 	assert(ntfs_write_lznt1_measure(source + alignment, bytes, workspace + alignment,
-	    workspace_bytes, &required) == NTFS_OK);
+		   workspace_bytes, &required) == NTFS_OK);
 	assert(required <= bound);
 	/* Every short capacity for the small goldens, plus zero and one-short for
 	 * larger/multi-chunk inputs. No partial first chunk may escape on error. */
@@ -158,13 +164,13 @@ check(const uint8_t *input, size_t bytes, const uint8_t *golden, size_t golden_b
 		memset(output, TEST_SENTINEL, alignment + bound + TEST_GUARD_BYTES);
 		original_written = written;
 		assert(ntfs_write_lznt1_encode(source + alignment, bytes, workspace + alignment,
-		    workspace_bytes, output + alignment, capacity, &written) == NTFS_RANGE);
+			   workspace_bytes, output + alignment, capacity, &written) == NTFS_RANGE);
 		assert(written == original_written);
 		sentinel(output, alignment + bound + TEST_GUARD_BYTES);
 	}
 	memset(output, TEST_SENTINEL, alignment + bound + TEST_GUARD_BYTES);
 	assert(ntfs_write_lznt1_encode(source + alignment, bytes, workspace + alignment,
-	    workspace_bytes, output + alignment, required, &written) == NTFS_OK);
+		   workspace_bytes, output + alignment, required, &written) == NTFS_OK);
 	assert(written == required);
 	if (golden != NULL) {
 		assert(written == golden_bytes && memcmp(output + alignment, golden, written) == 0);
@@ -178,14 +184,16 @@ check(const uint8_t *input, size_t bytes, const uint8_t *golden, size_t golden_b
 	sentinel(source + alignment + bytes, TEST_GUARD_BYTES);
 	stats = inspect(output + alignment, written, input, bytes, requested_position);
 	memset(decoded, TEST_SENTINEL, alignment + bytes + TEST_GUARD_BYTES);
-	assert(ntfs_lznt1_decode(output + alignment, written, decoded + alignment, bytes,
-	    &done) == NTFS_OK && done == bytes);
+	assert(ntfs_lznt1_decode(output + alignment, written, decoded + alignment, bytes, &done) ==
+		NTFS_OK &&
+	    done == bytes);
 	assert(memcmp(decoded + alignment, input, bytes) == 0);
 	sentinel(decoded, alignment);
 	sentinel(decoded + alignment + bytes, TEST_GUARD_BYTES);
 	memset(workspace, 0x5a, alignment + workspace_bytes + TEST_GUARD_BYTES);
 	assert(ntfs_write_lznt1_encode(source + alignment, bytes, workspace + alignment,
-	    workspace_bytes, again, bound, &done) == NTFS_OK && done == written);
+		   workspace_bytes, again, bound, &done) == NTFS_OK &&
+	    done == written);
 	assert(memcmp(again, output + alignment, written) == 0);
 	if (corpus != NULL && bytes != 0) {
 		count = snprintf(path, sizeof(path), "%s/case-%04zu.data", corpus, case_id);
@@ -195,7 +203,8 @@ check(const uint8_t *input, size_t bytes, const uint8_t *golden, size_t golden_b
 		count = snprintf(path, sizeof(path), "%s/case-%04zu.packed", corpus, case_id);
 		assert(count > 0 && (size_t)count < sizeof(path));
 		file = fopen(path, "wbx");
-		assert(file && fwrite(output + alignment, 1, written, file) == written && fclose(file) == 0);
+		assert(file && fwrite(output + alignment, 1, written, file) == written &&
+		    fclose(file) == 0);
 	}
 	free(again);
 	free(decoded);
@@ -257,16 +266,19 @@ exact_allocation_ends(void)
 			workspace = malloc(alignment + workspace_bytes);
 			decoded = malloc(alignment + lengths[index]);
 			assert(input && workspace && decoded);
-			pattern(input + alignment, lengths[index], (unsigned)(index % TEST_PATTERN_COUNT));
+			pattern(input + alignment, lengths[index],
+			    (unsigned)(index % TEST_PATTERN_COUNT));
 			assert(ntfs_write_lznt1_measure(input + alignment, lengths[index],
-			    workspace + alignment, workspace_bytes, &required) == NTFS_OK);
+				   workspace + alignment, workspace_bytes, &required) == NTFS_OK);
 			output = malloc(alignment + required);
 			assert(output);
 			assert(ntfs_write_lznt1_encode(input + alignment, lengths[index],
-			    workspace + alignment, workspace_bytes, output + alignment, required,
-			    &written) == NTFS_OK && written == required);
+				   workspace + alignment, workspace_bytes, output + alignment,
+				   required, &written) == NTFS_OK &&
+			    written == required);
 			assert(ntfs_lznt1_decode(output + alignment, written, decoded + alignment,
-			    lengths[index], &written) == NTFS_OK && written == lengths[index]);
+				   lengths[index], &written) == NTFS_OK &&
+			    written == lengths[index]);
 			assert(memcmp(input + alignment, decoded + alignment, written) == 0);
 			free(output);
 			free(decoded);
@@ -293,41 +305,42 @@ admission(void)
 	assert(ntfs_write_lznt1_bound(SIZE_MAX, &bound) == NTFS_RANGE && bound == SIZE_MAX);
 	assert(ntfs_write_lznt1_bound(1, NULL) == NTFS_INVALID);
 	assert(ntfs_write_lznt1_measure(NULL, 0, NULL, 0, &written) == NTFS_OK && written == 0);
-	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, NULL, 0, &written) == NTFS_OK && written == 0);
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, NULL, 0, &written) == NTFS_OK &&
+	    written == 0);
 	written = SIZE_MAX;
 	for (capacity = 0; capacity < workspace_bytes; capacity++) {
 		assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, capacity, output,
-		    sizeof(output), &written) == NTFS_RANGE);
+			   sizeof(output), &written) == NTFS_RANGE);
 	}
 	sentinel(workspace, workspace_bytes + TEST_GUARD_BYTES);
-	assert(ntfs_write_lznt1_encode(NULL, 1, workspace, workspace_bytes, output,
-	    sizeof(output), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 1, workspace, workspace_bytes, output, sizeof(output),
+		   &written) == NTFS_INVALID);
 	assert(ntfs_write_lznt1_encode(input, sizeof(input), NULL, workspace_bytes, output,
-	    sizeof(output), &written) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    NULL, sizeof(output), &written) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    output, sizeof(output), NULL) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(bad, 16, workspace, workspace_bytes, output,
-	    sizeof(output), &written) == NTFS_INVALID);
+		   sizeof(output), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes, NULL,
+		   sizeof(output), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes, output,
+		   sizeof(output), NULL) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(bad, 16, workspace, workspace_bytes, output, sizeof(output),
+		   &written) == NTFS_INVALID);
 	assert(ntfs_write_lznt1_encode(input, sizeof(input), bad, workspace_bytes, output,
-	    sizeof(output), &written) == NTFS_INVALID);
+		   sizeof(output), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes, bad, 16,
+		   &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, NTFS_WRITE_LZNT1_MAX_BYTES + 1u, workspace,
+		   workspace_bytes, output, sizeof(output), &written) == NTFS_RANGE);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes, input,
+		   sizeof(input), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), input, workspace_bytes, output,
+		   sizeof(output), &written) == NTFS_INVALID);
 	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    bad, 16, &written) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(input, NTFS_WRITE_LZNT1_MAX_BYTES + 1u,
-	    workspace, workspace_bytes, output, sizeof(output), &written) == NTFS_RANGE);
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    input, sizeof(input), &written) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), input, workspace_bytes,
-	    output, sizeof(output), &written) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    workspace + workspace_bytes - 1, sizeof(output), &written) == NTFS_INVALID);
+		   workspace + workspace_bytes - 1, sizeof(output), &written) == NTFS_INVALID);
 	assert(ntfs_write_lznt1_measure(input, sizeof(input), workspace, workspace_bytes,
-	    (size_t *)workspace) == NTFS_INVALID);
+		   (size_t *)workspace) == NTFS_INVALID);
 	assert(ntfs_write_lznt1_measure(input, sizeof(input), workspace, workspace_bytes,
-	    (size_t *)input) == NTFS_INVALID);
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    &written, sizeof(written), &written) == NTFS_INVALID);
+		   (size_t *)input) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes, &written,
+		   sizeof(written), &written) == NTFS_INVALID);
 	assert(written == SIZE_MAX);
 	sentinel(output, sizeof(output));
 	sentinel(workspace, workspace_bytes + TEST_GUARD_BYTES);
@@ -335,11 +348,11 @@ admission(void)
 	 * including unused output tail that would otherwise alias input. */
 	memset(shared, 'A', workspace_bytes + sizeof(size_t) + sizeof(output));
 	assert(ntfs_write_lznt1_encode(shared + workspace_bytes, sizeof(size_t), shared,
-	    workspace_bytes, shared + workspace_bytes + sizeof(size_t), sizeof(output),
-	    &written) == NTFS_OK);
+		   workspace_bytes, shared + workspace_bytes + sizeof(size_t), sizeof(output),
+		   &written) == NTFS_OK);
 	saved = written;
-	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes,
-	    input, sizeof(input) + sizeof(output), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(input, sizeof(input), workspace, workspace_bytes, input,
+		   sizeof(input) + sizeof(output), &written) == NTFS_INVALID);
 	assert(written == saved);
 	free(shared);
 	free(workspace);
@@ -350,10 +363,10 @@ malformed_goldens(void)
 {
 	static const uint8_t packets[][8] = {
 	    {0x03, 0xb0, 0x02, 'A', 0xfd, 0x0f}, /* Expands beyond the chunk. */
-	    {0x02, 0xb0, 0x01, 0x00, 0x00}, /* Reference before any literal. */
-	    {0x02, 0xb0, 0x02, 'A', 0x00}, /* Truncated match word. */
-	    {0x00, 0x20, 'A'}, /* Incorrect signature. */
-	    {0x00, 0x30, 'A', 0x00, 0x30, 'B'} /* Short interior chunk. */
+	    {0x02, 0xb0, 0x01, 0x00, 0x00},	 /* Reference before any literal. */
+	    {0x02, 0xb0, 0x02, 'A', 0x00},	 /* Truncated match word. */
+	    {0x00, 0x20, 'A'},			 /* Incorrect signature. */
+	    {0x00, 0x30, 'A', 0x00, 0x30, 'B'}	 /* Short interior chunk. */
 	};
 	static const size_t lengths[] = {6, 5, 5, 3, 6};
 	uint8_t *output;
@@ -364,24 +377,25 @@ malformed_goldens(void)
 	for (index = 0; index < sizeof(lengths) / sizeof(*lengths); index++) {
 		memset(output, TEST_SENTINEL, TEST_CHUNK_BYTES + TEST_GUARD_BYTES);
 		written = SIZE_MAX;
-		assert(ntfs_lznt1_decode(packets[index], lengths[index], output,
-		    TEST_CHUNK_BYTES, &written) == NTFS_CORRUPT && written == 0);
+		assert(ntfs_lznt1_decode(packets[index], lengths[index], output, TEST_CHUNK_BYTES,
+			   &written) == NTFS_CORRUPT &&
+		    written == 0);
 		sentinel(output + TEST_CHUNK_BYTES, TEST_GUARD_BYTES);
 	}
 	written = SIZE_MAX;
-	assert(ntfs_lznt1_decode(run_golden, sizeof(run_golden), output,
-	    TEST_CHUNK_BYTES - 1, &written) == NTFS_RANGE && written == 0);
+	assert(ntfs_lznt1_decode(run_golden, sizeof(run_golden), output, TEST_CHUNK_BYTES - 1,
+		   &written) == NTFS_RANGE &&
+	    written == 0);
 	free(output);
 }
 
 int
 main(int argc, char **argv)
 {
-	static const size_t lengths[] = {1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32, 33,
-	    255, 256, 257, 2048, 2049, 4095, 4096, 4097, 8191, 8192, 8193, 65536,
-	    NTFS_WRITE_LZNT1_MAX_BYTES};
-	static const size_t transitions[] = {16, 17, 32, 33, 64, 65, 128, 129, 256, 257,
-	    512, 513, 1024, 1025, 2048, 2049};
+	static const size_t lengths[] = {1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 31, 32, 33, 255, 256, 257,
+	    2048, 2049, 4095, 4096, 4097, 8191, 8192, 8193, 65536, NTFS_WRITE_LZNT1_MAX_BYTES};
+	static const size_t transitions[] = {
+	    16, 17, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513, 1024, 1025, 2048, 2049};
 	struct wire_stats stats;
 	uint8_t *input;
 	size_t index, kind, alignment, count = 0;
@@ -405,8 +419,8 @@ main(int argc, char **argv)
 		    alignment, SIZE_MAX, corpus, count++);
 		(void)check((const uint8_t *)"ABCABCABCABC", 12, triple_golden,
 		    sizeof(triple_golden), alignment, SIZE_MAX, corpus, count++);
-		(void)check((const uint8_t *)"AAAA", 4, tie_golden, sizeof(tie_golden),
-		    alignment, SIZE_MAX, corpus, count++);
+		(void)check((const uint8_t *)"AAAA", 4, tie_golden, sizeof(tie_golden), alignment,
+		    SIZE_MAX, corpus, count++);
 	}
 	for (kind = 0; kind < TEST_PATTERN_COUNT; kind++) {
 		pattern(input, NTFS_WRITE_LZNT1_MAX_BYTES, (unsigned)kind);
@@ -424,7 +438,8 @@ main(int argc, char **argv)
 	}
 	for (index = 0; index < sizeof(transitions) / sizeof(*transitions); index++) {
 		pattern(input, TEST_CHUNK_BYTES, 3);
-		memset(input + transitions[index] - 1, 'A', TEST_CHUNK_BYTES - transitions[index] + 1);
+		memset(
+		    input + transitions[index] - 1, 'A', TEST_CHUNK_BYTES - transitions[index] + 1);
 		stats = check(input, TEST_CHUNK_BYTES, NULL, 0, index % TEST_ALIGNMENTS,
 		    transitions[index], corpus, count++);
 		assert(stats.requested_position);
@@ -447,6 +462,8 @@ main(int argc, char **argv)
 	assert(stats.maximum_distance == TEST_CHUNK_BYTES - TEST_MIN_MATCH);
 	assert(widths == 0x1ff);
 	free(input);
-	printf("PASS: %zu original LZNT1 encodes, literal goldens, nine widths, guards and admission\n", count);
+	printf("PASS: %zu original LZNT1 encodes, literal goldens, nine widths, guards and "
+	       "admission\n",
+	    count);
 	return 0;
 }

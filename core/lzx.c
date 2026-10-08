@@ -139,8 +139,17 @@ lzx_consume_symbol(struct ntfs_lzx_reader *reader, unsigned bits, uint32_t next)
 	reader->valid -= bits;
 }
 
+_Static_assert(NTFS_LZX_MAX_CODE_BITS == LZX_PREFIX_BITS + 8,
+    "fixed canonical search covers the remaining seven widths");
+
+static inline bool
+lzx_before_bucket_end(const struct ntfs_lzx_tree *tree, uint32_t value, unsigned bits)
+{
+	return value < ((tree->first[bits] + tree->count[bits]) << (NTFS_LZX_WORD_BITS - bits));
+}
+
 /* Keep the refill/long-code frame out of the inlined short-code path. Stabilize
- * the small bucket loop's placement as surrounding code grows. */
+ * the canonical fallback's placement as surrounding code grows. */
 static __attribute__((noinline, aligned(LZX_SYMBOL_CODE_ALIGNMENT))) enum ntfs_result
 lzx_take_symbol_fallback(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree,
     const uint16_t *symbols, uint32_t value, unsigned *out)
@@ -172,16 +181,45 @@ lzx_take_symbol_fallback(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_t
 			return NTFS_OK;
 		}
 	}
-	for (bits = LZX_PREFIX_BITS + 1; bits <= available; bits++) {
+	bits = LZX_PREFIX_BITS + 1;
+	if (bits > available) {
+		return NTFS_CORRUPT;
+	}
+	code = value >> (NTFS_LZX_WORD_BITS - bits);
+	offset = code - tree->first[bits];
+	if (offset >= tree->count[bits]) {
+		if (bits == available) {
+			return NTFS_CORRUPT;
+		}
+		/* Normalize canonical ends and split the remaining seven widths.
+		 * Constant probes avoid search-state register pressure on shorter
+		 * codes. Unavailable padded bits never authorize consumption. */
+		if (lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 5)) {
+			if (lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 3)) {
+				bits = lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 2)
+				    ? LZX_PREFIX_BITS + 2 : LZX_PREFIX_BITS + 3;
+			} else {
+				bits = lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 4)
+				    ? LZX_PREFIX_BITS + 4 : LZX_PREFIX_BITS + 5;
+			}
+		} else if (lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 7)) {
+			bits = lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 6)
+			    ? LZX_PREFIX_BITS + 6 : LZX_PREFIX_BITS + 7;
+		} else {
+			bits = NTFS_LZX_MAX_CODE_BITS;
+		}
+		if (bits > available) {
+			return NTFS_CORRUPT;
+		}
 		code = value >> (NTFS_LZX_WORD_BITS - bits);
 		offset = code - tree->first[bits];
-		if (offset < tree->count[bits]) {
-			*out = symbols[tree->base[bits] + offset];
-			lzx_consume_symbol(reader, bits, next);
-			return NTFS_OK;
+		if (offset >= tree->count[bits]) {
+			return NTFS_CORRUPT;
 		}
 	}
-	return NTFS_CORRUPT;
+	*out = symbols[tree->base[bits] + offset];
+	lzx_consume_symbol(reader, bits, next);
+	return NTFS_OK;
 }
 
 static inline enum ntfs_result

@@ -1,0 +1,58 @@
+name: Matched compression qualification
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  compression:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[cloud-full]') }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, name: linux-x86-gcc, compiler: gcc}
+          - {os: ubuntu-24.04, name: linux-x86-clang, compiler: clang}
+          - {os: ubuntu-24.04-arm, name: linux-arm-gcc, compiler: gcc}
+          - {os: ubuntu-24.04-arm, name: linux-arm-clang, compiler: clang}
+          - {os: macos-latest, name: macos-xcode, compiler: ''}
+    runs-on: ${{ matrix.os }}
+    env:
+      CODEC_REFERENCE: 3d28cba936b3c67d3453a17c03e803453ead38fa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Freeze original decoder and encoder with identical current harnesses
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/benchmark_cpu.py prepare --compiler '${{ matrix.compiler }}' --reference "$CODEC_REFERENCE" --output artifacts/codec-decoder 2>&1 | tee artifacts/ci/decoder-prepare.log
+          python3 scripts/benchmark_lznt1.py prepare --compiler '${{ matrix.compiler }}' --reference "$CODEC_REFERENCE" --output artifacts/codec-encoder 2>&1 | tee artifacts/ci/encoder-prepare.log
+      - name: Check exact codec errors, partial output, capacity and portable variants
+        run: |
+          python3 tests/cpu_fixtures.py artifacts/codec-cpu-fixtures
+          python3 tests/huffman_fixtures.py artifacts/codec-huffman-fixtures
+          python3 scripts/check_lznt1.py --compiler '${{ matrix.compiler }}' --reference artifacts/codec-encoder/reference --fixtures artifacts/codec-cpu-fixtures --output artifacts/codec-lznt1-check 2>&1 | tee artifacts/ci/lznt1-check.log
+          python3 scripts/check_huffman.py --compiler '${{ matrix.compiler }}' --reference artifacts/codec-decoder/reference --fixtures artifacts/codec-huffman-fixtures --output artifacts/codec-huffman-check 2>&1 | tee artifacts/ci/huffman-check.log
+      - name: Measure serialized alternating Release pairs with wall and process CPU time
+        run: |
+          python3 scripts/benchmark_cpu.py compare --compiler '${{ matrix.compiler }}' --output artifacts/codec-decoder --comparison current --repetitions 9 --sample-ms 100 2>&1 | tee artifacts/ci/decoder-compare.log
+          python3 scripts/benchmark_lznt1.py compare --compiler '${{ matrix.compiler }}' --output artifacts/codec-encoder --comparison current --repetitions 9 --sample-ms 100 2>&1 | tee artifacts/ci/encoder-compare.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compression-${{ matrix.name }}
+          path: |
+            artifacts/codec-*
+            artifacts/ci
+          if-no-files-found: error
+          retention-days: 14

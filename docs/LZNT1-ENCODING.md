@@ -17,12 +17,15 @@ read/write callback or global mutable state exists in the encoder.
 All declared pointer ranges and capacities participate in disjointness checks.
 Address wrap, missing required storage, overlapping input/workspace/output/size
 results, insufficient scratch and over-policy input refuse before scratch or
-results change. Exact measurement uses the caller's scratch. Encoding first
-measures the complete stream, then checks output capacity; an insufficient output
-leaves output and size untouched but may change admitted scratch. A second
-identical pass writes the final bytes only after every fallible check. Callers
-must keep input immutable for both passes. Output beyond the returned size and
-workspace beyond its required extent remain unchanged.
+results change. Exact measurement uses the caller's scratch. When output capacity
+is below the checked raw bound, encoding first measures the complete stream and
+then checks capacity; an insufficient output leaves output and size untouched but
+may change admitted scratch. A deterministic second pass publishes only after
+every fallible check. Capacity at or above the raw bound already proves that all
+chunks fit and therefore uses one encoding pass after the same complete admission.
+Callers must keep input immutable throughout either route. Both routes produce
+identical bytes. Output beyond the returned size and workspace beyond its required
+extent remain unchanged.
 
 The worst-case bound is input bytes plus two bytes for each started 4-KiB chunk.
 At the one-MiB input limit this is 1,049,088 bytes. Chunk-count and addition
@@ -61,9 +64,10 @@ useful but is not advertised as optimal or byte-identical to Windows output.
 
 Match comparisons are linear in consumed input: a successful match consumes its
 compared prefix; a rejected short candidate compares at most three bytes.
-Dictionary insertion visits each position once, width selection takes at most
-eight steps per element, and each chunk clears a fixed 8-KiB table. Measurement
-uses one pass and encoding uses two. The core uses constant stack space beneath
+Dictionary insertion visits each position once, token-width selection advances
+at most eight boundaries per chunk, and each chunk clears a fixed 8-KiB table.
+Measurement uses one pass. Encoding uses one pass with raw-bound capacity or two
+with a smaller admitted capacity. The core uses constant stack space beneath
 the existing 2-KiB frame budget.
 
 The codec, hash selection, publication admission and independent tests are
@@ -100,6 +104,44 @@ an external codec.
 
 Current actual results belong in ACCEPTANCE and CLOUD-STATUS after integration;
 a prepared test or native workflow is not a successful execution claim.
+
+`tests/write_lznt1_differential.c` compares a frozen pre-optimization encoder
+with the current encoder across all nine width intervals, input sizes through
+one MiB, seven patterns, chunk resets and eight output-capacity choices. It
+checks exact encoded bytes, size publication and untouched refused outputs.
+`tests/lznt1_contract.c` independently checks all 256 flag combinations, literal
+groups and the chunk-end error/publication order, then compares complete output
+buffers, statuses and lengths with the frozen decoder for byte truncations,
+mutations, every short destination, multiple chunks and overlapping declarations.
+These checks retain exact allocation ends and 32 alignments. The ordinary Meson
+suite runs the independent decoder contract; the explicit differential runner
+also tests userspace, portable memory/wire access and GPR-only host contexts:
+
+```sh
+python3 scripts/check_lznt1.py --compiler clang --reference artifacts/codec-reference/reference --fixtures .build/cpu-fixtures --output artifacts/lznt1-check-next
+```
+
+The reference directory must be an unchanged export containing the private
+encoder, its headers and the existing original decoder. The runner requires
+fatal ASan/UBSan by default and retains Linux LeakSanitizer. Apple ASan does not
+supply the same leak-scanning boundary. A restricted local no-LSan supplement is
+separate evidence and does not satisfy the full hosted Linux sanitizer gate.
+
+`scripts/benchmark_lznt1.py` freezes a committed reference, original fixture
+bytes, harness, compiler identity and products, then alternates matched Release
+calls in userspace and GPR-only host contexts. The three operations are exact
+measurement, exact-capacity encoding and raw-bound-capacity encoding. They retain
+separate wall/process-CPU samples, identical work counts, output checksums and
+the 12-KiB workspace with zero core allocations/I/O. Original wire inspection
+checks every emitted literal and match against the input before and after timing.
+The 18 fixtures include empty/tiny inputs, incompressible bytes, periods, mixed
+chunks, original records and the one-MiB ceiling. Complete in-memory codec timing
+is separate from compression-unit storage or mounted filesystem throughput.
+
+```sh
+python3 scripts/benchmark_lznt1.py prepare --compiler clang --reference PRE_CHANGE_REVISION --output artifacts/encoder-next
+python3 scripts/benchmark_lznt1.py compare --compiler clang --output artifacts/encoder-next --comparison candidate --repetitions 9 --sample-ms 50
+```
 
 ## Independent hosted Windows oracle
 

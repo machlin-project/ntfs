@@ -36,6 +36,15 @@ Security, validation and immutable journal components retain their existing
 owners. Its new universal app is unsigned and uninstalled; the accepted signed
 package remains the native baseline.
 
+The separate growth recovery matrix now passes all 264 actual current-C states:
+181 MFT-extension and 83 large-index states, each with full validation and a
+quiet fresh reopen. Thirty-two representatives chosen before verdicts have exact
+whole-crash and VHD byte oracles and pass independent Windows recovery review,
+including complete namespaces, clean state, read-only chkdsk and original events.
+All 32 detached native postimages are retained.
+Completed pressure operations and C recovery states are reused, not repeated.
+See [the growth acceptance](docs/ACCEPTANCE.md#native-source-growth-recovery).
+
 The [NTFS format reference](docs/format/README.md) explains disk structures and
 their relationships in chapters with diagrams, field tables and original worked
 examples. It is updated alongside implementation and native research. See the

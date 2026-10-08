@@ -489,6 +489,71 @@ healthy-event review. This observes the combined owner and reserve contract on
 real mounted syscalls; it does not qualify every growth/reuse interruption point
 or change the cumulative budgets. Preceding failed images remain preserved.
 
+### Native-source MFT and index growth cuts
+
+The [manual growth test](../../tests/native_growth_faults.py) binds current
+preparation to two previously native-accepted physical publication programs.
+Its source is a frozen predecessor rather than a mounted or already recovered
+fault image. All original planners close before a new crash or recovery owner
+opens. Whole 4-KiB publications and explicit 512-byte sector prefixes independently
+construct each interrupted input.
+
+| Operation | Publications | Metadata homes | Local recovery states | Selected Windows states |
+| --- | ---: | ---: | ---: | ---: |
+| First MFT extension | 489 | 69 | 181 | 16 |
+| Large-index extension by two pages | 145 | 21 | 83 | 16 |
+
+The target classes are existing/new FILE storage, existing/new INDX pages,
+`$MFT::$BITMAP`, the volume bitmap, primary FILE zero and its mirror. Each metadata
+home has zero-prefix and first-sector cuts; each class also has a final-sector
+cut. Dirty roots, commit copy/home, clean roots and first/middle/last prepare
+copy/home positions cover zero, one-sector and seven-sector prefixes. This does
+not claim exhaustive cuts at every journal publication or hardware persistence
+ordering.
+
+All 264 states pass fresh actual C recovery, whole-volume validation and complete
+name/data/reference/descriptor/time checks. Protected metadata compares complete
+restored FILE/INDX bytes while separating USA storage and recovery-owned LSNs.
+Bitmap bytes compare directly. A losing operation's newly allocated, subsequently
+free storage has no predecessor-content contract; no live namespace or allocation
+may retain it. Every result admits a quiet fresh reopen with zero rewrites.
+The 32 native representatives are selected before these verdicts and have separate
+whole-crash and VHD byte oracles. All 32 pass independent Windows namespace,
+identity/security/time, clean-state, read-only chkdsk and original-event review;
+every exact detached postimage is retained. See
+[the current acceptance](../ACCEPTANCE.md#native-source-growth-recovery).
+
+The [native collector](../../tests/windows_image_recovery.ps1) now separates journal
+and metadata USA diagnostics. A metadata expectation declares exact `FileName`,
+record-only `FileReference`, logical `BufferOffset`, `TornStructureOffset`,
+zero-based `BlockIndex`, `ExpectedSequenceNumber` and `ActualSequenceNumber`, all
+derived before attachment from the unrecovered bytes and owning stream. It is
+restricted to the selected MFT/mirror and pressure-directory index profile.
+Level, volume identity, event time, clean state, namespace and read-only chkdsk
+retain their independent requirements. Metadata warnings need not be emitted for
+every damaged free fragment; an observed warning must match exactly. The existing
+journal profile still requires every predicted torn page. Four pure positive
+examples and 74 malformed-event/profile refusals pass in Windows. This validates
+collection policy, not new native recovery behavior.
+
+The separate original native observations supply 32 healthy events, all ten
+predicted journal warnings and four metadata warnings with the exact declared
+fields. Their metadata diagnostics are:
+
+| Owning stream | `FileReference` | `BufferOffset` (bytes) | `BlockIndex` | Expected USA marker | Actual USA marker |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Existing `native-growth` INDX | 63 | 0 | 1 | 2 | 3 |
+| New FILE through `\$Mft` | 0 | 262144 | 1 | 3 | 0 |
+| New `native-growth` INDX, first-sector prefix | 63 | 61440 | 1 | 2 | 0 |
+| New `native-growth` INDX, seven-sector prefix | 63 | 61440 | 7 | 2 | 0 |
+
+The MFT observation's `FileReference` identifies the owning stream record, while
+its additional `FrsFileReference` is 256, the damaged logical FILE slot at the
+reported byte offset. Original XML also names that new child. The predeclared
+primary/mirror tears emit no metadata warning; this is not proof that their bytes
+were never inspected. None of these observations admits an unrelated diagnostic
+or establishes exhaustive publication cuts or hardware power-loss behavior.
+
 ### Loser, winner and interrupted recovery
 
 This experimental physical protocol publishes no metadata homes before durable

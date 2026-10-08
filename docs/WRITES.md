@@ -12,8 +12,14 @@ build passes all 81 native component groups, complete bounded ordinary-image
 mutation, sixteen reuse cycles, authenticated owner/root/nobody enforcement and
 exact fresh remount. Its inactive postimage passes independent Windows
 namespace/data, File ID, ACL, FILETIME, clean state, read-only chkdsk and matching
-healthy-event review. Complete native creation inheritance and the broader growth
-interruption matrix remain pending. See [ACCEPTANCE.md](ACCEPTANCE.md).
+healthy-event review. A separate current-C growth matrix now passes 181 MFT and
+83 index interruption states, with full validation and quiet fresh reopen. Its
+32 preselected exact unrecovered inputs pass independent Windows recovery,
+complete namespace/identity/security/time checks, clean state, read-only chkdsk
+and original-event review. All exact detached postimages are retained.
+Complete native creation inheritance, broader growth/recovery fault coverage and
+hardware power cuts remain separate. See
+[the growth gate](ACCEPTANCE.md#native-source-growth-recovery).
 
 ## General owner and native reply preparation
 

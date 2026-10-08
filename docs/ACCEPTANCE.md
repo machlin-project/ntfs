@@ -1,5 +1,68 @@
 # Acceptance
 
+## Native-source growth recovery
+
+The current C reader-cleanup source passes a separate growth fault batch:
+181 MFT-extension states and 83 large-index states. The test reuses the frozen
+native-accepted predecessor histories and complete publication traces; none of
+the preceding 891 operations or 234 checkpoints is executed again. Current
+zero-write preparation matches every accepted region and publication byte.
+
+Every metadata home has both a before-transfer and first-sector cut. Each target
+class also has a last-sector cut; dirty/commit/clean roots and first/middle/last
+prepare copy/home boundaries have zero, 512-byte and 3,584-byte prefixes. The MFT
+operation has 69 homes and the index operation has 21, including new storage,
+existing FILE/INDX, allocation bitmaps and the MFT mirror. This is a declared
+coverage matrix, not every possible hardware failure or publication cut.
+
+All 264 independently constructed crash images pass actual fresh POSIX C recovery
+with fatal ASan/UBSan, complete metadata/allocation validation, complete names,
+data, sequence-bearing identities, raw descriptors and modification times.
+Captured transfers bind 11,052 actual recovery writes to their planned bytes.
+All 264 recovered images reopen with zero rewrites and one persistence barrier.
+Free unowned new FILE/INDX storage has no predecessor-content requirement; complete
+namespace and allocation checks still apply. Main reviews the raw results,
+unchanged frozen sources/tools and exact native-accepted traces.
+
+Thirty-two native representatives were selected before recovery verdicts:
+sixteen per family. Each unrecovered input has an independently reconstructed
+whole-image oracle and a whole-virtual-disk VHD comparison. Exact source bytes
+predict ten torn journal pages and six metadata tears. The collector admits a
+metadata warning only when all stream, record, logical offset, mismatch block
+and USA-marker fields match one predeclared fault. Every predicted journal warning
+remains required; metadata warning absence does not prove that a free or already
+reconstructed fragment was inspected. Four positive event guards and 74 malformed
+event/profile refusals pass in Windows before any candidate mount. All 32 object
+profiles pass read-only admission.
+
+All 32 unrecovered inputs then pass native Windows recovery: sixteen per family,
+ten losing and 22 committed operations. Independent review binds 4,278 complete
+object expectations, exact namespaces, sequence-bearing File IDs, data/ADS,
+ACL projection and FILETIME to the predeclared models. Every volume is clean and
+passes read-only chkdsk. Original XML supplies exactly 32 matching healthy events,
+all ten predicted journal warnings and four exactly bound metadata warnings.
+Those metadata diagnostics identify an existing INDX page, the new FILE record
+and both sector prefixes of a new INDX page. The primary/mirror tears emit no
+metadata diagnostic; absence alone does not establish which copy Windows inspected.
+No unrelated warning, error or repair is admitted, and the original test volume
+is unchanged before and after every group.
+
+The harness completes this one matrix in four eight-case storage groups. All 32
+exact detached native outputs are preserved and fully hashed on the host before
+their guest copies are removed. Input copies receive separate plain-file,
+detached-state, size and hash checks against their retained host inputs. Original
+test volumes, previous inputs and UTM lifecycle are outside this cleanup.
+The first completed eight-case report exceeds the 15-second collection deadline;
+its original report is collected with a bounded 60-second read, and only the
+24 unexecuted candidates continue. No native candidate or completed C recovery
+is repeated. Evidence is retained
+under `native-growth-matrix-local-bounded-20261008/`,
+`native-growth-inputs-20261008/` and `windows-native-growth-matrix-20261008/` in
+`artifacts/overwrite/`. The first preparation/review and report-transport failures
+remain preserved. This qualifies the declared growth cuts and native subset;
+full publication-cut coverage, interrupted growth recovery, wider geometries
+and hardware power cuts remain separate.
+
 ## General mutation owner and FSKit local boundary
 
 The preceding general-owner implementation passes all 201 unique fatal-ASan/UBSan C

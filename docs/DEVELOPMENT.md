@@ -114,13 +114,43 @@ ownership are reviewed separately from new journal/recovery semantics; see
 
 ## Private ordinary-operation image CLI
 
+The separate [growth recovery matrix](ACCEPTANCE.md#native-source-growth-recovery)
+reuses two native-accepted predecessors and their exact publication programs.
+Its 264 fresh C recoveries and one selected 32-input Windows batch pass independent
+review, with every exact detached native output retained. Completed operations
+and local recoveries are not repeated for container transport.
+The manual [integration test](../tests/native_growth_faults.py) takes an explicit
+frozen input model and a new output directory:
+
+```sh
+python3 tests/native_growth_faults.py --input /absolute/frozen-growth-input.json \
+  --output /absolute/new-growth-results
+```
+
+The input names frozen tools/source, accepted trace, parent identity, operation
+time and complete old/committed object expectations. Native representatives must
+be chosen before verdicts. Keep raw stdout/stderr, actual transfer events and
+unrecovered inputs; container preparation independently compares every virtual
+disk byte. The native collector's
+[pure torn-write guards](../tests/windows_torn_write_guard.ps1) run before mounts.
+Use at most eight input/candidate pairs per guest storage group, then archive exact
+detached outputs and release only separately verified host-preserved group copies.
+One failed or uncertain native attempt stops execution; its original report and
+candidate remain preserved, and only unexecuted cases may continue after diagnosis.
+Keep producer completion separate from report transport. If a completed original
+report exceeds the collection deadline, preserve the transport failure and collect
+that same request's report with a longer bounded read; do not invoke its candidates
+again. Verify the original completion time, request identity and unchanged inputs
+before admitting any continuation.
+VM CLI commands retain the absolute `lab/` working directory.
+
 The current large batch retains 891 actual native-source operations, 234 successful
 checkpoints and six complete image states. One Windows invocation passes the
 growth/pressure/reuse gate with independently reviewed native metadata, chkdsk
 and original healthy events. Preserve these results and preceding failures;
 do not repeat completed operations to repackage or collect delayed evidence.
-General owner/FSKit integration now passes the local boundary above; its installed
-tests remain the next batch.
+General owner/FSKit integration passes the local and bounded installed/Windows
+postimage gates above; broader operation families retain their separate gates.
 See [the current acceptance](ACCEPTANCE.md#native-mftdirectory-pressure-and-sustained-journal-reuse).
 
 The manual `ntfs-write-operation-image-tests` executable uses the experimental

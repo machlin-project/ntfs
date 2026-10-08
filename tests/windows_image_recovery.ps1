@@ -527,6 +527,93 @@ function Test-OriginalDisk {
     return (Test-NativeFiles $batch.baseline $batch.baseline.root $batch.targetAcl $batch.fileId)
 }
 
+function Test-NativeTornMetadataProfile($product, [string]$root) {
+    $pageMaximum = 16
+    $sectorBytes = 512
+    $pageBytes = 4096
+    $mftRecordBytes = 1024
+    $mftBytesMaximum = 1048576
+    $indexBytesMaximum = 16777216
+    $sequenceMaximum = 65535
+    $recordMask = [UInt64]281474976710655
+    $fields = @('FileName','FileReference','BufferOffset','TornStructureOffset',
+                'BlockIndex','ExpectedSequenceNumber','ActualSequenceNumber')
+    if ($product.PSObject.Properties.Name -notcontains 'expectedTornMetadataPages') { return @() }
+    if ($root -cne 'R:\MachlinWriteCases-native-write-alias-20261006' -or
+        $product.PSObject.Properties.Name -notcontains 'sequenceObjects') {
+        throw 'Unexpected torn metadata namespace.'
+    }
+    $pages = @($product.expectedTornMetadataPages)
+    if ($pages.Count -gt $pageMaximum) { throw 'Torn metadata profile exceeds its bound.' }
+    $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($page in $pages) {
+        if (@($page.PSObject.Properties).Count -ne $fields.Count) { throw 'Unexpected torn metadata fields.' }
+        foreach ($field in $fields) {
+            if ($page.PSObject.Properties.Name -notcontains $field -or $page.$field -isnot [string]) {
+                throw 'Unexpected torn metadata field type.'
+            }
+        }
+        foreach ($field in $fields | Where-Object { $_ -ne 'FileName' }) {
+            if ($page.$field -notmatch '^(0|[1-9][0-9]{0,15})$') { throw 'Unexpected torn metadata number.' }
+        }
+        $blocks = $mftRecordBytes / $sectorBytes
+        $bytesMaximum = $mftBytesMaximum
+        if ($page.FileName -ceq '\$Mft') {
+            if ($page.FileReference -cne '0') { throw 'Unexpected torn MFT identity.' }
+        } elseif ($page.FileName -ceq '\$MftMirr') {
+            if ($page.FileReference -cne '1') { throw 'Unexpected torn mirror identity.' }
+        } elseif ($page.FileName -ceq ('\' + $root.Substring('R:\'.Length) + '\native-growth')) {
+            $parent = @($product.sequenceObjects | Where-Object {
+                $_.relativePath -ceq 'native-growth' -and $_.directory -and $_.present
+            })
+            if ($parent.Count -ne 1 -or
+                [UInt64]$page.FileReference -ne ([UInt64]$parent[0].reference -band $recordMask)) {
+                throw 'Unexpected torn index identity.'
+            }
+            $blocks = $pageBytes / $sectorBytes
+            $bytesMaximum = $indexBytesMaximum
+        } else { throw 'Unexpected torn metadata stream.' }
+        if ([UInt64]$page.BufferOffset -ge $bytesMaximum -or [UInt64]$page.BufferOffset % $pageBytes -ne 0 -or
+            $page.TornStructureOffset -cne '0' -or [UInt64]$page.BlockIndex -ge $blocks -or
+            [UInt64]$page.ExpectedSequenceNumber -lt 1 -or [UInt64]$page.ExpectedSequenceNumber -gt $sequenceMaximum -or
+            [UInt64]$page.ActualSequenceNumber -gt $sequenceMaximum -or
+            $page.ExpectedSequenceNumber -ceq $page.ActualSequenceNumber) {
+            throw 'Unexpected torn metadata sector state.'
+        }
+        $key = ($fields | ForEach-Object { $page.$_ }) -join '|'
+        if (-not $keys.Add($key)) { throw 'Duplicate torn metadata expectation.' }
+    }
+    return $pages
+}
+
+function Test-NativeTornWriteEvent($data, $product) {
+    $fields = @('FileName','FileReference','BufferOffset','TornStructureOffset',
+                'BlockIndex','ExpectedSequenceNumber','ActualSequenceNumber')
+    foreach ($field in $fields) {
+        if (-not $data.ContainsKey($field)) { throw 'Incomplete native torn-write event.' }
+    }
+    if ($data['FileName'] -ceq '\$LogFile') {
+        if ($data['FileReference'] -cne '2' -or $data['TornStructureOffset'] -cne '0' -or
+            $product.PSObject.Properties.Name -notcontains 'expectedTornLogPages') {
+            throw 'Unattributed native torn-write event requires review.'
+        }
+        $expected = @($product.expectedTornLogPages | Where-Object {
+            $_.bufferOffset -ceq $data['BufferOffset'] -and $_.blockIndex -ceq $data['BlockIndex'] -and
+            $_.expectedSequenceNumber -ceq $data['ExpectedSequenceNumber'] -and
+            $_.actualSequenceNumber -ceq $data['ActualSequenceNumber']
+        })
+        if ($expected.Count -ne 1) { throw 'Native torn-page observation differs from the injected sector state.' }
+        return 'journal'
+    }
+    $pages = @(Test-NativeTornMetadataProfile $product $product.root)
+    $matchingPages = @($pages | Where-Object {
+        $page = $_
+        @($fields | Where-Object { $page.$_ -cne $data[$_] }).Count -eq 0
+    })
+    if ($matchingPages.Count -ne 1) { throw 'Native torn metadata observation differs from the injected sector state.' }
+    return 'metadata'
+}
+
 function Get-NativeEvents([DateTime]$since, [string]$volumeId, $product, $observation) {
     $utc = $since.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffffffZ',[Globalization.CultureInfo]::InvariantCulture)
     $result = @()
@@ -537,7 +624,7 @@ function Get-NativeEvents([DateTime]$since, [string]$volumeId, $product, $observ
         $exit = $LASTEXITCODE
         $row = [ordered]@{ provider=$provider; channel=$channel; query=$query; exitCode=$exit;
                            output=$output; parsed=$false; count=$null; matchingHealthyEvents=@();
-                           matchingInjectedTornPages=@(); observedEvents=@() }
+                           matchingInjectedTornPages=@(); matchingInjectedMetadataPages=@(); observedEvents=@() }
         # Preserve the exact native query before parsing or applying verdicts.
         $observation.nativeEvents += $row
         if ($exit -ne 0) { throw ('Native event query failed: ' + $provider) }
@@ -569,19 +656,12 @@ function Get-NativeEvents([DateTime]$since, [string]$volumeId, $product, $observ
                 ($data['DriveName'] -eq 'R:' -or $data['DriveName'].TrimEnd('\') -eq $volumeId.TrimEnd('\'))) -or
                 ($data.ContainsKey('VolumeName') -and $data['VolumeName'].TrimEnd('\') -eq $volumeId.TrimEnd('\'))
             if ($id -eq 7) {
-                if ($level -ne 3 -or -not $matching -or -not $data.ContainsKey('FileName') -or
-                    $data['FileName'] -ne '\$LogFile' -or $data['FileReference'] -ne '2' -or
-                    $data['TornStructureOffset'] -ne '0' -or
-                    -not ($product.PSObject.Properties.Name -contains 'expectedTornLogPages')) {
+                if ($level -ne 3 -or -not $matching) {
                     throw 'Unattributed native torn-write event requires review.'
                 }
-                $expected = @($product.expectedTornLogPages | Where-Object {
-                    $_.bufferOffset -eq $data['BufferOffset'] -and $_.blockIndex -eq $data['BlockIndex'] -and
-                    $_.expectedSequenceNumber -eq $data['ExpectedSequenceNumber'] -and
-                    $_.actualSequenceNumber -eq $data['ActualSequenceNumber']
-                })
-                if ($expected.Count -ne 1) { throw 'Native torn-page observation differs from the injected sector state.' }
-                $row.matchingInjectedTornPages += $observed
+                $kind = Test-NativeTornWriteEvent $data $product
+                if ($kind -ceq 'journal') { $row.matchingInjectedTornPages += $observed }
+                else { $row.matchingInjectedMetadataPages += $observed }
             } elseif ($matching) {
                 if ($id -ne 98 -or -not $data.ContainsKey('CorruptionActionState') -or $data['CorruptionActionState'] -ne '0') {
                     throw 'Native candidate corruption state requires review.'
@@ -608,6 +688,7 @@ try {
     # Admit every declared mounted profile before constructing or attaching any
     # disposable candidate. This validation performs no filesystem mutation.
     foreach ($product in $batch.products) {
+        [void](Test-NativeTornMetadataProfile $product $product.root)
         if ($product.PSObject.Properties.Name -contains 'mountedMutationObjects') {
             [void](Test-NativeMountedMutationProfile $product $product.root)
             Initialize-NativeMountedMetadata

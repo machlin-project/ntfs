@@ -1,5 +1,26 @@
 # Handoff to Sol
 
+The current large batch adds 264 actual current-C growth recoveries: 181 MFT and
+83 index states, all with full validation and quiet fresh reopen. The preceding
+891 operations are reused, not rerun. All 32 preselected unrecovered native inputs
+have independent whole-crash/container byte oracles. Main accepts the input and
+read-only Windows preparation: four positive event guards, 74 malformed refusals,
+all 32 profiles, a fresh request identity and sufficient eight-case group storage.
+All 32 inputs now pass independently reviewed native recovery: 4,278 complete
+object expectations, 32 healthy events, ten exact journal warnings and four exact
+metadata warnings, with no unrelated warning or repair. All 32 detached outputs
+are retained; all four groups release only verified host-preserved guest copies.
+The original test volume is unchanged. Windows ownership returns to main idle.
+Completed-report collection uses a longer bounded read after the first transport
+deadline, without invoking any completed candidate again. Evidence is in
+`artifacts/overwrite/windows-native-growth-matrix-20261008/`.
+The current frozen source/model and C evidence are under
+`native-growth-inputs-20261008/` and `native-growth-matrix-local-bounded-20261008/`.
+Do not repeat preparation, completed local recoveries or native cases. Preserve
+the first failures and coordinate VM handoffs through the main agent. Broader
+growth interruption matrices, hardware cuts and unsupported operation families
+remain separate; this does not qualify arbitrary device writing.
+
 Work in `/Users/darekhta/Development/machlin/ntfs`, branch `development`.
 Read AGENTS.md, README.md, ARCHITECTURE.md, ACCEPTANCE.md, PROVENANCE.md and WRITES.md.
 This is an independent proprietary FSKit product; no kernel/LXNU adapter or public

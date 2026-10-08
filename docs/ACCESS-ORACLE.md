@@ -145,6 +145,16 @@ observations, child-output caps and deadlines. Deliberately coarse fake answers
 produce both matches and mismatches; they are not a Windows access implementation.
 Standalone SID seeds exercise the existing security fuzz target.
 
-No native Windows acquisition has run for this checkpoint. FSKit has not adopted
-the evaluator or diagnostic token projection. Do not use these tools as a native
-authenticator or expose their transport as a product API.
+The [first complete hosted acquisition](https://github.com/machlin-project/ntfs/actions/runs/37854379914)
+contains 144 decisions across all six contexts. Its original review has 111
+matching decisions, six zero-request mismatches, 21 declared unsupported probes
+and six mandatory-plane observations. The Windows result for every original
+empty-DACL zero request is a denial with zero grant. Core correction and a v2
+matrix add explicit zero-request controls for absent/NULL/populated DACLs and
+ownership. Additional owner/Everyone allow-deny combinations distinguish how
+ownership interacts with the two token contexts; maximum-mask vectors separate
+ACE ordering, mixed required masks, empty/NULL DACLs and ownership. The unchanged
+v1 captures remain verifiable. Additional v2 native
+observations are pending. FSKit has not adopted the evaluator or diagnostic token
+projection. Do not use these tools as a native authenticator or expose their
+transport as a product API.

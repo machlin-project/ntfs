@@ -105,7 +105,8 @@ def validate_manifest(path):
     raw = bounded_read(path, MANIFEST_BYTES_MAX)
     data = decoded_json(raw)
     if (not isinstance(data, dict) or type(data.get('schema_version')) is not int or
-            data['schema_version'] != wire.SCHEMA_VERSION or data.get('vector_set') != collector.VECTOR_SET or
+            data['schema_version'] != wire.SCHEMA_VERSION or
+            data.get('vector_set') not in (collector.LEGACY_VECTOR_SET, collector.VECTOR_SET) or
             data.get('acquisition_status') not in ('complete', 'partial') or
             data.get('provenance') not in (collector.NATIVE_PROVENANCE, collector.SYNTHETIC_PROVENANCE) or
             data.get('context_plan') != list(collector.CONTEXT_IDS)):
@@ -131,7 +132,8 @@ def validate_manifest(path):
         if name in context_map or name not in collector.CONTEXT_IDS:
             raise ValueError('Duplicate or unexpected access context')
         context_map[name] = context
-        for vector in collector.vectors(context['token'], data['probe_group'], data['probe_owner_group']):
+        for vector in collector.vectors(context['token'], data['probe_group'], data['probe_owner_group'],
+                                        vector_set=data['vector_set']):
             planned[name + '/' + vector['name']] = vector
     if 'base' in context_map:
         enabled = [entry for entry in context_map['base']['token']['groups']

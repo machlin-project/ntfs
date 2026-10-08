@@ -356,7 +356,7 @@ ownership_and_restriction_tests(void)
 		size = descriptor(bytes, &owner_sid, state, NULL, 0);
 		(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK,
 		    state != NTFS_ACL_EMPTY);
-		(void)check(bytes, size, &token, 0, NULL, NTFS_OK, true);
+		(void)check(bytes, size, &token, 0, NULL, NTFS_OK, false);
 	}
 	size = descriptor(bytes, &user_sid, NTFS_ACL_EMPTY, NULL, 0);
 	(void)check(bytes, size, &token, NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC, NULL,
@@ -484,7 +484,7 @@ ordered_tests(void)
 				token.restricting_count = restriction;
 				for (request = 0; request < TEST_ORDER_REQUESTS; request++) {
 					desired = 0;
-					expected = true;
+					expected = request != 0;
 					for (i = 0; i < sizeof(rights) / sizeof(rights[0]); i++) {
 						if ((request & ((size_t)1 << i)) == 0) {
 							continue;

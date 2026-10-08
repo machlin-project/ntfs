@@ -74,10 +74,12 @@ def core_contract(evaluator, directory):
     deny = wire.ace(wire.ACE_DENY, read, TEST_USER)
     for entries, desired, allowed in (([allow], read, True), ([deny, allow], read, False),
                                      ([allow, deny], read, True), ([], read, False),
-                                     ([], 0, True), ([allow], read | write, False)):
+                                     ([], 0, False), ([allow], read | write, False),
+                                     ([allow], 0, False), ([deny], 0, False)):
         evaluate(plain, wire.descriptor(TEST_OTHER, entries), desired, allowed)
     for state in ('null', 'absent'):
         evaluate(plain, wire.descriptor(TEST_OTHER, [], state=state), read, True)
+        evaluate(plain, wire.descriptor(TEST_OTHER, [], state=state), 0, False)
     evaluate(plain, wire.descriptor(TEST_OTHER, [wire.ace(wire.ACE_ALLOW, wire.FILE_GENERIC_READ, TEST_USER)]),
              wire.GENERIC_READ, True, mapped=wire.FILE_GENERIC_READ)
     generic_overlap = [wire.ace(wire.ACE_DENY, wire.FILE_GENERIC_WRITE, TEST_USER),
@@ -113,6 +115,11 @@ def core_contract(evaluator, directory):
     controls = wire.READ_CONTROL | wire.WRITE_DAC
     evaluate(plain, wire.descriptor(TEST_USER, []), controls, True)
     evaluate(plain, wire.descriptor(TEST_USER, []), read, False)
+    for context in (plain, token(user_deny_only=True),
+                    token(restricting=[TEST_USER], restricted=True)):
+        evaluate(context, wire.descriptor(TEST_USER, []), 0, False)
+        evaluate(context, wire.descriptor(TEST_USER,
+                 [wire.ace(wire.ACE_ALLOW, read, wire.OWNER_RIGHTS)]), 0, False)
     evaluate(plain, wire.descriptor(TEST_USER, [wire.ace(wire.ACE_DENY, controls, wire.OWNER_RIGHTS)]), controls, False)
     evaluate(token(restricting=[TEST_USER], restricted=True), wire.descriptor(TEST_USER, []), controls,
              False, code=wire.NTFS_UNSUPPORTED)
@@ -326,12 +333,21 @@ def corpus_contract(evaluator, directory):
     corpus = directory / 'corpus'
     manifest = collector.capture(fake, corpus, synthetic=True)
     check(manifest['acquisition_status'] == 'complete' and len(manifest['contexts']) == len(collector.CONTEXT_IDS))
-    check(len(manifest['cases']) == 24 * len(collector.CONTEXT_IDS))
+    check(len(manifest['cases']) == 47 * len(collector.CONTEXT_IDS))
     check(fake.created == sorted(fake.closed) and not fake.handles)
     check(manifest['contexts'][1]['token']['user_deny_only'] and not manifest['contexts'][1]['token']['restricted'])
     check(len(manifest['contexts'][-1]['token']['restricting']) == 2)
     path = corpus / 'manifest.json'
     original = path.read_bytes()
+    legacy = deepcopy(manifest)
+    legacy['vector_set'] = collector.LEGACY_VECTOR_SET
+    legacy_names = {vector['name'] for vector in collector.vectors(
+        manifest['contexts'][0]['token'], manifest['probe_group'], manifest['probe_owner_group'],
+        vector_set=collector.LEGACY_VECTOR_SET)}
+    legacy['cases'] = [case for case in legacy['cases'] if case['id'].split('/')[1] in legacy_names]
+    path.write_text(json.dumps(legacy), encoding='utf-8')
+    check(len(verifier.validate_manifest(path)[0]['cases']) == 24 * len(collector.CONTEXT_IDS))
+    path.write_bytes(original)
     report = verifier.verify(path, evaluator, directory / 'report')
     check(report['status'] == 'gaps' and not report['native_dacl_vectors_verified'] and
           not report['full_authorization_qualified'] and report['manifest_unchanged'])

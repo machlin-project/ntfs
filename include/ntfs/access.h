@@ -110,6 +110,7 @@ void ntfs_dacl_default_limits(struct ntfs_dacl_limits *);
  * No allocation/I/O or mutations. Input/output storage must not overlap; inputs
  * remain immutable throughout. NULL limits select defaults. Errors zero decision;
  * NTFS_OK with allowed=false is a valid denial with granted=0, never partial grant.
+ * An original zero-right request is a valid denial after descriptor validation.
  * Owner/group SIDs are required here, although the framing decoder permits absence. */
 enum ntfs_result ntfs_dacl_evaluate(const void *, size_t, const struct ntfs_access_token *,
     uint32_t, const struct ntfs_dacl_limits *, struct ntfs_dacl_decision *);

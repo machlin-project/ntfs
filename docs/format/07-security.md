@@ -69,6 +69,15 @@ Displaying a native owner or mode cannot substitute for a Windows access check.
 Our evaluator and platform boundary are described in [ACCESS.md](../ACCESS.md)
 and [NATIVE-ACCESS.md](../NATIVE-ACCESS.md).
 
+The first [hosted native AccessCheck observation](https://github.com/machlin-project/ntfs/actions/runs/37854379914)
+denies a zero requested mask against an empty DACL in every one of six queried
+token contexts. A zero original request must not be confused with a nonzero
+owner-control request already satisfied by implied rights. The evaluator keeps
+complete descriptor/ACE checks before the zero-mask denial; the native collector
+adds separate absent/NULL/populated/owner zero-mask controls for the next capture.
+See [the decision implementation](../../core/access.c),
+[independent vectors](../../tests/access.c) and [oracle contract](../ACCESS-ORACLE.md).
+
 ## Shared security store
 
 `$Secure` uses a named DATA stream `$SDS` plus `$SII` and `$SDH` indexes.

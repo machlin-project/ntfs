@@ -315,6 +315,13 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	if (result != NTFS_OK) {
 		return result;
 	}
+	/* AccessCheck denies an original zero-right request. This is different
+	 * from a nonzero request satisfied entirely by implied owner rights.
+	 * Keep complete descriptor and feature validation before this decision. */
+	if (decision.requested == 0) {
+		*out = decision;
+		return NTFS_OK;
+	}
 	work.maximum = limits->max_sid_comparisons;
 	result = access_token_match(&work, &info.owner, false, true, false, &owner);
 	if (result != NTFS_OK) {

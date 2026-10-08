@@ -36,7 +36,8 @@ TOKEN_INFORMATION_BYTES_MAX = 1024 * 1024
 PRIVILEGES_MAX = 64
 NATIVE_PROVENANCE = 'Windows AccessCheck with queried disposable impersonation tokens'
 SYNTHETIC_PROVENANCE = 'Synthetic AccessCheck collector contract test; no Windows qualification'
-VECTOR_SET = 'ntfs-file-dacl-v1'
+LEGACY_VECTOR_SET = 'ntfs-file-dacl-v1'
+VECTOR_SET = 'ntfs-file-dacl-v2'
 CONTEXT_IDS = ('base', 'deny-user', 'deny-group', 'restrict-user', 'restrict-world',
                'restrict-duplicates')
 
@@ -260,7 +261,9 @@ class WindowsAPI:
                                   if success else None}
 
 
-def vectors(token, group_sid=None, owner_group=None):
+def vectors(token, group_sid=None, owner_group=None, *, vector_set=VECTOR_SET):
+    if vector_set not in (LEGACY_VECTOR_SET, VECTOR_SET):
+        raise ValueError('Unknown access vector set')
     user = token['user']
     # An unrelated owner avoids implicit owner rights in ordinary membership cases.
     memberships = [user, *(entry['sid'] for entry in token['groups']), *token['restricting']]
@@ -289,6 +292,14 @@ def vectors(token, group_sid=None, owner_group=None):
     add('null', [], state='null')
     add('absent', [], state='absent')
     add('zero-request', [], 0)
+    if vector_set == VECTOR_SET:
+        add('zero-null', [], 0, state='null')
+        add('zero-absent', [], 0, state='absent')
+        add('zero-allow', [wire.ace(wire.ACE_ALLOW, read, user)], 0)
+        add('zero-deny', [wire.ace(wire.ACE_DENY, read, user)], 0)
+        add('zero-owner-empty', [], 0, owner=user)
+        add('zero-owner-rights', [wire.ace(wire.ACE_ALLOW, read, wire.OWNER_RIGHTS)], 0,
+            owner=user)
     add('owner-empty-control', [], controls, owner=user,
         scope='probe' if token['restricted'] else 'dacl')
     add('owner-empty-data', [], owner=user)
@@ -307,6 +318,53 @@ def vectors(token, group_sid=None, owner_group=None):
     if owner_group is not None:
         add('group-owner-empty', [], controls, owner=owner_group,
             scope='probe' if token['restricted'] else 'dacl')
+    if vector_set == VECTOR_SET:
+        # These witnesses distinguish ownership in each pass from ownership
+        # requiring the owner SID in both ordinary and restricting contexts.
+        add('owner-rights-deny-world-allow',
+            [wire.ace(wire.ACE_DENY, controls, wire.OWNER_RIGHTS),
+             wire.ace(wire.ACE_ALLOW, controls, wire.WORLD)], controls,
+            owner=user, scope=owner_scope)
+        add('owner-implied-user-deny-world-allow',
+            [wire.ace(wire.ACE_DENY, controls, user),
+             wire.ace(wire.ACE_ALLOW, controls, wire.WORLD)], controls,
+            owner=user, scope=owner_scope)
+        add('owner-rights-allow-before-user-deny',
+            [wire.ace(wire.ACE_ALLOW, read, wire.OWNER_RIGHTS),
+             wire.ace(wire.ACE_DENY, read, user),
+             wire.ace(wire.ACE_ALLOW, read, wire.WORLD)], owner=user, scope=owner_scope)
+        add('owner-implied-controls-plus-data', [wire.ace(wire.ACE_ALLOW, read, wire.WORLD)],
+            controls | read, owner=user, scope=owner_scope)
+        maximum = wire.MAXIMUM_ALLOWED
+        add('maximum-allow-before-deny',
+            [wire.ace(wire.ACE_ALLOW, read, user), wire.ace(wire.ACE_DENY, read, user)],
+            maximum, scope='probe')
+        add('maximum-deny-before-allow',
+            [wire.ace(wire.ACE_DENY, read, user), wire.ace(wire.ACE_ALLOW, read, user)],
+            maximum, scope='probe')
+        add('maximum-split-allow',
+            [wire.ace(wire.ACE_ALLOW, read, user), wire.ace(wire.ACE_ALLOW, write, user)],
+            maximum, scope='probe')
+        add('maximum-partial-deny',
+            [wire.ace(wire.ACE_DENY, write, user), wire.ace(wire.ACE_ALLOW, read | write, user)],
+            maximum, scope='probe')
+        add('maximum-required-present', [wire.ace(wire.ACE_ALLOW, read | write, user)],
+            maximum | read, scope='probe')
+        add('maximum-required-missing', [wire.ace(wire.ACE_ALLOW, read, user)],
+            maximum | write, scope='probe')
+        add('maximum-null', [], maximum, state='null', scope='probe')
+        add('maximum-absent', [], maximum, state='absent', scope='probe')
+        add('maximum-empty', [], maximum, scope='probe')
+        add('maximum-owner-empty', [], maximum, owner=user, scope='probe')
+        add('maximum-owner-rights-deny',
+            [wire.ace(wire.ACE_DENY, controls, wire.OWNER_RIGHTS),
+             wire.ace(wire.ACE_ALLOW, controls | read, user)],
+            maximum, owner=user, scope='probe')
+        add('maximum-owner-rights-allow', [wire.ace(wire.ACE_ALLOW, read, wire.OWNER_RIGHTS)],
+            maximum, owner=user, scope='probe')
+        add('maximum-inherit-only',
+            [wire.ace(wire.ACE_ALLOW, wire.FILE_ALL_ACCESS, user, wire.ACE_INHERIT_ONLY)],
+            maximum, scope='probe')
     return result
 
 

@@ -17,8 +17,9 @@ an authenticated mount initiator or a Windows-to-native mapping.
 
 The independent [AccessCheck observation pipeline](ACCESS-ORACLE.md) captures
 Windows token fields and original descriptors, then compares decisions offline.
-Local tooling contracts pass; native acquisition has not run. Unsupported probes
-and mandatory/privilege boundaries remain explicit gaps, not passed comparisons.
+The first complete hosted capture contains 144 native decisions. Its original
+comparison exposes six zero-request mismatches, one in each token context;
+unsupported probes and mandatory/privilege boundaries remain explicit gaps.
 
 ## Implemented decision contract
 
@@ -89,8 +90,10 @@ and [OWNER RIGHTS identity](https://learn.microsoft.com/en-us/windows-server/ide
 ## Error, ownership and resource contract
 
 `NTFS_OK` means a valid discretionary decision; `allowed=false` is a denial with
-`granted=0`. An allowed result returns exactly the mapped requested mask, including
-zero for a zero-right request. Errors zero the entire decision. Unsupported
+`granted=0`. An allowed result returns exactly the nonzero mapped requested mask.
+An original zero-right request is a valid denial, after complete descriptor and
+feature validation. It is distinct from a nonzero owner-control request whose
+remaining mask becomes zero through implied rights. Errors zero the entire decision. Unsupported
 features are errors, not valid denials or successful unsupported-feature support.
 The decision reports the aggregate SID comparison count for successful evaluation,
 including a valid denial. There are no partial grants on budget exhaustion.
@@ -166,5 +169,12 @@ test expectation remains recorded in the failed focused log.
 `tests/fuzz_access.c` has a separate bounded descriptor/token envelope and tests
 deterministic decisions, exact grants, budget bounds and zero errors. The bounded
 campaign and all core/component/source-build results are recorded in ACCEPTANCE.md.
-No Windows AccessCheck, installed FSKit authorization or commercial-security
-qualification has executed at this checkpoint.
+The [first hosted AccessCheck run](https://github.com/machlin-project/ntfs/actions/runs/37854379914)
+captures 144 original decisions using six queried Windows token contexts. Windows
+denies all six original zero-mask requests against an empty DACL; the preceding
+core instead reports allowed with zero granted rights. The correction retains
+complete descriptor/ACE validation and denies an original zero request. The v2
+native matrix adds NULL, absent, allow, deny, owner and OWNER RIGHTS zero-mask
+controls; those additional observations remain pending. The verifier still
+accepts the unchanged v1 matrix, preserving replay of the exact first failure.
+Installed FSKit authorization and commercial-security qualification remain open.

@@ -55,11 +55,16 @@ FILE_DEVICE_FILE_SYSTEM = 0x00000009
 IOCTL_DEVICE_SHIFT = 16
 IOCTL_FUNCTION_SHIFT = 2
 FSCTL_GET_NTFS_VOLUME_DATA_FUNCTION = 25
+FSCTL_ALLOW_EXTENDED_DASD_IO_FUNCTION = 32
 FSCTL_GET_REPARSE_POINT_FUNCTION = 42
+METHOD_NEITHER = 3
 FSCTL_GET_NTFS_VOLUME_DATA = ((FILE_DEVICE_FILE_SYSTEM << IOCTL_DEVICE_SHIFT) |
                              (FSCTL_GET_NTFS_VOLUME_DATA_FUNCTION << IOCTL_FUNCTION_SHIFT))
 FSCTL_GET_REPARSE_POINT = ((FILE_DEVICE_FILE_SYSTEM << IOCTL_DEVICE_SHIFT) |
                          (FSCTL_GET_REPARSE_POINT_FUNCTION << IOCTL_FUNCTION_SHIFT))
+FSCTL_ALLOW_EXTENDED_DASD_IO = ((FILE_DEVICE_FILE_SYSTEM << IOCTL_DEVICE_SHIFT) |
+                              (FSCTL_ALLOW_EXTENDED_DASD_IO_FUNCTION << IOCTL_FUNCTION_SHIFT) |
+                              METHOD_NEITHER)
 REPARSE_TAG_SYMLINK = 0xA000000C
 REPARSE_TAG_MOUNT_POINT = 0xA0000003
 REPARSE_TAG_WOF = 0x80000017
@@ -301,18 +306,35 @@ class WindowsAPI:
             self.kernel.FindClose(handle)
         return streams
 
-    def copy(self, source, destination, expected):
+    def copy(self, source, destination, expected, *, volume_sector_bytes=None):
+        if type(expected) is not int or expected < 0:
+            raise ValueError('Invalid native acquisition length')
+        if volume_sector_bytes is not None:
+            if (type(volume_sector_bytes) is not int or volume_sector_bytes <= 0 or
+                    COPY_BYTES % volume_sector_bytes or expected == 0 or expected % volume_sector_bytes or
+                    not re.fullmatch(r'\\\\\.\\[A-Z]:', str(source))):
+                raise ValueError('Raw volume acquisition requires its exact sector-aligned extent and drive handle')
         checksum = hashlib.sha256()
         buffer = ct.create_string_buffer(COPY_BYTES)
         done = 0
         with self.open(source, GENERIC_READ) as handle, destination.open('xb') as output:
+            if volume_sector_bytes is not None:
+                # Windows otherwise clips DASD reads to complete filesystem
+                # clusters. This handle-only control admits the exact observed
+                # trailing sectors; GENERIC_READ and the declared length remain
+                # unchanged. Device-driver partition bounds still apply.
+                returned = DWORD()
+                if not self.kernel.DeviceIoControl(handle, FSCTL_ALLOW_EXTENDED_DASD_IO,
+                                                   None, 0, None, 0, ct.byref(returned), None):
+                    raise self.error()
             while done < expected:
                 amount = min(COPY_BYTES, expected - done)
                 returned = DWORD()
                 if not self.kernel.ReadFile(handle, buffer, amount, ct.byref(returned), None):
                     raise self.error()
                 if returned.value == 0 or returned.value > amount:
-                    raise ValueError('Short or invalid native read before expected EOF')
+                    raise ValueError(f'Short or invalid native read before expected EOF: '
+                                     f'{returned.value} of {amount} bytes at {done}/{expected}')
                 chunk = buffer.raw[:returned.value]
                 output.write(chunk)
                 checksum.update(chunk)
@@ -406,8 +428,11 @@ def collect(args):
         if api.volume(root) != {key: value for key, value in volume.items() if key != 'root_reference'}:
             raise ValueError('Native volume geometry changed during collection')
         image = output / 'volume.img'
-        checksum = api.copy('\\\\.\\' + root[:2], image, int(volume['size_bytes']))
+        checksum = api.copy('\\\\.\\' + root[:2], image, int(volume['size_bytes']),
+                            volume_sector_bytes=volume['sector_size'])
         report['image'] = {'file': image.name, 'size': str(image.stat().st_size), 'sha256': checksum}
+        report['raw_volume_io'] = {'extended_dasd_read': True, 'write_access': False,
+                                  'declared_bytes': volume['size_bytes']}
         report['acquisition_status'] = 'partial' if report['observation_errors'] else 'complete'
     except BaseException:
         report['acquisition_status'] = 'failed'

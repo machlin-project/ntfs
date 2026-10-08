@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Exercise the Windows corpus transport against independent synthetic fixtures."""
 from copy import deepcopy
+from contextlib import contextmanager
 import ctypes
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import fixtures
 import windows_corpus as corpus
@@ -21,6 +25,111 @@ WINDOWS_FILE_INFORMATION_BYTES = 52
 WINDOWS_VOLUME_INFORMATION_BYTES = 96
 WINDOWS_STREAM_INFORMATION_BYTES = 600
 WINDOWS_MAX_NAME_UNITS = 255
+
+
+def sanitizer_contracts():
+    """Inspect the real launcher arguments without starting a modeled reader."""
+    with patch.dict(os.environ, {'API_KEY': 'synthetic-secret', 'UNKNOWN_CREDENTIAL': 'synthetic-secret',
+                                 'ASAN_OPTIONS': 'halt_on_error=0:detect_leaks=0',
+                                 'UBSAN_OPTIONS': 'halt_on_error=0', 'CC': 'untrusted-compiler'}), \
+            patch.object(corpus.subprocess, 'Popen', side_effect=OSError('stop before launch')) as launch:
+        try:
+            corpus.tool(Path('/unlaunched-reader'), Path('/unopened-image'), 'info-json')
+        except OSError as error:
+            assert str(error) == 'stop before launch'
+        else:
+            raise AssertionError('The launcher was not intercepted before execution')
+        environment = launch.call_args.kwargs['env']
+    assert launch.call_count == 1
+    assert 'API_KEY' not in environment and 'UNKNOWN_CREDENTIAL' not in environment and 'CC' not in environment
+    for kind in ('ASAN_OPTIONS', 'UBSAN_OPTIONS'):
+        assert 'halt_on_error=1' in environment[kind] and 'abort_on_error=1' in environment[kind]
+        assert 'halt_on_error=0' not in environment[kind] and 'detect_leaks=0' not in environment[kind]
+
+
+def raw_tail_contracts(directory):
+    """A complete-cluster prefix plus seven independently authored tail sectors."""
+    sector, cluster = 512, 4096
+    original = b'C' * cluster + b'T' * (7 * sector)
+
+    class FakeAPI(collector.WindowsAPI):
+        def __init__(self, refuse_control=False):
+            self.position, self.extended, self.closed = 0, False, False
+            self.reads, self.controls, self.opens = [], [], []
+            self.refuse_control = refuse_control
+            self.kernel = SimpleNamespace(ReadFile=self.read, DeviceIoControl=self.control)
+
+        @contextmanager
+        def open(self, source, access):
+            self.opens.append((source, access))
+            try:
+                yield 123
+            finally:
+                self.closed = True
+
+        def error(self):
+            return OSError('Synthetic DASD control refusal')
+
+        def control(self, handle, code, data, data_bytes, output, output_bytes, returned, overlap):
+            self.controls.append(code)
+            assert code == 0x00090083 and handle == 123
+            assert data is output is overlap is None and data_bytes == output_bytes == 0
+            if self.refuse_control:
+                return False
+            self.extended = True
+            returned._obj.value = 0
+            return True
+
+        def read(self, handle, buffer, amount, returned, overlap):
+            limit = len(original) if self.extended else cluster
+            count = min(amount, limit - self.position)
+            assert count >= 0 and handle == 123 and overlap is None
+            self.reads.append((self.position, amount))
+            ctypes.memmove(buffer, original[self.position:self.position + count], count)
+            self.position += count
+            returned._obj.value = count
+            return True
+
+    drive = r'\\.\R:'
+    previous = FakeAPI()
+    try:
+        previous.copy(drive, directory / 'clipped.img', len(original))
+    except ValueError as error:
+        assert 'expected EOF' in str(error)
+    else:
+        raise AssertionError('The old complete-cluster clipping was not reproduced')
+    assert (directory / 'clipped.img').read_bytes() == original[:cluster]
+    current = FakeAPI()
+    checksum = current.copy(drive, directory / 'complete.img', len(original), volume_sector_bytes=sector)
+    assert checksum == hashlib.sha256(original).hexdigest()
+    assert (directory / 'complete.img').read_bytes() == original
+    assert current.controls == [0x00090083] and current.closed
+    assert current.opens == [(drive, collector.GENERIC_READ)]
+    assert all(first + length <= len(original) for first, length in current.reads)
+    ordinary = FakeAPI()
+    ordinary.copy(r'R:\file.bin', directory / 'ordinary.bin', cluster)
+    assert not ordinary.controls and ordinary.closed
+    assert (directory / 'ordinary.bin').read_bytes() == original[:cluster]
+    refused = FakeAPI(refuse_control=True)
+    try:
+        refused.copy(drive, directory / 'refused.img', len(original), volume_sector_bytes=sector)
+    except OSError:
+        pass
+    else:
+        raise AssertionError('A rejected extended-read control was ignored')
+    assert not refused.reads and refused.closed
+    assert (directory / 'refused.img').read_bytes() == b''
+    for source, count, unit in ((r'R:\file.bin', len(original), sector),
+                                (r'\\.\PhysicalDrive0', len(original), sector),
+                                (drive, len(original) - 1, sector), (drive, len(original), 0)):
+        invalid = FakeAPI()
+        try:
+            invalid.copy(source, directory / 'invalid.img', count, volume_sector_bytes=unit)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError('Invalid raw-read identity or alignment was admitted')
+        assert not invalid.opens and not (directory / 'invalid.img').exists()
 
 
 def native_stat(size, directory=False, links=1):
@@ -199,8 +308,10 @@ def case_contracts(directory, reader, path, manifest):
 def main():
     reader = Path(sys.argv[1]).resolve()
     helper_contracts()
+    sanitizer_contracts()
     with tempfile.TemporaryDirectory(prefix='ntfs-corpus-') as temporary:
         base = Path(temporary)
+        raw_tail_contracts(base)
         for name, create in (('standard', standard_manifest), ('hard-links', hard_link_manifest),
                              ('case-sensitive', sensitive_manifest)):
             directory = base / name

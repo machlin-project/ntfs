@@ -138,9 +138,9 @@ ntfs_mutation_hardlink(
 	struct ntfs_link_counts counts;
 	struct ntfs_attr_view attribute;
 	struct ntfs_disk_filename *name;
-	const uint8_t *original;
+	const uint8_t *original = NULL;
 	uint8_t value[NTFS_MUTATION_FILENAME_BYTES];
-	size_t position, bytes, index;
+	size_t position = 0, bytes, index;
 	enum ntfs_result result;
 
 	result = ntfs_mutation_record_get(plan, request->reference, false, &record);

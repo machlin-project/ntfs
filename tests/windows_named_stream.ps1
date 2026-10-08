@@ -14,17 +14,25 @@ function Refuse([scriptblock]$Action) {
     if (-not $refused) { throw 'An unsafe/repeated stream request was accepted.' }
     $script:checks++
 }
+function Read-TestStream {
+    $options = @{LiteralPath=$path;Stream='test-stream';ReadCount=0}
+    # PowerShell 6+ replaced the Framework-only Encoding Byte with AsByteStream.
+    if ((Get-Command Get-Content).Parameters.ContainsKey('AsByteStream')) {
+        $options.AsByteStream = $true
+    } else { $options.Encoding = 'Byte' }
+    return [byte[]](Get-Content @options)
+}
 try {
     [IO.File]::WriteAllBytes($path,$original)
     $before = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
     Write-CloudNamedStream $path 'test-stream' $payload
-    $observed = [byte[]](Get-Content -LiteralPath $path -Stream 'test-stream' -Encoding Byte -ReadCount 0)
+    $observed = [byte[]](Read-TestStream)
     if ([Convert]::ToBase64String($observed) -cne [Convert]::ToBase64String($payload)) {
         throw 'Original named stream bytes changed.'
     }
     $checks++
     Refuse { Write-CloudNamedStream $path 'test-stream' ([byte[]](9,9,9)) }
-    $retained = [byte[]](Get-Content -LiteralPath $path -Stream 'test-stream' -Encoding Byte -ReadCount 0)
+    $retained = [byte[]](Read-TestStream)
     if ([Convert]::ToBase64String($retained) -cne [Convert]::ToBase64String($payload) -or
         (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $before) {
         throw 'A rejected duplicate changed the stream or original unnamed contents.'

@@ -23,6 +23,14 @@ class Response(io.BytesIO):
 
 
 class ExternalToolContracts(unittest.TestCase):
+    def test_static_utilities_do_not_install_library_or_system_helpers(self):
+        configured = bootstrap.configure_command()
+        for flag in ('--disable-ntfs-3g', '--disable-library', '--disable-shared',
+                     '--enable-static', '--disable-mount-helper', '--disable-ldconfig'):
+            self.assertIn(flag, configured)
+        self.assertIn('--prefix=/ntfs-tools', configured)
+        self.assertIn('--exec-prefix=/ntfs-tools', configured)
+
     def test_original_archive_pin_is_unchanged(self):
         self.assertEqual(bootstrap.ARCHIVE_SHA256,
                          'f20e36ee68074b845e3629e6bced4706ad053804cbaf062fbae60738f854170c')

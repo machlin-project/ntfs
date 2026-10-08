@@ -31,6 +31,15 @@ COPY_BYTES = 1024 * 1024
 CONFIGURE_PREFIX = '/ntfs-tools'
 
 
+def configure_command():
+    # Utilities link the private static noinst library. Installing that library
+    # is unnecessary and upstream's shared-library relocation hook is not valid
+    # for a static-only DESTDIR tree.
+    return ['./configure', '--disable-ntfs-3g', '--disable-library', '--disable-shared',
+            '--enable-static', '--disable-ldconfig', '--disable-mount-helper',
+            f'--prefix={CONFIGURE_PREFIX}', f'--exec-prefix={CONFIGURE_PREFIX}']
+
+
 def sha(path):
     with Path(path).open('rb') as source:
         return hashlib.file_digest(source, 'sha256').hexdigest()
@@ -155,9 +164,7 @@ def bootstrap(args):
                              'checkout', '--detach', GIT_COMMIT], timeout=60)
             run('autogen', ['./autogen.sh'], cwd=source, timeout=120)
         report['notices'] = {name: sha(require_plain(source / name)) for name in ('COPYING', 'COPYING.LIB')}
-        run('configure', ['./configure', '--disable-ntfs-3g', '--disable-shared', '--enable-static',
-                          '--disable-ldconfig', '--disable-mount-helper',
-                          f'--prefix={CONFIGURE_PREFIX}', f'--exec-prefix={CONFIGURE_PREFIX}'], cwd=source)
+        run('configure', configure_command(), cwd=source)
         run('build', ['make', '-j4'], cwd=source, timeout=600)
         stage = work / 'install'
         stage.mkdir()

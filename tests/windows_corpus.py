@@ -19,7 +19,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from environment import tool_environment
+from environment import sanitizer_environment
 
 SCHEMA_VERSION = 1
 MANIFEST_BYTE_LIMIT = 32 * 1024 * 1024
@@ -151,7 +151,7 @@ def tool(reader, image, command, *arguments, content_bytes=None):
     data, digest, count = bytearray(), hashlib.sha256(), 0
     with tempfile.TemporaryFile() as errors:
         process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=errors,
-                                   cwd=ROOT, env=tool_environment())
+                                   cwd=ROOT, env=sanitizer_environment())
         try:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)

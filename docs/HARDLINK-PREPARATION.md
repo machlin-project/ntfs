@@ -98,7 +98,8 @@ places its TOO_MANY_LINKS check at an existing LinkList size of 1024.
 models the short spelling on an existing Link member. These are logical/API
 limits, separate from the uint16 physical FILE-name field. The natural
 reconciliation is 1023 additionally created links plus the original link;
-this interpretation is not a native maximum-link-count measurement.
+the hosted observation below now verifies this API boundary on one recorded
+Windows/NTFS environment. It does not measure physical FILE-name packing.
 
 The private count-admission helper independently checks complete physical,
 primary and DOS inventory consistency, refuses 1024 existing primary names, and
@@ -155,3 +156,14 @@ early-failed or surprising native result remains a failed observation with its
 original evidence. Eight synthetic ABI/report/refusal tests separately exercise
 the harness and cannot mark a result as native. This command does not measure
 raw physical filename/DOS counts, inspect ACLs or WAL, or qualify the C writer.
+
+## Hosted native observation
+
+The [Windows Server 2025 observation](https://github.com/machlin-project/ntfs/actions/runs/37852693547)
+on source `62d2986bdc97d2c5e470d1d9b2668b11fc2da23a` created 1023
+additional links, observed 1024 total links, and received Win32 error 1142 on
+the next creation. Exact original identity, namespace, payload and ADS remained
+unchanged at the refusal. The retained report marks native collection and all
+checks complete; its runner was Windows build 26100. This independently verifies
+the logical API cap only. It does not qualify the C writer, physical DOS-pair
+counts, extension-record packing, cache/time side effects or recovery.

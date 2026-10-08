@@ -85,6 +85,17 @@ Windows codec/link-count verdicts are implied. Compression performance work now
 requires retained pre-optimization source, matched measurements and explicit
 corner-case/differential coverage before any gain is accepted.
 
+## Fresh independent Windows boundary
+
+Source `62d2986bdc97d2c5e470d1d9b2668b11fc2da23a` passes the
+[native LZNT1 oracle](https://github.com/machlin-project/ntfs/actions/runs/37852693510):
+Windows ntdll decoded all 295 original encoded/plain pairs. The independent
+[hard-link observer](https://github.com/machlin-project/ntfs/actions/runs/37852693547)
+created 1023 additional names, observed 1024 total links, and rejected one more
+with error 1142 while preserving namespace, identity and original DATA/ADS.
+Neither result widens filesystem mutation admission. Compression optimization
+has its own retained baseline, differential tests and subsequent native rerun.
+
 ## Reproduce and request the wider gates
 
 Use separate build directories for different compilers:

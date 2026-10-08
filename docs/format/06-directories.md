@@ -322,3 +322,13 @@ Read traversal, native projection and durable namespace mutation are separate
 qualification. The ordinary write batch has local planned-image checks for
 create/remove/rename, index growth and stale generations; installed namespace
 mutation and Windows recovery are still open.
+
+### Hosted logical hard-link boundary
+
+A [Windows Server 2025 cloud observation](https://github.com/machlin-project/ntfs/actions/runs/37852693547)
+created 1023 additional names for one original file, reported 1024 total links,
+and rejected one more name with Win32 error 1142. File identity, namespace and
+original DATA/ADS bytes were preserved across refusal. This is a native API
+observation, not a count of on-disk FILE_NAME attributes or DOS aliases. The
+[hard-link preparation contract](../HARDLINK-PREPARATION.md) retains the separate
+physical inventory and new-family recovery gates.

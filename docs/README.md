@@ -16,6 +16,8 @@ diagrams, field maps, examples and a research register.
 - [Provenance](PROVENANCE.md): sources, consulted layouts and dependency attribution.
 - [CPU optimizations](PERFORMANCE.md#cpu-primitives-and-compression): compression,
   memory operations, userspace/kernel selection and measured tradeoffs.
+- [Huffman decoding](PERFORMANCE.md#huffman-decoding): bounded prefix/word paths,
+  differential contracts and matched XPRESS/LZX measurements.
 
 ## Detailed contracts
 

@@ -14,7 +14,7 @@ checkpoints, including MFT growth, large directories and 30 journal ring wraps.
 All six retained pressure/reuse states pass independent Windows namespace,
 metadata, read-only chkdsk and original healthy-event review.
 
-The general owner passes 204 sanitized C suites, 64 host FSKit groups and a
+The general owner passes 205 sanitized C suites, 64 host FSKit groups and a
 universal Release build. The personally signed build 19 is installed and
 all 81 native component groups pass. Actual create, growth with zero gaps,
 truncate/regrow, shared-mapping writes, cross-parent directory movement,
@@ -44,6 +44,15 @@ accelerates bounded memory operations and LZNT1/XPRESS/LZX decoding. It passes
 uses measured NEON paths; kernel objects contain no SIMD/FP registers. The new
 unsigned universal Release app is uninstalled. CPU measurements and object
 compilation do not establish mounted throughput or a kernel filesystem adapter.
+
+The following [Huffman batch](docs/PERFORMANCE.md#huffman-decoding) accelerates
+XPRESS and LZX symbol parsing without growing their caller workspaces. Matched
+CPU decodes improve about 2× for XPRESS 9/15-bit codes and 4.2× for LZX balanced/
+long codes; one-bit LZX improves 1.19×. All 205 sanitized suites, 45 whole-image
+oracles, 308 compiler-context objects and 229,388 differential checks in each of
+three host contexts pass. Host FSKit remains 64 PASS/13 runtime SKIPs; the unsigned
+universal Release app is uninstalled and installed build 19 retains its native
+acceptance. These are CPU results, not mounted throughput measurements.
 
 The separate growth recovery matrix now passes all 264 actual current-C states:
 181 MFT-extension and 83 large-index states, each with full validation and a

@@ -367,6 +367,14 @@ memory primitive. Short distances build a valid wider repeated prefix before
 wide copies; decoder workspace sizes, stream credits and publication stay the
 same. LZX searches for the next CALL opcode in bounded blocks, then applies the
 existing operand conversion and skips its four operand bytes in order.
+XPRESS/LZX Huffman readers retain eight-bit prefix tables and bounded canonical
+buckets. XPRESS resolves long codes from its guaranteed buffered word before one
+ordinary consume/refill. LZX keeps its small prefix path inline, previews at most
+one bounded following word, and commits it only for a crossing symbol. A final
+short code works without an extra word. Tree construction overwrites reachable
+scratch after validating completeness; only incremental counts and retained
+LZX length histories need clearing. These changes preserve the 1,664/4,940-byte
+workspaces and have no allocation, stream-credit, SIMD or I/O dependency.
 
 A live node caches standard-information metadata and the checked reparse-presence
 result only after that complete operation succeeds. The cache has no separate

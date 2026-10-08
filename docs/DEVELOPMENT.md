@@ -18,10 +18,14 @@ Never interpret an unsigned build as an installed mount or a commercial release.
 
 ## CPU optimization checks
 
-`cpu-memory` and `cpu-codecs` are part of the regular sanitized Meson suite.
-They use byte/period oracles, 46 independently authored packets, all 32 small
+`cpu-memory`, `cpu-codecs` and `huffman` are part of the regular sanitized Meson suite.
+They use byte/period oracles, 54 independently authored CPU packets, all 32 small
 alignments, exact allocation ends and protected pages. The broader existing
 malformed/fault tests continue to own decoder and filesystem refusals.
+The dedicated Huffman corpus contains 662 packets: every legal main-code width
+at all 16 word offsets, secondary trees, retained lengths, raw transitions and
+interleaved extensions. Every byte truncation and a bit mutation in each byte
+also run with exact allocation ends and dirty reusable scratch.
 
 The explicit compiler-context check also runs portable and GPR-only memory/codec
 tests, then builds every core source for userspace arm64/x86_64 and kernel
@@ -47,6 +51,19 @@ refuses to overwrite a completed comparison. Keep other builds/tests serialized
 while timing. `ntfs-cpu-benchmark` can also measure one explicit codec or memory
 case; its assertions must remain enabled. CPU gains do not qualify native mount
 throughput. See [the measured scope](PERFORMANCE.md#cpu-primitives-and-compression).
+
+For changes to Huffman decoding, compare against the exported reference in all
+three host execution contexts (ordinary, portable memory and GPR-only):
+
+```sh
+python3 scripts/check_huffman.py --reference artifacts/cpu-next/reference --fixtures .build/huffman-fixtures --output artifacts/huffman-check-next
+```
+
+The script links only the old decoder objects with renamed public symbols;
+reference source stays in ignored artifacts. It checks exact result, written
+length and partial output on every error under fatal ASan/UBSan. Independent
+authored output bytes remain the successful-decode oracle. Kernel object checks
+and host GPR execution are distinct from actually loading a kernel driver.
 
 ## Completed driver refactoring
 

@@ -24,7 +24,7 @@ struct ntfs_lzx_workspace {
 struct ntfs_lzx_reader {
 	const uint8_t *bytes;
 	size_t size, position;
-	uint32_t value;
+	uint16_t value;
 	unsigned valid;
 };
 
@@ -43,25 +43,25 @@ ntfs_lzx_workspace_alignment(void)
 static enum ntfs_result
 lzx_take_bits(struct ntfs_lzx_reader *reader, unsigned bits, uint32_t *out)
 {
-	unsigned take;
-	uint32_t value = 0;
+	uint32_t value;
 
-	while (bits != 0) {
-		if (reader->valid == 0) {
-			if (reader->size - reader->position < NTFS_LZX_WORD_BYTES) {
-				return NTFS_CORRUPT;
-			}
-			reader->value = ntfs_u16(reader->bytes + reader->position);
-			reader->position += NTFS_LZX_WORD_BYTES;
-			reader->valid = NTFS_LZX_WORD_BITS;
-		}
-		take = bits < reader->valid ? bits : reader->valid;
-		value = (value << take) |
-		    ((reader->value >> (reader->valid - take)) & ((1u << take) - 1));
-		reader->valid -= take;
-		bits -= take;
+	/* Every caller requests at most one word. Refill only if the requested
+	 * field actually crosses that word, retaining raw-block/trailer position. */
+	if (bits <= reader->valid) {
+		reader->valid -= bits;
+		*out = (reader->value >> reader->valid) & ((1u << bits) - 1);
+		return NTFS_OK;
 	}
-	*out = value;
+	value = reader->value & ((1u << reader->valid) - 1);
+	bits -= reader->valid;
+	reader->valid = 0;
+	if (reader->size - reader->position < NTFS_LZX_WORD_BYTES) {
+		return NTFS_CORRUPT;
+	}
+	reader->value = ntfs_u16(reader->bytes + reader->position);
+	reader->position += NTFS_LZX_WORD_BYTES;
+	reader->valid = NTFS_LZX_WORD_BITS - bits;
+	*out = (value << bits) | (reader->value >> reader->valid);
 	return NTFS_OK;
 }
 
@@ -73,7 +73,7 @@ lzx_build_tree(struct ntfs_lzx_tree *tree, const uint8_t *lengths, unsigned coun
 	uint32_t slots = 1, code = 0;
 	unsigned symbol, bits, used = 0, prefix, repeats, index;
 
-	ntfs_zero(tree, sizeof(*tree));
+	ntfs_zero(tree->count, sizeof(tree->count));
 	for (symbol = 0; symbol < count; symbol++) {
 		bits = lengths[symbol];
 		if (bits > maximum) {
@@ -105,55 +105,101 @@ lzx_build_tree(struct ntfs_lzx_tree *tree, const uint8_t *lengths, unsigned coun
 			symbols[next[bits]++] = (uint16_t)symbol;
 		}
 	}
-	for (prefix = 0; prefix < LZX_PREFIX_ENTRIES; prefix++) {
-		tree->prefix[prefix] = UINT16_MAX;
-	}
+	prefix = 0;
 	for (bits = 1; bits <= LZX_PREFIX_BITS; bits++) {
 		repeats = 1u << (LZX_PREFIX_BITS - bits);
 		for (index = 0; index < tree->count[bits]; index++) {
-			prefix = (tree->first[bits] + index) << (LZX_PREFIX_BITS - bits);
 			for (symbol = 0; symbol < repeats; symbol++) {
-				tree->prefix[prefix + symbol] =
-				    (uint16_t)((bits << LZX_SYMBOL_BITS) |
-					symbols[tree->base[bits] + index]);
+				tree->prefix[prefix++] = (uint16_t)((bits << LZX_SYMBOL_BITS) |
+				    symbols[tree->base[bits] + index]);
 			}
 		}
+	}
+	while (prefix < LZX_PREFIX_ENTRIES) {
+		tree->prefix[prefix++] = UINT16_MAX;
 	}
 	return NTFS_OK;
 }
 
-static enum ntfs_result
-lzx_take_symbol(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree,
-    const uint16_t *symbols, unsigned *out)
+static void
+lzx_consume_symbol(struct ntfs_lzx_reader *reader, unsigned bits, uint32_t next)
+{
+	/* The lookup checked availability. Commit a previewed word only when the
+	 * resolved symbol crosses the boundary; its unused bits stay buffered. */
+	if (bits > reader->valid) {
+		reader->value = next;
+		reader->position += NTFS_LZX_WORD_BYTES;
+		reader->valid += NTFS_LZX_WORD_BITS;
+	}
+	reader->valid -= bits;
+}
+
+/* Keep the refill/long-code frame out of the inlined short-code path. */
+static __attribute__((noinline)) enum ntfs_result
+lzx_take_symbol_fallback(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree,
+    const uint16_t *symbols, uint32_t value, unsigned *out)
 {
 	uint16_t entry;
-	uint32_t code = 0, bit, ignored;
-	unsigned bits;
-	enum ntfs_result result;
+	uint32_t code, offset, next = 0;
+	unsigned bits, available;
 
-	if (tree->used == 0) {
-		return NTFS_CORRUPT;
+	/* Preview at most one complete following word without advancing position.
+	 * Eager refill would consume raw-block bytes or change the trailing-word
+	 * contract. Zero padding lets a short final code use the same prefix table,
+	 * but its actual length must still fit the available input bits. */
+	available = reader->valid;
+	if (available < NTFS_LZX_WORD_BITS &&
+	    reader->size - reader->position >= NTFS_LZX_WORD_BYTES) {
+		next = ntfs_u16(reader->bytes + reader->position);
+		value |= next >> available;
+		available = NTFS_LZX_WORD_BITS;
 	}
-	if (reader->valid >= LZX_PREFIX_BITS) {
-		entry = tree->prefix[(reader->value >> (reader->valid - LZX_PREFIX_BITS)) &
-		    (LZX_PREFIX_ENTRIES - 1)];
+	if (reader->valid < LZX_PREFIX_BITS) {
+		entry = tree->prefix[value >> (NTFS_LZX_WORD_BITS - LZX_PREFIX_BITS)];
 		if (entry != UINT16_MAX) {
+			bits = entry >> LZX_SYMBOL_BITS;
+			if (bits > available) {
+				return NTFS_CORRUPT;
+			}
 			*out = entry & ((1u << LZX_SYMBOL_BITS) - 1);
-			return lzx_take_bits(reader, entry >> LZX_SYMBOL_BITS, &ignored);
+			lzx_consume_symbol(reader, bits, next);
+			return NTFS_OK;
 		}
 	}
-	for (bits = 1; bits <= NTFS_LZX_MAX_CODE_BITS; bits++) {
-		result = lzx_take_bits(reader, 1, &bit);
-		if (result != NTFS_OK) {
-			return result;
-		}
-		code = (code << 1) | bit;
-		if (code >= tree->first[bits] && code - tree->first[bits] < tree->count[bits]) {
-			*out = symbols[tree->base[bits] + code - tree->first[bits]];
+	for (bits = LZX_PREFIX_BITS + 1; bits <= available; bits++) {
+		code = value >> (NTFS_LZX_WORD_BITS - bits);
+		offset = code - tree->first[bits];
+		if (offset < tree->count[bits]) {
+			*out = symbols[tree->base[bits] + offset];
+			lzx_consume_symbol(reader, bits, next);
 			return NTFS_OK;
 		}
 	}
 	return NTFS_CORRUPT;
+}
+
+static inline enum ntfs_result
+lzx_take_symbol(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_tree *tree,
+    const uint16_t *symbols, unsigned *out)
+{
+	uint16_t entry;
+	uint32_t value;
+	unsigned bits;
+
+	if (tree->used == 0) {
+		return NTFS_CORRUPT;
+	}
+	/* Zero-padded lookup also recognizes a complete short code when fewer
+	 * than eight bits remain. The long-code marker's length exceeds one word. */
+	value = ((uint32_t)reader->value << (NTFS_LZX_WORD_BITS - reader->valid)) & UINT16_MAX;
+	entry = tree->prefix[value >> (NTFS_LZX_WORD_BITS - LZX_PREFIX_BITS)];
+	bits = entry >> LZX_SYMBOL_BITS;
+	if (bits <= reader->valid) {
+		reader->valid -= bits;
+		*out = entry & ((1u << LZX_SYMBOL_BITS) - 1);
+		return NTFS_OK;
+	}
+	return lzx_take_symbol_fallback(reader, tree, symbols, value, out);
 }
 
 static enum ntfs_result
@@ -406,7 +452,10 @@ ntfs_lzx_decode(const void *input, size_t size, void *output, size_t expected, v
 	if (expected == 0) {
 		return size == 0 ? NTFS_OK : NTFS_CORRUPT;
 	}
-	ntfs_zero(work, sizeof(*work));
+	/* Only these lengths survive between blocks. Tree construction overwrites
+	 * the remaining scratch; avoid clearing all four prefix/symbol tables. */
+	ntfs_zero(work->main_lengths, sizeof(work->main_lengths));
+	ntfs_zero(work->length_lengths, sizeof(work->length_lengths));
 	for (index = 0; index < NTFS_LZX_REPEATED_OFFSETS; index++) {
 		work->repeated[index] = NTFS_LZX_INITIAL_OFFSET;
 	}

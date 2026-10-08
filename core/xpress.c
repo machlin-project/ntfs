@@ -48,7 +48,9 @@ xpress_build_tree(const struct ntfs_disk_xpress *header, struct ntfs_xpress_work
 	uint32_t slots = 1, code = 0;
 	unsigned bits, symbol, used = 0, prefix, repeats, i;
 
-	ntfs_zero(tree, sizeof(*tree));
+	/* Every used symbol and prefix is overwritten below. Only counts carry
+	 * incremental state, so do not clear the entire caller workspace twice. */
+	ntfs_zero(tree->count, sizeof(tree->count));
 	for (symbol = 0; symbol < NTFS_XPRESS_SYMBOLS; symbol++) {
 		bits = xpress_symbol_length(header, symbol);
 		if (bits != 0) {
@@ -76,19 +78,21 @@ xpress_build_tree(const struct ntfs_disk_xpress *header, struct ntfs_xpress_work
 			tree->symbols[next[bits]++] = (uint16_t)symbol;
 		}
 	}
-	for (prefix = 0; prefix < XPRESS_PREFIX_ENTRIES; prefix++) {
-		tree->prefix[prefix] = UINT16_MAX;
-	}
+	prefix = 0;
 	for (bits = 1; bits <= XPRESS_PREFIX_BITS; bits++) {
 		repeats = 1u << (XPRESS_PREFIX_BITS - bits);
 		for (i = 0; i < tree->count[bits]; i++) {
-			prefix = (tree->first[bits] + i) << (XPRESS_PREFIX_BITS - bits);
 			for (symbol = 0; symbol < repeats; symbol++) {
-				tree->prefix[prefix + symbol] =
+				tree->prefix[prefix++] =
 				    (uint16_t)((bits << NTFS_XPRESS_SYMBOL_BITS) |
 					tree->symbols[tree->base[bits] + i]);
 			}
 		}
+	}
+	/* Canonical short codes fill one contiguous prefix; only the tail needs
+	 * the long-code marker. Completeness was checked before any table writes. */
+	while (prefix < XPRESS_PREFIX_ENTRIES) {
+		tree->prefix[prefix++] = UINT16_MAX;
 	}
 	return NTFS_OK;
 }
@@ -120,24 +124,24 @@ xpress_take_symbol(
     struct ntfs_xpress_reader *reader, const struct ntfs_xpress_workspace *tree, unsigned *out)
 {
 	uint16_t entry;
-	uint32_t code = 0, bit, ignored;
+	uint32_t code, offset, ignored;
 	unsigned bits;
-	enum ntfs_result result;
 
 	entry = tree->prefix[reader->value >> (NTFS_XPRESS_RESERVOIR_BITS - XPRESS_PREFIX_BITS)];
 	if (entry != UINT16_MAX) {
 		*out = entry & (NTFS_XPRESS_SYMBOLS - 1);
 		return xpress_take_bits(reader, entry >> NTFS_XPRESS_SYMBOL_BITS, &ignored);
 	}
-	for (bits = 1; bits <= NTFS_XPRESS_MAX_CODE_BITS; bits++) {
-		result = xpress_take_bits(reader, 1, &bit);
-		if (result != NTFS_OK) {
-			return result;
-		}
-		code = (code << 1) | bit;
-		if (code >= tree->first[bits] && code - tree->first[bits] < tree->count[bits]) {
-			*out = tree->symbols[tree->base[bits] + code - tree->first[bits]];
-			return NTFS_OK;
+	/* The reservoir already holds at least one word. A prefix miss rules out
+	 * all shorter codes; inspect the remaining buckets without consuming bits.
+	 * One final take preserves the mandatory post-consumption refill, including
+	 * its position relative to raw match-length extension bytes. */
+	for (bits = XPRESS_PREFIX_BITS + 1; bits <= NTFS_XPRESS_MAX_CODE_BITS; bits++) {
+		code = reader->value >> (NTFS_XPRESS_RESERVOIR_BITS - bits);
+		offset = code - tree->first[bits];
+		if (offset < tree->count[bits]) {
+			*out = tree->symbols[tree->base[bits] + offset];
+			return xpress_take_bits(reader, bits, &ignored);
 		}
 	}
 	return NTFS_CORRUPT;

@@ -1,6 +1,18 @@
 # Handoff to Sol
 
-The subsequent CPU optimization batch is complete locally: 204 fatal-sanitizer
+The subsequent Huffman batch is complete locally: 205 fatal-sanitizer suites,
+45 unchanged whole images, 64 host FSKit PASS/13 runtime SKIPs, 308 strict objects
+and 229,388 frozen-reference comparisons in each of three host contexts. XPRESS
+and LZX retain their original scratch sizes and input/error contracts. The
+matched CPU results and rejected tuning candidates are in
+[Huffman performance](PERFORMANCE.md#huffman-decoding); full evidence is in
+[acceptance](ACCEPTANCE.md#huffman-decoder-acceleration) and
+`artifacts/huffman-regression-20261008/`. The new universal Release app is unsigned
+and uninstalled. Installed build 19 retains its mounted/Windows acceptance.
+No VM/UTM/kernel action occurred; VM ownership remains main idle. Do not infer
+mounted throughput or kernel execution from host CPU/object checks.
+
+The preceding CPU optimization batch is complete locally: 204 fatal-sanitizer
 C suites, 45 unchanged whole images, 64 host FSKit PASS/13 runtime SKIPs, four
 portable/GPR memory-codec checks, and 308 strict objects across 77 core files.
 All kernel arm64e/x86_64 objects avoid SIMD/FP registers and meet the 2-KiB frame

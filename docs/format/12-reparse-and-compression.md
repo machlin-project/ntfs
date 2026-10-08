@@ -103,6 +103,12 @@ An equal stored/logical chunk size selects raw storage. Other chunks select the
 qualified codec. The WOF/WIM LZX variant differs from a generic CAB/Delta LZX
 header; using an unrelated decoder with the same algorithm name is insufficient.
 
+The local Huffman fast paths preserve these framing boundaries: XPRESS refills
+its word reservoir before reading an interleaved raw length extension; LZX may
+preview a complete next word but advances the stored position only if the symbol
+consumes it. A short final code does not require a padding word merely to index
+the prefix table. [WOF.md](../WOF.md) records the exact variant and error contracts.
+
 ## Encryption and unknown providers
 
 Encrypted/default-provider content can retain inspectable metadata and stream
@@ -126,6 +132,9 @@ or provider bytes as ordinary user content would silently change semantics.
   [wof_fixtures.py](../../tests/wof_fixtures.py).
 - Independent CPU packets and boundary checks: [cpu_fixtures.py](../../tests/cpu_fixtures.py),
   [cpu_codecs.c](../../tests/cpu_codecs.c), [cpu_memory.c](../../tests/cpu_memory.c).
+- All Huffman widths/word offsets, truncations, mutations and frozen-reference
+  comparison: [huffman_fixtures.py](../../tests/huffman_fixtures.py),
+  [huffman.c](../../tests/huffman.c), [check_huffman.py](../../scripts/check_huffman.py).
 
 Current reader/provider behavior and its native corpus limits are described in
 [WOF.md](../WOF.md) and [ACCEPTANCE.md](../ACCEPTANCE.md). It does not qualify

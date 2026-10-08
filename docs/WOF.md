@@ -103,6 +103,11 @@ rejected. Multi-block continuation is outside this API.
 
 The caller supplies queried scratch size/alignment. Canonical buckets and an
 eight-bit prefix table currently use 1,664 bytes without allocation or I/O.
+Codes beyond that prefix are selected directly from the buffered bits and
+consumed once. The mandatory post-consumption word refill still precedes raw
+length extensions; it is not speculative input advancement. Tree construction
+checks completeness before filling the prefix table and clears only incremental
+counts, overwriting every reachable symbol/table entry.
 Errors leave `written` zero but may alter an output prefix and scratch. Regions
 must not overlap. An owning cache must decode privately and publish only after
 success. EOF is optional when final words are consumed; otherwise one EOF must
@@ -145,6 +150,17 @@ imported. Equal-size WOF raw chunks bypass the decoder and transform entirely.
 Independent raw/encoded CALL fixtures check this distinction. The decoder uses
 4,940 bytes of caller-owned scratch aligned to four bytes, no allocation/I/O and
 the same zero-error-count/private-publication contract as XPRESS.
+
+The short-code path uses the eight-bit table even near a word's end: zero padding
+is permitted for lookup only when the selected code fits the actual buffered
+bits. Otherwise a bounded next-word preview supports crossing or longer codes.
+The preview becomes buffered input only when the resolved code consumes it;
+raw alignment and final-word checks retain their original position. The fast
+path is inlined separately from refill/canonical fallback. This works in both
+userspace and general-register-only kernel compilation without larger scratch.
+Independent boundary authors and frozen-reference differential checks are in
+[huffman_fixtures.py](../tests/huffman_fixtures.py), [huffman.c](../tests/huffman.c)
+and [check_huffman.py](../scripts/check_huffman.py).
 
 `tests/lzx_oracle.py` optionally loads an explicitly selected external wimlib
 library in a separate test process. It captures packets from independently

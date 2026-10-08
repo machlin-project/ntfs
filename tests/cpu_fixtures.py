@@ -7,6 +7,7 @@ import sys
 
 import lzx_fixtures as lzx
 import wof_fixtures as xpress
+import huffman_fixtures as huffman
 
 LZNT_UNIT = 4096
 LZNT_SIGNATURE = 0x3000
@@ -99,6 +100,9 @@ def author(output):
     packet = lzx.Packet()
     packet.compressed(len(original), map(lzx.literal, original), default=True)
     add('lzx', 'literals', packet.finish(), original, True)
+
+    for codec, name, packed, original in huffman.workloads():
+        add(codec, name, packed, original, True)
 
     (output / 'profiles.json').write_text(json.dumps(profiles, indent=2) + '\n')
     (output / 'cases.txt').write_text(''.join(f"{p['codec']} {p['name']}\n" for p in profiles))

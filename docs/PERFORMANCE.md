@@ -1,13 +1,85 @@
 # Performance contracts
 
+## Huffman decoding
+
+The next CPU batch accelerates the existing XPRESS-Huffman and WOF LZX decoders.
+It retains the eight-bit prefix tables, canonical alphabets and caller-owned
+1,664/4,940-byte workspaces. No larger lookup tree, allocation, public interface
+or architecture-specific instruction is introduced by this batch.
+
+XPRESS's complete 512-symbol uniform alphabet has nine-bit codes, so it missed
+every entry in the old eight-bit fast table. The fallback now selects a canonical
+bucket directly from the already buffered bits, starting after the prefix width,
+and consumes the symbol once. Mandatory refill still occurs before any raw
+match-length extension. LZX performs a zero-padded short-code lookup on the bits
+already buffered, checks the actual code length, and previews at most one bounded
+following word for crossing/long codes. Only consumption commits that word to the
+reader. Both builders overwrite reachable tables without clearing them first;
+LZX clears only its retained main/length histories at unit start.
+
+The LZX short path is inlined separately from its refill/canonical fallback.
+The buffered word has its actual 16-bit type. Disassembly of the earlier 32-bit
+field showed a paired load spanning the separately updated bit count; the targeted
+word-width probe removed the remaining short-code regression. Failed candidates
+and their exact measurements remain retained. The final algorithm uses general
+registers; compiler SIMD policy and the separately owned memory helpers follow
+the context rules in the preceding [CPU batch](#cpu-primitives-and-compression).
+
+### Matched Huffman measurements
+
+The frozen reference is the accepted memory/match optimization checkpoint. The
+same harness, independent packets, selected Xcode Clang `-O2`, unaligned buffers
+and nine alternating before/after pairs are used for every profile. The expanded
+set has 68 comparisons: 19 XPRESS/LZX workloads plus 15 unchanged memory/LZNT1
+controls, each in ordinary userspace and GPR-only host execution. Ratios above
+one mean faster complete decodes, including tree construction and CALL translation.
+
+| Workload | Userspace median ratio | GPR-only median ratio |
+| --- | ---: | ---: |
+| XPRESS, 9-bit literal 4-KiB block | 2.05× | 1.93× |
+| XPRESS, 15-bit literal 4-KiB block | 2.16× | 2.17× |
+| XPRESS, mixed-width 4-KiB block | 1.45× | 1.42× |
+| XPRESS, short codes / small tree | 1.03× / 1.10× | 1.03× / 1.09× |
+| LZX, balanced literal 32-KiB unit | 4.25× | 4.15× |
+| LZX, 16-bit literal 32-KiB unit | 4.20× | 4.22× |
+| LZX, mixed-width 32-KiB unit | 3.53× | 3.58× |
+| LZX, one-bit codes / small tree | 1.19× / 1.30× | 1.19× / 1.25× |
+| LZX, repeated-match unit | 1.41× | 1.38× |
+
+The ordinary LZX literal profile decreases from 412.7 to 97.2 microseconds per
+32-KiB decode; XPRESS decreases from 31.3 to 15.2 microseconds per 4-KiB decode.
+Already match-dominated XPRESS profiles improve only 1.01–1.07× in userspace;
+this change targets symbol parsing rather than their previously accelerated copies.
+Unchanged controls range 0.98–1.09× in userspace and 0.96–1.02× in the GPR run.
+None of the final 68 median ratios is below 0.95×. Earlier controls show scheduling
+variation and are retained; these samples are not a confidence interval or a
+guarantee for other input distributions.
+
+The independent author covers every legal main-code width at all 16 word offsets,
+short final codes without lookahead, all secondary trees, raw transitions,
+retained lengths and interleaved XPRESS extension bytes. All 662 packets and
+229,388 truncation/mutation/boundary checks match the frozen reference's status,
+written count and entire partial output in each of three fatal-ASan/UBSan
+contexts: userspace, portable memory and GPR-only. Independent expected bytes
+also validate successful output; differential agreement alone is not the oracle.
+The 54 CPU packets additionally cover all 32 alignments with exact allocation ends.
+
+Evidence is in `artifacts/huffman-optimization-20261008/comparison-accepted/`,
+`artifacts/huffman-differential-accepted-20261008/` and the preceding diagnostic
+comparisons in the same benchmark directory. [Development instructions](DEVELOPMENT.md#cpu-optimization-checks)
+describe reproduction; `--case NAME` can isolate a workload for diagnosis without
+rerunning unchanged profiles. These CPU measurements establish neither mounted
+FSKit throughput nor actual kernel execution. Full regression and compiler-context
+acceptance are recorded separately in [ACCEPTANCE.md](ACCEPTANCE.md).
+
 ## CPU primitives and compression
 
-This completed implementation batch follows the separation already used by
+This preceding implementation batch follows the separation already used by
 Machlin ext4: portable algorithms, acceleration selected for the execution
 context, independent byte oracles and measurements against a frozen Git baseline.
 It does not add a kernel filesystem adapter or a new encoded-content write family.
 
-The audit found these actual opportunities:
+The initial audit found these actual opportunities:
 
 | Area | Current NTFS work | Decision |
 | --- | --- | --- |
@@ -16,7 +88,7 @@ The audit found these actual opportunities:
 | LZNT1, XPRESS-Huffman, WOF LZX | Each expands backward matches byte by byte. | Share checked match expansion, widening short repeating prefixes before wide copies. |
 | LZX CALL translation | Scans every decoded byte for opcode `0xE8`. | Search complete bounded blocks, retaining exact first-opcode order, operand skipping and the excluded final ten bytes. |
 | Copy, zero, equality | Used throughout record/recovery validation and stream buffering. | Preserve compiler-vectorized userspace copies; use wide GPR operations for kernel copies, NEON equality/search, and checked large-range DC ZVA. |
-| `$Secure` hash and Huffman parsing | Serial format-dependent operations remain. | No separate speedup is claimed. Literal-heavy codec controls are retained in the benchmark. |
+| `$Secure` hash and Huffman parsing | Serial format-dependent operations remain at this checkpoint. | No separate speedup is included in this batch's figures. The subsequent Huffman batch is measured above. |
 
 [memory.c](../core/memory.c) owns the primitives. Wide accesses consume only
 complete spans and impose no caller alignment requirement. Copy retains forward

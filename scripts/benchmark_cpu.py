@@ -20,6 +20,7 @@ from environment import sanitizer_environment, tool_environment
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 from cpu_fixtures import author
+from huffman_fixtures import author as author_huffman
 
 PROFILES = {'userspace': [], 'general-registers': ['-DKERNEL', '-mgeneral-regs-only']}
 
@@ -54,6 +55,8 @@ def main():
     parser.add_argument('--reference', default='HEAD')
     parser.add_argument('--repetitions', type=int, default=9)
     parser.add_argument('--comparison', default='comparison')
+    parser.add_argument('--case', action='append', default=[],
+                        help='Measure only this named workload (repeatable); default: all')
     args = parser.parse_args()
     output = args.output.resolve()
     env = tool_environment()
@@ -83,6 +86,11 @@ def main():
         binary, _ = build(source, output, ROOT / 'tests/cpu_codecs.c',
                           ['-fsanitize=address,undefined'], 'before-codecs', clang, env)
         command([binary, fixtures], output, 'before-codecs-check', sanitizer_environment())
+        boundary_fixtures = output / 'huffman-fixtures'
+        author_huffman(boundary_fixtures)
+        binary, _ = build(source, output, ROOT / 'tests/huffman.c',
+                          ['-fsanitize=address,undefined'], 'before-huffman', clang, env)
+        command([binary, boundary_fixtures], output, 'before-huffman-check', sanitizer_environment())
         report = dict(reference=revision, compiler=compiler, machine=platform.machine(),
                       profiles=profiles, buildCommands=commands, prepared=True)
         (output / 'prepared.json').write_text(json.dumps(report, indent=2) + '\n')
@@ -111,6 +119,9 @@ def main():
                                output / 'fixtures' / f'{name}.data'],
                          max(64, (2 * 1024 * 1024) // profile['bytes'])))
     results = []
+    if args.case:
+        assert set(args.case) <= {job[0] for job in jobs}, 'Unknown workload name'
+        jobs = [job for job in jobs if job[0] in args.case]
     for context, pair in binaries.items():
         for name, argv, iterations in jobs:
             rows = [[], []]
@@ -133,7 +144,8 @@ def main():
                                 iterations=iterations, medianNs=medians,
                                 speedup=medians[0] / medians[1], samples=rows))
     report = dict(complete=True, reference=prepared['reference'], compiler=compiler,
-                  repetitions=args.repetitions, buildCommands=commands, results=results)
+                  repetitions=args.repetitions, selectedCases=args.case,
+                  buildCommands=commands, results=results)
     (current / 'result.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(complete=True, comparisons=len(results), output=str(current))))
 

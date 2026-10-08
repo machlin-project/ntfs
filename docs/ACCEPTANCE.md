@@ -1,8 +1,53 @@
 # Acceptance
 
+## Huffman decoder acceleration
+
+The connected Huffman batch is complete. XPRESS selects long canonical codes
+directly from buffered bits, retaining its mandatory refill before raw length
+extensions. LZX uses an inlined bounded prefix lookup, previews at most one next
+word and commits it only when the selected symbol crosses the word boundary.
+Complete-tree validation precedes table filling; redundant scratch clearing is
+removed. Caller workspaces stay 1,664/4,940 bytes, and public interfaces, output
+limits, error results and stream admission/accounting remain unchanged.
+
+Independent vectors cover every legal main-code width at each word offset,
+secondary trees, raw transitions, retained lengths and extension interleaving.
+Each of three host contexts (userspace, portable memory, GPR-only) passes
+**662 packets / 229,388 boundary, truncation and mutation checks**, matching the
+frozen predecessor's exact status, written count and partial output. Successful
+outputs also match independent authored bytes. All 54 CPU packets pass at all
+32 alignments with exact allocation ends in default/portable/GPR modes.
+
+One full connected regression passes **205 C suites**, zero failures and zero
+C SKIPs with assertions and fatal ASan/UBSan. All **45 frozen whole images** remain
+byte-identical. Selected-Xcode formatting and all **308 strict freestanding
+compilations** pass across 77 core sources in userspace arm64/x86_64 and kernel
+arm64e/x86_64 contexts. All 154 kernel objects avoid SIMD/FP registers and meet
+the 2-KiB frame ceiling. Memory objects retain zero unresolved runtime dependencies.
+
+Host FSKit passes **64 groups**, with **13 explicit runtime SKIPs** and no failures.
+The new unsigned universal Release app and both extension copies contain both
+architectures; the archive has all 77 expected core members. No app installation,
+VM operation, mounted mutation, Windows candidate or kernel load occurs. Installed
+signed build 19 retains its prior mounted/Windows acceptance.
+
+The accepted benchmark has 68 profiles with nine alternating before/after pairs.
+Representative complete decodes improve 2.05×/2.16× for XPRESS 9/15-bit literals,
+4.25×/4.20× for LZX balanced/16-bit literals, and 1.19× for one-bit LZX in userspace.
+GPR-only host results are comparable; none of the final median ratios is below
+0.95×. Initial short-code regressions were diagnosed with disassembly and removed
+before this acceptance; all candidate measurements are retained. These timings
+do not measure native kernel or mounted filesystem throughput. See
+[the measured contracts](PERFORMANCE.md#huffman-decoding).
+
+Evidence: `artifacts/huffman-optimization-20261008/comparison-accepted/`,
+`artifacts/huffman-differential-accepted-20261008/`,
+`artifacts/huffman-boundaries-20261008/` and
+`artifacts/huffman-regression-20261008/`.
+
 ## CPU primitives and decoder acceleration
 
-The current connected CPU batch is complete. A private memory component owns
+The preceding connected CPU batch is complete. A private memory component owns
 bounded forward-overlap copying, zeroing, equality, byte search and backward-match
 expansion. LZNT1, XPRESS-Huffman and WOF LZX retain all existing framing/match checks,
 workspaces, error results and output publication. LZX CALL translation retains

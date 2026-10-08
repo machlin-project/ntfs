@@ -1,0 +1,71 @@
+name: Native LZNT1 oracle
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-corpus:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[cloud-full]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python3 -m pip install meson==1.11.1 ninja==1.13.2
+      - run: python3 scripts/build.py .build --compiler clang
+      - name: Generate and verify independently authored plaintext and encoded pairs
+        run: |
+          mkdir -p artifacts/lznt1-input
+          mkdir artifacts/lznt1-input/corpus
+          .build/ntfs-write-lznt1-tests artifacts/lznt1-input/corpus
+          python3 - <<'PY'
+          import hashlib, json, subprocess
+          from pathlib import Path
+          root = Path('artifacts/lznt1-input')
+          report = {'source_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+                    'producer_sha256': hashlib.sha256(Path('.build/ntfs-write-lznt1-tests').read_bytes()).hexdigest(),
+                    'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((root / 'corpus').iterdir())},
+                    'native_observation': False}
+          (root / 'producer.json').write_text(json.dumps(report, indent=2) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lznt1-original-input
+          path: artifacts/lznt1-input
+          if-no-files-found: error
+          retention-days: 14
+  windows-decompression:
+    needs: original-corpus
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: lznt1-original-input
+          path: artifacts/lznt1-input
+      - name: Check collector failure and report contracts
+        run: python tests/windows_lznt1_contract.py
+      - name: Compare against actual Windows ntdll decompression
+        run: python scripts/collect_windows_lznt1.py --corpus artifacts/lznt1-input/corpus --output artifacts/windows-lznt1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-lznt1-observations
+          path: |
+            artifacts/windows-lznt1
+            artifacts/lznt1-input/producer.json
+          if-no-files-found: error
+          retention-days: 14

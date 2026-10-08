@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import random
 import shutil
 import subprocess
 import sys
@@ -30,8 +31,9 @@ SEED_REPLAY_BATCH_FILES = 32
 STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
+ENCODER_INPUT_BYTES = 16 * 4096
 LOGFILE_INPUT_BYTES = 2 * 1024 * 1024
-TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'directory-mutation', 'lznt1', 'reparse', 'security', 'access', 'wof', 'logfile')
+TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'directory-mutation', 'lznt1', 'lznt1-encode', 'reparse', 'security', 'access', 'wof', 'logfile')
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -69,6 +71,8 @@ try:
             maximum = SECURITY_INPUT_BYTES
         if target == 'wof':
             maximum = COMPRESSION_INPUT_BYTES
+        if target == 'lznt1-encode':
+            maximum = ENCODER_INPUT_BYTES
         if target == 'logfile':
             maximum = LOGFILE_INPUT_BYTES
         if target in ('image', 'validation'):
@@ -98,6 +102,19 @@ try:
             paths = generate_directory(seeds / target)
             sources = [root / 'tests/fuzz_directory.c']
             flags = []
+        elif target == 'lznt1-encode':
+            seeds.mkdir()
+            authored = {'empty': b'', 'zero': bytes(ENCODER_INPUT_BYTES),
+                        'alphabet': (b'abcdefghijklmnopqrstuvwxyz' * ENCODER_INPUT_BYTES)[:ENCODER_INPUT_BYTES],
+                        'byte-ramp': bytes(range(256)) * (ENCODER_INPUT_BYTES // 256),
+                        'random': random.Random(20261008).randbytes(ENCODER_INPUT_BYTES)}
+            paths = []
+            for name, data in authored.items():
+                path = seeds / (name + '.seed')
+                path.write_bytes(data)
+                paths.append(path)
+            sources = [root / 'tests/fuzz_write_lznt1.c']
+            flags = []
         else:
             generate(seeds)
             paths = sorted((seeds / target).glob('*.seed'))
@@ -106,6 +123,8 @@ try:
             flags = [] if target in ('access', 'wof', 'logfile') else ['-DNTFS_FUZZ_TARGET=NTFS_FUZZ_' + target.replace('-', '_').upper()]
         for path in paths:
             shutil.copyfile(path, corpus / path.name)
+        if not paths:
+            raise ValueError(f'No authored seeds were generated for {target}')
         binary = campaign / 'ntfs-fuzzer'
         command = [compiler, *sdk, '-std=c11', '-O1', '-g', '-fsanitize=fuzzer,address,undefined', '-fno-omit-frame-pointer', '-Wdeclaration-after-statement', '-I', str(root / 'include'), '-I', str(root / 'core'), *flags, *map(str, sorted((root / 'core').glob('*.c'))), *map(str, sources), str(root / 'tests/fuzz_device.c'), '-o', str(binary)]
         # Whole-image corpora retain large raw byte arrays. LibFuzzer's process

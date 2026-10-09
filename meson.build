@@ -436,6 +436,7 @@ test('write-lznt1-unit', write_lznt1_unit, timeout: 120)
 write_lznt1_fuzz = executable('ntfs-fuzz-write-lznt1', 'tests/fuzz_write_lznt1.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-DNTFS_FUZZ_STANDALONE', '-Wdeclaration-after-statement'])
 test('fuzz-write-lznt1', write_lznt1_fuzz, timeout: 120)
 test('windows-lznt1-contract', python, args: [files('tests/windows_lznt1_contract.py')], timeout: 60)
+test('windows-xpress-contract', python, args: [files('tests/windows_xpress_contract.py')], timeout: 120)
 
 # Synthetic observer contracts do not substitute for the separate Windows job.
 test('windows-hardlink-limit-contract', python, args: [files('tests/test_windows_hardlink_limit.py')], timeout: 120)

@@ -273,6 +273,38 @@ fresh source acquisition, C preparation, one-attempt Windows recovery and offlin
 review. [review_windows_hardlink.py](../scripts/review_windows_hardlink.py) binds the
 complete expected case set to each first native report, reparses the retained
 original event XML, checks sequence/ADS and health verdicts, and verifies every
-confirmed-detached postimage against the original post-detach hash. Its five
+confirmed-detached postimage against the original post-detach hash. Its six
 synthetic contract tests pass. It does not mount, repair or retry a candidate.
 Workflow preparation is not an executed Windows acceptance result.
+
+### Independent post-Windows raw preservation gate
+
+The later [raw postimage consumer](../tests/native_hardlink_postimage.py) receives
+the first native run's immutable artifact IDs and exact producer SHA. The
+[follow-on workflow](../.github/workflows/hardlink-postimages.yml) has read-only
+repository/Actions permissions and checks out the original collector only as
+source evidence. It performs no native mount, recovery or retry. The original
+VHD hash is bound to the first report before and after decoding. Both GPT copies
+and the complete extracted partition are checked before filesystem observation.
+
+The expected caches remain those of the original pre-Windows predecessor. The
+consumer compares the complete old or selected-cache new target FILE, original
+data and ADS, and every original FILE_NAME parent/I30 cache, including aliases
+outside the selected source/destination parents. It also compares the complete
+original `$Secure` FILE and all its nonresident storage bytes. Only protected
+FILE USA storage and recovery-owned LSNs are normalized. Windows output never
+supplies replacement expected timestamps, filename caches or security bytes.
+
+An immutable preparation archive may contain tens of gigabytes of apparent
+sparse working images. [Selective extraction](../scripts/extract_hardlink_expectations.py)
+checks the original archive digest and extracts only seven named expectation
+files, preserving exact sparse bytes and checking each predecessor against its
+original transition hash. Unselected working images are not expanded. Duplicate,
+missing, linked, oversized or changed expectation entries refuse. Failed decoder
+products remain retained; successful temporary decodes may be released while
+original VHDs and native reports stay unchanged.
+
+The raw helpers already pass a read-only supplement across all 53 C endpoints,
+including 53 complete `$Secure` FILE records and 159 nonresident security streams.
+This is observer qualification on C outputs. Post-Windows raw preservation still
+requires its own actual hosted verdict before widening the general owner.

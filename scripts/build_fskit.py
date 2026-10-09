@@ -125,7 +125,9 @@ def release_debug_symbols(app, products, run):
         for architecture in sorted(binary_uuids):
             run(['xcrun', 'dwarfdump', '--verify', '--arch=' + architecture, str(symbols)],
                 label + '-' + architecture + '-debug-verify', limit=4 * 1024 * 1024)
-            contents = run(['xcrun', 'dwarfdump', '--debug-info', '--recurse-depth=1',
+            # Presence needs only each unit root. Dumping its immediate children
+            # can exceed the log budget for a healthy extension's large types.
+            contents = run(['xcrun', 'dwarfdump', '--debug-info', '--recurse-depth=0',
                             '--arch=' + architecture, str(symbols)],
                            label + '-' + architecture + '-debug-content', limit=4 * 1024 * 1024)
             compile_units[architecture] = contents.count('DW_TAG_compile_unit')

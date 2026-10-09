@@ -190,7 +190,7 @@ def check_case(product, case):
     return event_review(case['nativeEvents'], product, case, True)
 
 
-def review(packages, replay, output):
+def review(packages, replay, output, collector=None):
     output.mkdir(parents=True, exist_ok=False)
     report = dict(status='running', nativeMounts=0, automaticRetry=False, cases=[],
                   storageFamily='selected-cache-posix-hardlink', generalOwnerAdmitted=False)
@@ -201,7 +201,8 @@ def review(packages, replay, output):
                 native['stage'] == 'complete' and native['automatic_retry'] is False,
                 'Native package or replay did not finish')
         require(1 <= len(expected['groups']) == len(native['groups']) <= 16, 'Native group set differs')
-        collector = Path(__file__).resolve().parents[1] / 'tests/windows_image_recovery.ps1'
+        if collector is None:
+            collector = Path(__file__).resolve().parents[1] / 'tests/windows_image_recovery.ps1'
         report['collectorSource'] = collector_encoding(collector, native['collector_sha256'])
         seen = set()
         for index, state in enumerate(native['groups']):

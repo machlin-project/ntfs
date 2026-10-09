@@ -12,6 +12,8 @@ diagrams, field maps, examples and a research register.
   independent byte/native-oracle contract, without compressed media admission.
 - [Compression-unit preparation](LZNT1-UNIT-PREPARATION.md): owned normalized
   plaintext, sparse/raw/packed selection and exact cluster-padding boundaries.
+- [Native XPRESS oracle](XPRESS-ORACLE.md): independent Windows raw-buffer
+  observations with required packets and explicitly separate compatibility cases.
 
 - [Dots cloud handoff](HANDOFF-DOTS.md): complete all work feasible from the
   proprietary repository and cloud runners, with observed CI failures, implementation

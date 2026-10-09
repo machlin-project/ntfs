@@ -1,0 +1,91 @@
+name: Original native security diagnosis
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-raw-postimages:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[security-observation]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11590375707'
+          run-id: '37869063560'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: artifacts/original-packages
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11589579895'
+          run-id: '37869063560'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: artifacts/original-replay
+      - name: Install original-format container utility
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y qemu-utils
+      - name: Verify exact sources and convert without native mounting
+        run: python3 scripts/prepare_security_postimages.py --packages artifacts/original-packages --replay artifacts/original-replay --qemu /usr/bin/qemu-img --output artifacts/original-security-raw
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-security-raw
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/original-security-raw/*.json
+            artifacts/original-security-raw/*.stdout
+            artifacts/original-security-raw/*.stderr
+            artifacts/original-security-raw/*.ntfs
+  original-readonly-security:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[security-observation]') }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11590375707'
+          run-id: '37869063560'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: artifacts/original-packages
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '11589579895'
+          run-id: '37869063560'
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: artifacts/original-replay
+      - name: Parse and check pure identity guards before native use
+        run: |
+          & tests/windows_cloud_transport.ps1
+          & tests/windows_scratch_guard.ps1
+          $tokens = $null; $errors = $null
+          [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/inspect_windows_security.ps1'),[ref]$tokens,[ref]$errors)
+          if (@($errors).Count) { throw ($errors -join '; ') }
+      - name: Observe security on a new read-only copy of the exact failed postimage
+        run: |
+          & scripts/inspect_windows_security.ps1 -Packages artifacts/original-packages -Replay artifacts/original-replay -Output "$env:RUNNER_TEMP\MachlinNTFSSecurityReadonly-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-readonly-security
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/MachlinNTFSSecurityReadonly-${{ github.run_id }}-${{ github.run_attempt }}/evidence

@@ -164,6 +164,7 @@ class BuildExecutionContracts(unittest.TestCase):
             return ('UUID: 11111111-2222-3333-4444-555555555555 (arm64) synthetic\n'
                     'UUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee (x86_64) synthetic\n')
         if name.endswith('-debug-content'):
+            self.assertIn('--recurse-depth=0', argv)
             return '0x0000000b: DW_TAG_compile_unit\n'
         return 'synthetic-tool-evidence'
 

@@ -1,0 +1,121 @@
+name: Hard-link raw postimage preservation
+on:
+  workflow_run:
+    workflows: ['Selected-cache hard-link storage']
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: ntfs-hardlink-postimages-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+jobs:
+  raw-review:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'development' && github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the independent review implementation
+        uses: actions/checkout@v4
+        with:
+          ref: development
+          persist-credentials: false
+      - name: Retain the exact original producer collector source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: .native-source
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Bind immutable artifact IDs to the exact producing run and source
+        id: artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const run = context.payload.workflow_run;
+            const response = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner, repo: context.repo.repo, run_id: run.id, per_page: 100
+            });
+            if (response.data.total_count !== response.data.artifacts.length) {
+              throw new Error('Artifact inventory exceeds the admitted complete page.');
+            }
+            const wanted = {
+              preparation: 'hardlink-c-preparation',
+              packages: 'hardlink-recovery-packages',
+              native: 'hardlink-native-recovery'
+            };
+            const binding = {sourceRun: run.id, sourceSha: run.head_sha,
+              sourceRepository: run.head_repository.full_name, artifacts: []};
+            for (const [key, name] of Object.entries(wanted)) {
+              const selected = response.data.artifacts.filter(value => value.name === name);
+              if (selected.length !== 1 || selected[0].expired ||
+                  selected[0].workflow_run.id !== run.id ||
+                  selected[0].workflow_run.head_sha !== run.head_sha) {
+                throw new Error('Missing, repeated, expired or mismatched producer artifact: ' + name);
+              }
+              const value = selected[0];
+              binding.artifacts.push({id: value.id, name, digest: value.digest ?? null,
+                bytes: value.size_in_bytes, createdAt: value.created_at});
+              core.setOutput(key, String(value.id));
+            }
+            fs.mkdirSync('artifacts', {recursive: true});
+            fs.writeFileSync('artifacts/hardlink-artifact-binding.json',
+              JSON.stringify(binding, null, 2) + '\n', {flag: 'wx'});
+      - name: Retrieve original C expectations from this exact completed run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREPARATION_ARTIFACT_ID: ${{ steps.artifacts.outputs.preparation }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PREPARATION_ARTIFACT_ID}/zip" > artifacts/hardlink-preparation.zip
+          python3 scripts/extract_hardlink_expectations.py \
+            --archive artifacts/hardlink-preparation.zip \
+            --binding artifacts/hardlink-artifact-binding.json \
+            --output artifacts/hardlink-preparation-download
+      - name: Retrieve original package expectations from the same run
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.artifacts.outputs.packages }}
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: artifacts/hardlink-packages-download
+      - name: Retrieve first native reports and exact detached postimages
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.artifacts.outputs.native }}
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: artifacts/hardlink-native-download
+      - name: Prepare the external read-only VHD decoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qemu-utils
+      - name: Recheck original-report and source-encoding contracts
+        run: python3 tests/test_windows_hardlink_review.py
+      - name: Compare raw post-Windows storage with original pre-Windows expectations
+        run: |
+          python3 tests/native_hardlink_postimage.py \
+            --preparation artifacts/hardlink-preparation-download/windows-hardlink-storage \
+            --packages artifacts/hardlink-packages-download/windows-hardlink-packages \
+            --replay artifacts/hardlink-native-download \
+            --collector-source .native-source/tests/windows_image_recovery.ps1 \
+            --artifact-binding artifacts/hardlink-artifact-binding.json \
+            --qemu /usr/bin/qemu-img --output artifacts/hardlink-raw-review
+      - name: Retain raw verdict and any exact failed decoder products
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-raw-postimage-review
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/hardlink-raw-review
+            artifacts/hardlink-artifact-binding.json
+            artifacts/hardlink-preparation-download/expectation-extraction.json

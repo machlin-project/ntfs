@@ -102,7 +102,7 @@ def probe(output):
                     contents = ''
                     if not debug_diagnostics:
                         run(['xcrun', 'dwarfdump', '--verify', str(symbols)], directory, 'debug-verify')
-                        contents = run(['xcrun', 'dwarfdump', '--debug-info', '--recurse-depth=1', str(symbols)],
+                        contents = run(['xcrun', 'dwarfdump', '--debug-info', '--recurse-depth=0', str(symbols)],
                                        directory, 'debug-content')
                     pair['builds'].append({'directory': str(directory), 'uuid_output': uuid,
                                            'stripped_sha256': digest(stripped), 'unstripped_sha256': digest(binary),

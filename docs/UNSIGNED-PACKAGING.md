@@ -176,6 +176,16 @@ Debug builds retain physical source paths; Release source-level debugging maps
 the logical source prefix back to the retained source snapshot. Reproducible
 product bytes and debugger source-path lookup are separate checks.
 
+The first hosted run of the narrower linker route completes compilation and
+passes missing-input/UUID checks, then reaches the extension's DWARF content
+query. Dumping each unit's immediate children exceeds the 4-MiB retained-log
+limit. That failed helper report remains preserved; the second app is not built
+in that run. The presence query now prints compilation-unit roots only, while
+the separate complete structural verification and the existing byte budget
+remain unchanged. The same run's source/linker probe passes exact bytes and
+complete debug-input resolution for both architectures. Whole-app acceptance
+still requires the next completed pair.
+
 `python3 scripts/check_macos_uuid.py --output artifacts/macos-uuid-probe` is a
 small selected-Xcode diagnostic. It compares independent C/Swift builds with
 original paths, compiler mappings, compiler plus linker mappings, and the narrower

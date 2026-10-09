@@ -13,6 +13,7 @@ enum {
 	    sizeof(struct ntfs_disk_log_table) + sizeof(struct ntfs_disk_log_transaction),
 	NTFS_WRITE_MFT_TARGET_FLAG = 2,
 	NTFS_WRITE_QUIET_EXTENSION_BYTES = 48,
+	NTFS_WRITE_QUIET_PROFILE_SCALAR = 0x1000,
 	NTFS_WRITE_QUIET_EXTENSION_PREFIX_BYTES =
 	    NTFS_WRITE_QUIET_EXTENSION_BYTES - sizeof(uint64_t),
 	NTFS_WRITE_BOOTSTRAP_BYTES = sizeof(struct ntfs_disk_log_record) +

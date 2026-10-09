@@ -588,7 +588,12 @@ jobs:
       - name: Matched core, mutation, and directory preparation measurements
         run: |
           for kind in core mutation write; do
-            python3 "scripts/benchmark_${kind}.py" prepare --compiler clang --reference "$REFERENCE" --output "artifacts/cloud-${kind}" 2>&1 | tee "artifacts/ci/${kind}-prepare.log"
+            fixture_args=()
+            if [[ "$kind" == write ]]; then
+              python3 scripts/prepare_write_benchmark_profile.py --source .build/write-mutation-cases/history-source.img --output artifacts/cloud-write-common-profile 2>&1 | tee artifacts/ci/write-common-profile.log
+              fixture_args=(--fixture artifacts/cloud-write-common-profile/common-quiet.img)
+            fi
+            python3 "scripts/benchmark_${kind}.py" prepare --compiler clang --reference "$REFERENCE" --output "artifacts/cloud-${kind}" "${fixture_args[@]}" 2>&1 | tee "artifacts/ci/${kind}-prepare.log"
             python3 "scripts/benchmark_${kind}.py" compare --compiler clang --output "artifacts/cloud-${kind}" --comparison current --repetitions 5 2>&1 | tee "artifacts/ci/${kind}-compare.log"
           done
       - uses: actions/upload-artifact@v4

@@ -119,6 +119,29 @@ in executable payloads retaining absolute debug-map paths; normal Release debug
 stripping and separately UUID-bound dSYM retention are prepared for a fresh build.
 SDK 27 coverage and installed signed behavior remain distinct unavailable gates.
 
+## Qualified native profile and Access continuation
+
+The full native corpus validator now succeeds at source `9581ad8`: 256 records,
+2,943 claimed and allocated clusters, no unclaimed clusters, and all four mirror
+records agree. Its first directory writer attempt exposed a quiet-checkpoint
+profile refusal before any persistence. Five retained Windows remounts show the
+opaque historical word changing while geometry stays fixed. The continuation
+preserves that word and constrains the narrowly observed profile without naming
+its universal meaning or altering original native images.
+
+A new preparation-only copy remains unchanged; a separate fresh copy completes
+the first mkdir, passes complete validation, and has a quiet recovery reopen.
+These local fatal ASan/UBSan supplements exclude only the sandbox-incompatible
+LeakSanitizer. Full 803-operation and Windows recovery qualification remains open.
+The new shared benchmark profile passes old-policy/current GCC admission with
+identical checksums and resource counters; original frozen inputs remain intact.
+
+Restricted-owner and ordered maximum-access decisions now match all 276 retained
+Windows DACL vectors, with no failed or unsupported in-plane cases. Six mandatory
+authorization-plane probes remain outside that claim. The Mac synthetic Access
+report harness reuses only identical immutable packets after evaluating every
+distinct request; it retains every report assertion and the 120-second deadline.
+
 ## Reproduce and request the wider gates
 
 Use separate build directories for different compilers:

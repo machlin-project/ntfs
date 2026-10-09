@@ -660,6 +660,46 @@ four table LSNs, and four table byte lengths. The remaining extension is retaine
 under its qualified profile. Native lengths and opaque extension storage must
 not be normalized merely to match a convenient struct size.
 
+### Qualified quiet checkpoint extension
+
+The selected 112-byte empty client profile has a 48-byte extension after that
+common prefix. Its first eight bytes and the twenty bytes after the profile-scalar
+field are zero in the qualified samples. The scalar at client offset `0x50`
+is `0x1000`. Both cluster and log-page sizes are 4096 in these samples, so its
+units are not independently distinguished here. The last eight bytes equal the quiet anchor.
+The eight bytes at client offset `0x48` are retained as **opaque historical
+state**, not a constant signature or a universally interpreted NTFS field.
+
+The [controlled native remount captures](../../scripts/probe_windows_volume_flags.ps1)
+retain five values of this historical word with unchanged volume/log geometry:
+`0x100000`, `0x280000`, `0x400000`, `0x580000` and `0x700000`. They change across
+mounts while original namespace, object metadata and stream hashes stay equal.
+All are nonzero, aligned to the selected LSN epoch and numerically before the
+quiet anchor. Those relationships define a narrow observed admission profile;
+they are not asserted as universal semantics. Original
+[format research](https://flatcap.github.io/linux-ntfs/ntfs/files/logfile.html)
+tentatively calls this field a previous restart LSN, but that interpretation is
+not required or promoted by this implementation.
+
+The former writer compared one whole opaque prefix, including a fixed
+`0x01000000` historical word. Fresh native cloud media therefore passed complete
+filesystem validation and ordinary mutation planning but refused execution
+preparation before any publication. The bounded profile now checks the observed
+relationships and preserves the historical word byte-for-byte. Existing
+checkpoint generation changes only the separately qualified analysis/final
+anchor fields; current history, all empty table fields, physical ownership and
+every other profile byte retain their guards. See
+[admission](../../core/write_journal.c),
+[checkpoint copying](../../core/write_checkpoint.c) and
+[literal/native-profile and preservation tests](../../tests/write_journal.c).
+
+The compact synthetic author previously injected the same arbitrary signature
+literal regardless of LSN geometry. Its replacement authors a profile-consistent
+historical word; the old generated input is retained and the old literal is an
+explicit refusal in that compact profile, with a separate accepted vector under
+compatible geometry/anchor. No original native source or expected decision is
+rewritten. New complete-image and Windows recovery qualification remain required.
+
 The four tables describe open attributes, names, dirty pages and transactions.
 A restart-table header is 24 bytes. Target and transaction keys are physical
 byte positions in the qualified table layout, not host array pointers. Client

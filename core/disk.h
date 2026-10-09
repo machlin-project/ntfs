@@ -299,6 +299,14 @@ struct ntfs_disk_log_client_restart {
 	uint8_t dirty_pages_bytes[sizeof(uint32_t)], transactions_bytes[sizeof(uint32_t)];
 };
 
+/* Qualified 112-byte quiet client profile only. The historical word is
+ * preserved opaque native state; its universal field meaning is unclaimed. */
+struct ntfs_disk_log_quiet_extension {
+	uint8_t opaque_before[sizeof(uint64_t)], historical_state[sizeof(uint64_t)];
+	uint8_t profile_scalar[sizeof(uint32_t)], opaque_after[5 * sizeof(uint32_t)];
+	uint8_t anchor_lsn[sizeof(uint64_t)];
+};
+
 struct ntfs_disk_record {
 	struct ntfs_disk_mst mst;
 	uint8_t lsn[8], sequence[2], links[2], attrs_offset[2], flags[2];

@@ -11,19 +11,10 @@ enum {
 	    sizeof(struct ntfs_disk_log_update_storage) + 2 * WRITE_CHANGE_BYTES
 };
 
-/* Exact opaque prefix of the retained native empty checkpoint family.
- * Its bytes are compared as a whole, without assigning unqualified field meaning. */
-static const uint8_t empty_extension_prefix[NTFS_WRITE_QUIET_EXTENSION_PREFIX_BYTES] =
-    "\x00\x00\x00\x00"
-    "\x00\x00\x00\x00"
-    "\x00\x00\x00\x01"
-    "\x00\x00\x00\x00"
-    "\x00\x10\x00\x00"
-    "\x00\x00\x00\x00"
-    "\x00\x00\x00\x00"
-    "\x00\x00\x00\x00"
-    "\x00\x00\x00\x00"
-    "\x00\x00\x00\x00";
+static const struct ntfs_disk_log_quiet_extension empty_extension = {0};
+
+_Static_assert(sizeof(struct ntfs_disk_log_quiet_extension) == NTFS_WRITE_QUIET_EXTENSION_BYTES,
+    "qualified quiet checkpoint extension");
 
 static bool
 write_journal_separate(const void *left, size_t left_bytes, const void *right, size_t right_bytes)
@@ -52,6 +43,7 @@ write_journal_qualified_restart(const struct ntfs_logfile_restart *restart)
 	    restart->system_page_bytes == NTFS_WRITE_CLUSTER_BYTES &&
 	    restart->log_page_bytes == NTFS_WRITE_CLUSTER_BYTES &&
 	    restart->record_header_bytes == sizeof(struct ntfs_disk_log_record) &&
+	    restart->sequence_bits != 0 && restart->sequence_bits < NTFS_LFS_LSN_BITS &&
 	    restart->page_data_offset == NTFS_WRITE_LOG_DATA_OFFSET && restart->client_count == 1 &&
 	    restart->in_use_head == 0 && restart->free_head == NTFS_LOGFILE_NO_CLIENT &&
 	    (restart->flags == 0 || restart->flags == NTFS_LOGFILE_RESTART_CLEAN) &&
@@ -227,9 +219,19 @@ ntfs_write_journal_reserve(const struct ntfs_logfile_restart *restart, uint16_t 
 }
 
 static bool
-write_journal_empty_checkpoint_matches(const struct ntfs_logfile_client_restart *checkpoint,
-    uint64_t anchor, const uint8_t *body, size_t bytes)
+write_journal_empty_checkpoint_matches(const struct ntfs_logfile_restart *restart,
+    const struct ntfs_logfile_client_restart *checkpoint, uint64_t anchor,
+    const uint8_t *body, size_t bytes)
 {
+	const struct ntfs_disk_log_quiet_extension *extension;
+	uint64_t historical, offset_mask;
+
+	if (bytes != sizeof(struct ntfs_disk_log_client_restart) + sizeof(*extension)) {
+		return false;
+	}
+	extension = (const void *)(body + sizeof(struct ntfs_disk_log_client_restart));
+	historical = ntfs_u64(extension->historical_state);
+	offset_mask = (UINT64_C(1) << (NTFS_LFS_LSN_BITS - restart->sequence_bits)) - 1;
 	return checkpoint->major == NTFS_LOG_CLIENT_MAJOR_ATTRIBUTES &&
 	    checkpoint->minor == NTFS_LOG_CLIENT_MINOR && checkpoint->analysis_lsn == anchor &&
 	    checkpoint->extension.length == NTFS_WRITE_QUIET_EXTENSION_BYTES &&
@@ -237,9 +239,13 @@ write_journal_empty_checkpoint_matches(const struct ntfs_logfile_client_restart 
 	    checkpoint->dirty_pages.lsn == 0 && checkpoint->transactions.lsn == 0 &&
 	    checkpoint->open_attributes.bytes == 0 && checkpoint->attribute_names.bytes == 0 &&
 	    checkpoint->dirty_pages.bytes == 0 && checkpoint->transactions.bytes == 0 &&
-	    ntfs_equal(body + sizeof(struct ntfs_disk_log_client_restart), empty_extension_prefix,
-		NTFS_WRITE_QUIET_EXTENSION_PREFIX_BYTES) &&
-	    ntfs_u64(body + bytes - sizeof(uint64_t)) == anchor;
+	    ntfs_equal(extension->opaque_before, empty_extension.opaque_before,
+		sizeof(extension->opaque_before)) &&
+	    ntfs_equal(extension->opaque_after, empty_extension.opaque_after,
+		sizeof(extension->opaque_after)) &&
+	    ntfs_u32(extension->profile_scalar) == NTFS_WRITE_QUIET_PROFILE_SCALAR &&
+	    historical != 0 && (historical & offset_mask) == 0 && historical < anchor &&
+	    ntfs_u64(extension->anchor_lsn) == anchor;
 }
 
 enum ntfs_result
@@ -299,7 +305,7 @@ ntfs_write_quiet_bind(const struct ntfs_logfile_restart *restart,
 		return result;
 	}
 	if (!write_journal_empty_checkpoint_matches(
-		&checkpoint, first.lsn, body, last.data.length)) {
+		restart, &checkpoint, first.lsn, body, last.data.length)) {
 		return NTFS_UNSUPPORTED;
 	}
 	return NTFS_OK;
@@ -382,7 +388,7 @@ ntfs_write_checkpoint_origin_bind(const struct ntfs_logfile_restart *restart,
 		return result;
 	}
 	return write_journal_empty_checkpoint_matches(
-		   &checkpoint, first.lsn, body, last.data.length)
+		   restart, &checkpoint, first.lsn, body, last.data.length)
 	    ? NTFS_OK
 	    : NTFS_UNSUPPORTED;
 }

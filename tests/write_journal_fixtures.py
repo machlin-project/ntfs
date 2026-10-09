@@ -23,8 +23,10 @@ FOLLOWUP_FILETIME = FILETIME + 230000000
 EXECUTE_OFFSET, EXECUTE_BYTES = 123, 5000
 EXECUTE_PATTERN_MULTIPLIER, EXECUTE_PATTERN_BIAS = 29, 7
 REFERENCE = f.file_reference(v.FRAGMENTED_RECORD)
-NATIVE_EMPTY_EXTENSION = bytes.fromhex(
-    '00000000000000000000000100000000001000000000000000000000000000000000000000000000')
+# Independent wire layout for the narrowly observed 112-byte quiet profile:
+# opaque prefix, opaque historical word, profile scalar, opaque suffix, anchor.
+QUIET_EXTENSION = struct.Struct('<QQIIQQQ')
+QUIET_PROFILE_SCALAR = 0x1000
 
 
 def fields(layout, data, base=0):
@@ -69,7 +71,7 @@ def guarded_publication(before, desired, layout):
 
 def author(output, source):
     output.mkdir(parents=True, exist_ok=True)
-    assert len(NATIVE_EMPTY_EXTENSION) == 48 - w.LSN_BYTES
+    assert QUIET_EXTENSION.size == 48
     image = bytearray(source.read_bytes())
     log, runs = storage.mapping(next(attr for attr in storage.record_parts(
         image[f.MFT_LCN * f.CLUSTER + v.LOGFILE_RECORD * f.RECORD:
@@ -97,7 +99,13 @@ def author(output, source):
     struct.pack_into('<Q', bootstrap, w.RECORD.size + w.UPDATE.size, 0)
     checkpoint = bytearray(quiet[restart_offset:restart_offset + w.RECORD.size + last_header['data_bytes']])
     assert len(checkpoint) == w.RECORD.size + CLIENT_RESTART.size + 48
-    checkpoint[w.RECORD.size + CLIENT_RESTART.size:] = NATIVE_EMPTY_EXTENSION + struct.pack('<Q', client['oldest_lsn'])
+    # The previous arbitrary signature literal was unrelated to this compact
+    # fixture's epoch geometry. Author a bounded-profile state value instead;
+    # original native images and captured expectations are never rewritten.
+    historical_state = max(1, epoch - 1) << offset_bits
+    assert 0 < historical_state < client['oldest_lsn']
+    checkpoint[w.RECORD.size + CLIENT_RESTART.size:] = QUIET_EXTENSION.pack(
+        0, historical_state, QUIET_PROFILE_SCALAR, 0, 0, 0, client['oldest_lsn'])
     quiet[restart_offset:restart_offset + len(checkpoint)] = checkpoint
     quiet[bootstrap_offset:bootstrap_offset + len(bootstrap)] = bootstrap
     journal[home:home + w.PAGE_BYTES] = protect_page(quiet, w.PAGE, quiet_sequence)

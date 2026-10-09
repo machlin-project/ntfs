@@ -279,11 +279,13 @@ def wrapped_free_file_image(original):
     return image
 
 
-def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
+def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES, *,
+                           minimum_sequence=0, historical_state=None):
     """Independently resize the authored quiet journal, preserving its two roots.
 
     Changing file size changes LSN offset width. Rebind each meaningful stored
     LSN, keep opaque Noop words intact, and protect the complete authored pages.
+    The new synthetic profile receives an independently chosen historical word.
     This is a test predecessor, not a driver checkpoint/reuse operation.
     """
     import fixtures as f
@@ -291,7 +293,7 @@ def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
     import logfile_fixtures as w
     import validation_fixtures as v
     from secure_store_fixtures import resident_value
-    from write_journal_fixtures import restore_page, protect_page
+    from write_journal_fixtures import restore_page, protect_page, QUIET_EXTENSION, QUIET_PROFILE_SCALAR
     from logfile_checkpoint_fixtures import CLIENT_RESTART
 
     image = bytearray(original)
@@ -316,6 +318,10 @@ def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
             for name in ('oldest_lsn', 'restart_lsn')}
     old_offset_bits = w.LSN_BITS - area['sequence_bits']
     new_sequence_bits = w.LSN_BITS + w.OFFSET_SHIFT - journal_bytes.bit_length()
+    new_offset_bits = w.LSN_BITS - new_sequence_bits
+    assert 0 <= minimum_sequence < 1 << new_sequence_bits
+    source_sequence = roots['oldest_lsn'] >> old_offset_bits
+    sequence_delta = max(0, minimum_sequence - source_sequence)
 
     def old_offset(lsn):
         return (lsn & ((1 << old_offset_bits) - 1)) << w.OFFSET_SHIFT
@@ -326,7 +332,8 @@ def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
         offset = old_offset(lsn)
         assert offset < len(old)
         return w.lsn_at(offset, journal_bytes,
-                        sequence=lsn >> old_offset_bits, sequence_bits=new_sequence_bits)
+                        sequence=(lsn >> old_offset_bits) + sequence_delta,
+                        sequence_bits=new_sequence_bits)
 
     home = old_offset(roots['oldest_lsn']) // w.PAGE_BYTES * w.PAGE_BYTES
     assert old_offset(roots['restart_lsn']) // w.PAGE_BYTES * w.PAGE_BYTES == home
@@ -349,6 +356,17 @@ def expanded_journal_image(original, journal_bytes=EXPANDED_JOURNAL_BYTES):
             retained, = struct.unpack_from('<Q', quiet, retained_first)
             assert retained == roots['oldest_lsn']
             struct.pack_into('<Q', quiet, retained_first, rebound(retained))
+            extension_first = payload_first + CLIENT_RESTART.size
+            extension = QUIET_EXTENSION.unpack_from(quiet, extension_first)
+            assert extension[0] == extension[3] == extension[4] == extension[5] == 0
+            assert extension[2] == QUIET_PROFILE_SCALAR and extension[6] == rebound(retained)
+            authored_state = historical_state
+            if authored_state is None:
+                authored_state = max(1, (rebound(retained) >> new_offset_bits) - 1) << new_offset_bits
+            assert 0 < authored_state < rebound(retained)
+            assert authored_state % (1 << new_offset_bits) == 0
+            QUIET_EXTENSION.pack_into(quiet, extension_first,
+                0, authored_state, QUIET_PROFILE_SCALAR, 0, 0, 0, rebound(retained))
         else:
             assert fields['type'] == w.UPDATE_TYPE
     journal = bytearray(journal_bytes)

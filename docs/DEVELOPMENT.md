@@ -85,6 +85,23 @@ python3 scripts/benchmark_write.py prepare --reference HEAD --output artifacts/w
 python3 scripts/benchmark_write.py compare --output artifacts/write-next --comparison candidate --repetitions 9
 ```
 
+For comparisons crossing the quiet-checkpoint historical-state admission change,
+author a new common synthetic profile before freezing either implementation:
+
+```sh
+python3 scripts/prepare_write_benchmark_profile.py --source .build/write-mutation-cases/history-source.img --output artifacts/write-common-profile-next
+python3 scripts/benchmark_write.py prepare --reference 35136fa --fixture artifacts/write-common-profile-next/common-quiet.img --output artifacts/write-common-next
+python3 scripts/benchmark_write.py compare --output artifacts/write-common-next --comparison candidate --repetitions 5
+```
+
+This profile deliberately combines the earlier implementation's historical-word
+literal with an independently authored compatible LSN epoch. It is a new
+synthetic workload, not a native capture or a modification of a frozen input.
+Both implementations must accept the same retained bytes and produce the same
+independent namespace/content checksums. Old benchmark artifacts remain unchanged;
+their admission difference cannot be relabeled as a timing regression. The author
+report alone is not proof of either implementation's admission or performance.
+
 This harness requires `.build/write-mutation-cases/history-source.img`. The
 reference seeds 256 long names before timing. Independent phases measure complete
 mutation planning, program compilation, execution preparation and repeated stream

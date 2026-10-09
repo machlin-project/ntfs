@@ -29,7 +29,11 @@ def main():
     parser.add_argument('--compiler', help='Explicit compiler executable; defaults to selected Xcode or cc')
     parser.add_argument('--comparison', default='comparison')
     parser.add_argument('--repetitions', type=int, default=9)
+    parser.add_argument('--fixture', type=Path,
+                        help='Freeze this independently authored synthetic writer image during prepare')
     args = parser.parse_args()
+    if args.stage != 'prepare' and args.fixture is not None:
+        parser.error('--fixture is only valid for a new prepare stage')
     output = args.output.resolve()
     validate_comparison(args.comparison, args.repetitions)
     env = select(args.compiler)
@@ -47,7 +51,8 @@ def main():
             package.extractall(source, filter='data')
         for name in ('benchmark_write.c', 'benchmark_mutation.c'):
             shutil.copyfile(ROOT / 'tools' / name, output / name)
-        shutil.copyfile(ROOT / '.build/write-mutation-cases/history-source.img', output / 'small.img')
+        fixture = args.fixture or ROOT / '.build/write-mutation-cases/history-source.img'
+        shutil.copyfile(fixture, output / 'small.img')
         builds, baseline, jobs = {}, {}, {}
         for profile, flags in PROFILES.items():
             binary, builds[profile] = build(source, output, output / 'benchmark_write.c', flags,
@@ -62,7 +67,8 @@ def main():
                     'before-' + profile + '-' + name.replace('/', '-'), env))
         hashes = retained_hashes(output, [*(path for path in output.iterdir() if path.suffix in ('.c', '.img')), *(output / ('before-' + name) for name in PROFILES)])
         report = dict(complete=True, reference=revision, compiler=version, sdk=sdk, toolchain=toolchain,
-                      builds=builds, baseline=baseline, jobs=jobs, hashes=hashes)
+                      builds=builds, baseline=baseline, jobs=jobs, hashes=hashes,
+                      fixture_source=str(fixture.resolve()))
         (output / 'prepared.json').write_text(json.dumps(report, indent=2) + '\n')
         print(json.dumps(dict(complete=True, profiles=len(baseline))))
         return

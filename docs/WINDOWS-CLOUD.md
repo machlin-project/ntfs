@@ -43,8 +43,8 @@ python3 tests/windows_access.py artifacts/windows-access/manifest.json \
 
 The optional CI gate requires complete native acquisition, every supported DACL
 vector matching, no API errors, no comparison failures, no missing cases and no
-changed input. Only explicitly declared probes may be unsupported; only boundary
-cases may remain outside the discretionary plane. `status: gaps` and the full
+changed input. The original owner/maximum probes are now supported and must
+match; only boundary cases may remain outside the discretionary plane. `status: gaps` and the full
 authorization refusal remain in the report. This flag does not remove cases or
 turn unsupported decisions into successful authorization. Synthetic acquisitions
 cannot pass it. The default CLI behavior still fails any overall gap.
@@ -135,6 +135,20 @@ remains a separate regular file. Actual disk/partition geometry and a fresh root
 come from validated native inputs, rather than the historical owner's disk.
 Native logfile/admission failures must be diagnosed from those exact bytes;
 acquisition success cannot override an unsupported recovery origin.
+
+The first directory operation from the
+[9581ad8 hosted acquisition](https://github.com/machlin-project/ntfs/actions/runs/37860226460)
+exposed an overly specific quiet-checkpoint signature: the source's opaque
+historical word differed from the retained literal. The
+[qualified quiet profile](format/09-logfile.md#qualified-quiet-checkpoint-extension)
+preserves that word and admits the independently observed relationships. A fresh
+copy of the original source now prepares the same mkdir without writing. A second
+fresh copy executes it with 23 publications, passes complete 256-record validation,
+and reopens with no recovery publications. Raw volume flags and the quiet-profile
+fields remain unchanged. Original failed inputs and both copies are retained in
+`artifacts/dots-native-9581ad8/current-quiet-first-operation/`. This establishes the
+first operation on that native image; the fresh full batch and Windows recovery
+verdict remain pending.
 
 The packager verifies complete virtual disks and gives each candidate unique outer
 GPT identities. Groups still contain at most eight VHDs. Stage each generated

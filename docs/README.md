@@ -58,3 +58,5 @@ diagrams, field maps, examples and a research register.
 
 The format reference explains what bytes and relationships mean. These detailed
 contracts describe what this implementation owns and what its tests establish.
+
+- [Security descriptor editing](SECURITY-EDITING.md): private exact donor-DACL storage transform and preserved-component contracts; no shared-store or native mutation admission.

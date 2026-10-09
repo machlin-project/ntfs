@@ -11,7 +11,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { TEST_PATH_BYTES = 4096, TEST_INDEX_BYTES = 1024 * 1024, TEST_LOG_LOCATIONS = 7 };
+enum {
+	TEST_PATH_BYTES = 4096,
+	TEST_INDEX_BYTES = 1024 * 1024,
+	TEST_LOG_LOCATIONS = 7,
+	TEST_NATIVE_LSN_OFFSET_BITS = 19,
+	TEST_NATIVE_LOG_BYTES = 2523136
+};
 
 #define TEST_REFERENCE (UINT64_C(7) << NTFS_REFERENCE_SEQUENCE_SHIFT | UINT64_C(25))
 #define TEST_FILETIME UINT64_C(134357146906613431)
@@ -277,6 +283,87 @@ refusals(struct journal_case *test)
 }
 
 static void
+quiet_profile_vectors(struct journal_case *test)
+{
+	static const struct {
+		uint64_t historical, anchor, checkpoint;
+	} native[] = {{UINT64_C(0x100000), UINT64_C(0x184408), UINT64_C(0x184415)},
+	    {UINT64_C(0x280000), UINT64_C(0x304408), UINT64_C(0x304415)},
+	    {UINT64_C(0x400000), UINT64_C(0x484408), UINT64_C(0x484415)},
+	    {UINT64_C(0x580000), UINT64_C(0x604408), UINT64_C(0x604415)},
+	    {UINT64_C(0x700000), UINT64_C(0x784408), UINT64_C(0x784415)},
+	    /* The old literal is still valid when this profile's anchor permits it. */
+	    {UINT64_C(0x1000000), UINT64_C(0x1084408), UINT64_C(0x1084415)}};
+	uint8_t bootstrap[NTFS_WRITE_BOOTSTRAP_BYTES], checkpoint[NTFS_WRITE_CHECKPOINT_BYTES];
+	struct ntfs_disk_log_record *first = (void *)bootstrap, *last = (void *)checkpoint;
+	struct ntfs_disk_log_client_restart *body = (void *)(checkpoint + sizeof(*last));
+	struct ntfs_disk_log_quiet_extension *extension = (void *)((uint8_t *)body + sizeof(*body));
+	struct ntfs_logfile_restart restart = test->selected;
+	struct ntfs_logfile_client client = test->capture.client;
+	size_t index;
+
+	memcpy(bootstrap, test->bootstrap, sizeof(bootstrap));
+	memcpy(checkpoint, test->checkpoint, sizeof(checkpoint));
+	/* The arbitrary historical signature from the old compact author falls
+	 * outside this newly qualified profile, not a universal NTFS rule. */
+	ntfs_put_u64(extension->historical_state, UINT64_C(0x1000000));
+	assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+	restart.sequence_bits = NTFS_LFS_LSN_BITS - TEST_NATIVE_LSN_OFFSET_BITS;
+	restart.file_bytes = TEST_NATIVE_LOG_BYTES;
+	for (index = 0; index < sizeof(native) / sizeof(native[0]); index++) {
+		restart.current_lsn = native[index].checkpoint;
+		client.oldest_lsn = native[index].anchor;
+		client.restart_lsn = native[index].checkpoint;
+		ntfs_put_u64(first->lsn, native[index].anchor);
+		ntfs_put_u64(last->lsn, native[index].checkpoint);
+		ntfs_put_u64(body->analysis_lsn, native[index].anchor);
+		ntfs_put_u64(extension->anchor_lsn, native[index].anchor);
+		ntfs_put_u64(extension->historical_state, native[index].historical);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_OK);
+		ntfs_put_u64(extension->historical_state, 0);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+		ntfs_put_u64(extension->historical_state, native[index].historical | 1);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+		ntfs_put_u64(extension->historical_state,
+		    ((native[index].anchor >> TEST_NATIVE_LSN_OFFSET_BITS) + 1)
+			<< TEST_NATIVE_LSN_OFFSET_BITS);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+	}
+}
+
+static void
+quiet_profile_preservation(struct journal_case *test)
+{
+	uint8_t saved[NTFS_WRITE_CHECKPOINT_BYTES], before[NTFS_WRITE_CHECKPOINT_BYTES];
+	struct ntfs_disk_log_quiet_extension *source = (void *)(test->checkpoint +
+	    sizeof(struct ntfs_disk_log_record) + sizeof(struct ntfs_disk_log_client_restart));
+	const struct ntfs_disk_log_quiet_extension *encoded;
+	uint32_t offset_bits = NTFS_LFS_LSN_BITS - test->selected.sequence_bits;
+	uint64_t values[] = {UINT64_C(1) << offset_bits,
+	    (test->capture.client.oldest_lsn >> offset_bits) << offset_bits,
+	    ntfs_u64(source->historical_state)};
+	size_t index;
+
+	memcpy(saved, test->checkpoint, sizeof(saved));
+	for (index = 0; index < sizeof(values) / sizeof(values[0]); index++) {
+		ntfs_put_u64(source->historical_state, values[index]);
+		memcpy(before, test->checkpoint, sizeof(before));
+		assert(ntfs_write_journal_encode(&test->input, &test->work, &test->plan) == NTFS_OK);
+		assert(memcmp(before, test->checkpoint, sizeof(before)) == 0);
+		memcpy(test->work.restored, test->plan.checkpoint, sizeof(test->plan.checkpoint));
+		assert(ntfs_fixup(test->work.restored, sizeof(test->plan.checkpoint), "RCRD") == NTFS_OK);
+		encoded = (const void *)(test->work.restored +
+		    test->plan.reservation.checkpoint_record_offset + sizeof(struct ntfs_disk_log_record) +
+		    sizeof(struct ntfs_disk_log_client_restart));
+		assert(memcmp(source, encoded,
+			   offsetof(struct ntfs_disk_log_quiet_extension, anchor_lsn)) == 0);
+		assert(ntfs_u64(encoded->anchor_lsn) == test->plan.reservation.bootstrap_lsn);
+	}
+	memcpy(test->checkpoint, saved, sizeof(saved));
+	assert(ntfs_write_journal_encode(&test->input, &test->work, &test->plan) == NTFS_OK);
+}
+
+static void
 copy_fixture(const char *directory, const char *name, void *out, size_t length)
 {
 	uint8_t *data;
@@ -426,6 +513,8 @@ run_vectors(const char *directory)
 	    sizeof(test->plan.retained_restart[1]));
 	reads = device.reads;
 	allocations = device.allocations;
+	quiet_profile_vectors(test);
+	quiet_profile_preservation(test);
 	refusals(test);
 	assert(device.reads == reads && device.allocations == allocations);
 	for (prefix = NTFS_WRITE_SECTOR_BYTES; prefix < NTFS_WRITE_CLUSTER_BYTES;

@@ -1,0 +1,41 @@
+name: Native metadata observations
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: powershell
+jobs:
+  windows-metadata:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[metadata-probe]') }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check scratch guards and script parsing
+        run: |
+          python tests/windows_metadata_observer.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native metadata identity contracts failed.' }
+          & tests/windows_scratch_guard.ps1
+          $tokens = $null; $errors = $null
+          [void][Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/probe_windows_metadata.ps1'), [ref]$tokens, [ref]$errors)
+          if (@($errors).Count) { throw ($errors -join '; ') }
+      - name: Observe metadata APIs and original records on fresh native media
+        run: |
+          & scripts/probe_windows_metadata.ps1 -Output "$env:RUNNER_TEMP\MachlinNTFSMetadata-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - name: Retain original diagnostics and detached snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-metadata
+          path: ${{ runner.temp }}/MachlinNTFSMetadata-${{ github.run_id }}-${{ github.run_attempt }}/evidence
+          if-no-files-found: error
+          retention-days: 14

@@ -124,8 +124,21 @@ records the primary/DOS distinction, callback-free limit checks, exact capacity
 refusals, source preservation and independent oracles. SI and parent timestamps,
 all old filename/index bodies, streams and security remain unchanged. This exact
 storage transform does not claim Windows hard-link API side effects. Complete
-regions compile through generic redo/undo, but the execution owner and FSKit
-remain refused pending the family's own durable/native qualification.
+regions compile through generic redo/undo. The private
+[execution harness](../../tests/hardlink_execution.c) now passes 2,499 preselected
+whole/sector interruption states across five synthetic profiles, with complete
+independent FILE goldens, old-or-committed metadata and quiet fresh recovery.
+The separate [raw observer](../../tests/native_hardlink_observer.py) constructs
+the complete new resident FILE_NAME independently, walks original/new I30 keys,
+and requires unchanged sibling FILE slots and unselected metadata bytes.
+
+Current C execution on an original Windows-authored scratch source additionally
+passes cross-parent, same-parent and actual index-split profiles: three complete
+images and fifty fresh recovery cuts. This verifies the implementation on those
+source bytes, not Windows recovery or native API timestamp/cache side effects.
+The general execution owner and FSKit remain refused pending the separate native
+qualification; [the family contract](../HARDLINK-PREPARATION.md#private-c-execution-and-fresh-recovery)
+records the evidence and retained first failure.
 
 ## Directory ancestry through native aliases
 

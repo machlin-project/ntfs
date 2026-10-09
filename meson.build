@@ -418,6 +418,9 @@ test('write-times', write_times, args: [meson.current_build_dir() / 'write-times
 write_hardlink_fixture = custom_target('write-hardlink-fixtures', output: 'write-hardlink-fixtures.stamp', command: [python, files('tests/write_hardlink_fixtures.py'), meson.current_build_dir() / 'write-hardlink-fixtures', '@OUTPUT@', '--source', meson.current_build_dir() / 'write-mutation-cases'], depends: write_mutation_fixture, depend_files: files('tests/fixtures.py', 'tests/filename_storage.py', 'tests/write_metadata_fixtures.py', 'tests/validation_fixtures.py', 'tests/secure_fixtures.py', 'tests/logfile_fixtures.py'), build_by_default: true)
 write_hardlink = executable('ntfs-write-hardlink-tests', ['tests/write_hardlink.c', 'tests/fuzz_device.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('write-hardlink', write_hardlink, args: [meson.current_build_dir() / 'write-hardlink-fixtures'], depends: write_hardlink_fixture, timeout: 180)
+hardlink_execution = executable('ntfs-hardlink-execution-tests', ['tests/hardlink_execution.c', 'adapters/posix/overwrite_image.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-D_POSIX_C_SOURCE=200809L', '-D_DARWIN_C_SOURCE', '-Wdeclaration-after-statement'])
+test('hardlink-execution', hardlink_execution, args: [meson.current_build_dir() / 'write-hardlink-fixtures', meson.current_build_dir()], depends: write_hardlink_fixture, timeout: 600)
+test('native-hardlink-harness', python, args: [files('tests/test_native_hardlink_harness.py'), meson.current_build_dir() / 'write-hardlink-fixtures'], depends: write_hardlink_fixture, timeout: 120)
 write_lifetime = executable('ntfs-write-lifetime-tests', ['tests/write_lifetime.c', 'tests/fuzz_device.c'], include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
 test('write-lifetime', write_lifetime, timeout: 120)
 write_reparse = executable('ntfs-write-reparse-tests', 'tests/write_reparse.c', include_directories: [inc, include_directories('core')], link_with: core, c_args: ['-Wdeclaration-after-statement'])
@@ -433,3 +436,5 @@ test('windows-lznt1-contract', python, args: [files('tests/windows_lznt1_contrac
 
 # Synthetic observer contracts do not substitute for the separate Windows job.
 test('windows-hardlink-limit-contract', python, args: [files('tests/test_windows_hardlink_limit.py')], timeout: 120)
+test('windows-hardlink-review-contract', python, args: [files('tests/test_windows_hardlink_review.py')], timeout: 120)
+test('windows-metadata-observer-contract', python, args: [files('tests/windows_metadata_observer.py')], timeout: 120)

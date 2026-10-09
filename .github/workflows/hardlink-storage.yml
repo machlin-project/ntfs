@@ -1,0 +1,186 @@
+name: Selected-cache hard-link storage
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: ntfs-hardlink-storage-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  acquire:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[hardlink-storage]')) }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test scratch admission without disk operations
+        run: ./tests/windows_scratch_guard.ps1
+      - name: Author and detach one new guarded native NTFS source
+        run: ./scripts/bootstrap_windows_ntfs.ps1 -Output "$env:RUNNER_TEMP\MachlinNTFSCloud-Hardlink-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - name: Independently confirm detached state before retaining media
+        id: detached
+        if: always()
+        run: |
+          $vhd = "$env:RUNNER_TEMP\MachlinNTFSCloud-Hardlink-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT\base.vhd"
+          if (Test-Path -LiteralPath $vhd) {
+            if ((Get-DiskImage -ImagePath $vhd -ErrorAction Stop).Attached) {
+              throw 'Scratch VHD remains attached; retain diagnostics only.'
+            }
+            'confirmed=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
+      - name: Retain first acquisition diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-acquisition-diagnostics
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/MachlinNTFSCloud-Hardlink-${{ github.run_id }}-${{ github.run_attempt }}/bootstrap.json
+            ${{ runner.temp }}/MachlinNTFSCloud-Hardlink-${{ github.run_id }}-${{ github.run_attempt }}/*.txt
+            ${{ runner.temp }}/MachlinNTFSCloud-Hardlink-${{ github.run_id }}-${{ github.run_attempt }}/*.stdout
+            ${{ runner.temp }}/MachlinNTFSCloud-Hardlink-${{ github.run_id }}-${{ github.run_attempt }}/*.stderr
+      - name: Retain unchanged detached native source
+        if: ${{ always() && steps.detached.outputs.confirmed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-native-source
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/MachlinNTFSCloud-Hardlink-${{ github.run_id }}-${{ github.run_attempt }}
+  prepare:
+    needs: acquire
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardlink-native-source
+          path: artifacts/windows-native-inputs
+      - run: |
+          python3 -m pip install meson==1.11.1 ninja==1.13.2
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y qemu-utils
+      - name: Build current C with assertions and fatal sanitizers
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/build.py .build --compiler clang 2>&1 | tee artifacts/ci/build.log
+      - name: Run independent preparation, execution, and wire-oracle contracts
+        run: |
+          python3 - <<'PY' 2>&1 | tee artifacts/ci/contracts.log
+          import subprocess
+          from scripts.environment import tool_environment
+          subprocess.run(['meson', 'test', '-C', '.build', '--no-rebuild', '--print-errorlogs',
+              '--num-processes', '1', 'write-hardlink', 'hardlink-execution', 'native-hardlink-harness'],
+              env=tool_environment(), check=True)
+          PY
+          python3 tests/test_windows_hardlink_review.py 2>&1 | tee artifacts/ci/review-contracts.log
+      - name: Rebind exact native source identities and bytes to this consumer
+        run: python3 scripts/windows_cloud_inputs.py --bootstrap artifacts/windows-native-inputs/bootstrap.json --output artifacts/windows-cloud-inputs --qemu /usr/bin/qemu-img 2>&1 | tee artifacts/ci/inputs.log
+      - name: Compare original native corpus before mutation
+        run: python3 tests/windows_corpus.py artifacts/windows-native-inputs/corpus/manifest.json --reader .build/ntfs-inspect --report artifacts/windows-corpus-review/report.json 2>&1 | tee artifacts/ci/corpus.log
+      - name: Validate complete original volume
+        run: .build/ntfs-validate artifacts/windows-cloud-inputs/source.ntfs 2>&1 | tee artifacts/ci/validation.log
+      - name: Execute selected-cache hard links and preselected fresh recovery cuts
+        run: python3 tests/native_hardlink_batch.py --cloud-manifest artifacts/windows-cloud-inputs/cloud-manifest.json --build .build --output artifacts/windows-hardlink-storage 2>&1 | tee artifacts/ci/hardlink.log
+      - name: Package exact hard-link candidates through unchanged GPT and VHD guards
+        id: package
+        run: python3 tests/native_directory_package.py --local artifacts/windows-hardlink-storage --cloud-manifest artifacts/windows-cloud-inputs/cloud-manifest.json --qemu /usr/bin/qemu-img --tag 'HL${{ github.run_id }}-${{ github.run_attempt }}' --output artifacts/windows-hardlink-packages 2>&1 | tee artifacts/ci/package.log
+      - name: Retain complete C evidence and first failed input
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-c-preparation
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/ci/*.log
+            artifacts/windows-hardlink-storage
+            artifacts/windows-cloud-inputs/*.json
+            artifacts/windows-corpus-review
+      - name: Retain exact packages for one native recovery attempt
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-recovery-packages
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/windows-hardlink-packages
+            artifacts/windows-native-inputs/base.vhd
+  recover:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardlink-recovery-packages
+          path: artifacts/hardlink-recovery-download
+      - name: Test transport and parser refusal contracts without disk operations
+        run: ./tests/windows_cloud_transport.ps1
+      - name: Attempt every admitted hard-link candidate once
+        run: ./scripts/replay_windows_cloud.ps1 -Packages artifacts/hardlink-recovery-download/windows-hardlink-packages -BaseVhd artifacts/hardlink-recovery-download/windows-native-inputs/base.vhd -Output "$env:RUNNER_TEMP\MachlinNTFSReplay-Hardlink-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+      - name: Retain first native reports, original event XML and detached postimages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-native-recovery
+          if-no-files-found: error
+          retention-days: 14
+          path: ${{ runner.temp }}/MachlinNTFSReplay-Hardlink-${{ github.run_id }}-${{ github.run_attempt }}
+  review:
+    needs: [prepare, recover]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardlink-recovery-packages
+          path: artifacts/hardlink-packages-download
+      - uses: actions/download-artifact@v4
+        with:
+          name: hardlink-native-recovery
+          path: artifacts/hardlink-native-download
+      - name: Independently bind original native verdicts, XML and exact retained bytes
+        run: python3 scripts/review_windows_hardlink.py --packages artifacts/hardlink-packages-download/windows-hardlink-packages --replay artifacts/hardlink-native-download --output artifacts/hardlink-offline-review
+      - name: Retain offline verdict without retrying a native candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardlink-offline-review
+          if-no-files-found: error
+          retention-days: 14
+          path: artifacts/hardlink-offline-review

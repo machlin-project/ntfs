@@ -165,6 +165,21 @@ request(struct image_case *test, int argc, char **argv)
 	enum ntfs_result result;
 
 	input->filetime = number(argv[5]);
+	if (strcmp(kind, "hardlink-storage") == 0) {
+		/* Private selected-cache storage qualification, not native API semantics
+		 * or general mutation-owner admission. The timestamp argument stays zero. */
+		assert(argc == 8 && input->filetime == 0);
+		input->kind = NTFS_WRITE_CREATE_HARD_LINK;
+		result = resolve(environment, path, strlen(path), &input->reference);
+		if (result == NTFS_OK) {
+			result = split_name(environment, path, test->source_name, &input->source);
+		}
+		if (result == NTFS_OK) {
+			result = split_name(
+			    environment, argv[7], test->destination_name, &input->destination);
+		}
+		return result;
+	}
 	if (strcmp(kind, "create") == 0 || strcmp(kind, "mkdir") == 0 ||
 	    strcmp(kind, "remove") == 0 || strcmp(kind, "rmdir") == 0) {
 		assert(argc == 7);

@@ -1,7 +1,8 @@
 # Selected POSIX hard-link storage preparation
 
-This is a private portable mutation contract, not execution or FSKit support.
-The execution owner refuses this family before allocation or media I/O.
+This is a private selected-cache storage contract with dedicated portable
+persistence/recovery qualification. The general execution owner still refuses
+this family before allocation or media I/O; no FSKit operation is enabled.
 
 ## Request and preserved policy
 
@@ -48,8 +49,9 @@ The complete sealed FILE/INDX/bitmap regions enter the existing generic native
 redo/undo compiler, which owns its bytes after plan close. No source writes or
 persistence callbacks exist in this planner. Every preparation/allocation/read
 failure discards the private plan; source bytes stay unchanged. Generic program
-compilation and prefix compensation are preparation evidence, not new durable
-family qualification. The ordinary execution owner explicitly refuses this enum
+compilation and prefix compensation alone are preparation evidence. The dedicated
+family execution harness below keeps its evidence separate. The ordinary
+execution owner explicitly refuses this enum
 before allocation or image I/O, and no FSKit entrypoint is added.
 
 ## Independent tests
@@ -72,10 +74,11 @@ allocation metadata, rather than an invented old index image, owns that boundary
 
 ## Minimum remaining observations
 
-Native execution remains unadmitted until one prepared hard-link family completes
-its own old-or-committed C persistence/recovery and native Windows recovery gate,
-including index growth, metadata/data/security/ADS identity, clean state and
-read-only chkdsk. Existing ordinary create/rename acceptance is not this evidence.
+The private C storage family now passes the old-or-committed persistence/recovery
+boundary below. General/native execution remains unadmitted until its separate
+Windows recovery gate passes, including index growth, metadata/data/security/ADS
+identity, clean state and read-only chkdsk. Existing ordinary create/rename
+acceptance is not this evidence.
 
 A native semantic API additionally needs an original Windows before/after witness
 for source SI, every existing/new FILE_NAME and every corresponding I30 key after
@@ -124,8 +127,9 @@ profiles, 150 preparation-allocation failures, 76 full/partial read failures,
 objects compile with freestanding/no-builtin and the 2-KiB frame ceiling; ASan
 and UBSan remain fatal. Local LeakSanitizer cannot run under the cloud ptrace
 configuration; that runtime failure is retained separately, and the passing run
-uses exact owned-allocation balance assertions. There is no new native execution,
-Windows recovery or installed FSKit result.
+uses exact owned-allocation balance assertions. This preparation checkpoint alone
+established no native execution, Windows recovery or installed FSKit result. The
+later private C execution evidence below does not change those native boundaries.
 
 The first attempts preserve two test-harness corrections: overlay header include
 ordering and the independent INDX reader's header offset. Neither required a
@@ -167,3 +171,108 @@ unchanged at the refusal. The retained report marks native collection and all
 checks complete; its runner was Windows build 26100. This independently verifies
 the logical API cap only. It does not qualify the C writer, physical DOS-pair
 counts, extension-record packing, cache/time side effects or recovery.
+
+## Private C execution and fresh recovery
+
+[hardlink_execution.c](../tests/hardlink_execution.c) now qualifies the selected
+storage transform through the existing sealed plan, owned program, batch executor
+and journal-derived recovery interfaces. It adds no general-owner exception.
+Five independently authored profiles cover same/cross-parent insertion, an
+existing Win32/DOS pair, fragmented unnamed data and an actual index split.
+
+The complete published-image oracle applies captured sealed publications to the
+original complete image. This is complemented by the independently authored
+complete target-FILE golden, full-volume validation and exact old-or-committed
+bytes outside the journal. Only changed FILE/INDX USA storage and journal-derived
+LSNs are normalized; unchanged sibling FILE records, parent times, security,
+old names, ADS, data and trailing image bytes remain exact. Every planner/program
+owner closes before execution, and every writer owner closes before recovery.
+
+All 2,499 preselected whole/512-byte prefix/suffix writer and interrupted-recovery
+states pass, including both commit sides and every metadata publication. Every
+recovered image validates and a fresh second recovery owner publishes zero writes.
+Execution performs no reads or allocations. Ten separate ordinary-image recovery
+files additionally pass actual POSIX transfers/persistence and fresh close/reopen
+with complete captured-publication comparison. This is regular-file persistence,
+not a physical power-cut or Windows result.
+
+The focused fatal ASan/UBSan run passes `write-hardlink` and `hardlink-execution`
+in 1.24 and 131.37 seconds respectively. Local LeakSanitizer retains its documented
+ptrace restriction, with exact owned-allocation accounting still required. Evidence
+is retained in `artifacts/dots-hardlink-execution-check-20261009/retry2/`. The first
+failed attempt incorrectly required complete image length to be cluster-aligned;
+the unchanged fixture includes a 512-byte final sector. The harness now compares
+that exact tail rather than truncating or padding the input. No core correction
+was needed at this boundary; the first failure remains retained.
+
+## Prepared native storage-family candidates
+
+The private `hardlink-storage` request in
+[write_operation_image.c](../tests/write_operation_image.c) requires an explicit
+zero timestamp and source/destination paths. It calls the sealed private
+interfaces directly and leaves the general execution owner and FSKit refused.
+[native_hardlink_batch.py](../tests/native_hardlink_batch.py) prepares explicitly
+named `hardlink-*` candidates from validated Windows scratch inputs, with
+cross-parent, same-parent and a bounded search for an actual hard-link index split.
+Cut selection precedes recovery verdicts and covers both commit sides, all critical
+journal stages and every metadata home. It retains exact original crash images,
+full-byte publication/recovery comparisons, full validation and quiet reopen.
+
+[native_hardlink_observer.py](../tests/native_hardlink_observer.py) independently
+walks raw MFT mappings and complete FILE/I30 keys. It constructs the entire new
+resident FILE_NAME header, cache, name and padding from named wire fields, checks
+the complete target record, preserves every old key and unselected parent
+attribute, and compares the original data/ADS bytes. The core inspector's
+security/identity observations complement this separate wire oracle. Its four
+synthetic contract tests pass, including altered ADS, missing indexed flag, torn
+FILE and changed untouched-sibling LSN refusals. Those tests establish no native
+verdict.
+
+The native source-side route is:
+
+```sh
+python3 tests/native_hardlink_batch.py \
+  --cloud-manifest artifacts/windows-cloud-inputs/cloud-manifest.json \
+  --build .build --output artifacts/windows-hardlink-storage
+python3 tests/native_directory_package.py \
+  --local artifacts/windows-hardlink-storage \
+  --cloud-manifest artifacts/windows-cloud-inputs/cloud-manifest.json \
+  --qemu /usr/bin/qemu-img --tag HardlinkUniqueRun \
+  --output artifacts/windows-hardlink-packages
+```
+
+The unchanged packager and Windows collector accept only their already bounded
+directory/name profile, with explicit hard-link case identities and source-family
+reports. Original source identity, data, ADS, ACL and FILETIME checks, complete
+namespace/identity checks, clean state, read-only chkdsk, original-event guards,
+detached postimages and no-retry rules remain required. Candidate preparation
+does not itself qualify Windows recovery or the implicit `CreateHardLinkW`
+cache/time semantics described above.
+
+### Current C on original Windows-authored media
+
+The local current-C supplement now passes all three profiles on an unchanged
+original Windows scratch source. It retains 53 individually named products:
+three completed images and 50 preselected interruption inputs (14 cross-parent,
+14 same-parent, 22 index-split). The split predecessor contains three live index
+blocks; the selected operation adds index storage and has 44 publications.
+The two other operations each have 18 publications. Original/new physical name
+counts are checked, with the resulting counts two, three and two respectively.
+
+All completed and recovered states pass the independent complete FILE/new-attribute
+and I30 relationships, original data/ADS bytes and security, complete byte oracles,
+full-volume validation and fresh zero-write reopen. The original source hash stays
+unchanged. Evidence is retained under `artifacts/dots-hardlink-native-local-first/`,
+with execution logs under `artifacts/dots-hardlink-native-local-execution-20261009/`.
+The local supplement retains its explicit LeakSanitizer accommodation. No VM or
+Windows recovery ran in this supplement; native media provenance does not turn a
+C result into a native operating-system verdict.
+
+[The focused hosted workflow](../.github/workflows/hardlink-storage.yml) separates
+fresh source acquisition, C preparation, one-attempt Windows recovery and offline
+review. [review_windows_hardlink.py](../scripts/review_windows_hardlink.py) binds the
+complete expected case set to each first native report, reparses the retained
+original event XML, checks sequence/ADS and health verdicts, and verifies every
+confirmed-detached postimage against the original post-detach hash. Its five
+synthetic contract tests pass. It does not mount, repair or retry a candidate.
+Workflow preparation is not an executed Windows acceptance result.

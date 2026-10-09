@@ -449,8 +449,8 @@ native_extension_tests(void)
 	 * subtracting every deny mask after collecting every allow mask. */
 	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 3);
 	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
-	check_maximum(bytes, size, &token, NTFS_FILE_READ_DATA,
-	    NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
+	check_maximum(
+	    bytes, size, &token, NTFS_FILE_READ_DATA, NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
 	check_maximum(bytes, size, &token, NTFS_FILE_EXECUTE, 0);
 	aces[0].type = NTFS_ACE_DENY;
 	aces[1].type = NTFS_ACE_ALLOW;
@@ -459,8 +459,8 @@ native_extension_tests(void)
 	check_maximum(bytes, size, &token, NTFS_FILE_READ_DATA, 0);
 	for (state = NTFS_ACL_ABSENT; state <= NTFS_ACL_EMPTY; state++) {
 		size = descriptor(bytes, &owner_sid, state, NULL, 0);
-		check_maximum(bytes, size, &token, 0,
-		    state == NTFS_ACL_EMPTY ? 0 : TEST_FILE_ALL_ACCESS);
+		check_maximum(
+		    bytes, size, &token, 0, state == NTFS_ACL_EMPTY ? 0 : TEST_FILE_ALL_ACCESS);
 	}
 	size = descriptor(bytes, &user_sid, NTFS_ACL_EMPTY, NULL, 0);
 	check_maximum(bytes, size, &token, 0, controls);
@@ -503,8 +503,8 @@ native_extension_tests(void)
 	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA);
 	token.restricting = &group_sid;
 	aces[0] = (struct test_ace){NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA, user_sid};
-	aces[1] = (struct test_ace){NTFS_ACE_ALLOW, 0,
-	    NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA, group_sid};
+	aces[1] = (struct test_ace){
+	    NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA, group_sid};
 	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);
 	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
 	token.restricting = &user_sid;
@@ -593,8 +593,9 @@ ordered_tests(void)
 				for (i = 0; i < sizeof(rights) / sizeof(rights[0]); i++) {
 					if (right_allowed(aces, TEST_ORDERED_ACES, rights[i],
 						group.attributes, false) &&
-					    (!token.restricted || right_allowed(aces, TEST_ORDERED_ACES,
-								 rights[i], group.attributes, true))) {
+					    (!token.restricted ||
+						right_allowed(aces, TEST_ORDERED_ACES, rights[i],
+						    group.attributes, true))) {
 						maximum |= rights[i];
 					}
 				}
@@ -641,8 +642,8 @@ boundary_tests(void)
 	size_t size, i;
 	const uint8_t unsupported[] = {NTFS_ACE_ALLOW_CALLBACK, NTFS_ACE_DENY_CALLBACK,
 	    NTFS_ACE_ALLOW_OBJECT, NTFS_ACE_DENY_OBJECT, NTFS_ACE_AUDIT, TEST_UNKNOWN_ACE};
-	const uint32_t bad_masks[] = {NTFS_ACCESS_SYSTEM_SECURITY,
-	    TEST_RESERVED_ACCESS, NTFS_FILE_ALL_ACCESS + 1};
+	const uint32_t bad_masks[] = {
+	    NTFS_ACCESS_SYSTEM_SECURITY, TEST_RESERVED_ACCESS, NTFS_FILE_ALL_ACCESS + 1};
 	static struct ntfs_token_group many[NTFS_ACCESS_MAX_SIDS + 1];
 
 	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);

@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 import sys
 
 from benchmark_toolchain import command
@@ -23,6 +24,7 @@ DEFAULT_BUILD_SECONDS = 1200
 MAX_BUILD_SECONDS = 1800
 UUID_LINE = re.compile(r'UUID: ([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}) '
                        r'\((arm64|x86_64)\) .+')
+REPRODUCIBLE_BUILD_ROOT = '/machlin-ntfs-build'
 
 
 def arguments(argv=None):
@@ -57,6 +59,11 @@ def xcode_command(args, project, clang):
             '-jobs', '4', 'CLANG_ENABLE_EXPLICIT_MODULES=NO', f'CC={clang}']
     if args.configuration == 'Release':
         argv += ['ARCHS=arm64 x86_64', 'ONLY_ACTIVE_ARCH=NO']
+        mapping = f'{args.derived_data.absolute()}={REPRODUCIBLE_BUILD_ROOT}'
+        argv += ['NTFS_REPRO_CFLAGS=' + shlex.join(['-ffile-prefix-map=' + mapping]),
+                 'NTFS_REPRO_SWIFT_FLAGS=' + shlex.join(
+                     ['-file-prefix-map', mapping, '-debug-prefix-map', mapping,
+                      '-Xfrontend', '-prefix-serialized-debugging-options'])]
     if args.build_number is not None:
         argv += [f'CURRENT_PROJECT_VERSION={args.build_number}']
     if args.team:
@@ -143,16 +150,27 @@ def build(args, *, root=ROOT):
             'sdk_version': run(['xcrun', '--show-sdk-version'], 'sdk-version').strip(),
             'xcodegen': run(['xcodegen', '--version'], 'xcodegen-version').strip(),
             'clang': run(['xcrun', '--find', 'clang'], 'clang-path').strip(),
+            'swift': run(['xcrun', '--find', 'swiftc'], 'swift-path').strip(),
         }
         require(Path(report['toolchain']['sdk_path']).is_dir(), 'Selected SDK directory is absent')
         require(Path(report['toolchain']['clang']).is_file(), 'Selected clang executable is absent')
+        require(Path(report['toolchain']['swift']).is_file(), 'Selected Swift compiler is absent')
         report['toolchain']['clang_version'] = run([report['toolchain']['clang'], '--version'], 'clang-version').strip()
+        report['toolchain']['swift_version'] = run([report['toolchain']['swift'], '--version'], 'swift-version').strip()
+        if args.configuration == 'Release':
+            options = run([report['toolchain']['swift'], '-frontend', '-help-hidden'],
+                          'swift-options', limit=1024 * 1024)
+            required = ('-file-prefix-map', '-debug-prefix-map', '-prefix-serialized-debugging-options')
+            require(all(re.search(r'(?m)^\s*' + re.escape(option) + r'(?:\s|$)', options)
+                        for option in required), 'Selected Swift compiler lacks required path-mapping options')
         project = snapshot / 'adapters/fskit'
         spec = selected_spec(args, project)
         run(['xcodegen', 'generate', '--spec', str(spec), '--project', str(project)],
             'xcodegen', timeout=120, cwd=snapshot)
         argv = xcode_command(args, project, report['toolchain']['clang'])
         report['command'] = argv
+        if args.configuration == 'Release':
+            report['compiler_path_mapping'] = {str(output): REPRODUCIBLE_BUILD_ROOT}
         report_path.write_bytes(json_bytes(report))
         run(argv, 'xcode-build', timeout=args.timeout, limit=32 * 1024 * 1024, cwd=snapshot)
         app = output / 'Build/Products' / args.configuration / APP_NAME

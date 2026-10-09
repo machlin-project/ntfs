@@ -72,7 +72,8 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(first.requested == ntfs_file_map_rights(desired));
 		if (first.allowed && (first.requested & NTFS_ACCESS_MAXIMUM_ALLOWED) != 0) {
 			assert(first.granted != 0);
-			assert((first.requested & ~NTFS_ACCESS_MAXIMUM_ALLOWED & ~first.granted) == 0);
+			assert(
+			    (first.requested & ~NTFS_ACCESS_MAXIMUM_ALLOWED & ~first.granted) == 0);
 		} else {
 			assert(first.granted == (first.allowed ? first.requested : 0));
 		}

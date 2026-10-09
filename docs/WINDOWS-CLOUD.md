@@ -150,6 +150,25 @@ fields remain unchanged. Original failed inputs and both copies are retained in
 first operation on that native image; the fresh full batch and Windows recovery
 verdict remain pending.
 
+The next [8b63aad run](https://github.com/machlin-project/ntfs/actions/runs/37866655275)
+completed 287 operations, including root spill and split, before operation 288
+refused preparation with `NTFS_NO_SPACE` and zero writes. Its settled history
+required 16,508 allocations, exceeding the existing 16,384-allocation checkpoint
+reserve threshold. The direct batch harness now observes that existing admission
+signal before freezing the next crash predecessor and performs a checkpoint when
+needed, in addition to its periodic checkpoints. It requires the pressure to clear;
+a failed writer still stops the run without retry. Recovery budgets, the complete
+scenario, publication/namespace oracles and preselected cuts remain unchanged.
+The original failure is retained in `artifacts/dots-native-8b63aad/directory/`.
+A fresh diagnostic copy then passed that checkpoint and the exact operation 288
+once. History allocations fell to 4,134 before the operation. All 287 predecessor
+and 288 resulting objects matched the original-command model, the complete image
+equaled the independent publication oracle, 332-record validation passed, and
+fresh recovery wrote nothing. The original source, all opaque checkpoint-prefix
+bytes and raw volume flags remained unchanged. This bounded proof is retained in
+`artifacts/dots-native-8b63aad/current-pressure-operation-0288/`; it does not
+replace the still-required fresh full sequence and Windows recovery verdict.
+
 The packager verifies complete virtual disks and gives each candidate unique outer
 GPT identities. Groups still contain at most eight VHDs. Stage each generated
 `transfer.json` under its exact `batch.json` directory in a disposable Windows

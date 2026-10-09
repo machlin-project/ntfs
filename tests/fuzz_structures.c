@@ -56,12 +56,10 @@ static const uint8_t security_absent[] = {
 static const uint8_t security_null[] = {
     1, 0, 4, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 static const uint8_t security_empty[] = {
-    1, 0, 4, 0x90, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14, 0, 0, 0,
-    2, 0, 8, 0, 0, 0, 0, 0};
-static const uint8_t security_one_ace[] = {
-    1, 0, 0x0c, 0x85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14, 0, 0, 0,
-    2, 0, 0x1c, 0, 1, 0, 0, 0,
-    0, 0x13, 0x14, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0};
+    1, 0, 4, 0x90, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14, 0, 0, 0, 2, 0, 8, 0, 0, 0, 0, 0};
+static const uint8_t security_one_ace[] = {1, 0, 0x0c, 0x85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0x14, 0, 0, 0, 2, 0, 0x1c, 0, 1, 0, 0, 0, 0, 0x13, 0x14, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1,
+    0, 0, 0, 0};
 
 struct security_fuzz_descriptor {
 	uint8_t revision, manager, control[sizeof(uint16_t)];
@@ -133,8 +131,8 @@ security_fuzz_component(const uint8_t *source, size_t source_bytes, const uint8_
 }
 
 static void
-security_fuzz_oracle(const struct ntfs_security_edit_input *input, const uint8_t *bytes,
-    size_t size)
+security_fuzz_oracle(
+    const struct ntfs_security_edit_input *input, const uint8_t *bytes, size_t size)
 {
 	const struct security_fuzz_descriptor *original = input->original;
 	const struct security_fuzz_descriptor *donor = input->dacl_source;
@@ -167,7 +165,8 @@ fuzz_security_edit(const uint8_t *data, size_t size, enum ntfs_result decoded)
 	} donors[] = {{security_absent, sizeof(security_absent)},
 	    {security_null, sizeof(security_null)}, {security_empty, sizeof(security_empty)},
 	    {security_one_ace, sizeof(security_one_ace)}, {data, size}};
-	struct ntfs_security_edit_input input = {data, security_absent, size, sizeof(security_absent)};
+	struct ntfs_security_edit_input input = {
+	    data, security_absent, size, sizeof(security_absent)};
 	uint8_t refused[sizeof(struct security_fuzz_descriptor) + 2 * FUZZ_SECURITY_GUARD_BYTES];
 	uint8_t *copy, *guarded, *output;
 	size_t required = SIZE_MAX, written = SIZE_MAX, index, prefix, allocation;
@@ -176,7 +175,7 @@ fuzz_security_edit(const uint8_t *data, size_t size, enum ntfs_result decoded)
 		memset(refused, FUZZ_GUARD_BYTE, sizeof(refused));
 		assert(ntfs_security_edit_dacl_size(&input, &required) == decoded);
 		assert(ntfs_security_edit_dacl_encode(&input, refused + FUZZ_SECURITY_GUARD_BYTES,
-		    sizeof(struct security_fuzz_descriptor), &written) == decoded);
+			   sizeof(struct security_fuzz_descriptor), &written) == decoded);
 		assert(required == SIZE_MAX && written == SIZE_MAX);
 		security_fuzz_guard(refused, sizeof(refused));
 		return;
@@ -197,15 +196,18 @@ fuzz_security_edit(const uint8_t *data, size_t size, enum ntfs_result decoded)
 		output = guarded + prefix;
 		memset(guarded, FUZZ_GUARD_BYTE, allocation);
 		written = SIZE_MAX;
-		assert(ntfs_security_edit_dacl_encode(&input, output, required - 1, &written) == NTFS_RANGE);
+		assert(ntfs_security_edit_dacl_encode(&input, output, required - 1, &written) ==
+		    NTFS_RANGE);
 		assert(written == SIZE_MAX);
 		security_fuzz_guard(guarded, allocation);
-		assert(ntfs_security_edit_dacl_encode(&input, output, required, &written) == NTFS_OK);
+		assert(
+		    ntfs_security_edit_dacl_encode(&input, output, required, &written) == NTFS_OK);
 		assert(written == required);
 		security_fuzz_guard(guarded, prefix);
 		security_fuzz_guard(output + required, FUZZ_SECURITY_GUARD_BYTES);
 		security_fuzz_oracle(&input, output, written);
-		assert(ntfs_security_edit_dacl_encode(&input, output, required + 1, &written) == NTFS_OK);
+		assert(ntfs_security_edit_dacl_encode(&input, output, required + 1, &written) ==
+		    NTFS_OK);
 		assert(written == required);
 		security_fuzz_guard(guarded, prefix);
 		security_fuzz_guard(output + required, FUZZ_SECURITY_GUARD_BYTES);

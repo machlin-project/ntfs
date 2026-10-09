@@ -90,8 +90,8 @@ author a new common synthetic profile before freezing either implementation:
 
 ```sh
 python3 scripts/prepare_write_benchmark_profile.py --source .build/write-mutation-cases/history-source.img --output artifacts/write-common-profile-next
-python3 scripts/benchmark_write.py prepare --reference 35136fa --fixture artifacts/write-common-profile-next/common-quiet.img --output artifacts/write-common-next
-python3 scripts/benchmark_write.py compare --output artifacts/write-common-next --comparison candidate --repetitions 5
+python3 scripts/benchmark_write.py prepare --reference 35136fa --compiler clang --fixture artifacts/write-common-profile-next/common-quiet.img --output artifacts/write-common-next
+python3 scripts/benchmark_write.py compare --compiler clang --output artifacts/write-common-next --comparison candidate --repetitions 5
 ```
 
 This profile deliberately combines the earlier implementation's historical-word
@@ -101,6 +101,15 @@ Both implementations must accept the same retained bytes and produce the same
 independent namespace/content checksums. Old benchmark artifacts remain unchanged;
 their admission difference cannot be relabeled as a timing regression. The author
 report alone is not proof of either implementation's admission or performance.
+
+The local GCC supplement uses `361d80f`, which retains the former exact opaque
+prefix policy and compiles under unchanged GCC warnings. Its new common image
+passed preparation and all 16 current comparison cases: 80 old/current sample
+pairs have identical checksums and resource counters. Evidence is retained in
+`artifacts/dots-writer-common-benchmark-361d80f-gcc/current-admission-retry1/`;
+the interrupted first comparison remains separate. This proves shared admission
+for that reference. The original `35136fa` comparison uses hosted Clang because
+that revision's enum/sign warnings prevent its unmodified GCC build.
 
 This harness requires `.build/write-mutation-cases/history-source.img`. The
 reference seeds 256 long names before timing. Independent phases measure complete

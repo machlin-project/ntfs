@@ -12,6 +12,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: '26.5'
     MARKETING_VERSION: '0.1.0'
     CURRENT_PROJECT_VERSION: '1'
+    OTHER_CFLAGS: $(inherited) $(NTFS_REPRO_CFLAGS)
+    OTHER_SWIFT_FLAGS: $(inherited) $(NTFS_REPRO_SWIFT_FLAGS)
 targets:
   NTFSCore:
     type: library.static
@@ -22,7 +24,7 @@ targets:
     settings:
       base:
         HEADER_SEARCH_PATHS: $(SRCROOT)/../../include
-        OTHER_CFLAGS: -ffreestanding -fno-builtin -Wdeclaration-after-statement
+        OTHER_CFLAGS: $(inherited) -ffreestanding -fno-builtin -Wdeclaration-after-statement
         SKIP_INSTALL: YES
   NTFSExtension:
     type: extensionkit-extension
@@ -70,7 +72,7 @@ targets:
         ENABLE_APP_SANDBOX: YES
         SWIFT_OBJC_BRIDGING_HEADER: BridgingHeader.h
         HEADER_SEARCH_PATHS: $(SRCROOT)/../../include
-        OTHER_CFLAGS: -Wdeclaration-after-statement -Wno-deprecated-declarations
+        OTHER_CFLAGS: $(inherited) -Wdeclaration-after-statement -Wno-deprecated-declarations
         SKIP_INSTALL: YES
       configs:
         Release:
@@ -100,7 +102,7 @@ targets:
         ENABLE_APP_SANDBOX: YES
         ENABLE_HARDENED_RUNTIME: YES
         SWIFT_OBJC_BRIDGING_HEADER: NTFSAppSupport.h
-        OTHER_CFLAGS: -Wdeclaration-after-statement
+        OTHER_CFLAGS: $(inherited) -Wdeclaration-after-statement
         INFOPLIST_KEY_CFBundleDisplayName: Machlin NTFS
       configs:
         Release:

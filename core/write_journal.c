@@ -220,8 +220,8 @@ ntfs_write_journal_reserve(const struct ntfs_logfile_restart *restart, uint16_t 
 
 static bool
 write_journal_empty_checkpoint_matches(const struct ntfs_logfile_restart *restart,
-    const struct ntfs_logfile_client_restart *checkpoint, uint64_t anchor,
-    const uint8_t *body, size_t bytes)
+    const struct ntfs_logfile_client_restart *checkpoint, uint64_t anchor, const uint8_t *body,
+    size_t bytes)
 {
 	const struct ntfs_disk_log_quiet_extension *extension;
 	uint64_t historical, offset_mask;

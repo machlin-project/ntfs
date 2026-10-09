@@ -56,33 +56,21 @@ struct component {
  * Original: empty DACL, group, opaque SACL with free space, owner, unused tail.
  * Donor: callback + unknown ACE, four free ACL bytes; its generic mask, flags,
  * application data and unknown body are intentionally copied exactly. */
-static const uint8_t original_golden[] = {
-    1, 0x7c, 0xff, 0xfa, 0x38, 0, 0, 0, 0x1c, 0, 0, 0, 0x28, 0, 0, 0, 0x14, 0, 0, 0,
-    2, 0, 8, 0, 0, 0, 0, 0,
-    1, 1, 0, 0, 0, 0, 0, 5, 0x20, 0, 0, 0,
-    2, 0, 0x10, 0, 1, 0, 0, 0, 0xfe, 0x81, 4, 0, 0xde, 0xad, 0xbe, 0xef,
-    1, 1, 0, 0, 0, 0, 0, 5, 0x12, 0, 0, 0,
-    0xa1, 0xb2, 0xc3, 0xd4
-};
+static const uint8_t original_golden[] = {1, 0x7c, 0xff, 0xfa, 0x38, 0, 0, 0, 0x1c, 0, 0, 0, 0x28,
+    0, 0, 0, 0x14, 0, 0, 0, 2, 0, 8, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 0x20, 0, 0, 0, 2, 0,
+    0x10, 0, 1, 0, 0, 0, 0xfe, 0x81, 4, 0, 0xde, 0xad, 0xbe, 0xef, 1, 1, 0, 0, 0, 0, 0, 5, 0x12, 0,
+    0, 0, 0xa1, 0xb2, 0xc3, 0xd4};
 
-static const uint8_t donor_golden[] = {
-    1, 0xa6, 4, 0x85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14, 0, 0, 0,
-    4, 0, 0x2c, 0, 2, 0, 0, 0,
-    9, 0x1b, 0x18, 0, 1, 0, 0, 0x80, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-    0x61, 0x72, 0x74, 0x78,
-    0xfd, 0xa5, 8, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0
-};
+static const uint8_t donor_golden[] = {1, 0xa6, 4, 0x85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14,
+    0, 0, 0, 4, 0, 0x2c, 0, 2, 0, 0, 0, 9, 0x1b, 0x18, 0, 1, 0, 0, 0x80, 1, 1, 0, 0, 0, 0, 0, 1, 0,
+    0, 0, 0, 0x61, 0x72, 0x74, 0x78, 0xfd, 0xa5, 8, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde,
+    0xf0};
 
-static const uint8_t edited_golden[] = {
-    1, 0x7c, 0xf7, 0xef, 0x14, 0, 0, 0, 0x20, 0, 0, 0, 0x2c, 0, 0, 0, 0x3c, 0, 0, 0,
-    1, 1, 0, 0, 0, 0, 0, 5, 0x12, 0, 0, 0,
-    1, 1, 0, 0, 0, 0, 0, 5, 0x20, 0, 0, 0,
-    2, 0, 0x10, 0, 1, 0, 0, 0, 0xfe, 0x81, 4, 0, 0xde, 0xad, 0xbe, 0xef,
-    4, 0, 0x2c, 0, 2, 0, 0, 0,
-    9, 0x1b, 0x18, 0, 1, 0, 0, 0x80, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
-    0x61, 0x72, 0x74, 0x78,
-    0xfd, 0xa5, 8, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0
-};
+static const uint8_t edited_golden[] = {1, 0x7c, 0xf7, 0xef, 0x14, 0, 0, 0, 0x20, 0, 0, 0, 0x2c, 0,
+    0, 0, 0x3c, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 0x12, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 0x20, 0, 0,
+    0, 2, 0, 0x10, 0, 1, 0, 0, 0, 0xfe, 0x81, 4, 0, 0xde, 0xad, 0xbe, 0xef, 4, 0, 0x2c, 0, 2, 0, 0,
+    0, 9, 0x1b, 0x18, 0, 1, 0, 0, 0x80, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0x61, 0x72, 0x74, 0x78,
+    0xfd, 0xa5, 8, 0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0};
 
 static uint32_t
 load(const void *buffer, size_t bytes)
@@ -131,8 +119,8 @@ read_component(const void *buffer, size_t size, const uint8_t *field, bool acl)
 	} else {
 		assert(size - result.offset >= offsetof(struct wire_sid, subauthorities));
 		sid = (const void *)result.bytes;
-		result.length = offsetof(struct wire_sid, subauthorities) +
-		    sid->count * sizeof(uint32_t);
+		result.length =
+		    offsetof(struct wire_sid, subauthorities) + sid->count * sizeof(uint32_t);
 	}
 	assert(result.length <= size - result.offset);
 	return result;
@@ -167,10 +155,14 @@ component_oracle(const struct ntfs_security_edit_input *input, const void *outpu
 	group = read_component(output, size, edited->group, false);
 	sacl = read_component(output, size, edited->sacl, true);
 	dacl = read_component(output, size, edited->dacl, true);
-	same_component(read_component(input->original, input->original_bytes, original->owner, false), owner);
-	same_component(read_component(input->original, input->original_bytes, original->group, false), group);
-	same_component(read_component(input->original, input->original_bytes, original->sacl, true), sacl);
-	same_component(read_component(input->dacl_source, input->dacl_source_bytes, donor->dacl, true), dacl);
+	same_component(
+	    read_component(input->original, input->original_bytes, original->owner, false), owner);
+	same_component(
+	    read_component(input->original, input->original_bytes, original->group, false), group);
+	same_component(
+	    read_component(input->original, input->original_bytes, original->sacl, true), sacl);
+	same_component(
+	    read_component(input->dacl_source, input->dacl_source_bytes, donor->dacl, true), dacl);
 	/* Components must be independent output storage even if inputs alias. */
 	if (owner.length != 0 && group.length != 0) {
 		assert(owner.offset + owner.length <= group.offset);
@@ -204,7 +196,8 @@ check_success(const struct ntfs_security_edit_input *input)
 	uint8_t original[TEST_BUFFER_BYTES], donor[TEST_BUFFER_BYTES];
 	size_t size = TEST_SIZE_SENTINEL, written, index;
 
-	assert(input->original_bytes <= sizeof(original) && input->dacl_source_bytes <= sizeof(donor));
+	assert(
+	    input->original_bytes <= sizeof(original) && input->dacl_source_bytes <= sizeof(donor));
 	memcpy(original, input->original, input->original_bytes);
 	memcpy(donor, input->dacl_source, input->dacl_source_bytes);
 	assert(ntfs_security_edit_dacl_size(input, &size) == NTFS_OK);
@@ -230,8 +223,8 @@ check_success(const struct ntfs_security_edit_input *input)
 static void
 golden_tests(void)
 {
-	struct ntfs_security_edit_input input = {original_golden, donor_golden,
-	    sizeof(original_golden), sizeof(donor_golden)};
+	struct ntfs_security_edit_input input = {
+	    original_golden, donor_golden, sizeof(original_golden), sizeof(donor_golden)};
 	uint8_t output[TEST_BUFFER_BYTES];
 	size_t size = 0;
 
@@ -286,8 +279,7 @@ make_acl(void *buffer, size_t bytes, uint16_t entries)
 }
 
 static size_t
-make_descriptor(void *buffer, enum ntfs_acl_state dacl, enum ntfs_acl_state sacl,
-    uint16_t control)
+make_descriptor(void *buffer, enum ntfs_acl_state dacl, enum ntfs_acl_state sacl, uint16_t control)
 {
 	struct wire_descriptor *header = buffer;
 	size_t size = sizeof(*header);
@@ -295,8 +287,8 @@ make_descriptor(void *buffer, enum ntfs_acl_state dacl, enum ntfs_acl_state sacl
 	memset(buffer, 0, TEST_BUFFER_BYTES);
 	header->revision = TEST_DESCRIPTOR_REVISION;
 	header->manager = TEST_FILL;
-	control = (uint16_t)((control | TEST_SELF_RELATIVE) &
-	    ~(TEST_DACL_PRESENT | TEST_SACL_PRESENT));
+	control =
+	    (uint16_t)((control | TEST_SELF_RELATIVE) & ~(TEST_DACL_PRESENT | TEST_SACL_PRESENT));
 	if (dacl != NTFS_ACL_ABSENT) {
 		control |= TEST_DACL_PRESENT;
 	}
@@ -326,14 +318,15 @@ state_control_tests(void)
 
 	for (old_state = NTFS_ACL_ABSENT; old_state <= NTFS_ACL_PRESENT; old_state++) {
 		for (new_state = NTFS_ACL_ABSENT; new_state <= NTFS_ACL_PRESENT; new_state++) {
-			for (sacl_state = NTFS_ACL_ABSENT; sacl_state <= NTFS_ACL_PRESENT; sacl_state++) {
+			for (sacl_state = NTFS_ACL_ABSENT; sacl_state <= NTFS_ACL_PRESENT;
+			    sacl_state++) {
 				for (bit = 0; bit < sizeof(uint16_t) * TEST_BITS_PER_BYTE; bit++) {
 					input.original_bytes = make_descriptor(original,
-					    (enum ntfs_acl_state)old_state, (enum ntfs_acl_state)sacl_state,
-					    (uint16_t)(1u << bit));
-					input.dacl_source_bytes = make_descriptor(donor,
-					    (enum ntfs_acl_state)new_state, NTFS_ACL_NULL,
-					    (uint16_t)~(1u << bit));
+					    (enum ntfs_acl_state)old_state,
+					    (enum ntfs_acl_state)sacl_state, (uint16_t)(1u << bit));
+					input.dacl_source_bytes =
+					    make_descriptor(donor, (enum ntfs_acl_state)new_state,
+						NTFS_ACL_NULL, (uint16_t)~(1u << bit));
 					check_success(&input);
 				}
 			}
@@ -344,8 +337,8 @@ state_control_tests(void)
 static void
 truncation_tests(void)
 {
-	struct ntfs_security_edit_input input = {original_golden, donor_golden,
-	    sizeof(original_golden), sizeof(donor_golden)};
+	struct ntfs_security_edit_input input = {
+	    original_golden, donor_golden, sizeof(original_golden), sizeof(donor_golden)};
 	size_t size;
 
 	for (size = 0; size < sizeof(donor_golden); size++) {
@@ -371,8 +364,8 @@ malformed_tests(void)
 	struct wire_descriptor *header = (void *)donor;
 	struct wire_acl *acl = (void *)(donor + sizeof(*header));
 	struct wire_ace *ace = (void *)((uint8_t *)acl + sizeof(*acl));
-	struct ntfs_security_edit_input input = {original, donor,
-	    sizeof(original_golden), sizeof(donor_golden)};
+	struct ntfs_security_edit_input input = {
+	    original, donor, sizeof(original_golden), sizeof(donor_golden)};
 
 	memcpy(original, original_golden, sizeof(original_golden));
 	memcpy(donor, donor_golden, sizeof(donor_golden));
@@ -406,8 +399,8 @@ malformed_tests(void)
 	memcpy(donor, donor_golden, sizeof(donor_golden));
 	/* Known object ACEs with unknown object flags are not opaque escapes. */
 	ace->type = NTFS_ACE_ALLOW_OBJECT;
-	store((uint8_t *)ace + sizeof(*ace) + sizeof(uint32_t),
-	    TEST_UNSUPPORTED_OBJECT_FLAG, sizeof(uint32_t));
+	store((uint8_t *)ace + sizeof(*ace) + sizeof(uint32_t), TEST_UNSUPPORTED_OBJECT_FLAG,
+	    sizeof(uint32_t));
 	check_failure(&input, NTFS_UNSUPPORTED);
 	memcpy(donor, donor_golden, sizeof(donor_golden));
 	/* Validate even donor fields that are not selected for copying. */
@@ -478,9 +471,11 @@ argument_alias_tests(void)
 		max_align_t alignment;
 		uint8_t bytes[TEST_BUFFER_BYTES * 2];
 	} storage;
+
 	uint8_t before[sizeof(storage.bytes)], output[TEST_BUFFER_BYTES];
 	struct ntfs_security_edit_input input = {storage.bytes, donor_golden,
-	    sizeof(original_golden), sizeof(donor_golden)}, saved;
+					    sizeof(original_golden), sizeof(donor_golden)},
+					saved;
 	size_t written = TEST_SIZE_SENTINEL, index;
 
 	memset(storage.bytes, TEST_FILL, sizeof(storage.bytes));
@@ -488,36 +483,42 @@ argument_alias_tests(void)
 	memcpy(before, storage.bytes, sizeof(before));
 	for (index = 0; index < sizeof(original_golden); index++) {
 		assert(ntfs_security_edit_dacl_encode(&input, storage.bytes + index,
-		    TEST_BUFFER_BYTES, &written) == NTFS_INVALID);
+			   TEST_BUFFER_BYTES, &written) == NTFS_INVALID);
 		assert(written == TEST_SIZE_SENTINEL);
 		assert(memcmp(storage.bytes, before, sizeof(before)) == 0);
 	}
-	assert(ntfs_security_edit_dacl_size(&input, (size_t *)(void *)storage.bytes) == NTFS_INVALID);
+	assert(
+	    ntfs_security_edit_dacl_size(&input, (size_t *)(void *)storage.bytes) == NTFS_INVALID);
 	assert(ntfs_security_edit_dacl_encode(&input, output, sizeof(output),
-	    (size_t *)(void *)storage.bytes) == NTFS_INVALID);
+		   (size_t *)(void *)storage.bytes) == NTFS_INVALID);
 	assert(memcmp(storage.bytes, before, sizeof(before)) == 0);
-	assert(ntfs_security_edit_dacl_encode(&input, (void *)donor_golden,
-	    sizeof(donor_golden), &written) == NTFS_INVALID);
+	assert(ntfs_security_edit_dacl_encode(
+		   &input, (void *)donor_golden, sizeof(donor_golden), &written) == NTFS_INVALID);
 	/* Even unreferenced trailing source bytes belong to the immutable range. */
 	input.original_bytes = TEST_BUFFER_BYTES;
 	assert(ntfs_security_edit_dacl_encode(&input, storage.bytes + sizeof(original_golden),
-	    TEST_BUFFER_BYTES, &written) == NTFS_INVALID);
+		   TEST_BUFFER_BYTES, &written) == NTFS_INVALID);
 	assert(memcmp(storage.bytes, before, sizeof(before)) == 0);
 	input.original_bytes = sizeof(original_golden);
 	/* The written slot aliases output capacity beyond the produced extent. */
 	assert(ntfs_security_edit_dacl_encode(&input, storage.bytes + TEST_BUFFER_BYTES,
-	    TEST_BUFFER_BYTES, (size_t *)(void *)(storage.bytes + sizeof(storage.bytes) - sizeof(size_t))) == NTFS_INVALID);
+		   TEST_BUFFER_BYTES,
+		   (size_t *)(void *)(storage.bytes + sizeof(storage.bytes) - sizeof(size_t))) ==
+	    NTFS_INVALID);
 	assert(memcmp(storage.bytes, before, sizeof(before)) == 0);
 	saved = input;
 	assert(ntfs_security_edit_dacl_size(&input, &input.original_bytes) == NTFS_INVALID);
-	assert(ntfs_security_edit_dacl_encode(&input, &input, sizeof(input), &written) == NTFS_INVALID);
+	assert(ntfs_security_edit_dacl_encode(&input, &input, sizeof(input), &written) ==
+	    NTFS_INVALID);
 	assert(memcmp(&input, &saved, sizeof(input)) == 0);
-	assert(ntfs_security_edit_dacl_encode(&input, output, sizeof(output), &input.original_bytes) == NTFS_INVALID);
+	assert(ntfs_security_edit_dacl_encode(
+		   &input, output, sizeof(output), &input.original_bytes) == NTFS_INVALID);
 	assert(ntfs_security_edit_dacl_size(&input, NULL) == NTFS_INVALID);
 	assert(ntfs_security_edit_dacl_encode(&input, NULL, 0, &written) == NTFS_INVALID);
-	assert(ntfs_security_edit_dacl_encode(&input, output, sizeof(output), NULL) == NTFS_INVALID);
+	assert(
+	    ntfs_security_edit_dacl_encode(&input, output, sizeof(output), NULL) == NTFS_INVALID);
 	assert(ntfs_security_edit_dacl_encode(&input, (void *)(uintptr_t)(UINTPTR_MAX - 1),
-	    sizeof(struct wire_descriptor), &written) == NTFS_INVALID);
+		   sizeof(struct wire_descriptor), &written) == NTFS_INVALID);
 	check_failure(NULL, NTFS_INVALID);
 	input.original = NULL;
 	check_failure(&input, NTFS_INVALID);
@@ -536,9 +537,10 @@ static void
 maximum_tests(void)
 {
 	const size_t maximum_acl = UINT16_MAX;
-	const uint16_t maximum_entries = (uint16_t)((UINT16_MAX - sizeof(struct wire_acl)) /
-	    sizeof(struct wire_ace));
-	uint8_t *original = malloc(NTFS_SECURITY_MAX_BYTES), *output = malloc(NTFS_SECURITY_MAX_BYTES);
+	const uint16_t maximum_entries =
+	    (uint16_t)((UINT16_MAX - sizeof(struct wire_acl)) / sizeof(struct wire_ace));
+	uint8_t *original = malloc(NTFS_SECURITY_MAX_BYTES),
+		*output = malloc(NTFS_SECURITY_MAX_BYTES);
 	struct wire_descriptor *header = (void *)original;
 	struct wire_acl *acl;
 	struct ntfs_security_edit_input input = {original, original, 0, 0};
@@ -574,7 +576,9 @@ maximum_tests(void)
 	assert(ntfs_security_edit_dacl_encode(&input, output, size, &written) == NTFS_OK);
 	assert(written == size && output[size] == TEST_FILL);
 	component_oracle(&input, output, size);
-	assert(output[load(((struct wire_descriptor *)(void *)output)->dacl, sizeof(uint32_t)) - 1] == 0);
+	assert(
+	    output[load(((struct wire_descriptor *)(void *)output)->dacl, sizeof(uint32_t)) - 1] ==
+	    0);
 	assert(ntfs_security_edit_dacl_encode(&input, output, size + 1, &written) == NTFS_OK);
 	assert(output[size] == TEST_FILL);
 	store(acl->count, maximum_entries + 1u, sizeof(acl->count));
@@ -630,6 +634,7 @@ main(void)
 	argument_alias_tests();
 	maximum_tests();
 	mutation_tests();
-	puts("security editing: literal wire, component preservation, states, bounds and aliases passed");
+	puts("security editing: literal wire, component preservation, states, bounds and aliases "
+	     "passed");
 	return 0;
 }

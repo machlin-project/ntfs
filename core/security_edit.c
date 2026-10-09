@@ -6,8 +6,7 @@
 enum {
 	SECURITY_EDIT_ALIGNMENT = sizeof(uint32_t),
 	SECURITY_EDIT_DACL_CONTROL = NTFS_SD_DACL_PRESENT | NTFS_SD_DACL_DEFAULTED |
-	    NTFS_SD_DACL_AUTO_INHERIT_REQUEST | NTFS_SD_DACL_AUTO_INHERITED |
-	    NTFS_SD_DACL_PROTECTED
+	    NTFS_SD_DACL_AUTO_INHERIT_REQUEST | NTFS_SD_DACL_AUTO_INHERITED | NTFS_SD_DACL_PROTECTED
 };
 
 struct security_edit_component {
@@ -22,9 +21,8 @@ struct security_edit_layout {
 };
 
 static enum ntfs_result
-security_edit_append(struct security_edit_layout *layout,
-    struct security_edit_component *component, const void *input,
-    const struct ntfs_security_span *span)
+security_edit_append(struct security_edit_layout *layout, struct security_edit_component *component,
+    const void *input, const struct ntfs_security_span *span)
 {
 	size_t padding;
 
@@ -66,7 +64,8 @@ security_edit_prepare(
 	}
 	result = ntfs_security_decode(input->original, input->original_bytes, &original);
 	if (result == NTFS_OK) {
-		result = ntfs_security_decode(input->dacl_source, input->dacl_source_bytes, &source);
+		result =
+		    ntfs_security_decode(input->dacl_source, input->dacl_source_bytes, &source);
 	}
 	if (result != NTFS_OK) {
 		return result;
@@ -75,27 +74,31 @@ security_edit_prepare(
 	layout->bytes = sizeof(struct ntfs_disk_security_descriptor);
 	layout->control = (uint16_t)((original.control & ~SECURITY_EDIT_DACL_CONTROL) |
 	    (source.control & SECURITY_EDIT_DACL_CONTROL));
-	result = security_edit_append(layout, &layout->owner, input->original, &original.owner_span);
+	result =
+	    security_edit_append(layout, &layout->owner, input->original, &original.owner_span);
 	if (result == NTFS_OK) {
 		result = security_edit_append(
 		    layout, &layout->group, input->original, &original.group_span);
 	}
 	if (result == NTFS_OK) {
-		result = security_edit_append(layout, &layout->sacl, input->original, &original.sacl.span);
+		result = security_edit_append(
+		    layout, &layout->sacl, input->original, &original.sacl.span);
 	}
 	if (result == NTFS_OK) {
-		result = security_edit_append(layout, &layout->dacl, input->dacl_source, &source.dacl.span);
+		result = security_edit_append(
+		    layout, &layout->dacl, input->dacl_source, &source.dacl.span);
 	}
 	return result;
 }
 
 static bool
-security_edit_separate(const struct ntfs_security_edit_input *input, const void *output,
-    size_t bytes)
+security_edit_separate(
+    const struct ntfs_security_edit_input *input, const void *output, size_t bytes)
 {
 	return ntfs_pointer_ranges_separate(input, sizeof(*input), output, bytes) &&
 	    ntfs_pointer_ranges_separate(input->original, input->original_bytes, output, bytes) &&
-	    ntfs_pointer_ranges_separate(input->dacl_source, input->dacl_source_bytes, output, bytes);
+	    ntfs_pointer_ranges_separate(
+		input->dacl_source, input->dacl_source_bytes, output, bytes);
 }
 
 static void
@@ -127,8 +130,8 @@ ntfs_security_edit_dacl_size(const struct ntfs_security_edit_input *input, size_
 }
 
 enum ntfs_result
-ntfs_security_edit_dacl_encode(const struct ntfs_security_edit_input *input, void *output,
-    size_t capacity, size_t *written)
+ntfs_security_edit_dacl_encode(
+    const struct ntfs_security_edit_input *input, void *output, size_t capacity, size_t *written)
 {
 	struct security_edit_layout layout;
 	struct ntfs_disk_security_descriptor *header;

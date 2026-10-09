@@ -378,7 +378,8 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	if (owner && token->restricted) {
 		/* Native ownership requires the owner in both token contexts.
 		 * OWNER RIGHTS uses this same qualification in both DACL passes. */
-		result = access_token_match(&work, &info.owner, false, true, true, &restricting_owner);
+		result =
+		    access_token_match(&work, &info.owner, false, true, true, &restricting_owner);
 		if (result != NTFS_OK) {
 			return result;
 		}
@@ -386,7 +387,8 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	}
 	implied = owner && !owner_rights ? OWNER_IMPLIED_ACCESS : 0;
 	if ((decision.requested & NTFS_ACCESS_MAXIMUM_ALLOWED) != 0) {
-		result = access_maximum_dacl(buffer, &info.dacl, &work, implied, owner, false, &granted);
+		result =
+		    access_maximum_dacl(buffer, &info.dacl, &work, implied, owner, false, &granted);
 		if (result == NTFS_OK && token->restricted) {
 			result = access_maximum_dacl(
 			    buffer, &info.dacl, &work, implied, owner, true, &restricted_granted);

@@ -137,6 +137,35 @@ See Apple's [build-setting descriptions](https://developer.apple.com/documentati
 for `DEBUG_INFORMATION_FORMAT`, `DEPLOYMENT_POSTPROCESSING`,
 `STRIP_INSTALLED_PRODUCT` and the `debugging` strip style.
 
+The subsequent hosted build validates both app/dSYM UUID pairs and both
+independent transports, but the complete app comparison still fails. The two
+executables now have equal sizes and identical code, data and symbol bytes.
+Their only differences are each architecture's `LC_UUID` and the arm64 ad-hoc
+CodeDirectory hash of the first page containing that UUID. Every retained
+CodeDirectory page hash matches its actual bytes. Stripping the debug map after
+linking therefore did not make the linker's earlier UUID computation independent
+of the relocated build inputs.
+
+Release builds now map the entire owned build root to the logical
+`/machlin-ntfs-build` prefix while compiling C, Objective-C and Swift. Swift's
+serialized debugging options receive the same mapping. The actual selected
+Swift version and supported prefix-map options are queried before generation;
+missing support fails explicitly. UUID generation, separate debug symbols and
+the complete app comparison remain intact. These changes require a fresh hosted
+comparison before reproducibility is accepted. Debug builds retain physical
+paths; Release symbolication can map the logical prefix to the retained build
+directory using the debugger's source mapping.
+
+`python3 scripts/check_macos_uuid.py --output artifacts/macos-uuid-probe` is a
+small selected-Xcode diagnostic. It compares independent C/Swift builds with
+original paths, compiler mappings, and compiler plus linker mappings for both
+architectures. It retains unstripped/stripped binaries, dSYMs and bounded command
+logs without executing those binaries. Its report is toolchain evidence, not
+FSKit or whole-app reproducibility acceptance. Apple's published
+[linker options](https://github.com/apple-oss-distributions/ld64/blob/main/doc/man/man1/ld-classic.1)
+and Swift's [driver option declarations](https://github.com/swiftlang/swift-driver/blob/main/Sources/SwiftOptions/Options.swift)
+describe the debug-path interfaces used here.
+
 
 No packaging result establishes actual SDK compilation, installed/native FSKit,
 Windows image acceptance, authorization mapping, notarization, upgrade/uninstall,

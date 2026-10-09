@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import sys
 import tarfile
 import tempfile
@@ -48,6 +49,21 @@ class BuildArgumentTests(unittest.TestCase):
         self.assertIn('DEVELOPMENT_TEAM=FIXTURETEAM', command)
         self.assertIn('-allowProvisioningUpdates', command)
         self.assertNotIn('CODE_SIGNING_ALLOWED=NO', command)
+
+    def test_release_maps_relocated_compiler_paths_without_removing_debugging(self):
+        for root in ('/first build', '/different/location second'):
+            args = build.arguments(['--configuration', 'Release', '--derived-data', root])
+            command = build.xcode_command(args, Path('/project'), '/selected/clang')
+            settings = dict(value.split('=', 1) for value in command if '=' in value)
+            mapping = root + '=' + build.REPRODUCIBLE_BUILD_ROOT
+            self.assertEqual(shlex.split(settings['NTFS_REPRO_CFLAGS']), ['-ffile-prefix-map=' + mapping])
+            self.assertEqual(shlex.split(settings['NTFS_REPRO_SWIFT_FLAGS']),
+                             ['-file-prefix-map', mapping, '-debug-prefix-map', mapping,
+                              '-Xfrontend', '-prefix-serialized-debugging-options'])
+            self.assertNotIn('GCC_GENERATE_DEBUGGING_SYMBOLS', settings)
+        args = build.arguments(['--configuration', 'Debug'])
+        self.assertFalse(any(value.startswith('NTFS_REPRO_') for value in
+                             build.xcode_command(args, Path('/project'), '/selected/clang')))
 
     def test_invalid_combinations_and_bounds_refuse(self):
         for arguments in (['--provision'], ['--app-profile', 'app'], ['--build-number', '0'],
@@ -123,8 +139,12 @@ class BuildExecutionContracts(unittest.TestCase):
             return buffer.getvalue()
         if name == 'sdk-path':
             return str(self.sdk)
-        if name == 'clang-path':
+        if name in ('clang-path', 'swift-path'):
             return str(self.clang)
+        if name == 'swift-options':
+            return ('  -file-prefix-map <prefix=replacement>\n'
+                    '  -debug-prefix-map <prefix=replacement>\n'
+                    '  -prefix-serialized-debugging-options\n')
         if name == 'xcode-build':
             if self.fail_build:
                 raise RuntimeError('injected Xcode failure')
@@ -193,6 +213,16 @@ class BuildExecutionContracts(unittest.TestCase):
         self.assertEqual(result['status'], 'failed')
         self.assertFalse(result['native_installation_qualified'])
         self.assertTrue((self.output / 'SourceSnapshot').is_dir())
+
+    def test_missing_swift_prefix_support_refuses_before_project_generation(self):
+        original = self.fake_command
+        def command(*args, **kwargs):
+            return '  -file-prefix-map <prefix=replacement>\n' if args[2] == 'swift-options' else original(*args, **kwargs)
+        with patch.object(self, 'fake_command', side_effect=command), \
+                self.assertRaisesRegex(ValueError, 'required path-mapping options'):
+            self.execute()
+        self.assertFalse(any(name in ('xcodegen', 'xcode-build') for _, name, _, _ in self.calls))
+        self.assertEqual(json.loads((self.output / 'build-report.json').read_text())['status'], 'failed')
 
     def test_source_changed_during_simulated_build_refuses_success(self):
         values = iter([dict(SOURCE), dict(SOURCE, revision='f' * 40)])

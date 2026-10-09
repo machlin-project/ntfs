@@ -68,7 +68,7 @@ class Batch:
         self.output, self.build, self.qemu = output, build, qemu
         self.env = sanitizer_environment()
         self.report = dict(status='running', vmCommands=0, automaticRetry=False,
-                           commands=[], operations=[], transitions=[], snapshots=[], cuts=[])
+                           commands=[], operations=[], checkpoints=[], transitions=[], snapshots=[], cuts=[])
         self.image, self.oracle = output / 'candidate.ntfs', output / 'publication-oracle.ntfs'
         self.files, self.directories = {}, {}
         self.native_root = native_root
@@ -169,8 +169,10 @@ class Batch:
         for first, value in dict(changes).items():
             assert at(self.image, first, len(value)) == value
 
-    def checkpoint(self, ordinal):
-        directory = self.output / f'checkpoint-{ordinal:04d}'
+    def checkpoint(self, ordinal, reason='periodic'):
+        assert reason in ('periodic', 'admission-pressure')
+        prefix = 'checkpoint' if reason == 'periodic' else 'pressure-checkpoint'
+        directory = self.output / f'{prefix}-{ordinal:04d}'
         directory.mkdir()
         trace = directory / 'trace'
         trace.mkdir()
@@ -178,6 +180,21 @@ class Batch:
             [self.tool('ntfs-native-checkpoint'), '--image', self.image, trace])
         assert result['result'] == 0 and result['completed'] and not result['poisoned']
         self.events(trace)
+        self.report['checkpoints'].append(dict(ordinal=ordinal, reason=reason, directory=str(directory)))
+        self.save()
+
+    def checkpoint_before_operation(self, ordinal, directory):
+        if 'native-growth' not in self.directories:
+            return
+        reference = self.directories['native-growth']
+        state = self.state(directory, 'admission-state', self.image, reference)
+        assert state['settled'] and state['mftReservedAllocationMask'] == 0
+        assert type(state['checkpointNeeded']) is bool
+        if state['checkpointNeeded']:
+            self.checkpoint(ordinal, reason='admission-pressure')
+            state = self.state(directory, 'admission-after-checkpoint', self.image, reference)
+            assert state['settled'] and state['mftReservedAllocationMask'] == 0
+            assert state['checkpointNeeded'] is False
 
     def snapshot(self, phase, directory):
         self.command(directory, 'whole-publication-oracle',
@@ -199,6 +216,9 @@ class Batch:
         directory.mkdir()
         trace = directory / 'trace'
         trace.mkdir()
+        # Observe the existing core admission signal before freezing a crash
+        # predecessor. This is scheduled maintenance, never a writer retry.
+        self.checkpoint_before_operation(ordinal, directory)
         previous = directory / 'before.ntfs'
         self.clone(directory, 'clone-before', self.image, previous)
         previous.chmod(0o444)

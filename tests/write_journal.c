@@ -294,6 +294,7 @@ quiet_profile_vectors(struct journal_case *test)
 	    {UINT64_C(0x700000), UINT64_C(0x784408), UINT64_C(0x784415)},
 	    /* The old literal is still valid when this profile's anchor permits it. */
 	    {UINT64_C(0x1000000), UINT64_C(0x1084408), UINT64_C(0x1084415)}};
+
 	uint8_t bootstrap[NTFS_WRITE_BOOTSTRAP_BYTES], checkpoint[NTFS_WRITE_CHECKPOINT_BYTES];
 	struct ntfs_disk_log_record *first = (void *)bootstrap, *last = (void *)checkpoint;
 	struct ntfs_disk_log_client_restart *body = (void *)(checkpoint + sizeof(*last));
@@ -321,13 +322,16 @@ quiet_profile_vectors(struct journal_case *test)
 		ntfs_put_u64(extension->historical_state, native[index].historical);
 		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_OK);
 		ntfs_put_u64(extension->historical_state, 0);
-		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) ==
+		    NTFS_UNSUPPORTED);
 		ntfs_put_u64(extension->historical_state, native[index].historical | 1);
-		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) ==
+		    NTFS_UNSUPPORTED);
 		ntfs_put_u64(extension->historical_state,
 		    ((native[index].anchor >> TEST_NATIVE_LSN_OFFSET_BITS) + 1)
 			<< TEST_NATIVE_LSN_OFFSET_BITS);
-		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) == NTFS_UNSUPPORTED);
+		assert(ntfs_write_quiet_bind(&restart, &client, bootstrap, checkpoint) ==
+		    NTFS_UNSUPPORTED);
 	}
 }
 
@@ -348,12 +352,15 @@ quiet_profile_preservation(struct journal_case *test)
 	for (index = 0; index < sizeof(values) / sizeof(values[0]); index++) {
 		ntfs_put_u64(source->historical_state, values[index]);
 		memcpy(before, test->checkpoint, sizeof(before));
-		assert(ntfs_write_journal_encode(&test->input, &test->work, &test->plan) == NTFS_OK);
+		assert(
+		    ntfs_write_journal_encode(&test->input, &test->work, &test->plan) == NTFS_OK);
 		assert(memcmp(before, test->checkpoint, sizeof(before)) == 0);
 		memcpy(test->work.restored, test->plan.checkpoint, sizeof(test->plan.checkpoint));
-		assert(ntfs_fixup(test->work.restored, sizeof(test->plan.checkpoint), "RCRD") == NTFS_OK);
+		assert(ntfs_fixup(test->work.restored, sizeof(test->plan.checkpoint), "RCRD") ==
+		    NTFS_OK);
 		encoded = (const void *)(test->work.restored +
-		    test->plan.reservation.checkpoint_record_offset + sizeof(struct ntfs_disk_log_record) +
+		    test->plan.reservation.checkpoint_record_offset +
+		    sizeof(struct ntfs_disk_log_record) +
 		    sizeof(struct ntfs_disk_log_client_restart));
 		assert(memcmp(source, encoded,
 			   offsetof(struct ntfs_disk_log_quiet_extension, anchor_lsn)) == 0);

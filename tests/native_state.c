@@ -99,10 +99,16 @@ main(int argc, char **argv)
 	       ",\"logFileBytes\":\"%" PRIu64 "\",\"completedLsn\":\"%" PRIu64
 	       "\",\"completedSequence\":\"%" PRIu64 "\",\"completedOffset\":\"%" PRIu64
 	       "\",\"oldestLsn\":\"%" PRIu64 "\",\"oldestSequence\":\"%" PRIu64
-	       "\",\"oldestOffset\":\"%" PRIu64 "\",\"settled\":true}\n",
+	       "\",\"oldestOffset\":\"%" PRIu64 "\",\"historyReadCalls\":\"%" PRIu64
+	       "\",\"historyReadBytes\":\"%" PRIu64 "\",\"historyAllocationCalls\":\"%" PRIu64
+	       "\",\"historyAllocationBytes\":\"%" PRIu64
+	       "\",\"checkpointNeeded\":%s,\"settled\":true}\n",
 	    reference, index_bytes, blocks, index_allocated, history.origin.file_bytes,
 	    history.history.completed_end_lsn, end.sequence, end.file_offset,
-	    history.client.oldest_lsn, floor.sequence, floor.file_offset);
+	    history.client.oldest_lsn, floor.sequence, floor.file_offset,
+	    history.resources.read_calls, history.resources.read_bytes,
+	    history.resources.allocation_calls, history.resources.allocation_bytes,
+	    ntfs_write_batch_history_checkpoint_needed(&history) ? "true" : "false");
 	ntfs_stream_close(index);
 	ntfs_node_close(directory);
 	ntfs_node_close(mft);

@@ -14,9 +14,9 @@ usn_version(uint16_t major, uint16_t minor, struct usn_layout *layout)
 		return NTFS_UNSUPPORTED;
 	}
 	layout->prefix = major == NTFS_USN_VERSION_2 ? sizeof(struct ntfs_disk_usn_v2)
-						 : sizeof(struct ntfs_disk_usn_v3);
-	layout->id_bytes = major == NTFS_USN_VERSION_2 ? NTFS_USN_V2_FILE_ID_BYTES
-						   : NTFS_USN_FILE_ID_BYTES;
+						     : sizeof(struct ntfs_disk_usn_v3);
+	layout->id_bytes =
+	    major == NTFS_USN_VERSION_2 ? NTFS_USN_V2_FILE_ID_BYTES : NTFS_USN_FILE_ID_BYTES;
 	return NTFS_OK;
 }
 
@@ -58,16 +58,16 @@ ntfs_usn_record_decode(const void *input, size_t available, struct ntfs_usn_view
 	name_bytes = ntfs_u16(tail->filename_length);
 	name_offset = ntfs_u16(tail->filename_offset);
 	if (name_offset < layout.prefix || name_offset > record_bytes ||
-	    name_offset % NTFS_UTF16_UNIT_BYTES != 0 ||
-	    name_bytes % NTFS_UTF16_UNIT_BYTES != 0 || name_bytes > record_bytes - name_offset ||
-	    ntfs_u64(tail->usn) > INT64_MAX) {
+	    name_offset % NTFS_UTF16_UNIT_BYTES != 0 || name_bytes % NTFS_UTF16_UNIT_BYTES != 0 ||
+	    name_bytes > record_bytes - name_offset || ntfs_u64(tail->usn) > INT64_MAX) {
 		return NTFS_CORRUPT;
 	}
 	ntfs_zero(&view, sizeof(view));
 	view.record.major_version = major;
 	view.record.minor_version = minor;
 	ntfs_copy(view.record.file_id, bytes + sizeof(*header), layout.id_bytes);
-	ntfs_copy(view.record.parent_id, bytes + sizeof(*header) + layout.id_bytes, layout.id_bytes);
+	ntfs_copy(
+	    view.record.parent_id, bytes + sizeof(*header) + layout.id_bytes, layout.id_bytes);
 	view.record.usn = ntfs_u64(tail->usn);
 	view.record.timestamp = ntfs_u64(tail->timestamp);
 	view.record.reason = ntfs_u32(tail->reason);

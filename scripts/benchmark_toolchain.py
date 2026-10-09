@@ -19,6 +19,7 @@ from environment import selected_toolchain
 ROOT = Path(__file__).resolve().parents[1]
 QUERY_TIMEOUT_SECONDS = 15
 COMMAND_TIMEOUT_SECONDS = 300
+CLEANUP_TIMEOUT_SECONDS = 5
 MAX_LOG_BYTES = 8 * 1024 * 1024
 LOG_CHUNK_BYTES = 65536
 MAX_REPETITIONS = 100
@@ -150,12 +151,29 @@ def command(argv, output, name, env, timeout=COMMAND_TIMEOUT_SECONDS, output_lim
     except BaseException as error:
         entry['status'] = 'failed'
         entry['error'] = f'{type(error).__name__}: {error}'
-        if process is not None:
+        if process is not None and process.returncode is None:
+            # A child not yet reaped still owns its PID. Kill its session group
+            # before poll/wait can release that identity. Darwin can refuse a
+            # group signal after the last live member exits; preserve the
+            # original failure and record cleanup diagnostics separately.
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            process.wait()
+            except OSError as cleanup_error:
+                entry.setdefault('cleanup_errors', []).append(
+                    f'group termination: {type(cleanup_error).__name__}: {cleanup_error}')
+                if process.poll() is None:
+                    try:
+                        process.kill()
+                    except OSError as child_error:
+                        entry['cleanup_errors'].append(
+                            f'child termination: {type(child_error).__name__}: {child_error}')
+            try:
+                process.wait(timeout=CLEANUP_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                entry.setdefault('cleanup_errors', []).append('Owned child did not exit before cleanup deadline')
+            entry['exitCode'] = process.returncode
         raise
     finally:
         if process is not None:

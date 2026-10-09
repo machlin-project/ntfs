@@ -18,16 +18,19 @@ struct ntfs_write_lifetime_limits {
 };
 
 enum ntfs_write_lifetime_kind { NTFS_WRITE_LIFETIME_OPEN, NTFS_WRITE_LIFETIME_MAPPING };
+
 enum ntfs_write_lifetime_state {
 	NTFS_WRITE_LIFETIME_ATTACHED,
 	NTFS_WRITE_LIFETIME_DETACHED,
 	NTFS_WRITE_LIFETIME_RETIRED
 };
+
 enum ntfs_write_lifetime_operation {
 	NTFS_WRITE_LIFETIME_UNLINK,
 	NTFS_WRITE_LIFETIME_REPLACE,
 	NTFS_WRITE_LIFETIME_RETIRE
 };
+
 enum ntfs_write_lifetime_outcome {
 	NTFS_WRITE_LIFETIME_ABORTED,
 	NTFS_WRITE_LIFETIME_COMMITTED,
@@ -76,8 +79,8 @@ enum ntfs_result ntfs_write_lifetime_create(const struct ntfs_environment *, uin
  * EXISTS; another generation is STALE. After committed retirement only the exact
  * next nonzero generation may bind; UINT16_MAX wrap is UNSUPPORTED. Track is not
  * allocation or durable reuse, and names must be nonzero. */
-enum ntfs_result ntfs_write_lifetime_track(struct ntfs_write_lifetime *, uint64_t reference,
-    uint32_t names);
+enum ntfs_result ntfs_write_lifetime_track(
+    struct ntfs_write_lifetime *, uint64_t reference, uint32_t names);
 
 /* Namespace acquisition requires an attached generation. retain derives a new
  * open/mapping lease from a valid held lease, including after detachment. Pending
@@ -93,8 +96,8 @@ enum ntfs_result ntfs_write_lifetime_access(
     const struct ntfs_write_lifetime *, struct ntfs_write_lifetime_token);
 enum ntfs_result ntfs_write_lifetime_release(
     struct ntfs_write_lifetime *, struct ntfs_write_lifetime_token);
-enum ntfs_result ntfs_write_lifetime_inspect(const struct ntfs_write_lifetime *,
-    uint64_t reference, struct ntfs_write_lifetime_view *out);
+enum ntfs_result ntfs_write_lifetime_inspect(
+    const struct ntfs_write_lifetime *, uint64_t reference, struct ntfs_write_lifetime_view *out);
 
 /* UNLINK uses victim and source == 0; REPLACE pins distinct attached source and
  * victim; RETIRE uses victim and source == 0. Unlink/replace removes one logical

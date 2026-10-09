@@ -127,8 +127,8 @@ _Static_assert(NTFS_XPRESS_MAX_CODE_BITS == XPRESS_PREFIX_BITS + 7,
 static inline bool
 xpress_before_bucket_end(const struct ntfs_xpress_workspace *tree, uint32_t code, unsigned bits)
 {
-	return code < ((tree->first[bits] + tree->count[bits]) <<
-			  (NTFS_XPRESS_MAX_CODE_BITS - bits));
+	return code <
+	    ((tree->first[bits] + tree->count[bits]) << (NTFS_XPRESS_MAX_CODE_BITS - bits));
 }
 
 static enum ntfs_result
@@ -158,13 +158,15 @@ xpress_take_symbol(
 		if (xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 4)) {
 			if (xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 3)) {
 				bits = xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 2)
-				    ? XPRESS_PREFIX_BITS + 2 : XPRESS_PREFIX_BITS + 3;
+				    ? XPRESS_PREFIX_BITS + 2
+				    : XPRESS_PREFIX_BITS + 3;
 			} else {
 				bits = XPRESS_PREFIX_BITS + 4;
 			}
 		} else if (xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 6)) {
 			bits = xpress_before_bucket_end(tree, code, XPRESS_PREFIX_BITS + 5)
-			    ? XPRESS_PREFIX_BITS + 5 : XPRESS_PREFIX_BITS + 6;
+			    ? XPRESS_PREFIX_BITS + 5
+			    : XPRESS_PREFIX_BITS + 6;
 		} else {
 			bits = NTFS_XPRESS_MAX_CODE_BITS;
 		}

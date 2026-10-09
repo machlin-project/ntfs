@@ -88,8 +88,9 @@ lifetime_find(const struct ntfs_write_lifetime *owner, uint64_t reference, size_
 
 	for (index = 0; index < owner->limits.objects; index++) {
 		object = lifetime_object_const(owner, index);
-		if (object->used && (object->reference & NTFS_REFERENCE_RECORD_MASK) ==
-		    (reference & NTFS_REFERENCE_RECORD_MASK)) {
+		if (object->used &&
+		    (object->reference & NTFS_REFERENCE_RECORD_MASK) ==
+			(reference & NTFS_REFERENCE_RECORD_MASK)) {
 			if (object->reference != reference) {
 				return NTFS_STALE;
 			}
@@ -107,8 +108,8 @@ lifetime_kind(enum ntfs_write_lifetime_kind kind)
 }
 
 static enum ntfs_result
-lifetime_token(const struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_token token,
-    size_t *slot)
+lifetime_token(
+    const struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_token token, size_t *slot)
 {
 	const struct ntfs_write_lifetime_token *held;
 	size_t index;
@@ -242,7 +243,9 @@ ntfs_write_lifetime_track(struct ntfs_write_lifetime *owner, uint64_t reference,
 	}
 	object = lifetime_object(owner, empty);
 	*object = (struct lifetime_object){.reference = reference,
-	    .names = names, .state = NTFS_WRITE_LIFETIME_ATTACHED, .used = true};
+	    .names = names,
+	    .state = NTFS_WRITE_LIFETIME_ATTACHED,
+	    .used = true};
 	return NTFS_OK;
 }
 
@@ -265,8 +268,8 @@ lifetime_issue(struct ntfs_write_lifetime *owner, size_t slot, enum ntfs_write_l
 		if (lease->serial != 0) {
 			continue;
 		}
-		*lease = (struct ntfs_write_lifetime_token){owner, owner->epoch, ++owner->issued,
-		    object->reference, kind};
+		*lease = (struct ntfs_write_lifetime_token){
+		    owner, owner->epoch, ++owner->issued, object->reference, kind};
 		if (kind == NTFS_WRITE_LIFETIME_OPEN) {
 			object->opens++;
 		} else {
@@ -282,7 +285,7 @@ enum ntfs_result
 ntfs_write_lifetime_acquire(struct ntfs_write_lifetime *owner, uint64_t reference,
     enum ntfs_write_lifetime_kind kind, struct ntfs_write_lifetime_token *out)
 {
-	size_t slot;
+	size_t slot = 0;
 	enum ntfs_result result;
 
 	if (!lifetime_output(owner, out, sizeof(*out)) || !lifetime_kind(kind)) {
@@ -302,10 +305,11 @@ ntfs_write_lifetime_acquire(struct ntfs_write_lifetime *owner, uint64_t referenc
 }
 
 enum ntfs_result
-ntfs_write_lifetime_retain(struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_token token,
-    enum ntfs_write_lifetime_kind kind, struct ntfs_write_lifetime_token *out)
+ntfs_write_lifetime_retain(struct ntfs_write_lifetime *owner,
+    struct ntfs_write_lifetime_token token, enum ntfs_write_lifetime_kind kind,
+    struct ntfs_write_lifetime_token *out)
 {
-	size_t lease, slot;
+	size_t lease, slot = 0;
 	enum ntfs_result result;
 
 	if (!lifetime_output(owner, out, sizeof(*out)) || !lifetime_kind(kind)) {
@@ -325,10 +329,10 @@ ntfs_write_lifetime_retain(struct ntfs_write_lifetime *owner, struct ntfs_write_
 }
 
 enum ntfs_result
-ntfs_write_lifetime_access(const struct ntfs_write_lifetime *owner,
-    struct ntfs_write_lifetime_token token)
+ntfs_write_lifetime_access(
+    const struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_token token)
 {
-	size_t lease, slot;
+	size_t lease, slot = 0;
 	enum ntfs_result result = lifetime_admit(owner);
 
 	if (result == NTFS_OK) {
@@ -344,10 +348,11 @@ ntfs_write_lifetime_access(const struct ntfs_write_lifetime *owner,
 }
 
 enum ntfs_result
-ntfs_write_lifetime_release(struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_token token)
+ntfs_write_lifetime_release(
+    struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_token token)
 {
 	struct lifetime_object *object;
-	size_t lease, slot;
+	size_t lease, slot = 0;
 	enum ntfs_result result = lifetime_token(owner, token, &lease);
 
 	if (result == NTFS_OK) {
@@ -371,7 +376,7 @@ ntfs_write_lifetime_inspect(const struct ntfs_write_lifetime *owner, uint64_t re
     struct ntfs_write_lifetime_view *out)
 {
 	const struct lifetime_object *object;
-	size_t slot;
+	size_t slot = 0;
 	enum ntfs_result result;
 
 	if (!lifetime_output(owner, out, sizeof(*out))) {
@@ -383,11 +388,14 @@ ntfs_write_lifetime_inspect(const struct ntfs_write_lifetime *owner, uint64_t re
 	}
 	object = lifetime_object_const(owner, slot);
 	*out = (struct ntfs_write_lifetime_view){.state = object->state,
-	    .names = object->names, .opens = object->opens, .mappings = object->mappings,
+	    .names = object->names,
+	    .opens = object->opens,
+	    .mappings = object->mappings,
 	    .pending = object->pending,
 	    .eligible = object->state == NTFS_WRITE_LIFETIME_DETACHED && object->opens == 0 &&
 		object->mappings == 0 && !object->pending && !owner->draining && !owner->poisoned,
-	    .draining = owner->draining, .poisoned = owner->poisoned};
+	    .draining = owner->draining,
+	    .poisoned = owner->poisoned};
 	return NTFS_OK;
 }
 
@@ -398,7 +406,7 @@ ntfs_write_lifetime_prepare(struct ntfs_write_lifetime *owner,
 {
 	struct lifetime_object *object, *other = NULL;
 	struct lifetime_pending *pending;
-	size_t slot, source_slot = 0, index;
+	size_t slot = 0, source_slot = 0, index;
 	enum ntfs_result result;
 
 	if (!lifetime_output(owner, out, sizeof(*out))) {
@@ -446,8 +454,8 @@ ntfs_write_lifetime_prepare(struct ntfs_write_lifetime *owner,
 		if (pending->ticket.serial != 0) {
 			continue;
 		}
-		pending->ticket = (struct ntfs_write_lifetime_ticket){owner, owner->epoch,
-		    ++owner->issued, source, victim, operation};
+		pending->ticket = (struct ntfs_write_lifetime_ticket){
+		    owner, owner->epoch, ++owner->issued, source, victim, operation};
 		pending->source = source_slot;
 		pending->victim = slot;
 		pending->started = false;
@@ -462,9 +470,10 @@ ntfs_write_lifetime_prepare(struct ntfs_write_lifetime *owner,
 }
 
 enum ntfs_result
-ntfs_write_lifetime_start(struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_ticket ticket)
+ntfs_write_lifetime_start(
+    struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_ticket ticket)
 {
-	struct lifetime_pending *pending;
+	struct lifetime_pending *pending = NULL;
 	enum ntfs_result result = lifetime_admit(owner);
 
 	if (result == NTFS_OK) {
@@ -481,8 +490,8 @@ ntfs_write_lifetime_start(struct ntfs_write_lifetime *owner, struct ntfs_write_l
 }
 
 enum ntfs_result
-ntfs_write_lifetime_finish(struct ntfs_write_lifetime *owner, struct ntfs_write_lifetime_ticket ticket,
-    enum ntfs_write_lifetime_outcome outcome)
+ntfs_write_lifetime_finish(struct ntfs_write_lifetime *owner,
+    struct ntfs_write_lifetime_ticket ticket, enum ntfs_write_lifetime_outcome outcome)
 {
 	struct lifetime_pending *pending;
 	struct lifetime_object *object;

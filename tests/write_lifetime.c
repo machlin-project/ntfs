@@ -67,15 +67,16 @@ oracle_check(struct oracle *oracle)
 			}
 		}
 		state = !oracle->allocated[object] ? NTFS_WRITE_LIFETIME_RETIRED
-		    : names != 0 ? NTFS_WRITE_LIFETIME_ATTACHED : NTFS_WRITE_LIFETIME_DETACHED;
+		    : names != 0		   ? NTFS_WRITE_LIFETIME_ATTACHED
+						   : NTFS_WRITE_LIFETIME_DETACHED;
 		assert(ntfs_write_lifetime_inspect(oracle->owner, oracle->objects[object], &view) ==
 		    NTFS_OK);
 		assert(view.state == state && view.names == names && view.opens == opens &&
 		    view.mappings == mappings && view.pending == oracle->pending[object]);
 		assert(view.draining == oracle->draining && view.poisoned == oracle->poisoned);
-		assert(view.eligible == (oracle->allocated[object] && names == 0 && opens == 0 &&
-		    mappings == 0 && !oracle->pending[object] && !oracle->draining &&
-		    !oracle->poisoned));
+		assert(view.eligible ==
+		    (oracle->allocated[object] && names == 0 && opens == 0 && mappings == 0 &&
+			!oracle->pending[object] && !oracle->draining && !oracle->poisoned));
 		assert(oracle->allocated[object] || (names == 0 && opens == 0 && mappings == 0));
 		assertions++;
 	}
@@ -100,19 +101,20 @@ oracle_open(struct oracle *oracle, size_t source_names, size_t victim_names)
 	oracle->names[1] = source_names == 2 ? oracle->objects[0] : 0;
 	oracle->names[2] = oracle->objects[1];
 	oracle->names[3] = victim_names == 2 ? oracle->objects[1] : 0;
-	assert(ntfs_write_lifetime_track(oracle->owner, oracle->objects[0],
-	    (uint32_t)source_names) == NTFS_OK);
-	assert(ntfs_write_lifetime_track(oracle->owner, oracle->objects[1],
-	    (uint32_t)victim_names) == NTFS_OK);
+	assert(ntfs_write_lifetime_track(
+		   oracle->owner, oracle->objects[0], (uint32_t)source_names) == NTFS_OK);
+	assert(ntfs_write_lifetime_track(
+		   oracle->owner, oracle->objects[1], (uint32_t)victim_names) == NTFS_OK);
 	oracle_check(oracle);
 }
 
 static void
-oracle_acquire(struct oracle *oracle, size_t slot, size_t object, enum ntfs_write_lifetime_kind kind)
+oracle_acquire(
+    struct oracle *oracle, size_t slot, size_t object, enum ntfs_write_lifetime_kind kind)
 {
 	assert(oracle->tokens[slot].serial == 0);
-	assert(ntfs_write_lifetime_acquire(oracle->owner, oracle->objects[object], kind,
-	    &oracle->tokens[slot]) == NTFS_OK);
+	assert(ntfs_write_lifetime_acquire(
+		   oracle->owner, oracle->objects[object], kind, &oracle->tokens[slot]) == NTFS_OK);
 	assert(oracle->tokens[slot].reference == oracle->objects[object]);
 	oracle_check(oracle);
 }
@@ -156,7 +158,7 @@ oracle_remove_last(struct oracle *oracle, size_t name, size_t object)
 	struct ntfs_write_lifetime_ticket ticket;
 
 	assert(ntfs_write_lifetime_prepare(oracle->owner, NTFS_WRITE_LIFETIME_UNLINK, 0,
-	    oracle->objects[object], &ticket) == NTFS_OK);
+		   oracle->objects[object], &ticket) == NTFS_OK);
 	oracle->pending[object] = true;
 	oracle_check(oracle);
 	assert(ntfs_write_lifetime_start(oracle->owner, ticket) == NTFS_OK);
@@ -182,8 +184,8 @@ retire_and_reuse(struct oracle *oracle)
 	assert(ntfs_write_lifetime_track(oracle->owner, next, 1) == NTFS_STALE);
 	assert(ntfs_write_lifetime_inspect(oracle->owner, old, &before) == NTFS_OK);
 	assert(before.eligible);
-	assert(ntfs_write_lifetime_prepare(oracle->owner, NTFS_WRITE_LIFETIME_RETIRE, 0, old,
-	    &ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(
+		   oracle->owner, NTFS_WRITE_LIFETIME_RETIRE, 0, old, &ticket) == NTFS_OK);
 	oracle->pending[1] = true;
 	oracle_check(oracle);
 	assert(ntfs_write_lifetime_finish(oracle->owner, ticket, NTFS_WRITE_LIFETIME_ABORTED) ==
@@ -192,8 +194,8 @@ retire_and_reuse(struct oracle *oracle)
 	oracle_check(oracle);
 	assert(ntfs_write_lifetime_inspect(oracle->owner, old, &after) == NTFS_OK);
 	assert(after.eligible && after.state == before.state && after.names == before.names);
-	assert(ntfs_write_lifetime_prepare(oracle->owner, NTFS_WRITE_LIFETIME_RETIRE, 0, old,
-	    &ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(
+		   oracle->owner, NTFS_WRITE_LIFETIME_RETIRE, 0, old, &ticket) == NTFS_OK);
 	oracle->pending[1] = true;
 	assert(ntfs_write_lifetime_start(oracle->owner, ticket) == NTFS_OK);
 	assert(ntfs_write_lifetime_track(oracle->owner, next, 1) == NTFS_STALE);
@@ -244,8 +246,8 @@ lifecycle_case(size_t source_names, size_t victim_names, size_t opens, size_t ma
 		    index < opens ? NTFS_WRITE_LIFETIME_OPEN : NTFS_WRITE_LIFETIME_MAPPING);
 	}
 	assert(ntfs_write_lifetime_prepare(oracle.owner,
-	    replace ? NTFS_WRITE_LIFETIME_REPLACE : NTFS_WRITE_LIFETIME_UNLINK,
-	    replace ? source : 0, victim, &ticket) == NTFS_OK);
+		   replace ? NTFS_WRITE_LIFETIME_REPLACE : NTFS_WRITE_LIFETIME_UNLINK,
+		   replace ? source : 0, victim, &ticket) == NTFS_OK);
 	oracle.pending[0] = replace;
 	oracle.pending[1] = true;
 	oracle_check(&oracle);
@@ -253,18 +255,18 @@ lifecycle_case(size_t source_names, size_t victim_names, size_t opens, size_t ma
 	    NTFS_INVALID);
 	assert(ntfs_write_lifetime_finish(oracle.owner, ticket, NTFS_WRITE_LIFETIME_UNCERTAIN) ==
 	    NTFS_INVALID);
-	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_RETIRE, 0,
-	    victim, &sentinel) == NTFS_BUSY);
+	assert(ntfs_write_lifetime_prepare(
+		   oracle.owner, NTFS_WRITE_LIFETIME_RETIRE, 0, victim, &sentinel) == NTFS_BUSY);
 	assert(sentinel.serial == 0);
-	assert(ntfs_write_lifetime_acquire(oracle.owner, victim, NTFS_WRITE_LIFETIME_OPEN, &token) ==
-	    NTFS_BUSY);
+	assert(ntfs_write_lifetime_acquire(
+		   oracle.owner, victim, NTFS_WRITE_LIFETIME_OPEN, &token) == NTFS_BUSY);
 	assert(token.serial == 0);
 	assert(ntfs_write_lifetime_access(oracle.owner, oracle.tokens[0]) ==
 	    (replace ? NTFS_BUSY : NTFS_OK));
 	if (held != 0) {
 		stale = oracle.tokens[first];
 		assert(ntfs_write_lifetime_retain(oracle.owner, oracle.tokens[first],
-		    NTFS_WRITE_LIFETIME_MAPPING, &token) == NTFS_BUSY);
+			   NTFS_WRITE_LIFETIME_MAPPING, &token) == NTFS_BUSY);
 		if (release_early) {
 			oracle_release(&oracle, first++);
 			held--;
@@ -300,12 +302,12 @@ lifecycle_case(size_t source_names, size_t victim_names, size_t opens, size_t ma
 	if (oracle.poisoned || oracle.draining) {
 		closed = oracle.poisoned ? NTFS_IO : NTFS_STALE;
 		assert(ntfs_write_lifetime_access(oracle.owner, oracle.tokens[0]) == closed);
-		assert(ntfs_write_lifetime_acquire(oracle.owner, source,
-		    NTFS_WRITE_LIFETIME_OPEN, &token) == closed);
+		assert(ntfs_write_lifetime_acquire(
+			   oracle.owner, source, NTFS_WRITE_LIFETIME_OPEN, &token) == closed);
 		assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_UNLINK, 0,
-		    source, &sentinel) == closed);
-		assert(ntfs_write_lifetime_track(oracle.owner, reference(TEST_OTHER_RECORD, 1), 1) ==
-		    closed);
+			   source, &sentinel) == closed);
+		assert(ntfs_write_lifetime_track(
+			   oracle.owner, reference(TEST_OTHER_RECORD, 1), 1) == closed);
 		oracle_close(&oracle);
 		return;
 	}
@@ -319,25 +321,26 @@ lifecycle_case(size_t source_names, size_t victim_names, size_t opens, size_t ma
 	}
 	if (held != 0) {
 		assert(ntfs_write_lifetime_access(oracle.owner, oracle.tokens[first]) == NTFS_OK);
-		assert(ntfs_write_lifetime_retain(oracle.owner, oracle.tokens[first],
-		    NTFS_WRITE_LIFETIME_MAPPING, &oracle.tokens[TEST_TOKENS - 2]) == NTFS_OK);
+		assert(
+		    ntfs_write_lifetime_retain(oracle.owner, oracle.tokens[first],
+			NTFS_WRITE_LIFETIME_MAPPING, &oracle.tokens[TEST_TOKENS - 2]) == NTFS_OK);
 		oracle_check(&oracle);
 		assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_RETIRE, 0,
-		    victim, &sentinel) == NTFS_BUSY);
+			   victim, &sentinel) == NTFS_BUSY);
 		for (index = 0; index < held; index++) {
 			oracle_release(&oracle, first + index);
 		}
 		/* The descriptor set is empty here; its derived mapping alone must keep
 		 * detached storage allocated and retirement unavailable. */
 		assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_RETIRE, 0,
-		    victim, &sentinel) == NTFS_BUSY);
+			   victim, &sentinel) == NTFS_BUSY);
 		oracle_release(&oracle, TEST_TOKENS - 2);
 	}
 	retire_and_reuse(&oracle);
 	if (stale.serial != 0) {
 		assert(ntfs_write_lifetime_release(oracle.owner, stale) == NTFS_STALE);
-		assert(ntfs_write_lifetime_retain(oracle.owner, stale, NTFS_WRITE_LIFETIME_OPEN,
-		    &token) == NTFS_STALE);
+		assert(ntfs_write_lifetime_retain(
+			   oracle.owner, stale, NTFS_WRITE_LIFETIME_OPEN, &token) == NTFS_STALE);
 		oracle_check(&oracle);
 	}
 	oracle_close(&oracle);
@@ -354,12 +357,16 @@ lifecycle_matrix(void)
 				for (mappings = 0; mappings <= 2; mappings++) {
 					for (replace = 0; replace <= 1; replace++) {
 						for (outcome = NTFS_WRITE_LIFETIME_ABORTED;
-						    outcome <= NTFS_WRITE_LIFETIME_UNCERTAIN; outcome++) {
+						    outcome <= NTFS_WRITE_LIFETIME_UNCERTAIN;
+						    outcome++) {
 							for (drain = 0; drain <= 2; drain++) {
-								for (early = 0; early <= 1; early++) {
-									lifecycle_case(source_names, victim_names,
-									    opens, mappings, replace != 0,
-									    (enum ntfs_write_lifetime_outcome)outcome,
+								for (early = 0; early <= 1;
+								    early++) {
+									lifecycle_case(source_names,
+									    victim_names, opens,
+									    mappings, replace != 0,
+									    (enum ntfs_write_lifetime_outcome)
+										outcome,
 									    drain, early != 0);
 								}
 							}
@@ -413,24 +420,25 @@ failure_and_identity(void)
 	assert(ntfs_write_lifetime_track(oracle.owner, reference(NTFS_ROOT_RECORD, 1), 1) ==
 	    NTFS_INVALID);
 	assert(ntfs_write_lifetime_track(oracle.owner, source, 0) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_acquire(oracle.owner, source,
-	    (enum ntfs_write_lifetime_kind)2, &output) == NTFS_INVALID);
+	assert(ntfs_write_lifetime_acquire(oracle.owner, source, (enum ntfs_write_lifetime_kind)2,
+		   &output) == NTFS_INVALID);
 	assert(ntfs_write_lifetime_acquire(oracle.owner, reference(TEST_OTHER_RECORD, 1),
-	    NTFS_WRITE_LIFETIME_OPEN, &output) == NTFS_NOT_FOUND);
+		   NTFS_WRITE_LIFETIME_OPEN, &output) == NTFS_NOT_FOUND);
 	assert(ntfs_write_lifetime_acquire(oracle.owner, source, NTFS_WRITE_LIFETIME_OPEN,
-	    (void *)oracle.owner) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_inspect(oracle.owner, source, (void *)oracle.owner) == NTFS_INVALID);
+		   (void *)oracle.owner) == NTFS_INVALID);
+	assert(ntfs_write_lifetime_inspect(oracle.owner, source, (void *)oracle.owner) ==
+	    NTFS_INVALID);
 	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_REPLACE, source,
-	    source, &ticket) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_UNLINK, source,
-	    victim, &ticket) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_prepare(oracle.owner, (enum ntfs_write_lifetime_operation)3,
-	    0, victim, &ticket) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_RETIRE, 0,
-	    victim, &ticket) == NTFS_BUSY);
+		   source, &ticket) == NTFS_INVALID);
+	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_UNLINK, source, victim,
+		   &ticket) == NTFS_INVALID);
+	assert(ntfs_write_lifetime_prepare(oracle.owner, (enum ntfs_write_lifetime_operation)3, 0,
+		   victim, &ticket) == NTFS_INVALID);
+	assert(ntfs_write_lifetime_prepare(
+		   oracle.owner, NTFS_WRITE_LIFETIME_RETIRE, 0, victim, &ticket) == NTFS_BUSY);
 	oracle_check(&oracle);
-	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_REPLACE, source,
-	    victim, &ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(
+		   oracle.owner, NTFS_WRITE_LIFETIME_REPLACE, source, victim, &ticket) == NTFS_OK);
 	oracle.pending[0] = true;
 	oracle.pending[1] = true;
 	for (index = 0; index < 6; index++) {
@@ -449,15 +457,16 @@ failure_and_identity(void)
 			wrong.operation = NTFS_WRITE_LIFETIME_UNLINK;
 		}
 		assert(ntfs_write_lifetime_start(oracle.owner, wrong) == NTFS_STALE);
-		assert(ntfs_write_lifetime_finish(oracle.owner, wrong,
-		    NTFS_WRITE_LIFETIME_ABORTED) == NTFS_STALE);
+		assert(ntfs_write_lifetime_finish(
+			   oracle.owner, wrong, NTFS_WRITE_LIFETIME_ABORTED) == NTFS_STALE);
 		oracle_check(&oracle);
 	}
-	assert(ntfs_write_lifetime_prepare(oracle.owner, NTFS_WRITE_LIFETIME_UNLINK, 0,
-	    source, &second) == NTFS_BUSY);
-	assert(ntfs_write_lifetime_finish(oracle.owner, ticket,
-	    (enum ntfs_write_lifetime_outcome)3) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_finish(oracle.owner, ticket, NTFS_WRITE_LIFETIME_ABORTED) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(
+		   oracle.owner, NTFS_WRITE_LIFETIME_UNLINK, 0, source, &second) == NTFS_BUSY);
+	assert(ntfs_write_lifetime_finish(
+		   oracle.owner, ticket, (enum ntfs_write_lifetime_outcome)3) == NTFS_INVALID);
+	assert(ntfs_write_lifetime_finish(oracle.owner, ticket, NTFS_WRITE_LIFETIME_ABORTED) ==
+	    NTFS_OK);
 	oracle.pending[0] = false;
 	oracle.pending[1] = false;
 	assert(ntfs_write_lifetime_inspect(oracle.owner, source, &view) == NTFS_OK);
@@ -511,7 +520,8 @@ limits_and_allocation(void)
 			bad.objects = NTFS_WRITE_LIFETIME_MAX_OBJECTS + 1u;
 		}
 		owner = (void *)(uintptr_t)1;
-		assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &bad, &owner) == NTFS_RANGE);
+		assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &bad, &owner) ==
+		    NTFS_RANGE);
 		assert(owner == NULL && device.allocations == 0);
 	}
 	for (index = 0; index < 4; index++) {
@@ -524,26 +534,29 @@ limits_and_allocation(void)
 			invalid.release = NULL;
 		}
 		owner = (void *)(uintptr_t)1;
-		assert(ntfs_write_lifetime_create(&invalid, index == 3 ? 0 : TEST_EPOCH,
-		    &limits, &owner) == NTFS_INVALID);
+		assert(ntfs_write_lifetime_create(
+			   &invalid, index == 3 ? 0 : TEST_EPOCH, &limits, &owner) == NTFS_INVALID);
 		assert(owner == NULL && device.allocations == 0);
 	}
 	owner = (void *)(uintptr_t)1;
 	assert(ntfs_write_lifetime_create(NULL, TEST_EPOCH, &limits, &owner) == NTFS_INVALID);
 	assert(owner == (void *)(uintptr_t)1);
+	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits, (void *)&limits) ==
+	    NTFS_INVALID);
 	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits,
-	    (void *)&limits) == NTFS_INVALID);
-	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits,
-	    (void *)(UINTPTR_MAX - sizeof(owner) + 1u)) == NTFS_INVALID);
+		   (void *)(UINTPTR_MAX - sizeof(owner) + 1u)) == NTFS_INVALID);
 	device.fail_allocation = 1;
-	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits, &owner) == NTFS_NO_MEMORY);
+	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits, &owner) ==
+	    NTFS_NO_MEMORY);
 	assert(owner == NULL && device.memory == 0 && device.reads == 0);
 	device.fail_allocation = 0;
 	limits.issued = TEST_SERIAL_BUDGET;
 	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits, &owner) == NTFS_OK);
 	assert(ntfs_write_lifetime_track(owner, ref, UINT32_MAX) == NTFS_OK);
-	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK && view.names == UINT32_MAX);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &ticket) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK && view.names == UINT32_MAX);
+	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &ticket) ==
+	    NTFS_OK);
 	assert(ntfs_write_lifetime_start(owner, ticket) == NTFS_OK);
 	assert(ntfs_write_lifetime_finish(owner, ticket, NTFS_WRITE_LIFETIME_COMMITTED) == NTFS_OK);
 	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK &&
@@ -553,22 +566,29 @@ limits_and_allocation(void)
 	limits.issued = 3;
 	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits, &owner) == NTFS_OK);
 	assert(ntfs_write_lifetime_track(owner, ref, 1) == NTFS_OK);
-	assert(ntfs_write_lifetime_track(owner, reference(TEST_OTHER_RECORD, 1), 1) == NTFS_NO_SPACE);
-	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &token) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_track(owner, reference(TEST_OTHER_RECORD, 1), 1) == NTFS_NO_SPACE);
+	assert(
+	    ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &token) == NTFS_OK);
 	memset(&output, 0xa5, sizeof(output));
 	before = output;
-	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_MAPPING, &output) == NTFS_NO_SPACE);
+	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_MAPPING, &output) ==
+	    NTFS_NO_SPACE);
 	assert(memcmp(&output, &before, sizeof(output)) == 0);
-	assert(ntfs_write_lifetime_retain(owner, token, NTFS_WRITE_LIFETIME_MAPPING, &output) == NTFS_NO_SPACE);
+	assert(ntfs_write_lifetime_retain(owner, token, NTFS_WRITE_LIFETIME_MAPPING, &output) ==
+	    NTFS_NO_SPACE);
 	assert(memcmp(&output, &before, sizeof(output)) == 0);
 	assert(ntfs_write_lifetime_release(owner, token) == NTFS_OK);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &ticket) ==
+	    NTFS_OK);
 	assert(ntfs_write_lifetime_start(owner, ticket) == NTFS_OK);
 	assert(ntfs_write_lifetime_finish(owner, ticket, NTFS_WRITE_LIFETIME_COMMITTED) == NTFS_OK);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_RETIRE, 0, ref, &ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_RETIRE, 0, ref, &ticket) ==
+	    NTFS_OK);
 	assert(ntfs_write_lifetime_start(owner, ticket) == NTFS_OK);
 	assert(ntfs_write_lifetime_finish(owner, ticket, NTFS_WRITE_LIFETIME_COMMITTED) == NTFS_OK);
-	assert(ntfs_write_lifetime_track(owner, reference(TEST_SOURCE_RECORD, 1), 1) == NTFS_UNSUPPORTED);
+	assert(ntfs_write_lifetime_track(owner, reference(TEST_SOURCE_RECORD, 1), 1) ==
+	    NTFS_UNSUPPORTED);
 	ntfs_write_lifetime_drain(owner);
 	assert(ntfs_write_lifetime_close(owner) == NTFS_OK);
 	assert(device.memory == 0);
@@ -580,21 +600,26 @@ limits_and_allocation(void)
 	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH, &limits, &owner) == NTFS_OK);
 	assert(ntfs_write_lifetime_track(owner, ref, 1) == NTFS_OK);
 	assert(ntfs_write_lifetime_track(owner, reference(TEST_OTHER_RECORD, 1), 1) == NTFS_OK);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &ticket) ==
+	    NTFS_OK);
 	memset(&other, 0xa5, sizeof(other));
 	ticket_before = other;
 	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0,
-	    reference(TEST_OTHER_RECORD, 1), &other) == NTFS_NO_SPACE);
+		   reference(TEST_OTHER_RECORD, 1), &other) == NTFS_NO_SPACE);
 	assert(memcmp(&other, &ticket_before, sizeof(other)) == 0);
-	assert(ntfs_write_lifetime_inspect(owner, reference(TEST_OTHER_RECORD, 1), &view) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_inspect(owner, reference(TEST_OTHER_RECORD, 1), &view) == NTFS_OK);
 	assert(!view.pending && view.names == 1);
 	assert(ntfs_write_lifetime_finish(owner, ticket, NTFS_WRITE_LIFETIME_ABORTED) == NTFS_OK);
-	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &token) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &token) == NTFS_OK);
 	assert(ntfs_write_lifetime_release(owner, token) == NTFS_OK);
 	calls = device.allocations;
-	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &output) == NTFS_RANGE);
+	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &output) ==
+	    NTFS_RANGE);
 	assert(memcmp(&output, &before, sizeof(output)) == 0);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &other) == NTFS_RANGE);
+	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &other) ==
+	    NTFS_RANGE);
 	assert(memcmp(&other, &ticket_before, sizeof(other)) == 0);
 	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK && !view.pending);
 	assert(device.allocations == calls && device.reads == 0);
@@ -613,7 +638,8 @@ maximum_tables_and_parallel_completion(void)
 	    NTFS_WRITE_LIFETIME_MAX_LEASES, NTFS_WRITE_LIFETIME_MAX_PENDING, UINT64_MAX};
 	struct ntfs_write_lifetime *owner;
 	struct ntfs_write_lifetime_token *tokens, output = {0};
-	struct ntfs_write_lifetime_ticket tickets[NTFS_WRITE_LIFETIME_MAX_PENDING], output_ticket = {0};
+	struct ntfs_write_lifetime_ticket tickets[NTFS_WRITE_LIFETIME_MAX_PENDING],
+	    output_ticket = {0};
 	struct ntfs_write_lifetime_view view;
 	size_t index, allocations, expected_opens, expected_mappings;
 	uint64_t ref = reference(TEST_SOURCE_RECORD, 1), other;
@@ -622,17 +648,19 @@ maximum_tables_and_parallel_completion(void)
 	assert(tokens != NULL);
 	assert(ntfs_write_lifetime_create(&environment, UINT64_MAX, &limits, &owner) == NTFS_OK);
 	for (index = 0; index < NTFS_WRITE_LIFETIME_MAX_OBJECTS; index++) {
-		assert(ntfs_write_lifetime_track(owner, reference(TEST_SOURCE_RECORD + index, 1),
-		    1) == NTFS_OK);
+		assert(ntfs_write_lifetime_track(
+			   owner, reference(TEST_SOURCE_RECORD + index, 1), 1) == NTFS_OK);
 	}
 	assert(ntfs_write_lifetime_track(owner,
-	    reference(TEST_SOURCE_RECORD + NTFS_WRITE_LIFETIME_MAX_OBJECTS, 1), 1) == NTFS_NO_SPACE);
+		   reference(TEST_SOURCE_RECORD + NTFS_WRITE_LIFETIME_MAX_OBJECTS, 1),
+		   1) == NTFS_NO_SPACE);
 	for (index = 0; index < NTFS_WRITE_LIFETIME_MAX_LEASES; index++) {
 		assert(ntfs_write_lifetime_acquire(owner, ref,
-		    index % 2 == 0 ? NTFS_WRITE_LIFETIME_OPEN : NTFS_WRITE_LIFETIME_MAPPING,
-		    &tokens[index]) == NTFS_OK);
+			   index % 2 == 0 ? NTFS_WRITE_LIFETIME_OPEN : NTFS_WRITE_LIFETIME_MAPPING,
+			   &tokens[index]) == NTFS_OK);
 	}
-	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &output) == NTFS_NO_SPACE);
+	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &output) ==
+	    NTFS_NO_SPACE);
 	assert(output.serial == 0);
 	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK);
 	expected_opens = NTFS_WRITE_LIFETIME_MAX_LEASES / 2;
@@ -641,25 +669,26 @@ maximum_tables_and_parallel_completion(void)
 	for (index = 0; index < NTFS_WRITE_LIFETIME_MAX_PENDING; index++) {
 		other = reference(TEST_SOURCE_RECORD + index + 1, 1);
 		assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, other,
-		    &tickets[index]) == NTFS_OK);
+			   &tickets[index]) == NTFS_OK);
 		assert(ntfs_write_lifetime_start(owner, tickets[index]) == NTFS_OK);
 	}
 	other = reference(TEST_SOURCE_RECORD + NTFS_WRITE_LIFETIME_MAX_PENDING + 1, 1);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, other,
-	    &output_ticket) == NTFS_NO_SPACE);
+	assert(ntfs_write_lifetime_prepare(
+		   owner, NTFS_WRITE_LIFETIME_UNLINK, 0, other, &output_ticket) == NTFS_NO_SPACE);
 	assert(output_ticket.serial == 0);
 	assert(ntfs_write_lifetime_inspect(owner, other, &view) == NTFS_OK && !view.pending);
-	assert(ntfs_write_lifetime_finish(owner, tickets[0], NTFS_WRITE_LIFETIME_UNCERTAIN) == NTFS_OK);
+	assert(ntfs_write_lifetime_finish(owner, tickets[0], NTFS_WRITE_LIFETIME_UNCERTAIN) ==
+	    NTFS_OK);
 	for (index = 1; index < NTFS_WRITE_LIFETIME_MAX_PENDING; index++) {
 		/* An unrelated operation had already crossed start before the uncertain
 		 * outcome. A known durable endpoint must still be recorded during poison. */
-		assert(ntfs_write_lifetime_finish(owner, tickets[index],
-		    NTFS_WRITE_LIFETIME_COMMITTED) == NTFS_OK);
+		assert(ntfs_write_lifetime_finish(
+			   owner, tickets[index], NTFS_WRITE_LIFETIME_COMMITTED) == NTFS_OK);
 		assert(ntfs_write_lifetime_inspect(owner, tickets[index].victim, &view) == NTFS_OK);
 		assert(view.state == NTFS_WRITE_LIFETIME_DETACHED && view.names == 0 &&
 		    view.poisoned && !view.pending && !view.eligible);
 		assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_RETIRE, 0,
-		    tickets[index].victim, &output_ticket) == NTFS_IO);
+			   tickets[index].victim, &output_ticket) == NTFS_IO);
 	}
 	assert(ntfs_write_lifetime_track(owner, reference(TEST_SOURCE_RECORD, 2), 1) == NTFS_IO);
 	allocations = device.allocations;
@@ -708,7 +737,9 @@ same_address_new_epoch(void)
 {
 	struct fixed_allocator allocator = {0};
 	struct ntfs_environment environment = {.api_version = NTFS_API_VERSION,
-	    .context = &allocator, .allocate = fixed_allocate, .release = fixed_release};
+	    .context = &allocator,
+	    .allocate = fixed_allocate,
+	    .release = fixed_release};
 	const struct ntfs_write_lifetime_limits limits = {1, 1, 1, UINT64_MAX};
 	struct ntfs_write_lifetime *owner, *former;
 	struct ntfs_write_lifetime_token old, current;
@@ -724,28 +755,35 @@ same_address_new_epoch(void)
 	assert(ntfs_write_lifetime_track(owner, ref, 1) == NTFS_OK);
 	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &old) == NTFS_OK);
 	assert(ntfs_write_lifetime_release(owner, old) == NTFS_OK);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &old_ticket) == NTFS_OK);
-	assert(ntfs_write_lifetime_finish(owner, old_ticket, NTFS_WRITE_LIFETIME_ABORTED) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(
+		   owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &old_ticket) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_finish(owner, old_ticket, NTFS_WRITE_LIFETIME_ABORTED) == NTFS_OK);
 	ntfs_write_lifetime_drain(owner);
 	assert(ntfs_write_lifetime_close(owner) == NTFS_OK);
-	assert(ntfs_write_lifetime_create(&environment, TEST_EPOCH + 1, &limits, &owner) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_create(&environment, TEST_EPOCH + 1, &limits, &owner) == NTFS_OK);
 	assert(owner == former);
 	assert(ntfs_write_lifetime_track(owner, ref, 1) == NTFS_OK);
-	assert(ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &current) == NTFS_OK);
+	assert(
+	    ntfs_write_lifetime_acquire(owner, ref, NTFS_WRITE_LIFETIME_OPEN, &current) == NTFS_OK);
 	assert(old.serial == current.serial && old.owner == current.owner);
 	assert(ntfs_write_lifetime_release(owner, old) == NTFS_STALE);
 	assert(ntfs_write_lifetime_access(owner, current) == NTFS_OK);
 	assert(ntfs_write_lifetime_release(owner, current) == NTFS_OK);
-	assert(ntfs_write_lifetime_prepare(owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &current_ticket) == NTFS_OK);
+	assert(ntfs_write_lifetime_prepare(
+		   owner, NTFS_WRITE_LIFETIME_UNLINK, 0, ref, &current_ticket) == NTFS_OK);
 	assert(old_ticket.serial == current_ticket.serial);
-	assert(ntfs_write_lifetime_finish(owner, old_ticket, NTFS_WRITE_LIFETIME_ABORTED) == NTFS_STALE);
+	assert(ntfs_write_lifetime_finish(owner, old_ticket, NTFS_WRITE_LIFETIME_ABORTED) ==
+	    NTFS_STALE);
 	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK && view.pending);
 	assert(ntfs_write_lifetime_start(owner, current_ticket) == NTFS_OK);
 	ntfs_write_lifetime_poison(owner);
 	assert(ntfs_write_lifetime_close(owner) == NTFS_BUSY);
-	assert(ntfs_write_lifetime_finish(owner, current_ticket, NTFS_WRITE_LIFETIME_UNCERTAIN) == NTFS_OK);
-	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK &&
-	    view.poisoned && !view.pending && !view.eligible);
+	assert(ntfs_write_lifetime_finish(owner, current_ticket, NTFS_WRITE_LIFETIME_UNCERTAIN) ==
+	    NTFS_OK);
+	assert(ntfs_write_lifetime_inspect(owner, ref, &view) == NTFS_OK && view.poisoned &&
+	    !view.pending && !view.eligible);
 	assert(ntfs_write_lifetime_close(owner) == NTFS_OK);
 	assert(allocator.live == 0);
 	free(allocator.bytes);

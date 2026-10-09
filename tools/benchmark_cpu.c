@@ -120,8 +120,9 @@ main(int argc, char **argv)
 	for (index = 0; index < size; index++) {
 		checksum = checksum * 31u + destination[index];
 	}
-	printf("{\"bytes\":%zu,\"iterations\":%zu,\"ns\":%llu,\"cpuNs\":%llu,\"checksum\":\"%016llx\"}\n", size,
-	    iterations, (unsigned long long)elapsed, (unsigned long long)cpu_elapsed,
+	printf("{\"bytes\":%zu,\"iterations\":%zu,\"ns\":%llu,\"cpuNs\":%llu,\"checksum\":\"%"
+	       "016llx\"}\n",
+	    size, iterations, (unsigned long long)elapsed, (unsigned long long)cpu_elapsed,
 	    (unsigned long long)checksum);
 	free(output);
 	free(expected);

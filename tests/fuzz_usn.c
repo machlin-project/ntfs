@@ -96,9 +96,11 @@ verify_wire_values(const uint8_t *bytes, const struct ntfs_usn_view *view)
 	assert(view->record.reason == little(fields->reason, sizeof(fields->reason)));
 	assert(view->record.source_info == little(fields->source, sizeof(fields->source)));
 	assert(view->record.security_id == little(fields->security, sizeof(fields->security)));
-	assert(view->record.file_attributes == little(fields->attributes, sizeof(fields->attributes)));
+	assert(
+	    view->record.file_attributes == little(fields->attributes, sizeof(fields->attributes)));
 	assert(view->filename_offset == little(fields->name_offset, sizeof(fields->name_offset)));
-	assert(view->record.filename_bytes == little(fields->name_bytes, sizeof(fields->name_bytes)));
+	assert(
+	    view->record.filename_bytes == little(fields->name_bytes, sizeof(fields->name_bytes)));
 }
 
 int
@@ -139,9 +141,9 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(first.record.filename == copy + alignment + first.filename_offset);
 		verify_wire_values(copy + alignment, &first);
 		prefix = first.record.major_version == 2 ? sizeof(struct fuzz_usn_v2)
-							: sizeof(struct fuzz_usn_v3);
-		expected = ((prefix + first.record.filename_bytes + FUZZ_ALIGNMENT - 1) /
-			       FUZZ_ALIGNMENT) *
+							 : sizeof(struct fuzz_usn_v3);
+		expected =
+		    ((prefix + first.record.filename_bytes + FUZZ_ALIGNMENT - 1) / FUZZ_ALIGNMENT) *
 		    FUZZ_ALIGNMENT;
 		assert(ntfs_usn_record_size(&first.record, &required) == NTFS_OK);
 		assert(required == expected && required <= first.record_bytes);
@@ -150,12 +152,12 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(output != NULL && again != NULL);
 		memset(output, FUZZ_GUARD, required + FUZZ_GUARD_BYTES);
 		capacity = size % required;
-		assert(ntfs_usn_record_encode(&first.record, output + alignment, capacity, &written) ==
-		    NTFS_RANGE);
+		assert(ntfs_usn_record_encode(
+			   &first.record, output + alignment, capacity, &written) == NTFS_RANGE);
 		assert(written == SIZE_MAX);
 		guard(output, required + FUZZ_GUARD_BYTES);
-		assert(ntfs_usn_record_encode(&first.record, output + alignment, required, &written) ==
-		    NTFS_OK);
+		assert(ntfs_usn_record_encode(
+			   &first.record, output + alignment, required, &written) == NTFS_OK);
 		assert(written == required);
 		expected_view = first;
 		expected_view.record_bytes = (uint32_t)required;
@@ -171,12 +173,13 @@ LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 		assert(ntfs_usn_record_decode(output + alignment, written, &canonical) == NTFS_OK);
 		assert(canonical.filename_offset == prefix);
 		verify_wire_values(output + alignment, &canonical);
-		assert(ntfs_usn_record_encode(&canonical.record, again, required, &done) == NTFS_OK);
+		assert(
+		    ntfs_usn_record_encode(&canonical.record, again, required, &done) == NTFS_OK);
 		assert(done == required && memcmp(output + alignment, again, required) == 0);
 		reasons[0] = first.record.reason;
 		reasons[1] = ~first.record.reason;
-		assert(ntfs_usn_reason_union(reasons, sizeof(reasons) / sizeof(*reasons), &combined) ==
-		    NTFS_OK);
+		assert(ntfs_usn_reason_union(
+			   reasons, sizeof(reasons) / sizeof(*reasons), &combined) == NTFS_OK);
 		assert(combined == UINT32_MAX);
 		free(again);
 		free(output);
@@ -197,19 +200,19 @@ main(void)
 	static const struct {
 		struct fuzz_usn_v2 prefix;
 		uint8_t name[2], padding[2];
-	} v2 = {
-		.prefix = {.length = {64}, .major = {2},
+	} v2 = {.prefix = {.length = {64},
+		    .major = {2},
 		    .fields = {.reason = {1}, .name_bytes = {2}, .name_offset = {60}}},
-		.name = {'A', 0}
-	};
+	    .name = {'A', 0}};
+
 	static const struct {
 		struct fuzz_usn_v3 prefix;
 		uint8_t name[4];
-	} v3 = {
-		.prefix = {.length = {80}, .major = {3},
+	} v3 = {.prefix = {.length = {80},
+		    .major = {3},
 		    .fields = {.reason = {0, 0, 0, 0x80}, .name_bytes = {4}, .name_offset = {76}}},
-		.name = {0, 0xd8, 0, 0}
-	};
+	    .name = {0, 0xd8, 0, 0}};
+
 	uint8_t bytes[sizeof(v3)], saved;
 	size_t version, length, index, bit;
 

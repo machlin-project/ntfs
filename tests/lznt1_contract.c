@@ -6,9 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { PATH_BYTES = 1024, NAME_BYTES = 128, CODEC_BYTES = 16, GUARD = 0xa5,
-	ALIGNMENTS = 32, LITERAL_GROUP = 8, CHUNK_BYTES = 4096, HEADER_BYTES = 2,
-	HEADER_SIGNATURE = 0x3000, HEADER_COMPRESSED = 0x8000 };
+enum {
+	PATH_BYTES = 1024,
+	NAME_BYTES = 128,
+	CODEC_BYTES = 16,
+	GUARD = 0xa5,
+	ALIGNMENTS = 32,
+	LITERAL_GROUP = 8,
+	CHUNK_BYTES = 4096,
+	HEADER_BYTES = 2,
+	HEADER_SIGNATURE = 0x3000,
+	HEADER_COMPRESSED = 0x8000
+};
 
 #ifdef NTFS_LZNT1_REFERENCE
 enum ntfs_result reference_lznt1_decode(const void *, size_t, void *, size_t, size_t *);
@@ -56,8 +65,8 @@ check(const uint8_t *packed, size_t bytes, size_t capacity, size_t alignment,
 	memset(input, GUARD, bytes + alignment + 1);
 	memset(output, GUARD, capacity + alignment + 1);
 	memcpy(input + alignment + 1, packed, bytes);
-	result = ntfs_lznt1_decode(input + alignment + 1, bytes, output + alignment + 1,
-	    capacity, &written);
+	result = ntfs_lznt1_decode(
+	    input + alignment + 1, bytes, output + alignment + 1, capacity, &written);
 	assert(result == NTFS_OK || result == NTFS_CORRUPT || result == NTFS_RANGE);
 	assert(result == NTFS_OK ? written <= capacity : written == 0);
 	if (require_success) {
@@ -135,7 +144,8 @@ literal_contract(void)
 			packed[offset++] = expected[index];
 		}
 		bytes = offset;
-		header = HEADER_SIGNATURE | HEADER_COMPRESSED | (unsigned)(bytes - HEADER_BYTES - 1);
+		header =
+		    HEADER_SIGNATURE | HEADER_COMPRESSED | (unsigned)(bytes - HEADER_BYTES - 1);
 		packed[0] = (uint8_t)header;
 		packed[1] = (uint8_t)(header >> CHAR_BIT);
 		for (capacity = 0; capacity <= count + 1; capacity++) {
@@ -162,9 +172,15 @@ literal_contract(void)
 static void
 flag_combinations(void)
 {
-	enum { PREFIX_BYTES = 8, TOKENS = 8, MATCH_BYTES = 3, TAIL_BYTES = 8,
+	enum {
+		PREFIX_BYTES = 8,
+		TOKENS = 8,
+		MATCH_BYTES = 3,
+		TAIL_BYTES = 8,
 		PACKED_BYTES = HEADER_BYTES + 1 + PREFIX_BYTES + 1 + TOKENS * 2 + 1 + TAIL_BYTES,
-		PLAIN_BYTES = PREFIX_BYTES + TOKENS * MATCH_BYTES + TAIL_BYTES };
+		PLAIN_BYTES = PREFIX_BYTES + TOKENS * MATCH_BYTES + TAIL_BYTES
+	};
+
 	uint8_t packed[PACKED_BYTES], expected[PLAIN_BYTES];
 	size_t offset, plain, index, capacity;
 	unsigned flags, header;
@@ -194,12 +210,13 @@ flag_combinations(void)
 			packed[offset++] = (uint8_t)('0' + index);
 			expected[plain++] = (uint8_t)('0' + index);
 		}
-		header = HEADER_SIGNATURE | HEADER_COMPRESSED | (unsigned)(offset - HEADER_BYTES - 1);
+		header =
+		    HEADER_SIGNATURE | HEADER_COMPRESSED | (unsigned)(offset - HEADER_BYTES - 1);
 		packed[0] = (uint8_t)header;
 		packed[1] = (uint8_t)(header >> CHAR_BIT);
 		for (capacity = 0; capacity <= plain + 1; capacity++) {
-			check(packed, offset, capacity, flags % ALIGNMENTS,
-			    expected, plain, capacity >= plain);
+			check(packed, offset, capacity, flags % ALIGNMENTS, expected, plain,
+			    capacity >= plain);
 		}
 	}
 }
@@ -207,8 +224,14 @@ flag_combinations(void)
 static void
 chunk_end_publication(void)
 {
-	enum { MATCH_BYTES = 4085, PREFIX_BYTES = MATCH_BYTES + 1, FIRST_LITERALS = 6,
-		FINAL_LITERALS = 8, BODY_BYTES = 1 + 1 + 2 + FIRST_LITERALS + 1 + FINAL_LITERALS };
+	enum {
+		MATCH_BYTES = 4085,
+		PREFIX_BYTES = MATCH_BYTES + 1,
+		FIRST_LITERALS = 6,
+		FINAL_LITERALS = 8,
+		BODY_BYTES = 1 + 1 + 2 + FIRST_LITERALS + 1 + FINAL_LITERALS
+	};
+
 	uint8_t packed[HEADER_BYTES + BODY_BYTES], *output, *expected;
 	size_t index, capacity, written, copied;
 	unsigned header, token;
@@ -242,7 +265,8 @@ chunk_end_publication(void)
 		result = ntfs_lznt1_decode(packed, sizeof(packed), output, capacity, &written);
 		assert(result == (capacity < CHUNK_BYTES ? NTFS_RANGE : NTFS_CORRUPT));
 		assert(written == 0);
-		copied = capacity < PREFIX_BYTES ? 1 : (capacity < CHUNK_BYTES ? capacity : CHUNK_BYTES);
+		copied =
+		    capacity < PREFIX_BYTES ? 1 : (capacity < CHUNK_BYTES ? capacity : CHUNK_BYTES);
 		assert(memcmp(output, expected, copied) == 0);
 		for (index = copied; index < CHUNK_BYTES + 2; index++) {
 			assert(output[index] == GUARD);
@@ -276,13 +300,12 @@ multi_chunk_contract(const uint8_t *packed, size_t bytes, const uint8_t *expecte
 	/* Every truncation in a second chunk retains its full first-chunk bytes
 	 * on failure. A cut exactly between chunks is a valid shorter stream. */
 	for (index = 0; index < bytes; index++) {
-		check(input, bytes + index, CHUNK_BYTES * 2, index % ALIGNMENTS,
-		    plain, CHUNK_BYTES, index == 0);
+		check(input, bytes + index, CHUNK_BYTES * 2, index % ALIGNMENTS, plain, CHUNK_BYTES,
+		    index == 0);
 		checks++;
 	}
 	memset(input + bytes * 2, 0, HEADER_BYTES);
-	check(input, bytes * 2 + HEADER_BYTES, CHUNK_BYTES * 2, 0,
-	    plain, CHUNK_BYTES * 2, true);
+	check(input, bytes * 2 + HEADER_BYTES, CHUNK_BYTES * 2, 0, plain, CHUNK_BYTES * 2, true);
 	/* Corrupt only the second signature, after a fully published first chunk. */
 	input[bytes + 1] ^= (uint8_t)(1u << 4);
 	check(input, bytes * 2, CHUNK_BYTES * 2, 1, NULL, 0, false);
@@ -323,8 +346,10 @@ main(int argc, char **argv)
 		checks += ALIGNMENTS * 2 + 1;
 #endif
 		for (alignment = 0; alignment < ALIGNMENTS; alignment++) {
-			check(packed, bytes, expected_bytes, alignment, expected, expected_bytes, true);
-			check(packed, bytes, expected_bytes + 1, alignment, expected, expected_bytes, true);
+			check(packed, bytes, expected_bytes, alignment, expected, expected_bytes,
+			    true);
+			check(packed, bytes, expected_bytes + 1, alignment, expected,
+			    expected_bytes, true);
 			checks += 2;
 		}
 		for (index = 0; index < bytes; index++) {
@@ -343,7 +368,9 @@ main(int argc, char **argv)
 		count++;
 	}
 	assert(feof(manifest) && fclose(manifest) == 0 && count > 0);
-	printf("PASS: %zu LZNT1 packets, %zu exact-end/alignment/truncation/mutation/capacity checks", count, checks);
+	printf(
+	    "PASS: %zu LZNT1 packets, %zu exact-end/alignment/truncation/mutation/capacity checks",
+	    count, checks);
 #ifdef NTFS_LZNT1_REFERENCE
 	printf(" with identical reference status, length and complete partial output");
 #endif

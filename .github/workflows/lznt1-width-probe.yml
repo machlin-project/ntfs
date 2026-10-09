@@ -1,0 +1,36 @@
+name: LZNT1 width-state comparison
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  clang-x86-widths:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[codec-probe]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compare isolated width strategies after independent differential checks
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/probe_lznt1_widths.py --compiler clang --reference 3d28cba936b3c67d3453a17c03e803453ead38fa --candidate 9581ad8100e31b80b96ef211e4ffdbde2d22be6d --output artifacts/lznt1-width-probe --repetitions 9 --sample-ms 200 2>&1 | tee artifacts/ci/lznt1-width-probe.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lznt1-width-probe-clang-x86
+          path: |
+            artifacts/lznt1-width-probe
+            artifacts/ci/lznt1-width-probe.log
+          if-no-files-found: error
+          retention-days: 14

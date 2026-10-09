@@ -6,9 +6,19 @@
 #include <string.h>
 #include <time.h>
 
-enum { UNALIGNED = 3, CHUNK_BYTES = 4096, HEADER_BYTES = 2, GUARD_BYTES = 32, GUARD = 0xa5,
-	SIGNATURE_MASK = 0x7000, SIGNATURE = 0x3000, COMPRESSED = 0x8000,
-	WORD_HIGH_MULTIPLIER = 256, FLAG_BITS = 8, MIN_MATCH = 3 };
+enum {
+	UNALIGNED = 3,
+	CHUNK_BYTES = 4096,
+	HEADER_BYTES = 2,
+	GUARD_BYTES = 32,
+	GUARD = 0xa5,
+	SIGNATURE_MASK = 0x7000,
+	SIGNATURE = 0x3000,
+	COMPRESSED = 0x8000,
+	WORD_HIGH_MULTIPLIER = 256,
+	FLAG_BITS = 8,
+	MIN_MATCH = 3
+};
 
 static uint64_t
 now(clockid_t clock)
@@ -48,23 +58,28 @@ inspect(const uint8_t *packed, size_t count, const uint8_t *original, size_t byt
 				flags = packed[offset++];
 				for (bit = 0; bit < FLAG_BITS && offset < end; bit++) {
 					if ((flags & (1u << bit)) == 0) {
-						assert(position < bytes && packed[offset] == original[position]);
+						assert(position < bytes &&
+						    packed[offset] == original[position]);
 						offset++;
 						position++;
 						continue;
 					}
 					assert(end - offset >= HEADER_BYTES && position > base);
-					token = packed[offset] + WORD_HIGH_MULTIPLIER * packed[offset + 1];
+					token = packed[offset] +
+					    WORD_HIGH_MULTIPLIER * packed[offset + 1];
 					offset += HEADER_BYTES;
 					for (width = 0; position - base > ends[width]; width++) {
-						assert(width + 1 < sizeof(widths) / sizeof(*widths));
+						assert(
+						    width + 1 < sizeof(widths) / sizeof(*widths));
 					}
 					length = token % (1u << widths[width]) + MIN_MATCH;
 					distance = token / (1u << widths[width]) + 1;
-					assert(distance <= position - base && length <= bytes - position);
+					assert(distance <= position - base &&
+					    length <= bytes - position);
 					assert(length <= CHUNK_BYTES - (position - base));
 					for (index = 0; index < length; index++) {
-						assert(original[position + index] == original[position - distance + index]);
+						assert(original[position + index] ==
+						    original[position - distance + index]);
 					}
 					position += length;
 				}
@@ -108,20 +123,24 @@ main(int argc, char **argv)
 	assert(workspace && output);
 	memset(output, GUARD, bound + UNALIGNED + GUARD_BYTES);
 	assert(ntfs_write_lznt1_measure(input + UNALIGNED, bytes, workspace + UNALIGNED,
-	    workspace_bytes, &required) == NTFS_OK);
+		   workspace_bytes, &required) == NTFS_OK);
 	capacity = strcmp(argv[1], "bound") == 0 ? bound : required;
 	assert(ntfs_write_lznt1_encode(input + UNALIGNED, bytes, workspace + UNALIGNED,
-	    workspace_bytes, output + UNALIGNED, capacity, &written) == NTFS_OK && written == required);
+		   workspace_bytes, output + UNALIGNED, capacity, &written) == NTFS_OK &&
+	    written == required);
 	inspect(output + UNALIGNED, written, input + UNALIGNED, bytes);
 	wall_start = now(CLOCK_MONOTONIC);
 	cpu_start = now(CLOCK_PROCESS_CPUTIME_ID);
 	for (index = 0; index < iterations; index++) {
 		if (measure) {
-			assert(ntfs_write_lznt1_measure(input + UNALIGNED, bytes, workspace + UNALIGNED,
-			    workspace_bytes, &written) == NTFS_OK && written == required);
+			assert(ntfs_write_lznt1_measure(input + UNALIGNED, bytes,
+				   workspace + UNALIGNED, workspace_bytes, &written) == NTFS_OK &&
+			    written == required);
 		} else {
-			assert(ntfs_write_lznt1_encode(input + UNALIGNED, bytes, workspace + UNALIGNED,
-			    workspace_bytes, output + UNALIGNED, capacity, &written) == NTFS_OK && written == required);
+			assert(ntfs_write_lznt1_encode(input + UNALIGNED, bytes,
+				   workspace + UNALIGNED, workspace_bytes, output + UNALIGNED,
+				   capacity, &written) == NTFS_OK &&
+			    written == required);
 		}
 	}
 	cpu = now(CLOCK_PROCESS_CPUTIME_ID) - cpu_start;
@@ -136,10 +155,12 @@ main(int argc, char **argv)
 	for (index = 0; index < written; index++) {
 		checksum = checksum * 31u + output[UNALIGNED + index];
 	}
-	printf("{\"bytes\":%zu,\"encodedBytes\":%zu,\"capacity\":%zu,\"workspaceBytes\":%zu,"
+	printf(
+	    "{\"bytes\":%zu,\"encodedBytes\":%zu,\"capacity\":%zu,\"workspaceBytes\":%zu,"
 	    "\"coreAllocations\":0,\"coreIoCalls\":0,\"iterations\":%zu,\"ns\":%llu,\"cpuNs\":%llu,"
-	    "\"checksum\":\"%016llx\"}\n", bytes, written, capacity, workspace_bytes, iterations,
-	    (unsigned long long)wall, (unsigned long long)cpu, (unsigned long long)checksum);
+	    "\"checksum\":\"%016llx\"}\n",
+	    bytes, written, capacity, workspace_bytes, iterations, (unsigned long long)wall,
+	    (unsigned long long)cpu, (unsigned long long)checksum);
 	free(output);
 	free(workspace);
 	free(input);

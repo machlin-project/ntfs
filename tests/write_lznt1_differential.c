@@ -18,15 +18,17 @@ check(const uint8_t *data, size_t bytes, size_t alignment)
 {
 	uint8_t *input, *scratch, *reference_scratch, *output, *reference_output;
 	size_t workspace, reference_workspace, bound = SIZE_MAX, reference_bound = SIZE_MAX,
-	       required = SIZE_MAX, reference_required = SIZE_MAX, written, reference_written,
-	       capacities[8], count = 0, index, offset, capacity;
+					       required = SIZE_MAX, reference_required = SIZE_MAX,
+					       written, reference_written, capacities[8], count = 0,
+					       index, offset, capacity;
 	enum ntfs_result result, reference_result;
 
 	workspace = ntfs_write_lznt1_workspace_size();
 	reference_workspace = reference_write_lznt1_workspace_size();
 	assert(workspace == reference_workspace);
 	assert(ntfs_write_lznt1_bound(bytes, &bound) == NTFS_OK);
-	assert(reference_write_lznt1_bound(bytes, &reference_bound) == NTFS_OK && bound == reference_bound);
+	assert(reference_write_lznt1_bound(bytes, &reference_bound) == NTFS_OK &&
+	    bound == reference_bound);
 	input = malloc(bytes + alignment + 1);
 	scratch = malloc(workspace + alignment + 1);
 	reference_scratch = malloc(reference_workspace + alignment + 1);
@@ -36,9 +38,10 @@ check(const uint8_t *data, size_t bytes, size_t alignment)
 	memset(scratch, GUARD, workspace + alignment + 1);
 	memset(reference_scratch, GUARD, reference_workspace + alignment + 1);
 	assert(ntfs_write_lznt1_measure(input + alignment + 1, bytes, scratch + alignment + 1,
-	    workspace, &required) == NTFS_OK);
+		   workspace, &required) == NTFS_OK);
 	assert(reference_write_lznt1_measure(input + alignment + 1, bytes,
-	    reference_scratch + alignment + 1, reference_workspace, &reference_required) == NTFS_OK);
+		   reference_scratch + alignment + 1, reference_workspace,
+		   &reference_required) == NTFS_OK);
 	assert(required == reference_required && required <= bound);
 	capacities[count++] = 0;
 	capacities[count++] = 1;
@@ -71,7 +74,8 @@ check(const uint8_t *data, size_t bytes, size_t alignment)
 		assert(written == (capacity < required ? SIZE_MAX : required));
 		assert(memcmp(output, reference_output, capacity + alignment + 1) == 0);
 		for (offset = 0; offset <= alignment; offset++) {
-			assert(output[offset] == GUARD && scratch[offset] == GUARD && input[offset] == GUARD);
+			assert(output[offset] == GUARD && scratch[offset] == GUARD &&
+			    input[offset] == GUARD);
 		}
 		for (offset = result == NTFS_OK ? written : 0; offset < capacity; offset++) {
 			assert(output[alignment + 1 + offset] == GUARD);
@@ -89,10 +93,10 @@ check(const uint8_t *data, size_t bytes, size_t alignment)
 int
 main(void)
 {
-	static const size_t sizes[] = {0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 18, 31, 32, 33, 34,
-	    63, 64, 65, 66, 127, 128, 129, 130, 255, 256, 257, 258, 511, 512, 513, 514,
-	    1023, 1024, 1025, 1026, 2047, 2048, 2049, 2050, 4093, 4094, 4095, 4096, 4097,
-	    8191, 8192, 8193, 65536, NTFS_WRITE_LZNT1_MAX_BYTES};
+	static const size_t sizes[] = {0, 1, 2, 3, 4, 7, 8, 9, 15, 16, 17, 18, 31, 32, 33, 34, 63,
+	    64, 65, 66, 127, 128, 129, 130, 255, 256, 257, 258, 511, 512, 513, 514, 1023, 1024,
+	    1025, 1026, 2047, 2048, 2049, 2050, 4093, 4094, 4095, 4096, 4097, 8191, 8192, 8193,
+	    65536, NTFS_WRITE_LZNT1_MAX_BYTES};
 	uint8_t *data;
 	uint32_t random = UINT32_C(0x4c5a4e54);
 	size_t kind, index, check_index, checks = 0, position;
@@ -118,7 +122,8 @@ main(void)
 				data[index] = (uint8_t)random;
 				break;
 			case 4:
-				data[index] = index % 257 < 193 ? (uint8_t)(index % 7) : (uint8_t)random;
+				data[index] =
+				    index % 257 < 193 ? (uint8_t)(index % 7) : (uint8_t)random;
 				break;
 			case 5:
 				data[index] = (index / CHUNK_BYTES) % 2 ? (uint8_t)random : 'Q';
@@ -143,6 +148,8 @@ main(void)
 		}
 	}
 	free(data);
-	printf("PASS: %zu frozen/current LZNT1 encode capacity checks, identical bytes and failure publication\n", checks);
+	printf("PASS: %zu frozen/current LZNT1 encode capacity checks, identical bytes and failure "
+	       "publication\n",
+	    checks);
 	return 0;
 }

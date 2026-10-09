@@ -26,42 +26,38 @@ _Static_assert(offsetof(struct fixture_v3, name) == 76, "independent V3 prefix")
 _Static_assert(sizeof(struct fixture_v2) == 72, "independent V2 complete record");
 _Static_assert(sizeof(struct fixture_v3) == 88, "independent V3 complete record");
 
-static const struct fixture_v2 golden_v2 = {
-	.length = {0x48, 0, 0, 0},
-	.major = {2, 0},
-	.minor = {0, 0},
-	.file = {8, 7, 6, 5, 4, 3, 2, 1},
-	.parent = {0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11},
-	.usn = {0x28, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21},
-	.time = {0x38, 0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31},
-	.reason = {3, 0x81, 0, 0x81},
-	.source = {9, 0, 0, 0x80},
-	.security = {0x88, 0x77, 0x66, 0x55},
-	.attributes = {0xef, 0xcd, 0xab, 0x89},
-	.name_length = {8, 0},
-	.name_offset = {0x3c, 0},
-	.name = {'A', 0, 0xa9, 3, 0, 0xd8, 0, 0},
-	.padding = {0, 0, 0, 0}
-};
+static const struct fixture_v2 golden_v2 = {.length = {0x48, 0, 0, 0},
+    .major = {2, 0},
+    .minor = {0, 0},
+    .file = {8, 7, 6, 5, 4, 3, 2, 1},
+    .parent = {0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11},
+    .usn = {0x28, 0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21},
+    .time = {0x38, 0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31},
+    .reason = {3, 0x81, 0, 0x81},
+    .source = {9, 0, 0, 0x80},
+    .security = {0x88, 0x77, 0x66, 0x55},
+    .attributes = {0xef, 0xcd, 0xab, 0x89},
+    .name_length = {8, 0},
+    .name_offset = {0x3c, 0},
+    .name = {'A', 0, 0xa9, 3, 0, 0xd8, 0, 0},
+    .padding = {0, 0, 0, 0}};
 
-static const struct fixture_v3 golden_v3 = {
-	.length = {0x58, 0, 0, 0},
-	.major = {3, 0},
-	.minor = {0, 0},
-	.file = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-	.parent = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb,
-	    0xfc, 0xfd, 0xfe, 0xff},
-	.usn = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
-	.time = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-	.reason = {0xff, 0xff, 0xff, 0xff},
-	.source = {0, 0, 0, 0},
-	.security = {0, 0, 0, 0},
-	.attributes = {0, 0, 0, 0},
-	.name_length = {6, 0},
-	.name_offset = {0x4c, 0},
-	.name = {'x', 0, 'y', 0, 'z', 0},
-	.padding = {0, 0, 0, 0, 0, 0}
-};
+static const struct fixture_v3 golden_v3 = {.length = {0x58, 0, 0, 0},
+    .major = {3, 0},
+    .minor = {0, 0},
+    .file = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+    .parent = {0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd,
+	0xfe, 0xff},
+    .usn = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+    .time = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+    .reason = {0xff, 0xff, 0xff, 0xff},
+    .source = {0, 0, 0, 0},
+    .security = {0, 0, 0, 0},
+    .attributes = {0, 0, 0, 0},
+    .name_length = {6, 0},
+    .name_offset = {0x4c, 0},
+    .name = {'x', 0, 'y', 0, 'z', 0},
+    .padding = {0, 0, 0, 0, 0, 0}};
 
 static struct ntfs_usn_record
 description(unsigned version)
@@ -300,7 +296,8 @@ offset_and_sequence(void)
 	assert(ntfs_usn_record_decode(bytes, sizeof(bytes), &decoded) == NTFS_OK);
 	assert(decoded.filename_offset == name_offset);
 	assert(decoded.record.filename == bytes + name_offset);
-	assert(ntfs_usn_record_encode(&decoded.record, output, sizeof(output), &written) == NTFS_OK);
+	assert(
+	    ntfs_usn_record_encode(&decoded.record, output, sizeof(output), &written) == NTFS_OK);
 	assert(written == sizeof(golden_v2) && memcmp(output, &golden_v2, written) == 0);
 	/* Records use their own length; following V3 cannot be mistaken for padding. */
 	memcpy(bytes, &golden_v2, sizeof(golden_v2));
@@ -333,7 +330,8 @@ maximum_names(void)
 		input.filename_bytes = bytes;
 		prefix = version == 2 ? offsetof(struct fixture_v2, name)
 				      : offsetof(struct fixture_v3, name);
-		expected = ((prefix + bytes + TEST_ALIGNMENT - 1) / TEST_ALIGNMENT) * TEST_ALIGNMENT;
+		expected =
+		    ((prefix + bytes + TEST_ALIGNMENT - 1) / TEST_ALIGNMENT) * TEST_ALIGNMENT;
 		assert(ntfs_usn_record_size(&input, &required) == NTFS_OK && required == expected);
 		memset(output, TEST_SENTINEL, capacity);
 		assert(ntfs_usn_record_encode(&input, output, required, &written) == NTFS_OK);
@@ -347,7 +345,8 @@ maximum_names(void)
 		input.filename = NULL;
 		input.filename_bytes = 0;
 		assert(ntfs_usn_record_encode(&input, output, capacity, &written) == NTFS_OK);
-		assert(written == ((prefix + TEST_ALIGNMENT - 1) / TEST_ALIGNMENT) * TEST_ALIGNMENT);
+		assert(
+		    written == ((prefix + TEST_ALIGNMENT - 1) / TEST_ALIGNMENT) * TEST_ALIGNMENT);
 		assert(ntfs_usn_record_decode(output, written, &decoded) == NTFS_OK);
 		assert(decoded.record.filename_bytes == 0);
 	}
@@ -420,7 +419,8 @@ input_errors(void)
 		written = required = SIZE_MAX;
 		memset(output, TEST_SENTINEL, sizeof(output));
 		assert(ntfs_usn_record_size(&input, &required) == expected);
-		assert(ntfs_usn_record_encode(&input, output, sizeof(output), &written) == expected);
+		assert(
+		    ntfs_usn_record_encode(&input, output, sizeof(output), &written) == expected);
 		assert(required == SIZE_MAX && written == SIZE_MAX);
 		assert(memcmp(&input, &saved, sizeof(input)) == 0);
 		sentinel(output, sizeof(output));
@@ -435,8 +435,8 @@ input_errors(void)
 	assert(ntfs_usn_record_encode(&input, output, SIZE_MAX, &written) == NTFS_INVALID);
 	assert(ntfs_usn_record_encode(&input, output, sizeof(output), NULL) == NTFS_INVALID);
 	assert(ntfs_usn_record_encode(NULL, output, sizeof(output), &written) == NTFS_INVALID);
-	assert(ntfs_usn_record_encode((const void *)UINTPTR_MAX, output, sizeof(output), &written) ==
-	    NTFS_INVALID);
+	assert(ntfs_usn_record_encode(
+		   (const void *)UINTPTR_MAX, output, sizeof(output), &written) == NTFS_INVALID);
 	assert(written == SIZE_MAX);
 	sentinel(output, sizeof(output));
 	memset(&decoded, TEST_SENTINEL, sizeof(decoded));
@@ -469,8 +469,8 @@ aliases(void)
 	assert(ntfs_usn_record_encode(&input, storage.bytes, sizeof(storage.bytes),
 		   &input.filename_bytes) == NTFS_INVALID);
 	assert(memcmp(&input, &saved, sizeof(input)) == 0);
-	assert(ntfs_usn_record_encode(&input, storage.bytes, sizeof(storage.bytes), &storage.size) ==
-	    NTFS_INVALID);
+	assert(ntfs_usn_record_encode(
+		   &input, storage.bytes, sizeof(storage.bytes), &storage.size) == NTFS_INVALID);
 	sentinel(&storage, sizeof(storage));
 	input.filename = storage.bytes;
 	saved = input;
@@ -478,8 +478,8 @@ aliases(void)
 	assert(ntfs_usn_record_encode(&input, storage.bytes, sizeof(storage.bytes), &written) ==
 	    NTFS_INVALID);
 	memset(output, TEST_SENTINEL, sizeof(output));
-	assert(ntfs_usn_record_encode(&input, output, sizeof(output), &storage.size) ==
-	    NTFS_INVALID);
+	assert(
+	    ntfs_usn_record_encode(&input, output, sizeof(output), &storage.size) == NTFS_INVALID);
 	sentinel(output, sizeof(output));
 	assert(memcmp(&input, &saved, sizeof(input)) == 0);
 	sentinel(&storage, sizeof(storage));
@@ -500,6 +500,7 @@ reason_union(void)
 		uint32_t aligned;
 		uint8_t bytes[sizeof(uint32_t) + 1];
 	} unaligned;
+
 	uint32_t flags[] = {0x00000100, 0x80000000, 0x00000002, 0x00000002, 0x01000000};
 	uint32_t saved[sizeof(flags) / sizeof(*flags)], bits[32], out;
 	uint32_t *maximum;

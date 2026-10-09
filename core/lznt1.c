@@ -55,7 +55,8 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 				 * tail retains partial writes and CORRUPT-before-RANGE order
 				 * at a chunk boundary or short caller destination. */
 				if (flags == 0 && end - input_offset >= NTFS_BITS_PER_BYTE &&
-				    NTFS_LZNT1_CHUNK - (output_offset - base) >= NTFS_BITS_PER_BYTE &&
+				    NTFS_LZNT1_CHUNK - (output_offset - base) >=
+					NTFS_BITS_PER_BYTE &&
 				    capacity - output_offset >= NTFS_BITS_PER_BYTE) {
 					ntfs_copy(destination_bytes + output_offset,
 					    source_bytes + input_offset, NTFS_BITS_PER_BYTE);
@@ -82,8 +83,9 @@ ntfs_lznt1_decode(const void *input, size_t size, void *output, size_t capacity,
 						token = ntfs_u16(source_bytes + input_offset);
 						input_offset += NTFS_LZNT1_TOKEN_BYTES;
 						position = output_offset - base;
-						/* Output is monotone within this chunk. Advance each
-						 * width boundary once, including jumps over several. */
+						/* Output is monotone within this chunk. Advance
+						 * each width boundary once, including jumps over
+						 * several. */
 						while (position > threshold) {
 							mask >>= 1;
 							shift--;

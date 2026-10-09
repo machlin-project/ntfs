@@ -201,6 +201,33 @@ class BenchmarkToolTests(unittest.TestCase):
                               'overflow', tool_environment(), output_limit=32)
             self.assertEqual((root / 'overflow.stdout').stat().st_size, 32)
 
+    def test_group_cleanup_refusal_preserves_original_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(tools.os, 'killpg', side_effect=PermissionError('group refused')):
+                with self.assertRaisesRegex(ValueError, 'log budget'):
+                    tools.command([sys.executable, '-c',
+                                   "import time; print('x' * 4096, flush=True); time.sleep(30)"],
+                                  root, 'refused-group', tool_environment(), output_limit=32)
+            report = json.loads((root / 'refused-group.command.json').read_text())
+            self.assertEqual(report['status'], 'failed')
+            self.assertIn('retained-log budget', report['error'])
+            self.assertIn('PermissionError', report['cleanup_errors'][0])
+            self.assertIsNotNone(report['exitCode'])
+            self.assertEqual((root / 'refused-group.stdout').stat().st_size, 32)
+
+    def test_reaped_child_does_not_signal_reusable_process_id(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(tools.os, 'killpg') as kill_group:
+                with self.assertRaisesRegex(RuntimeError, 'exited 7'):
+                    tools.command([sys.executable, '-c', 'raise SystemExit(7)'],
+                                  root, 'settled', tool_environment())
+            kill_group.assert_not_called()
+            report = json.loads((root / 'settled.command.json').read_text())
+            self.assertEqual(report['exitCode'], 7)
+            self.assertNotIn('cleanup_errors', report)
+
 
 if __name__ == '__main__':
     unittest.main()

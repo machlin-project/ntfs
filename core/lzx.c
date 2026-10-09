@@ -197,14 +197,17 @@ lzx_take_symbol_fallback(struct ntfs_lzx_reader *reader, const struct ntfs_lzx_t
 		if (lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 5)) {
 			if (lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 3)) {
 				bits = lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 2)
-				    ? LZX_PREFIX_BITS + 2 : LZX_PREFIX_BITS + 3;
+				    ? LZX_PREFIX_BITS + 2
+				    : LZX_PREFIX_BITS + 3;
 			} else {
 				bits = lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 4)
-				    ? LZX_PREFIX_BITS + 4 : LZX_PREFIX_BITS + 5;
+				    ? LZX_PREFIX_BITS + 4
+				    : LZX_PREFIX_BITS + 5;
 			}
 		} else if (lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 7)) {
 			bits = lzx_before_bucket_end(tree, value, LZX_PREFIX_BITS + 6)
-			    ? LZX_PREFIX_BITS + 6 : LZX_PREFIX_BITS + 7;
+			    ? LZX_PREFIX_BITS + 6
+			    : LZX_PREFIX_BITS + 7;
 		} else {
 			bits = NTFS_LZX_MAX_CODE_BITS;
 		}

@@ -146,22 +146,44 @@ CodeDirectory page hash matches its actual bytes. Stripping the debug map after
 linking therefore did not make the linker's earlier UUID computation independent
 of the relocated build inputs.
 
-Release builds now map the entire owned build root to the logical
-`/machlin-ntfs-build` prefix while compiling C, Objective-C and Swift. Swift's
-serialized debugging options receive the same mapping. The actual selected
-Swift version and supported prefix-map options are queried before generation;
-missing support fails explicitly. UUID generation, separate debug symbols and
-the complete app comparison remain intact. These changes require a fresh hosted
-comparison before reproducibility is accepted. Debug builds retain physical
-paths; Release symbolication can map the logical prefix to the retained build
-directory using the debugger's source mapping.
+The next hosted experiment confirms that compiler mappings alone still leave
+different UUIDs. Its small C/Swift probe produces byte-identical stripped
+executables on both architectures only after adding relative Swift AST paths
+and an OSO prefix at link time. That probe's original `--oso-prepend-path` route
+also reports missing module inputs, and mapping the whole app build root makes
+Xcode's dsymutil miss remapped Clang module-cache paths. Those original binaries,
+dSYMs and diagnostics remain retained. Matching UUIDs alone do not establish
+complete debugger information.
+
+Release compilation now maps only `SourceSnapshot` to the logical
+`/machlin-ntfs-build/SourceSnapshot` prefix, including Swift's serialized source
+debugging options. Actual module-cache locations remain available to dsymutil.
+The selected Swift version and supported prefix-map options are queried before
+generation; missing support fails explicitly. A small committed linker wrapper
+forwards Xcode's arguments to that selected clang, making owned Swift AST paths
+relative and adding the owned build root as the OSO prefix. Response files have
+explicit byte, argument and nesting bounds; the originals remain unchanged.
+Normal UUID generation and complete app comparison remain intact.
+
+Xcode's ordinary dsymutil runs from the generated project directory. A contained
+`Build` alias there points to the original owned build tree, allowing relative
+OSO paths to find their actual objects without prefixing unrelated SDK/module
+paths. This generated alias is outside the app. Builds now reject missing
+object/module diagnostics and require structurally verified, nonempty DWARF
+compilation units for each architecture, in addition to matching dSYM UUIDs and
+inventories. A fresh hosted comparison must verify this complete route.
+Debug builds retain physical source paths; Release source-level debugging maps
+the logical source prefix back to the retained source snapshot. Reproducible
+product bytes and debugger source-path lookup are separate checks.
 
 `python3 scripts/check_macos_uuid.py --output artifacts/macos-uuid-probe` is a
 small selected-Xcode diagnostic. It compares independent C/Swift builds with
-original paths, compiler mappings, and compiler plus linker mappings for both
-architectures. It retains unstripped/stripped binaries, dSYMs and bounded command
-logs without executing those binaries. Its report is toolchain evidence, not
-FSKit or whole-app reproducibility acceptance. Apple's published
+original paths, compiler mappings, compiler plus linker mappings, and the narrower
+source/linker mappings with contained object aliases. It reports byte equality
+and complete debug-input resolution separately. It retains unstripped/stripped
+binaries, dSYMs and bounded command logs without executing those binaries. Its
+report is toolchain evidence, not FSKit or whole-app reproducibility acceptance.
+Apple's published
 [linker options](https://github.com/apple-oss-distributions/ld64/blob/main/doc/man/man1/ld-classic.1)
 and Swift's [driver option declarations](https://github.com/swiftlang/swift-driver/blob/main/Sources/SwiftOptions/Options.swift)
 describe the debug-path interfaces used here.

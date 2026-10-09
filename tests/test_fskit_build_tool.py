@@ -18,6 +18,7 @@ sys.path.insert(0, str(REPOSITORY / 'scripts'))
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(HERE))
 import build_fskit as build
+import fskit_linker as linker
 import package_unsigned as package
 from test_unsigned_package import fixture, SOURCE, LICENSE, PROVENANCE
 
@@ -55,7 +56,7 @@ class BuildArgumentTests(unittest.TestCase):
             args = build.arguments(['--configuration', 'Release', '--derived-data', root])
             command = build.xcode_command(args, Path('/project'), '/selected/clang')
             settings = dict(value.split('=', 1) for value in command if '=' in value)
-            mapping = root + '=' + build.REPRODUCIBLE_BUILD_ROOT
+            mapping = root + '/SourceSnapshot=' + build.REPRODUCIBLE_BUILD_ROOT + '/SourceSnapshot'
             self.assertEqual(shlex.split(settings['NTFS_REPRO_CFLAGS']), ['-ffile-prefix-map=' + mapping])
             self.assertEqual(shlex.split(settings['NTFS_REPRO_SWIFT_FLAGS']),
                              ['-file-prefix-map', mapping, '-debug-prefix-map', mapping,
@@ -136,6 +137,10 @@ class BuildExecutionContracts(unittest.TestCase):
                 entry = tarfile.TarInfo('adapters/fskit/project.yml')
                 entry.size = len(source)
                 archive.addfile(entry, io.BytesIO(source))
+                wrapper = b'#!/usr/bin/env python3\n# Synthetic build fixture only.\n'
+                entry = tarfile.TarInfo('scripts/fskit_linker.py')
+                entry.size, entry.mode = len(wrapper), 0o755
+                archive.addfile(entry, io.BytesIO(wrapper))
             return buffer.getvalue()
         if name == 'sdk-path':
             return str(self.sdk)
@@ -158,6 +163,8 @@ class BuildExecutionContracts(unittest.TestCase):
         if name.endswith('-uuids'):
             return ('UUID: 11111111-2222-3333-4444-555555555555 (arm64) synthetic\n'
                     'UUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee (x86_64) synthetic\n')
+        if name.endswith('-debug-content'):
+            return '0x0000000b: DW_TAG_compile_unit\n'
         return 'synthetic-tool-evidence'
 
     def execute(self, source=None):
@@ -185,6 +192,10 @@ class BuildExecutionContracts(unittest.TestCase):
         self.assertIn('CODE_SIGNING_ALLOWED=NO', command)
         self.assertIn(str(self.output / 'SourceSnapshot/adapters/fskit/NTFSFSKit.xcodeproj'), command)
         self.assertFalse((self.root / 'adapters').exists())
+        self.assertEqual((self.output / 'SourceSnapshot/adapters/fskit/Build').resolve(),
+                         (self.output / 'Build').resolve())
+        self.assertEqual(json.loads((self.output / 'linker-settings.json').read_text()),
+                         {'clang': str(self.clang), 'build_root': str(self.output)})
         self.assertEqual(len(result['debug_symbols']), 2)
         self.assertTrue(all(set(item['uuids']) == {'arm64', 'x86_64'} and item['payload']
                             for item in result['debug_symbols']))
@@ -224,6 +235,28 @@ class BuildExecutionContracts(unittest.TestCase):
         self.assertFalse(any(name in ('xcodegen', 'xcode-build') for _, name, _, _ in self.calls))
         self.assertEqual(json.loads((self.output / 'build-report.json').read_text())['status'], 'failed')
 
+    def test_matching_uuid_does_not_admit_empty_debug_symbols(self):
+        original = self.fake_command
+        def command(*args, **kwargs):
+            return 'empty DWARF\n' if args[2].endswith('-debug-content') else original(*args, **kwargs)
+        with patch.object(self, 'fake_command', side_effect=command), \
+                self.assertRaisesRegex(ValueError, 'no compilation units'):
+            self.execute()
+        self.assertEqual(json.loads((self.output / 'build-report.json').read_text())['status'], 'failed')
+
+    def test_missing_object_or_module_diagnostics_refuse_build_success(self):
+        original = self.fake_command
+        def command(*args, **kwargs):
+            result = original(*args, **kwargs)
+            return 'warning: /mapped/Cache.pcm: No such file or directory\n' if args[2] == 'xcode-build' else result
+        with patch.object(self, 'fake_command', side_effect=command), \
+                self.assertRaisesRegex(ValueError, 'missing object or module'):
+            self.execute()
+        result = json.loads((self.output / 'build-report.json').read_text())
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(len(result['debug_input_diagnostics']), 1)
+        self.assertFalse(any(name.endswith('-uuids') for _, name, _, _ in self.calls))
+
     def test_source_changed_during_simulated_build_refuses_success(self):
         values = iter([dict(SOURCE), dict(SOURCE, revision='f' * 40)])
         with self.assertRaisesRegex(ValueError, 'Source checkout changed'):
@@ -231,6 +264,56 @@ class BuildExecutionContracts(unittest.TestCase):
         result = json.loads((self.output / 'build-report.json').read_text())
         self.assertEqual(result['status'], 'failed')
         self.assertIn('Source checkout changed', result['error'])
+
+
+class LinkerPathContracts(unittest.TestCase):
+    def test_maps_owned_ast_paths_preserves_loader_and_external_paths(self):
+        root = Path('/owned/build root')
+        cwd = root / 'SourceSnapshot/adapters/fskit'
+        module = root / 'Build/Module.swiftmodule'
+        original = ['-target', 'arm64-apple-macos26.5', '-Xlinker', '-reproducible',
+                    '-Xlinker', '-rpath', '-Xlinker', '@executable_path/../Frameworks',
+                    '-Xlinker', '-add_ast_path', '-Xlinker', str(module),
+                    '-Wl,-add_ast_path,' + str(module),
+                    '-Xlinker', '-add_ast_path', '-Xlinker', '/SDK/External.swiftmodule',
+                    '-o', str(root / 'Build/Executable')]
+        result = linker.mapped_arguments(original, root, cwd)
+        expected = original.copy()
+        expected[11] = '../../../Build/Module.swiftmodule'
+        expected[12] = '-Wl,-add_ast_path,../../../Build/Module.swiftmodule'
+        self.assertEqual(result, [*expected, '-Xlinker', '-oso_prefix', '-Xlinker', str(root) + '/'])
+        self.assertEqual(original[11], str(module))
+
+    def test_nested_response_files_keep_quoted_arguments_and_original_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            cwd = root / 'SourceSnapshot/adapters/fskit'
+            cwd.mkdir(parents=True)
+            module = root / 'Build/Module Name.swiftmodule'
+            nested, response = root / 'nested.resp', root / 'link.resp'
+            nested.write_text(shlex.join(['-Xlinker', '-add_ast_path', '-Xlinker', str(module)]))
+            response.write_text(shlex.join(['@' + str(nested), '-framework', 'Framework Name']))
+            original = response.read_bytes(), nested.read_bytes()
+            result = linker.mapped_arguments(['@' + str(response)], root, cwd)
+            self.assertEqual(result[:6], ['-Xlinker', '-add_ast_path', '-Xlinker',
+                                         '../../../Build/Module Name.swiftmodule', '-framework', 'Framework Name'])
+            self.assertEqual((response.read_bytes(), nested.read_bytes()), original)
+            nested.write_text('@' + str(response))
+            with self.assertRaisesRegex(ValueError, 'nesting'):
+                linker.mapped_arguments(['@' + str(response)], root, cwd)
+            with patch.object(linker, 'MAX_RESPONSE_BYTES', 1), self.assertRaisesRegex(ValueError, 'byte bound'):
+                linker.mapped_arguments(['@' + str(response)], root, cwd)
+
+    def test_equivalent_relocated_debug_paths_and_argument_bound(self):
+        for location in ('first', 'longer relocated second'):
+            root = Path('/owned') / location
+            result = linker.mapped_arguments(['-Xlinker', '-add_ast_path', '-Xlinker',
+                                               str(root / 'Build/Module.swiftmodule')],
+                                              root, root / 'SourceSnapshot/adapters/fskit')
+            self.assertEqual(result[:4], ['-Xlinker', '-add_ast_path', '-Xlinker',
+                                         '../../../Build/Module.swiftmodule'])
+        with patch.object(linker, 'MAX_ARGUMENTS', 1), self.assertRaisesRegex(ValueError, 'count bound'):
+            linker.mapped_arguments(['-a', '-b'], Path('/owned'), Path('/owned'))
 
 
 class BuildBindingTests(unittest.TestCase):

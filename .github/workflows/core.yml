@@ -265,7 +265,7 @@ jobs:
             artifacts/ci/*.log
             .build/ntfs-fuzz-directory-mutation
   macos-components:
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[cloud-full]')) }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.broad) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[cloud-full]') || contains(github.event.head_commit.message, '[macos-app]'))) }}
     runs-on: macos-latest
     timeout-minutes: 60
     steps:

@@ -25,6 +25,13 @@ MAX_BUILD_SECONDS = 1800
 UUID_LINE = re.compile(r'UUID: ([0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}) '
                        r'\((arm64|x86_64)\) .+')
 REPRODUCIBLE_BUILD_ROOT = '/machlin-ntfs-build'
+MISSING_DEBUG_INPUT = re.compile(
+    r'(?:warning|error):.*(?:could not open|no such file or directory|'
+    r'unable to open.*(?:object|module)|failed to load.*module)', re.IGNORECASE)
+
+
+def debug_input_diagnostics(text):
+    return [line for line in text.splitlines() if MISSING_DEBUG_INPUT.search(line)]
 
 
 def arguments(argv=None):
@@ -59,11 +66,12 @@ def xcode_command(args, project, clang):
             '-jobs', '4', 'CLANG_ENABLE_EXPLICIT_MODULES=NO', f'CC={clang}']
     if args.configuration == 'Release':
         argv += ['ARCHS=arm64 x86_64', 'ONLY_ACTIVE_ARCH=NO']
-        mapping = f'{args.derived_data.absolute()}={REPRODUCIBLE_BUILD_ROOT}'
+        mapping = f'{args.derived_data.absolute() / "SourceSnapshot"}={REPRODUCIBLE_BUILD_ROOT}/SourceSnapshot'
         argv += ['NTFS_REPRO_CFLAGS=' + shlex.join(['-ffile-prefix-map=' + mapping]),
                  'NTFS_REPRO_SWIFT_FLAGS=' + shlex.join(
                      ['-file-prefix-map', mapping, '-debug-prefix-map', mapping,
-                      '-Xfrontend', '-prefix-serialized-debugging-options'])]
+                      '-Xfrontend', '-prefix-serialized-debugging-options']),
+                 'LD=' + str(project.parent.parent / 'scripts/fskit_linker.py')]
     if args.build_number is not None:
         argv += [f'CURRENT_PROJECT_VERSION={args.build_number}']
     if args.team:
@@ -113,8 +121,18 @@ def release_debug_symbols(app, products, run):
         binary_uuids = uuids(binary, label + '-binary-uuids')
         symbol_uuids = uuids(symbols, label + '-debug-uuids')
         require(binary_uuids == symbol_uuids, 'Executable and separate debug-symbol UUIDs differ')
+        compile_units = {}
+        for architecture in sorted(binary_uuids):
+            run(['xcrun', 'dwarfdump', '--verify', '--arch=' + architecture, str(symbols)],
+                label + '-' + architecture + '-debug-verify', limit=4 * 1024 * 1024)
+            contents = run(['xcrun', 'dwarfdump', '--debug-info', '--recurse-depth=1',
+                            '--arch=' + architecture, str(symbols)],
+                           label + '-' + architecture + '-debug-content', limit=4 * 1024 * 1024)
+            compile_units[architecture] = contents.count('DW_TAG_compile_unit')
+            require(compile_units[architecture] > 0, 'Separate debug symbols contain no compilation units')
         result.append({'binary': binary.relative_to(app).as_posix(), 'path': str(symbols),
-                       'uuids': binary_uuids, 'payload': public_inventory(inventory(symbols))})
+                       'uuids': binary_uuids, 'compile_units': compile_units,
+                       'dwarf_verified': True, 'payload': public_inventory(inventory(symbols))})
     return result
 
 
@@ -164,15 +182,31 @@ def build(args, *, root=ROOT):
             require(all(re.search(r'(?m)^\s*' + re.escape(option) + r'(?:\s|$)', options)
                         for option in required), 'Selected Swift compiler lacks required path-mapping options')
         project = snapshot / 'adapters/fskit'
+        if args.configuration == 'Release':
+            wrapper = snapshot / 'scripts/fskit_linker.py'
+            require(wrapper.is_file() and wrapper.stat().st_mode & 0o111,
+                    'The committed linker wrapper is absent or not executable')
+            (output / 'linker-settings.json').write_bytes(json_bytes(
+                {'clang': report['toolchain']['clang'], 'build_root': str(output)}))
+            # Relative OSO paths begin with Build/. Xcode runs dsymutil from the
+            # project directory, so expose that same owned tree there without
+            # changing the actual object paths or moving any compiler output.
+            (project / 'Build').symlink_to('../../../Build', target_is_directory=True)
+            report['linker_path_mapping'] = 'relative Swift AST paths and build-root OSO prefix; original UUID generation'
         spec = selected_spec(args, project)
         run(['xcodegen', 'generate', '--spec', str(spec), '--project', str(project)],
             'xcodegen', timeout=120, cwd=snapshot)
         argv = xcode_command(args, project, report['toolchain']['clang'])
         report['command'] = argv
         if args.configuration == 'Release':
-            report['compiler_path_mapping'] = {str(output): REPRODUCIBLE_BUILD_ROOT}
+            report['compiler_path_mapping'] = {str(snapshot): REPRODUCIBLE_BUILD_ROOT + '/SourceSnapshot'}
         report_path.write_bytes(json_bytes(report))
-        run(argv, 'xcode-build', timeout=args.timeout, limit=32 * 1024 * 1024, cwd=snapshot)
+        diagnostics = run(argv, 'xcode-build', timeout=args.timeout, limit=32 * 1024 * 1024, cwd=snapshot)
+        stderr = output / 'xcode-build.stderr'
+        if stderr.exists():
+            diagnostics += '\n' + stderr.read_text(errors='replace')
+        report['debug_input_diagnostics'] = debug_input_diagnostics(diagnostics)
+        require(not report['debug_input_diagnostics'], 'Build reports missing object or module inputs')
         app = output / 'Build/Products' / args.configuration / APP_NAME
         report['app_path'] = str(app)
         report['app_payload'] = public_inventory(inventory(app))

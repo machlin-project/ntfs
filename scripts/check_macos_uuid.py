@@ -13,7 +13,7 @@ import shutil
 import sys
 
 from benchmark_toolchain import command
-from build_fskit import REPRODUCIBLE_BUILD_ROOT
+from build_fskit import REPRODUCIBLE_BUILD_ROOT, debug_input_diagnostics
 from environment import tool_environment
 
 
@@ -43,7 +43,7 @@ def probe(output):
         sdk = run(['xcrun', '--show-sdk-path'], output, 'sdk-path').strip()
         sdk_version = run(['xcrun', '--show-sdk-version'], output, 'sdk-version').strip()
         report['sdk_version'] = sdk_version
-        for variant in ('original', 'compiler-mapped', 'compiler-and-linker-mapped'):
+        for variant in ('original', 'compiler-mapped', 'compiler-and-linker-mapped', 'source-and-linker-mapped'):
             value = {'name': variant, 'architectures': []}
             report['variants'].append(value)
             for architecture in ('arm64', 'x86_64'):
@@ -60,7 +60,9 @@ def probe(output):
                     swift_source.write_text('@_silgen_name("ntfs_probe_answer") func answer() -> Int32\n'
                                             'if answer() != 42 { fatalError("probe") }\n')
                     target = architecture + '-apple-macos' + sdk_version
-                    mapping = str(directory) + '=' + REPRODUCIBLE_BUILD_ROOT
+                    source_only = variant == 'source-and-linker-mapped'
+                    mapping = (str(source) + '=' + REPRODUCIBLE_BUILD_ROOT + '/SourceSnapshot' if source_only
+                               else str(directory) + '=' + REPRODUCIBLE_BUILD_ROOT)
                     c_flags = [] if variant == 'original' else ['-ffile-prefix-map=' + mapping]
                     swift_flags = [] if variant == 'original' else [
                         '-file-prefix-map', mapping, '-debug-prefix-map', mapping,
@@ -74,7 +76,7 @@ def probe(output):
                          '-module-name', 'NTFSReproProbe', *swift_flags, '-emit-module',
                          '-emit-module-path', str(module), '-emit-object', str(swift_source),
                          '-o', str(swift_object)], directory, 'compile-swift', source)
-                    linker_mapped = variant == 'compiler-and-linker-mapped'
+                    linker_mapped = variant in ('compiler-and-linker-mapped', 'source-and-linker-mapped')
                     ast_path = '../' + module.name if linker_mapped else str(module)
                     linker_flags = ['-Xlinker', '-oso_prefix', '-Xlinker', str(directory) + '/'] if linker_mapped else []
                     run(['xcrun', 'swiftc', '-target', target, '-sdk', sdk,
@@ -82,18 +84,35 @@ def probe(output):
                          '-Xlinker', '-add_ast_path', '-Xlinker', ast_path, *linker_flags,
                          '-o', str(binary)], directory, 'link', source)
                     symbols = directory / 'probe.dSYM'
-                    symbol_flags = ['--oso-prepend-path=' + str(directory)] if linker_mapped else []
-                    run(['xcrun', 'dsymutil', *symbol_flags, str(binary), '-o', str(symbols)],
-                        directory, 'debug-symbols', source)
+                    if source_only:
+                        for path in (c_object, swift_object):
+                            (source / path.name).symlink_to('../' + path.name)
+                    symbol_flags = ['--oso-prepend-path=' + str(directory)] if linker_mapped and not source_only else []
+                    debug_log = run(['xcrun', 'dsymutil', *symbol_flags, str(binary), '-o', str(symbols)],
+                                    directory, 'debug-symbols', source)
+                    debug_log += (directory / 'debug-symbols.stderr').read_text(errors='replace')
+                    debug_diagnostics = debug_input_diagnostics(debug_log)
                     stripped = directory / 'probe-stripped'
                     shutil.copyfile(binary, stripped)
                     run(['xcrun', 'strip', '-S', str(stripped)], directory, 'strip', source)
                     uuid = run(['xcrun', 'dwarfdump', '--uuid', str(stripped)], directory, 'uuid').strip()
+                    debug_uuid = run(['xcrun', 'dwarfdump', '--uuid', str(symbols)], directory, 'debug-uuid').strip()
+                    if uuid.split()[:3] != debug_uuid.split()[:3]:
+                        raise ValueError('Probe executable and dSYM UUIDs differ')
+                    contents = ''
+                    if not debug_diagnostics:
+                        run(['xcrun', 'dwarfdump', '--verify', str(symbols)], directory, 'debug-verify')
+                        contents = run(['xcrun', 'dwarfdump', '--debug-info', '--recurse-depth=1', str(symbols)],
+                                       directory, 'debug-content')
                     pair['builds'].append({'directory': str(directory), 'uuid_output': uuid,
                                            'stripped_sha256': digest(stripped), 'unstripped_sha256': digest(binary),
-                                           'c_object_sha256': digest(c_object), 'swift_object_sha256': digest(swift_object)})
+                                           'c_object_sha256': digest(c_object), 'swift_object_sha256': digest(swift_object),
+                                           'debug_input_diagnostics': debug_diagnostics,
+                                           'debug_compile_units': contents.count('DW_TAG_compile_unit')})
                     save()
                 pair['stripped_equal'] = pair['builds'][0]['stripped_sha256'] == pair['builds'][1]['stripped_sha256']
+                pair['debug_inputs_complete'] = all(not item['debug_input_diagnostics'] and
+                                                    item['debug_compile_units'] > 0 for item in pair['builds'])
                 save()
         report['status'] = 'complete'
         save()
@@ -111,4 +130,6 @@ if __name__ == '__main__':
     result = probe(args.output)
     print(json.dumps({'status': result['status'], 'variants': {
         item['name']: {pair['architecture']: pair['stripped_equal'] for pair in item['architectures']}
+        for item in result['variants']}, 'debug_inputs_complete': {
+        item['name']: {pair['architecture']: pair['debug_inputs_complete'] for pair in item['architectures']}
         for item in result['variants']}}))

@@ -127,8 +127,8 @@ not the full hosted sanitizer gate. No matched timing result follows from them.
 ## Cloud codec continuation
 
 This continuation optimizes the existing LZNT1 encoder/decoder and canonical
-XPRESS/LZX fallback searches. The private encoder advances its position-dependent
-token widths once per chunk and omits exact premeasurement when the checked raw
+XPRESS/LZX fallback searches. The selected private encoder retains the original
+per-position token widths and omits exact premeasurement when the checked raw
 bound already proves output capacity. Smaller admitted buffers still use exact
 measurement before any output publication. Encoded bytes, the one-MiB input
 policy, 12-KiB caller workspace, complete alias admission and refusal guarantees
@@ -231,7 +231,10 @@ is tracked separately in CLOUD-STATUS.
 
 ### Local paired encoder measurements
 
-The full encoder experiment retains 108 configurations: eighteen original inputs,
+These are the retained persistent-width candidate's measurements, before the
+later [controlled rejection](#selected-encoder-strategy). They are not the current
+selected encoder's performance figures. The full experiment retains 108
+configurations: eighteen original inputs,
 three operations and two contexts, each with nine alternating pairs at 50 ms.
 Sixteen selected configurations have a further thirteen pairs at 250 ms.
 The encoder algorithm is unchanged between these experiments; the later source
@@ -268,6 +271,107 @@ incompressible, mixed, record-like and one-MiB inputs, and no failed or slow row
 excluded from the complete retained reports:
 `artifacts/dots-codec-optimization/encoder/candidate-v3/result.json` and
 `artifacts/dots-codec-optimization/encoder/candidate-v4-long-controls/result.json`.
+
+### Five-platform hosted codec checkpoint
+
+The [hosted matrix](https://github.com/machlin-project/ntfs/actions/runs/37860226371)
+passes at `9581ad8100e31b80b96ef211e4ffdbde2d22be6d`: Linux x86-64 and ARM64 with
+GCC 13.3 and Clang 18.1.3, plus macOS ARM64 with selected-Xcode Apple Clang 21.
+Every platform passes the three-context 82,614-check LZNT1 decoder, 2,978-check
+encoder and 229,388-check Huffman differential boundaries. Linux retains default
+LSan with fatal ASan/UBSan; macOS provides its distinct fatal ASan/UBSan boundary.
+Portable builds explicitly enable both memory and wire fallbacks. The separate
+[native Windows run](https://github.com/machlin-project/ntfs/actions/runs/37860226468)
+passes all 295 optimized encoder packet pairs, with exact bytes/lengths, guards
+and unchanged inputs. No compressed-storage write admission follows.
+
+Each hosted job retains all 68 decoder and 108 encoder configurations, nine
+alternating pairs and 100-ms samples: **880 configurations and 7,920 paired
+measurements** overall. Independent review verifies frozen source/harness/input
+hashes, candidate binary hashes, exact output fields and raw sample counts.
+The following values are median paired CPU ratios, shown as userspace/GPR.
+
+| Platform/toolchain | LZNT1 literals | XPRESS long codes | LZX long codes | Encoder raw-bound 64-KiB zeros |
+| --- | ---: | ---: | ---: | ---: |
+| Linux x86-64 GCC | 1.676 / 2.235 | 1.662 / 1.648 | 1.676 / 1.677 | 2.009 / 2.007 |
+| Linux x86-64 Clang | 4.057 / 3.689 | 1.230 / 1.161 | 1.114 / 1.115 | 1.629 / 2.241 |
+| Linux ARM64 GCC | 2.066 / 3.519 | 1.412 / 1.419 | 1.514 / 1.513 | 1.998 / 1.995 |
+| Linux ARM64 Clang | 3.989 / 4.529 | 1.158 / 1.165 | 1.687 / 1.685 | 2.002 / 1.999 |
+| macOS ARM64 Xcode | 4.171 / 4.227 | 1.121 / 1.185 | 1.639 / 1.728 | 2.037 / 2.099 |
+
+Linux paired wall ratios are within 0.3% of paired CPU ratios across these
+retained configurations. macOS scheduling variation is larger: its LZNT1 literal
+wall ratios are 4.509/4.254 versus CPU 4.171/4.227, and the greatest relative
+wall/CPU ratio difference across its complete matrix is 12.3%. Both measurements
+remain in every raw report and the review; CPU and wall are not interchangeable.
+
+**This checkpoint exposes a material compiler-specific encoder regression.**
+Clang x86-64 userspace measures compressible exact/measurement cases at roughly
+0.815–0.838× with tight paired ranges, about 20–23% slower. For example, measuring
+4-KiB zeros gives 0.817× (0.812–0.822), and exact period-3 gives 0.826×
+(0.809–0.859). The corresponding GPR cases improve 1.121× and 1.140×. The same
+compiler's nine-bit XPRESS userspace control is 0.923× (0.918–0.926), while GPR
+is 1.095×. A successful correctness/CI result does not erase these regressions.
+The subsequent isolated classic-width/single-pass comparison below resolves that
+encoder choice. This checkpoint remains evidence of the rejected persistent-width
+implementation, with no erased or substituted measurements.
+
+Unchanged memory controls also regress in some retained layouts: ARM Clang's
+64-byte copy is 0.819×/0.852× with narrow ranges, and macOS userspace 4-KiB copy
+is 0.795× with a wider 0.657–0.971 range. Their source is unchanged, so those
+differences must remain distinct from a demonstrated codec algorithm cost.
+Several macOS mixed-width controls are around 0.91–0.94× with mixed/wide pairs.
+These observations prevent a universal improvement claim or attributing every
+timing difference to the changed source expressions.
+
+All five verified ZIPs and their complete raw contents are retained beneath
+`artifacts/dots-codec-hosted/9581ad8/compression-{PLATFORM}/`. Each contains
+`codec-decoder/current/result.json`, `codec-encoder/current/result.json`, frozen
+sources and products, command logs and both differential reports. The independent
+`artifacts/dots-codec-hosted/9581ad8/matrix-review.json` retains paired CPU/wall
+medians and ranges for all 880 configurations. The native report and reviewed
+Windows checkout source-hash binding are retained in the same parent directory.
+
+### Selected encoder strategy
+
+The [controlled Clang x86 run](https://github.com/machlin-project/ntfs/actions/runs/37862767045)
+exports immutable source `9581ad8` twice and changes only `lznt1_write_chunk` in
+the control to its exact `3d28cba` implementation. Both retain the raw-bound
+single-pass wrapper. The product checkout is not edited by the probe. Both
+variants pass all three strict sanitizer differential contexts before timing;
+fourteen selected workloads run with nine alternating pairs at 200 ms in each
+of userspace and GPR-only contexts, against one identical frozen baseline.
+
+The persistent-width variant reproduces the userspace regression: 4-KiB zero
+measurement is 0.813× and exact period-3 is 0.823×. The selected original-width
+control gives the following median paired CPU ratios; wall medians round to the
+same values except for the small differences retained in the complete reports.
+
+| Selected original-width encoder | Userspace CPU | GPR CPU |
+| --- | ---: | ---: |
+| Measure 4-KiB zeros | 1.001× | 0.990× |
+| Exact 4-KiB period-3 | 1.003× | 1.007× |
+| Measure 64-KiB noise | 0.999× | 0.999× |
+| Exact 64-KiB noise | 1.994× | 1.995× |
+| Raw-bound 4-KiB noise | 1.998× | 1.996× |
+| Raw-bound 64-KiB zeros | 2.008× | 1.995× |
+| Raw-bound 64-KiB mixed chunks | 1.998× | 1.995× |
+
+The selected raw-bound cases span paired CPU ranges 1.967–2.048 in userspace
+and 1.943–2.033 in GPR. This deliberately trades the rejected candidate's extra
+incompressible-input gain for consistent measurement/exact-capacity behavior,
+while retaining the approximately twofold single-pass benefit. There is no
+compiler-specific dispatch. It does not establish a universal improvement for
+every input or compiler, and the final published source keeps its full hosted
+and native qualification gates.
+
+The complete source exports, checks, both timing series and command logs remain
+under `artifacts/dots-codec-width-probe/361d80f/lznt1-width-probe/`, with
+`benchmark/{persistent-width,classic-width}/result.json` and `scope.json`.
+The retained Clang assembly shows the persistent-state encoder walk growing
+its local frame from 0x38 to 0x48 bytes and increasing live-register/spill work;
+the controlled source comparison, rather than assembly inspection alone,
+establishes the selected strategy's measured effect.
 
 ## Incremental directory and journal preparation
 

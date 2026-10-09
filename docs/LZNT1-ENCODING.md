@@ -64,11 +64,20 @@ useful but is not advertised as optimal or byte-identical to Windows output.
 
 Match comparisons are linear in consumed input: a successful match consumes its
 compared prefix; a rejected short candidate compares at most three bytes.
-Dictionary insertion visits each position once, token-width selection advances
-at most eight boundaries per chunk, and each chunk clears a fixed 8-KiB table.
+Dictionary insertion visits each position once, token-width selection performs
+at most eight shifts at each position, and each chunk clears a fixed 8-KiB table.
 Measurement uses one pass. Encoding uses one pass with raw-bound capacity or two
 with a smaller admitted capacity. The core uses constant stack space beneath
 the existing 2-KiB frame budget.
+
+The selected encoder retains this original per-position width calculation.
+A persistent-width candidate improved incompressible input but caused a measured
+20–23% Clang x86 userspace regression on compressible measurement/exact-capacity
+calls. The [controlled comparison](https://github.com/machlin-project/ntfs/actions/runs/37862767045)
+restores those controls to approximate parity while preserving approximately 2×
+raw-bound encoding gains. Both candidates pass the same three-context strict
+differential boundary; [performance](PERFORMANCE.md#selected-encoder-strategy)
+retains the complete measurements and rejected candidate.
 
 The codec, hash selection, publication admission and independent tests are
 repository-owned. No external codec or GPL implementation was copied or linked.
@@ -176,3 +185,16 @@ not Windows codec evidence. The hosted job must execute the actual collector
 successfully before claiming Windows compatibility for the generated packets.
 Even successful native decompression does not qualify compressed NTFS storage,
 Windows recovery, FSKit mutation or release readiness.
+
+The optimized source at `9581ad8100e31b80b96ef211e4ffdbde2d22be6d` passes the
+[fresh hosted Windows oracle](https://github.com/machlin-project/ntfs/actions/runs/37860226468):
+all 295 generated nonempty pairs return native status zero, exact output lengths
+and original content, intact output guards, unchanged input buffers and unchanged
+source files. The actual provider is Windows Server 2025's
+`ntdll!RtlDecompressBuffer`; corpus bytes total 11,048,128. The collector source
+hash matches the repository script with Windows checkout CRLF line endings.
+The retained ZIP's independent hash check and complete row review are under
+`artifacts/dots-codec-hosted/9581ad8/windows-lznt1-observations/` and
+`artifacts/dots-codec-hosted/9581ad8/native-codec-review.json`. This qualifies
+these optimized byte packets on that native API, within the storage/admission
+boundary above.

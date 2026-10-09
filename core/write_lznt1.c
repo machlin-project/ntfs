@@ -79,9 +79,9 @@ lznt1_write_chunk(const uint8_t *input, size_t bytes, uint8_t *workspace)
 {
 	uint8_t *body = workspace + LZNT1_HASH_BYTES;
 	size_t position = 0, stored = 0, flag_at = 0, hash, previous, length, maximum,
-	       displacement = 0, next, index, threshold = NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD;
-	uint16_t candidate, token, mask = NTFS_LZNT1_LENGTH_MASK;
-	unsigned bit = 0, shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
+	       displacement = 0, next, index, threshold;
+	uint16_t candidate, token, mask;
+	unsigned bit = 0, shift;
 
 	ntfs_zero(workspace, LZNT1_HASH_BYTES);
 	while (position < bytes) {
@@ -93,8 +93,11 @@ lznt1_write_chunk(const uint8_t *input, size_t bytes, uint8_t *workspace)
 			body[flag_at] = 0;
 		}
 		length = 0;
-		/* Width boundaries advance once per chunk, even when a match jumps
-		 * across several. Position zero never produces a reference. */
+		shift = NTFS_LZNT1_TOKEN_INITIAL_SHIFT;
+		mask = NTFS_LZNT1_LENGTH_MASK;
+		/* MS-XCA width transitions occur after positions 16, 32, ...,
+		 * 2048. Position zero never produces a backward reference. */
+		threshold = NTFS_LZNT1_TOKEN_SHIFT_THRESHOLD;
 		while (position > threshold) {
 			threshold *= 2;
 			shift--;

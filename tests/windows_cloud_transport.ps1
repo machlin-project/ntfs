@@ -56,7 +56,8 @@ try {
     $checks++
     Refuse { Copy-CloudFile $payload $destination $hash }
     Refuse { Copy-CloudFile $payload (Join-Path $directory 'changed.vhd') ('0' * 64) }
-    foreach ($script in @('scripts\replay_windows_cloud.ps1','scripts\windows_cloud_transport.ps1')) {
+    foreach ($script in @('scripts\replay_windows_cloud.ps1','scripts\windows_cloud_transport.ps1',
+        'tests\windows_image_recovery.ps1')) {
         $tokens = $null; $errors = $null
         [void][Management.Automation.Language.Parser]::ParseFile((Join-Path (Split-Path $PSScriptRoot) $script),
             [ref]$tokens,[ref]$errors)

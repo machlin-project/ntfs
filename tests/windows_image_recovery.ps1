@@ -19,6 +19,18 @@ $candidate = $null
 $attached = $false
 $batch = $null
 
+function Save-NativeSecurityComparison([string]$Profile, [string]$Path, $Entry,
+                                      [string]$ExpectedSddl, [string]$ActualSddl) {
+    # Successful rows are retained by the existing native checks. Preserve the
+    # exact current comparison before its strict failure can unwind those rows.
+    $report.lastSecurityComparison = [ordered]@{profile=$Profile;path=$Path;
+        relativePath=$Entry.relativePath;reference=$Entry.reference;
+        expectedSource=($Profile + '.securityDescriptor');
+        expectedDescriptor=$Entry.securityDescriptor;expectedSddl=$ExpectedSddl;
+        actualSource='Get-Acl.Sddl';actualSddl=$ActualSddl}
+    $report | ConvertTo-Json -Depth 16 | Out-File -Encoding utf8 -LiteralPath $reportPath
+}
+
 function Assert-NativeCandidateDrive($ExpectedDisk, $ExpectedPartition) {
     $routes = @(Get-Partition -DriveLetter R -ErrorAction Stop)
     $disk = Get-Disk -Number $ExpectedDisk.Number
@@ -91,6 +103,7 @@ function Test-NativeOrdinaryFiles($expected, [string]$root) {
         if ($null -ne $rawSecurity.SystemAcl) { throw 'This native ordinary profile does not admit a SACL.' }
         $expectedAcl = $rawSecurity.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
         $actualAcl = (Get-Acl -LiteralPath $path).Sddl
+        Save-NativeSecurityComparison 'ordinaryObjects' $path $entry $expectedAcl $actualAcl
         if ($actualAcl -ne $expectedAcl) { throw 'Ordinary native owner/group/DACL differs from the retained descriptor.' }
         $row = [ordered]@{ relativePath=$entry.relativePath; present=$true; directory=$file.PSIsContainer;
             reference=$entry.reference; fileId=[ordered]@{exitCode=$idExit;output=$fileId};
@@ -271,6 +284,7 @@ function Test-NativeMountedMutationFiles($expected, [string]$root) {
             [Convert]::FromBase64String($entry.securityDescriptor), 0)
         $wantedAcl = $security.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
         $actualAcl = (Get-Acl -LiteralPath $path).Sddl
+        Save-NativeSecurityComparison 'mountedMutationObjects' $path $entry $wantedAcl $actualAcl
         if ($actualAcl -ne $wantedAcl) { throw 'Mounted native owner/group/DACL differs.' }
         $row = [ordered]@{ relativePath=$entry.relativePath; present=$true; directory=$entry.directory;
             reference=$entry.reference; fileId=[ordered]@{exitCode=$idExit;output=$id};
@@ -419,6 +433,7 @@ function Test-NativeSequenceFiles($expected, [string]$root) {
         if ($null -ne $rawSecurity.SystemAcl) { throw 'This native sequence profile does not admit a SACL.' }
         $expectedAcl = $rawSecurity.GetSddlForm([Security.AccessControl.AccessControlSections]::All)
         $actualAcl = (Get-Acl -LiteralPath $path).Sddl
+        Save-NativeSecurityComparison 'sequenceObjects' $path $entry $expectedAcl $actualAcl
         if ($actualAcl -ne $expectedAcl) { throw 'Sequence native owner/group/DACL differs.' }
         $row = [ordered]@{ relativePath=$entry.relativePath; present=$true; directory=$file.PSIsContainer;
             reference=$entry.reference; fileId=[ordered]@{exitCode=$idExit;output=$fileId};

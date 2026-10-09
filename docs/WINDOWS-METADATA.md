@@ -20,6 +20,15 @@ attributes handle remains open, and after that handle closes. For `SetFileTime`
 that is the actual mutation handle. `SetFileAttributesW` is a path API and owns
 its internal handle; the separately held handle is labeled accordingly.
 
+Schema 2 acquires the exact-ID raw records before opening any new per-path
+observation handle. It adds a raw-only snapshot after the observer handles close
+while the mutation handle remains open, then another raw-first snapshot after
+that handle closes. Mutation identity guards still run immediately before every
+mutation. The first [schema-1 capture](https://github.com/machlin-project/ntfs/actions/runs/37869853136)
+is retained as an observer-affected sequence: its additional path handles closed
+before raw acquisition, so its cache timing cannot be attributed solely to the
+mutation handle. Its original bytes and identities remain useful structure facts.
+
 The observer rechecks the original volume GUID, native serial/geometry, target
 IDs and reparse exclusions before mutation. A file-record response must return
 the requested ordinal, and its FILE header number and sequence must bind the

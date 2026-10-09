@@ -70,6 +70,23 @@ SOURCES = [
     'https://learn.microsoft.com/en-us/windows/win32/api/winioctl/ns-winioctl-ntfs_file_record_output_buffer']
 
 
+def records_before_path_handles(read_records, read_held_handle, read_path_handles, include_paths):
+    read_records()
+    read_held_handle()
+    if include_paths:
+        read_path_handles()
+
+
+def observe_mutation_handle(open_handle, verify_handle, mutate, snapshot):
+    with open_handle() as handle:
+        verify_handle(handle)
+        snapshot('before-api-handle-open', handle, True)
+        mutate(handle)
+        snapshot('after-api-handle-open', handle, True)
+        snapshot('after-observer-close-handle-open', handle, False)
+    snapshot('after-handle-close', None, True)
+
+
 def verify_record(reference, raw, record_bytes):
     if (type(reference) is not int or not 0 < reference < 1 << 64 or
             reference >> REFERENCE_RECORD_BITS == 0 or record_bytes != PROBE_RECORD_BYTES or
@@ -200,7 +217,7 @@ def run(args):
     paths = {'parent_a': scope / 'first-parent', 'parent_b': scope / 'second-parent',
              'link_a': scope / 'first-parent' / 'long-primary-metadata-name.txt',
              'link_b': scope / 'second-parent' / 'long-secondary-metadata-name.txt'}
-    report = {'schema_version': 1, 'status': 'running', 'phase': args.phase,
+    report = {'schema_version': 2, 'status': 'running', 'phase': args.phase,
               'provenance': 'Windows native metadata APIs on a guarded copied scratch VHD',
               'cache_semantics_qualified': False, 'primary_sources': SOURCES,
               'snapshots': [], 'operations': [], 'errors': []}
@@ -220,27 +237,40 @@ def run(args):
                 if data['stat']['reparse'] or data['reference'] != identities[key]:
                     raise ValueError('Observation path identity changed')
         return geometry
-    def snapshot(name, identities, held=None):
-        geometry = guard(identities)
+    def snapshot(name, identities, held=None, include_paths=True):
+        # Mutation identity admission remains in guard(identities), immediately
+        # before the mutation. Observation uses only those already verified IDs
+        # until all raw records have been retained; no fresh path handle comes first.
+        geometry = api.guard()
         directory = output / name
         directory.mkdir()
-        row = {'name': name, 'metadata': {}, 'records': {}}
+        row = {'name': name, 'metadata': {}, 'records': {},
+               'observation_order': ['exact-id-raw-records', 'held-handle-basic'],
+               'new_path_observers': include_paths}
+        if include_paths:
+            row['observation_order'].append('path-basic-handles-open-query-close')
         report['snapshots'].append(row)
-        if held is not None:
-            row['held_handle'] = api.basic(held)
-        for key, path in paths.items():
-            with api.open(path) as handle:
-                row['metadata'][key] = api.basic(handle)
-        for key in ('link_a', 'parent_a', 'parent_b'):
-            reference = int(identities[key], 16)
-            raw = api.record(reference, geometry['record_size'])
-            name = key + '.fsctl-output.bin'
-            (directory / name).write_bytes(raw)
-            row['records'][key] = dict(file=name, sha256=hashlib.sha256(raw).hexdigest(),
-                                       requested_reference=identities[key], identity_verified=False)
-            save()
-            row['records'][key].update(verify_record(reference, raw, geometry['record_size']),
-                                       identity_verified=True)
+        def read_records():
+            for key in ('link_a', 'parent_a', 'parent_b'):
+                reference = int(identities[key], 16)
+                raw = api.record(reference, geometry['record_size'])
+                filename = key + '.fsctl-output.bin'
+                (directory / filename).write_bytes(raw)
+                row['records'][key] = dict(file=filename, sha256=hashlib.sha256(raw).hexdigest(),
+                                           requested_reference=identities[key], identity_verified=False)
+                save()
+                row['records'][key].update(verify_record(reference, raw, geometry['record_size']),
+                                           identity_verified=True)
+        def read_held_handle():
+            if held is not None:
+                row['held_handle'] = api.basic(held)
+        def read_path_handles():
+            for key, path in paths.items():
+                with api.open(path) as handle:
+                    row['metadata'][key] = api.basic(handle)
+                    if row['metadata'][key]['reference'] != identities[key]:
+                        raise ValueError('Path observer identity changed')
+        records_before_path_handles(read_records, read_held_handle, read_path_handles, include_paths)
         save()
         return row
     save()
@@ -273,10 +303,10 @@ def run(args):
                 raise ValueError('Unexpected observation identity set')
             guard(identities)
             key = 'link_a' if args.phase == 'times' else 'link_b'
-            with api.open(paths[key], FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES) as handle:
+            def verify_handle(handle):
                 if api.basic(handle)['reference'] != identities[key]:
                     raise ValueError('Mutation handle identity changed')
-                snapshot('before-api-handle-open', identities, handle)
+            def mutate(handle):
                 guard(identities)
                 if args.phase == 'times':
                     times = [FileTime(value & 0xffffffff, value >> 32) for value in (CREATED, ACCESSED, MODIFIED)]
@@ -292,8 +322,10 @@ def run(args):
                     report['operations'].append({'api': 'SetFileAttributesW', 'path': key,
                         'requested_attributes': attributes,
                         'held_handle_role': 'additional attributes handle; path API owns its internal handle'})
-                snapshot('after-api-handle-open', identities, handle)
-            snapshot('after-handle-close', identities)
+            observe_mutation_handle(
+                lambda: api.open(paths[key], FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES),
+                verify_handle, mutate,
+                lambda name, handle, include_paths: snapshot(name, identities, handle, include_paths))
         guard(identities)
         report['status'] = 'complete'
     except BaseException as error:

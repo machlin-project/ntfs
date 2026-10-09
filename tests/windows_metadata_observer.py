@@ -1,4 +1,5 @@
 """Pure native-record identity binding tests; no Windows provider is fabricated."""
+from contextlib import contextmanager
 from pathlib import Path
 import struct
 import sys
@@ -22,6 +23,49 @@ def packet(returned=REFERENCE):
 
 
 class NativeRecordIdentity(unittest.TestCase):
+    def test_raw_observation_and_handle_close_order(self):
+        events = []
+        token = object()
+        @contextmanager
+        def opened():
+            events.append('mutator-open')
+            try:
+                yield token
+            finally:
+                events.append('mutator-close')
+        def verify(handle):
+            self.assertIs(handle, token)
+            events.append('verify-mutator')
+        def mutate(handle):
+            self.assertIs(handle, token)
+            events.extend(('mutation-identity-guard', 'native-api'))
+        def snapshot(name, handle, include_paths):
+            def raw():
+                events.append(name + ':raw')
+            def held():
+                events.append(name + (':held' if handle is not None else ':no-held-handle'))
+            def paths():
+                events.extend((name + ':path-open', name + ':path-close'))
+            observer.records_before_path_handles(raw, held, paths, include_paths)
+        observer.observe_mutation_handle(opened, verify, mutate, snapshot)
+        self.assertEqual(events, [
+            'mutator-open', 'verify-mutator',
+            'before-api-handle-open:raw', 'before-api-handle-open:held',
+            'before-api-handle-open:path-open', 'before-api-handle-open:path-close',
+            'mutation-identity-guard', 'native-api',
+            'after-api-handle-open:raw', 'after-api-handle-open:held',
+            'after-api-handle-open:path-open', 'after-api-handle-open:path-close',
+            'after-observer-close-handle-open:raw', 'after-observer-close-handle-open:held',
+            'mutator-close', 'after-handle-close:raw', 'after-handle-close:no-held-handle',
+            'after-handle-close:path-open', 'after-handle-close:path-close'])
+        events.clear()
+        def refuse(handle):
+            events.append('identity-refused')
+            raise ValueError('identity mismatch')
+        with self.assertRaises(ValueError):
+            observer.observe_mutation_handle(opened, refuse, mutate, snapshot)
+        self.assertEqual(events, ['mutator-open', 'identity-refused', 'mutator-close'])
+
     def test_binds_exact_ordinal_and_file_header_sequence(self):
         # Literal FILE prefix and FSCTL header authored independently of the
         # structures and offset helpers under test: record 53, generation 7.

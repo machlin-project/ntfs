@@ -73,8 +73,15 @@ The first [hosted native AccessCheck observation](https://github.com/machlin-pro
 denies a zero requested mask against an empty DACL in every one of six queried
 token contexts. A zero original request must not be confused with a nonzero
 owner-control request already satisfied by implied rights. The evaluator keeps
-complete descriptor/ACE checks before the zero-mask denial; the native collector
-adds separate absent/NULL/populated/owner zero-mask controls for the next capture.
+complete descriptor/ACE checks before the zero-mask denial. The subsequent native
+capture confirms absent/NULL/populated/owner zero-mask controls and establishes
+restricted ownership as the intersection of owner membership in both token
+contexts. Its discriminating OWNER RIGHTS/user-deny/Everyone-allow vectors rule
+out treating ownership separately in the two passes. Maximum access retains
+first-decisive ACE order per concrete right, intersects both grant masks and
+requires every additionally requested bit. The extended core matches all 276
+discretionary observations from the unchanged 282-case native capture; the six
+mandatory-plane observations remain outside this contract.
 See [the decision implementation](../../core/access.c),
 [independent vectors](../../tests/access.c) and [oracle contract](../ACCESS-ORACLE.md).
 
@@ -198,3 +205,12 @@ Existing bounded overwrites preserve security bytes and identity in native
 acceptance. That evidence does not qualify general security rewriting or the
 complete Windows creation inheritance profile. The bounded in-memory comparison
 above qualifies only its stated descriptor relationships.
+
+## Private descriptor editing
+
+The [donor-DACL storage helper](../SECURITY-EDITING.md) reuses existing descriptor
+framing, preserves original owner/group/SACL and unselected control bytes, and
+packs checked component spans without allocation or I/O. Independent literal
+outputs, all four DACL states, component aliases, capacity/error preservation and
+opaque ACE/free-space cases are tested. This does not allocate a shared security
+ID or publish SDS/SII/SDH/FILE/WAL changes.

@@ -102,14 +102,17 @@ void ntfs_dacl_default_limits(struct ntfs_dacl_limits *);
  * allow/deny ACEs require concrete rights; applicable stored generic bits return
  * UNSUPPORTED, never an inferred grant. Supports inherit-only exclusion, owner
  * READ_CONTROL/WRITE_DAC and OWNER RIGHTS (S-1-3-4).
+ * Restricted ownership requires the owner in both ordinary and restricting
+ * contexts. MAXIMUM_ALLOWED computes their intersected concrete grant masks;
+ * additional requested rights must all be granted and maximum grants are nonzero.
  * Unknown/object/callback ACEs applying to this object, unknown masks/attributes,
- * MAXIMUM_ALLOWED and ACCESS_SYSTEM_SECURITY return UNSUPPORTED. Restricted-owner
- * implied/OWNER RIGHTS semantics await native qualification and are UNSUPPORTED.
+ * and ACCESS_SYSTEM_SECURITY return UNSUPPORTED.
  * SACL decisions, privileges, mandatory integrity, claims, traversal/delete-parent
  * alternatives and native authorization belong to other owning-layer contracts.
  * No allocation/I/O or mutations. Input/output storage must not overlap; inputs
  * remain immutable throughout. NULL limits select defaults. Errors zero decision;
  * NTFS_OK with allowed=false is a valid denial with granted=0, never partial grant.
+ * requested retains MAXIMUM_ALLOWED when supplied; granted never contains it.
  * An original zero-right request is a valid denial after descriptor validation.
  * Owner/group SIDs are required here, although the framing decoder permits absence. */
 enum ntfs_result ntfs_dacl_evaluate(const void *, size_t, const struct ntfs_access_token *,

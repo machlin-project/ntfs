@@ -262,6 +262,54 @@ access_evaluate_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl,
 	return NTFS_OK;
 }
 
+static enum ntfs_result
+access_maximum_dacl(const uint8_t *bytes, const struct ntfs_acl_info *acl,
+    struct ntfs_dacl_work *work, uint32_t implied, bool owner, bool restricting, uint32_t *granted)
+{
+	struct ntfs_ace_info ace;
+	size_t position = acl->span.offset + sizeof(struct ntfs_disk_acl), i;
+	uint32_t remaining = NTFS_FILE_ALL_ACCESS & ~implied, mask;
+	bool match;
+	enum ntfs_result result;
+
+	*granted = implied;
+	if (acl->state == NTFS_ACL_ABSENT || acl->state == NTFS_ACL_NULL) {
+		*granted = NTFS_FILE_ALL_ACCESS;
+		return NTFS_OK;
+	}
+	for (i = 0; i < acl->entries && remaining != 0; i++) {
+		result = access_next_ace(bytes, &position, &ace);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		if ((ace.flags & NTFS_ACE_INHERIT_ONLY) != 0) {
+			continue;
+		}
+		mask = ace.mask & remaining;
+		if (mask == 0) {
+			continue;
+		}
+		if (access_owner_rights_sid(&ace.trustee)) {
+			match = owner;
+		} else {
+			result = access_token_match(work, &ace.trustee, ace.type == NTFS_ACE_DENY,
+			    false, restricting, &match);
+			if (result != NTFS_OK) {
+				return result;
+			}
+		}
+		if (match) {
+			/* Each concrete right is decided by its first applicable ACE.
+			 * A later deny cannot revoke an earlier ordered allow. */
+			if (ace.type == NTFS_ACE_ALLOW) {
+				*granted |= mask;
+			}
+			remaining &= ~mask;
+		}
+	}
+	return NTFS_OK;
+}
+
 enum ntfs_result
 ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t size,
     const struct ntfs_access_token *token, uint32_t desired, const struct ntfs_dacl_limits *limits,
@@ -271,8 +319,8 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	struct ntfs_dacl_limits defaults;
 	struct ntfs_dacl_work work = {.token = token, .volume = volume};
 	struct ntfs_dacl_decision decision = {0};
-	uint32_t remaining;
-	bool owner, owner_rights;
+	uint32_t remaining, implied, granted = 0, restricted_granted = 0;
+	bool owner, owner_rights, restricting_owner = false;
 	enum ntfs_result result;
 
 	if (out == NULL) {
@@ -293,7 +341,7 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 		return result;
 	}
 	decision.requested = ntfs_file_map_rights(desired);
-	if ((decision.requested & ~NTFS_FILE_ALL_ACCESS) != 0) {
+	if ((decision.requested & ~(NTFS_FILE_ALL_ACCESS | NTFS_ACCESS_MAXIMUM_ALLOWED)) != 0) {
 		return NTFS_UNSUPPORTED;
 	}
 	if (volume != NULL) {
@@ -327,21 +375,41 @@ ntfs_dacl_evaluate_volume(struct ntfs_volume *volume, const void *buffer, size_t
 	if (result != NTFS_OK) {
 		return result;
 	}
-	remaining = decision.requested;
-	/* The exact interaction between restricted ownership and OWNER RIGHTS
-	 * needs independent Windows observations before native authorization. */
-	if (owner && token->restricted &&
-	    (owner_rights || (remaining & OWNER_IMPLIED_ACCESS) != 0)) {
-		return NTFS_UNSUPPORTED;
+	if (owner && token->restricted) {
+		/* Native ownership requires the owner in both token contexts.
+		 * OWNER RIGHTS uses this same qualification in both DACL passes. */
+		result = access_token_match(&work, &info.owner, false, true, true, &restricting_owner);
+		if (result != NTFS_OK) {
+			return result;
+		}
+		owner = restricting_owner;
 	}
-	if (owner && !owner_rights) {
-		remaining &= ~OWNER_IMPLIED_ACCESS;
+	implied = owner && !owner_rights ? OWNER_IMPLIED_ACCESS : 0;
+	if ((decision.requested & NTFS_ACCESS_MAXIMUM_ALLOWED) != 0) {
+		result = access_maximum_dacl(buffer, &info.dacl, &work, implied, owner, false, &granted);
+		if (result == NTFS_OK && token->restricted) {
+			result = access_maximum_dacl(
+			    buffer, &info.dacl, &work, implied, owner, true, &restricted_granted);
+			if (result == NTFS_OK) {
+				granted &= restricted_granted;
+			}
+		}
+		if (result != NTFS_OK) {
+			return result;
+		}
+		remaining = decision.requested & ~NTFS_ACCESS_MAXIMUM_ALLOWED;
+		decision.allowed = granted != 0 && (remaining & ~granted) == 0;
+		decision.granted = decision.allowed ? granted : 0;
+		decision.sid_comparisons = work.comparisons;
+		*out = decision;
+		return NTFS_OK;
 	}
+	remaining = decision.requested & ~implied;
 	result = access_evaluate_dacl(
 	    buffer, &info.dacl, &work, remaining, owner, false, &decision.allowed);
 	if (result == NTFS_OK && decision.allowed && token->restricted) {
 		result = access_evaluate_dacl(
-		    buffer, &info.dacl, &work, remaining, false, true, &decision.allowed);
+		    buffer, &info.dacl, &work, remaining, owner, true, &decision.allowed);
 	}
 	if (result != NTFS_OK) {
 		return result;

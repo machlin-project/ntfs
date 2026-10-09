@@ -20,7 +20,8 @@ Windows token fields and original descriptors, then compares decisions offline.
 The first complete hosted capture contains 144 native decisions. Its original
 comparison exposes six zero-request mismatches, one in each token context.
 After correction, comparison of that unchanged capture passes all 117 supported
-decisions; 21 probes and six mandatory-plane observations remain explicit gaps.
+decisions. A second 282-case native capture adds the original owner/maximum-mask
+witnesses used by the extensions below; full authorization remains separate.
 
 ## Implemented decision contract
 
@@ -65,7 +66,7 @@ See [ordered DACL checks](https://learn.microsoft.com/en-us/windows/win32/secaut
 | Enabled group | Matches | Matches | Requires the additional OWNER attribute |
 | Disabled group | Ignored | Ignored | Does not qualify |
 | Deny-only group | Ignored | Matches | Does not qualify |
-| Restricting SID | Used in the separate second check | Used in the separate second check | Restricted-owner interactions below remain unqualified |
+| Restricting SID | Used in the separate second check | Used in the separate second check | The ordinary owner SID must also occur in this list |
 
 ENABLED_BY_DEFAULT alone does not enable a group. Contradictory ENABLED and
 DENY_ONLY attributes are invalid. Integrity group attributes are unsupported in
@@ -88,10 +89,33 @@ inherit-only OWNER RIGHTS entry does not apply to this object. See
 [access-check overview](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-dtyp/4f1bbcbb-814a-4c70-a11e-2a5b8779a6f9)
 and [OWNER RIGHTS identity](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-identifiers).
 
+Restricted ownership requires ordinary owner qualification and the same owner
+SID in the restricting list. That single result controls implied rights and
+OWNER RIGHTS in both passes. The native discriminator uses an owner different
+from the restricting Everyone SID: OWNER RIGHTS deny followed by Everyone allow
+grants control rights, while a user deny followed by Everyone allow denies them.
+Treating ownership independently in the two passes gives the opposite results.
+
+`MAXIMUM_ALLOWED` computes all supported concrete file rights using the original
+ACE order: the first matching allow or deny decides each right. Allow-before-deny
+therefore retains that right; deny-before-allow excludes it. Restricted tokens
+receive the intersection of both complete grant masks. NULL/absent DACLs supply
+FILE_ALL_ACCESS, empty DACLs supply only qualified implied owner rights, and
+OWNER RIGHTS suppresses those implicit rights as for ordinary requests.
+Additional concrete requested bits must all appear in the final mask. A zero
+maximum grant is a denial. These details are independently observed by
+[the native v2 collector](../scripts/collect_windows_access.py), including mixed
+required masks; the general [AccessCheck API](https://learn.microsoft.com/en-us/windows/win32/api/securitybaseapi/nf-securitybaseapi-accesscheck)
+defines the maximum-mask output contract. No privilege or parent-directory
+alternative is added to this discretionary result.
+
 ## Error, ownership and resource contract
 
 `NTFS_OK` means a valid discretionary decision; `allowed=false` is a denial with
-`granted=0`. An allowed result returns exactly the nonzero mapped requested mask.
+`granted=0`. An allowed ordinary result returns exactly the nonzero mapped requested mask.
+For maximum requests, `requested` retains MAXIMUM_ALLOWED and all additional
+mapped bits; `granted` contains only the resulting concrete file rights, never
+the MAXIMUM_ALLOWED flag. It can contain more rights than the additional bits.
 An original zero-right request is a valid denial, after complete descriptor and
 feature validation. It is distinct from a nonzero owner-control request whose
 remaining mask becomes zero through implied rights. Errors zero the entire decision. Unsupported
@@ -121,13 +145,8 @@ Applicable object, callback, conditional, audit or unknown DACL ACEs return
 UNSUPPORTED even when a simpler earlier allow would suffice or a trustee would
 not match. Stored generic and unknown access bits/attributes also fail explicitly.
 Nonapplicable inherit-only entries retain framing validation but do not participate
-in the feature policy. MAXIMUM_ALLOWED and ACCESS_SYSTEM_SECURITY are unsupported.
-
-Restricted-token ownership with implicit READ_CONTROL/WRITE_DAC or active OWNER
-RIGHTS returns UNSUPPORTED. The detailed interaction needs independent Windows
-observations before those combinations can grant access; it is not inferred from
-the general two-check overview. Implement and qualify it against AccessCheck.
-Write-restricted token contexts also need an explicit separate contract.
+in the feature policy. ACCESS_SYSTEM_SECURITY remains unsupported.
+Write-restricted token contexts still need an explicit separate contract.
 
 SACL byte framing is validated, but this API deliberately makes no SACL decision.
 Mandatory integrity, resource claims/conditional ACEs, central policy, privileges,
@@ -178,8 +197,16 @@ complete descriptor/ACE validation and denies an original zero request. The
 unchanged native capture now passes 117 supported decisions with zero mismatches;
 the transport suite passes 476 checks. Local child diagnostics use a retained
 wrapper disabling only LeakSanitizer because this executor traces children;
-the fatal AddressSanitizer/UBSan settings and hosted gate are unchanged. The v2
-native matrix adds NULL, absent, allow, deny, owner and OWNER RIGHTS zero-mask
-controls; those additional observations remain pending. The verifier still
+the fatal AddressSanitizer/UBSan settings and hosted gate are unchanged. The
+[v2 hosted capture](https://github.com/machlin-project/ntfs/actions/runs/37859802008)
+adds zero-mask controls and discriminating owner/maximum cases. Before the
+extensions its hosted review passes 165 decisions and retains 111 probes.
+The completed extensions compare that unchanged 282-case capture with **276
+matches, zero failures, zero unsupported cases and six mandatory-plane
+observations**. Transport contracts pass 499 checks. The native gate now requires
+every original owner/maximum probe to match; unsupported results cannot pass.
+An additional 24,576 maximum masks use the independent per-right oracle, and
+explicit maximum/maximum-required seeds exercise the bounded access fuzzer.
+The verifier still
 accepts the unchanged v1 matrix, preserving replay of the exact first failure.
 Installed FSKit authorization and commercial-security qualification remain open.

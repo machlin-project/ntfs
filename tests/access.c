@@ -186,7 +186,12 @@ check(const void *bytes, size_t size, const struct ntfs_access_token *token, uin
 	}
 	if (result == NTFS_OK) {
 		assert(out.requested == ntfs_file_map_rights(desired));
-		assert(out.granted == (allowed ? out.requested : 0));
+		if (allowed && (desired & NTFS_ACCESS_MAXIMUM_ALLOWED) != 0) {
+			assert(out.granted != 0 && (out.granted & ~TEST_FILE_ALL_ACCESS) == 0);
+			assert((out.requested & ~NTFS_ACCESS_MAXIMUM_ALLOWED & ~out.granted) == 0);
+		} else {
+			assert(out.granted == (allowed ? out.requested : 0));
+		}
 		assert(out.sid_comparisons <= (limits == NULL ? NTFS_ACCESS_DEFAULT_COMPARISONS
 							      : limits->max_sid_comparisons));
 	} else {
@@ -194,6 +199,17 @@ check(const void *bytes, size_t size, const struct ntfs_access_token *token, uin
 	}
 	decisions++;
 	return out;
+}
+
+static void
+check_maximum(const void *bytes, size_t size, const struct ntfs_access_token *token,
+    uint32_t required, uint32_t granted)
+{
+	struct ntfs_dacl_decision out;
+
+	out = check(bytes, size, token, required | NTFS_ACCESS_MAXIMUM_ALLOWED, NULL, NTFS_OK,
+	    granted != 0);
+	assert(out.granted == granted);
 }
 
 static void
@@ -292,7 +308,8 @@ stored_mask_tests(void)
 	const uint32_t generic[] = {NTFS_ACCESS_GENERIC_READ, NTFS_ACCESS_GENERIC_WRITE,
 	    NTFS_ACCESS_GENERIC_EXECUTE, NTFS_ACCESS_GENERIC_ALL};
 	const uint32_t requests[] = {0, NTFS_FILE_READ_DATA, NTFS_ACCESS_GENERIC_READ,
-	    NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC};
+	    NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC, NTFS_ACCESS_MAXIMUM_ALLOWED,
+	    NTFS_ACCESS_MAXIMUM_ALLOWED | NTFS_FILE_READ_DATA};
 	const uint8_t types[] = {NTFS_ACE_ALLOW, NTFS_ACE_DENY};
 	size_t mask, type, trustee, context, request, mixed, size, before = decisions;
 
@@ -405,12 +422,102 @@ ownership_and_restriction_tests(void)
 	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, false);
 	size = descriptor(bytes, &owner_sid, NTFS_ACL_NULL, NULL, 0);
 	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, true);
-	/* Unqualified restricted-owner combinations cannot produce a grant. */
+	/* An empty restricting list cannot qualify ownership in both contexts. */
 	size = descriptor(bytes, &user_sid, NTFS_ACL_EMPTY, NULL, 0);
-	(void)check(bytes, size, &token, NTFS_ACCESS_READ_CONTROL, NULL, NTFS_UNSUPPORTED, false);
+	(void)check(bytes, size, &token, NTFS_ACCESS_READ_CONTROL, NULL, NTFS_OK, false);
 	aces[0] = (struct test_ace){NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA, owner_rights};
 	size = descriptor(bytes, &user_sid, NTFS_ACL_PRESENT, aces, 1);
-	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_UNSUPPORTED, false);
+	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, false);
+}
+
+static void
+native_extension_tests(void)
+{
+	uint8_t bytes[TEST_BUFFER_BYTES];
+	struct ntfs_token_group group = {.sid = group_sid, .attributes = NTFS_GROUP_ENABLED};
+	struct ntfs_access_token token = {.user = user_sid, .groups = &group, .group_count = 1};
+	struct test_ace aces[] = {{NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA, user_sid},
+	    {NTFS_ACE_DENY, 0, NTFS_FILE_READ_DATA, user_sid},
+	    {NTFS_ACE_ALLOW, 0, NTFS_FILE_WRITE_DATA, user_sid}};
+	const uint32_t controls = NTFS_ACCESS_READ_CONTROL | NTFS_ACCESS_WRITE_DAC;
+	struct ntfs_dacl_limits limits;
+	struct ntfs_dacl_decision out;
+	size_t size;
+	unsigned state;
+
+	/* Literal native witnesses discriminate ordered maximum access from
+	 * subtracting every deny mask after collecting every allow mask. */
+	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 3);
+	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
+	check_maximum(bytes, size, &token, NTFS_FILE_READ_DATA,
+	    NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
+	check_maximum(bytes, size, &token, NTFS_FILE_EXECUTE, 0);
+	aces[0].type = NTFS_ACE_DENY;
+	aces[1].type = NTFS_ACE_ALLOW;
+	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 3);
+	check_maximum(bytes, size, &token, 0, NTFS_FILE_WRITE_DATA);
+	check_maximum(bytes, size, &token, NTFS_FILE_READ_DATA, 0);
+	for (state = NTFS_ACL_ABSENT; state <= NTFS_ACL_EMPTY; state++) {
+		size = descriptor(bytes, &owner_sid, state, NULL, 0);
+		check_maximum(bytes, size, &token, 0,
+		    state == NTFS_ACL_EMPTY ? 0 : TEST_FILE_ALL_ACCESS);
+	}
+	size = descriptor(bytes, &user_sid, NTFS_ACL_EMPTY, NULL, 0);
+	check_maximum(bytes, size, &token, 0, controls);
+	check_maximum(bytes, size, &token, NTFS_FILE_READ_DATA, 0);
+	token.restricted = true;
+	token.restricting = &user_sid;
+	token.restricting_count = 1;
+	check_maximum(bytes, size, &token, 0, controls);
+	(void)check(bytes, size, &token, controls, NULL, NTFS_OK, true);
+	token.restricting = &group_sid;
+	check_maximum(bytes, size, &token, 0, 0);
+	(void)check(bytes, size, &token, controls, NULL, NTFS_OK, false);
+	/* With the owner absent from the restricting list, OWNER RIGHTS does
+	 * not match even in the ordinary pass. The group allow can then grant. */
+	aces[0] = (struct test_ace){NTFS_ACE_DENY, 0, controls, owner_rights};
+	aces[1] = (struct test_ace){NTFS_ACE_ALLOW, 0, controls, group_sid};
+	size = descriptor(bytes, &user_sid, NTFS_ACL_PRESENT, aces, 2);
+	(void)check(bytes, size, &token, controls, NULL, NTFS_OK, true);
+	check_maximum(bytes, size, &token, 0, controls);
+	token.restricting = &user_sid;
+	(void)check(bytes, size, &token, controls, NULL, NTFS_OK, false);
+	check_maximum(bytes, size, &token, 0, 0);
+	/* Ordinary ownership alone cannot bypass a user deny for a restricted
+	 * token. Both contexts qualifying ownership restore the implied grant. */
+	aces[0].trustee = user_sid;
+	size = descriptor(bytes, &user_sid, NTFS_ACL_PRESENT, aces, 2);
+	(void)check(bytes, size, &token, controls, NULL, NTFS_OK, true);
+	check_maximum(bytes, size, &token, 0, controls);
+	token.restricting = &group_sid;
+	(void)check(bytes, size, &token, controls, NULL, NTFS_OK, false);
+	check_maximum(bytes, size, &token, 0, 0);
+	aces[0] = (struct test_ace){NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA, owner_rights};
+	aces[1] = (struct test_ace){NTFS_ACE_DENY, 0, NTFS_FILE_READ_DATA, user_sid};
+	aces[2] = (struct test_ace){NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA, group_sid};
+	size = descriptor(bytes, &user_sid, NTFS_ACL_PRESENT, aces, 3);
+	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, false);
+	check_maximum(bytes, size, &token, 0, 0);
+	token.restricting = &user_sid;
+	(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, true);
+	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA);
+	token.restricting = &group_sid;
+	aces[0] = (struct test_ace){NTFS_ACE_ALLOW, 0, NTFS_FILE_READ_DATA, user_sid};
+	aces[1] = (struct test_ace){NTFS_ACE_ALLOW, 0,
+	    NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA, group_sid};
+	size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);
+	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA | NTFS_FILE_WRITE_DATA);
+	token.restricting = &user_sid;
+	check_maximum(bytes, size, &token, 0, NTFS_FILE_READ_DATA);
+	check_maximum(bytes, size, &token, NTFS_FILE_WRITE_DATA, 0);
+	token.restricting = &group_sid;
+	ntfs_dacl_default_limits(&limits);
+	out = check(bytes, size, &token, NTFS_ACCESS_MAXIMUM_ALLOWED, &limits, NTFS_OK, true);
+	assert(out.sid_comparisons > 1);
+	limits.max_sid_comparisons = out.sid_comparisons;
+	(void)check(bytes, size, &token, NTFS_ACCESS_MAXIMUM_ALLOWED, &limits, NTFS_OK, true);
+	limits.max_sid_comparisons--;
+	(void)check(bytes, size, &token, NTFS_ACCESS_MAXIMUM_ALLOWED, &limits, NTFS_RANGE, false);
 }
 
 /* A different oracle: for each individual right, the first applicable ACE wins.
@@ -463,7 +570,7 @@ ordered_tests(void)
 	struct ntfs_token_group group = {.sid = group_sid};
 	struct ntfs_access_token token = {.user = user_sid, .groups = &group, .group_count = 1};
 	size_t sequences = 1, sequence, value, i, size, mode, restriction, request;
-	uint32_t desired;
+	uint32_t desired, maximum;
 	bool expected;
 
 	for (i = 0; i < TEST_ORDERED_ACES; i++) {
@@ -482,6 +589,16 @@ ordered_tests(void)
 				token.restricted = restriction != 0;
 				token.restricting = &restricting_sid;
 				token.restricting_count = restriction;
+				maximum = 0;
+				for (i = 0; i < sizeof(rights) / sizeof(rights[0]); i++) {
+					if (right_allowed(aces, TEST_ORDERED_ACES, rights[i],
+						group.attributes, false) &&
+					    (!token.restricted || right_allowed(aces, TEST_ORDERED_ACES,
+								 rights[i], group.attributes, true))) {
+						maximum |= rights[i];
+					}
+				}
+				check_maximum(bytes, size, &token, 0, maximum);
 				for (request = 0; request < TEST_ORDER_REQUESTS; request++) {
 					desired = 0;
 					expected = request != 0;
@@ -524,7 +641,7 @@ boundary_tests(void)
 	size_t size, i;
 	const uint8_t unsupported[] = {NTFS_ACE_ALLOW_CALLBACK, NTFS_ACE_DENY_CALLBACK,
 	    NTFS_ACE_ALLOW_OBJECT, NTFS_ACE_DENY_OBJECT, NTFS_ACE_AUDIT, TEST_UNKNOWN_ACE};
-	const uint32_t bad_masks[] = {NTFS_ACCESS_MAXIMUM_ALLOWED, NTFS_ACCESS_SYSTEM_SECURITY,
+	const uint32_t bad_masks[] = {NTFS_ACCESS_SYSTEM_SECURITY,
 	    TEST_RESERVED_ACCESS, NTFS_FILE_ALL_ACCESS + 1};
 	static struct ntfs_token_group many[NTFS_ACCESS_MAX_SIDS + 1];
 
@@ -556,6 +673,8 @@ boundary_tests(void)
 		size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);
 		(void)check(
 		    bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_UNSUPPORTED, false);
+		(void)check(bytes, size, &token, NTFS_ACCESS_MAXIMUM_ALLOWED, NULL,
+		    NTFS_UNSUPPORTED, false);
 		aces[1].flags = NTFS_ACE_INHERIT_ONLY;
 		size = descriptor(bytes, &owner_sid, NTFS_ACL_PRESENT, aces, 2);
 		(void)check(bytes, size, &token, NTFS_FILE_READ_DATA, NULL, NTFS_OK, true);
@@ -710,6 +829,7 @@ main(void)
 	basic_tests();
 	stored_mask_tests();
 	ownership_and_restriction_tests();
+	native_extension_tests();
 	ordered_tests();
 	boundary_tests();
 	sid_and_work_tests();

@@ -200,9 +200,16 @@ def decision(data):
     if value['code'] != wire.NTFS_OK and any(value[field] for field in
                                             ('allowed', 'requested', 'granted', 'sid_comparisons')):
         raise ValueError('Core error contains a partial decision')
-    if value['code'] == wire.NTFS_OK and ((not value['allowed'] and value['granted']) or
-                                        (value['allowed'] and value['granted'] != value['requested'])):
-        raise ValueError('Core decision violates the exact-request contract')
+    if value['code'] == wire.NTFS_OK:
+        requested, granted = value['requested'], value['granted']
+        maximum = bool(requested & wire.MAXIMUM_ALLOWED)
+        required = requested & ~wire.MAXIMUM_ALLOWED
+        if (requested & ~(wire.FILE_ALL_ACCESS | wire.MAXIMUM_ALLOWED) or
+                granted & ~wire.FILE_ALL_ACCESS or
+                (not value['allowed'] and granted) or
+                (value['allowed'] and (not granted or required & ~granted or
+                                      (not maximum and granted != requested)))):
+            raise ValueError('Core decision violates the exact or maximum-request contract')
     return value
 
 
@@ -258,7 +265,7 @@ def verify(path, evaluator, directory):
     after = hashlib.sha256(bounded_read(path, MANIFEST_BYTES_MAX)).hexdigest()
     report['manifest_unchanged'] = before == after
     report['group_owner_vectors_present'] = data['probe_owner_group'] is not None
-    dacl = [case for case in report['cases'] if case['scope'] == 'dacl']
+    dacl = [case for case in report['cases'] if case['scope'] != 'boundary']
     report['native_dacl_vectors_verified'] = (
         data['provenance'] == collector.NATIVE_PROVENANCE and data['acquisition_status'] == 'complete' and
         before == after and bool(dacl) and all(case['status'] == 'passed' for case in dacl))
@@ -272,13 +279,12 @@ def verify(path, evaluator, directory):
 
 
 def native_dacl_gate(report):
-    """Require native DACL agreement without relabeling declared scope gaps."""
+    """All current DACL probes are implemented; mandatory-plane gaps remain."""
     return (report['native_dacl_vectors_verified'] and report['manifest_unchanged'] and
             report['acquisition_status'] == 'complete' and
             not report['missing_cases'] and not report['missing_contexts'] and
             not report['acquisition_errors'] and bool(report['cases']) and
             all(case['status'] == 'passed' or
-                (case['scope'] == 'probe' and case['status'] == 'unsupported') or
                 (case['scope'] == 'boundary' and case['status'] == 'out_of_plane')
                 for case in report['cases']))
 

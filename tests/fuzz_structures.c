@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Dmitri Arekhta. All rights reserved. */
 #include "internal.h"
 #include "fuzz_device.h"
+#include "security_edit.h"
 #include <ntfs/security.h>
 #include <assert.h>
 #include <stdio.h>
@@ -38,11 +39,181 @@ enum {
 	FUZZ_BITMAP_ALLOCATED_BIT = 1,
 	FUZZ_STANDALONE_MUTATIONS = 512,
 	FUZZ_ATTRIBUTE_ALIGNMENT = 8,
-	FUZZ_SEQUENCE = 1
+	FUZZ_SEQUENCE = 1,
+	FUZZ_SECURITY_GUARD_BYTES = 16,
+	FUZZ_SECURITY_ALIGNMENT = sizeof(uint32_t),
+	FUZZ_SECURITY_DACL_BITS = 0x150c,
+	FUZZ_SECURITY_AUTHORITY_BYTES = 6
 };
 
 static const uint16_t directory_index_name[] = {'$', 'I', '3', '0'};
 static const uint8_t listed_data[] = "attribute-list payload";
+
+/* Independent literal donor descriptors retain the existing fuzzer's raw
+ * descriptor framing. The fifth donor is the fuzzed descriptor itself. */
+static const uint8_t security_absent[] = {
+    1, 0, 0, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static const uint8_t security_null[] = {
+    1, 0, 4, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static const uint8_t security_empty[] = {
+    1, 0, 4, 0x90, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14, 0, 0, 0,
+    2, 0, 8, 0, 0, 0, 0, 0};
+static const uint8_t security_one_ace[] = {
+    1, 0, 0x0c, 0x85, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x14, 0, 0, 0,
+    2, 0, 0x1c, 0, 1, 0, 0, 0,
+    0, 0x13, 0x14, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0};
+
+struct security_fuzz_descriptor {
+	uint8_t revision, manager, control[sizeof(uint16_t)];
+	uint8_t owner[sizeof(uint32_t)], group[sizeof(uint32_t)];
+	uint8_t sacl[sizeof(uint32_t)], dacl[sizeof(uint32_t)];
+};
+
+struct security_fuzz_sid {
+	uint8_t revision, count, authority[FUZZ_SECURITY_AUTHORITY_BYTES];
+};
+
+struct security_fuzz_acl {
+	uint8_t revision, reserved1, length[sizeof(uint16_t)];
+	uint8_t count[sizeof(uint16_t)], reserved2[sizeof(uint16_t)];
+};
+
+static uint32_t
+security_fuzz_little(const uint8_t *bytes, size_t count)
+{
+	uint32_t value = 0;
+	size_t index;
+
+	assert(count <= sizeof(value));
+	for (index = count; index != 0; index--) {
+		value = value * (UINT8_MAX + 1u) + bytes[index - 1];
+	}
+	return value;
+}
+
+static void
+security_fuzz_guard(const uint8_t *bytes, size_t count)
+{
+	size_t index;
+
+	for (index = 0; index < count; index++) {
+		assert(bytes[index] == FUZZ_GUARD_BYTE);
+	}
+}
+
+static void
+security_fuzz_component(const uint8_t *source, size_t source_bytes, const uint8_t *output,
+    size_t output_bytes, size_t field, bool acl)
+{
+	const struct security_fuzz_acl *header;
+	const struct security_fuzz_sid *sid;
+	size_t source_offset, output_offset, length;
+
+	source_offset = security_fuzz_little(source + field, sizeof(uint32_t));
+	output_offset = security_fuzz_little(output + field, sizeof(uint32_t));
+	if (source_offset == 0) {
+		assert(output_offset == 0);
+		return;
+	}
+	assert(source_offset >= sizeof(struct security_fuzz_descriptor));
+	assert(output_offset >= sizeof(struct security_fuzz_descriptor));
+	assert(source_offset <= source_bytes && output_offset <= output_bytes);
+	assert(output_offset % FUZZ_SECURITY_ALIGNMENT == 0);
+	if (acl) {
+		assert(sizeof(*header) <= source_bytes - source_offset);
+		header = (const void *)(source + source_offset);
+		length = security_fuzz_little(header->length, sizeof(header->length));
+	} else {
+		assert(sizeof(*sid) <= source_bytes - source_offset);
+		sid = (const void *)(source + source_offset);
+		length = sizeof(*sid) + sid->count * sizeof(uint32_t);
+	}
+	assert(length <= source_bytes - source_offset && length <= output_bytes - output_offset);
+	assert(memcmp(source + source_offset, output + output_offset, length) == 0);
+}
+
+static void
+security_fuzz_oracle(const struct ntfs_security_edit_input *input, const uint8_t *bytes,
+    size_t size)
+{
+	const struct security_fuzz_descriptor *original = input->original;
+	const struct security_fuzz_descriptor *donor = input->dacl_source;
+	const struct security_fuzz_descriptor *output = (const void *)bytes;
+	uint32_t control, old_control, donor_control;
+
+	assert(size >= sizeof(*output));
+	assert(output->revision == original->revision && output->manager == original->manager);
+	control = security_fuzz_little(output->control, sizeof(output->control));
+	old_control = security_fuzz_little(original->control, sizeof(original->control));
+	donor_control = security_fuzz_little(donor->control, sizeof(donor->control));
+	assert((control & FUZZ_SECURITY_DACL_BITS) == (donor_control & FUZZ_SECURITY_DACL_BITS));
+	assert((control & ~FUZZ_SECURITY_DACL_BITS) == (old_control & ~FUZZ_SECURITY_DACL_BITS));
+	security_fuzz_component(input->original, input->original_bytes, bytes, size,
+	    offsetof(struct security_fuzz_descriptor, owner), false);
+	security_fuzz_component(input->original, input->original_bytes, bytes, size,
+	    offsetof(struct security_fuzz_descriptor, group), false);
+	security_fuzz_component(input->original, input->original_bytes, bytes, size,
+	    offsetof(struct security_fuzz_descriptor, sacl), true);
+	security_fuzz_component(input->dacl_source, input->dacl_source_bytes, bytes, size,
+	    offsetof(struct security_fuzz_descriptor, dacl), true);
+}
+
+static void
+fuzz_security_edit(const uint8_t *data, size_t size, enum ntfs_result decoded)
+{
+	const struct {
+		const uint8_t *bytes;
+		size_t size;
+	} donors[] = {{security_absent, sizeof(security_absent)},
+	    {security_null, sizeof(security_null)}, {security_empty, sizeof(security_empty)},
+	    {security_one_ace, sizeof(security_one_ace)}, {data, size}};
+	struct ntfs_security_edit_input input = {data, security_absent, size, sizeof(security_absent)};
+	uint8_t refused[sizeof(struct security_fuzz_descriptor) + 2 * FUZZ_SECURITY_GUARD_BYTES];
+	uint8_t *copy, *guarded, *output;
+	size_t required = SIZE_MAX, written = SIZE_MAX, index, prefix, allocation;
+
+	if (decoded != NTFS_OK) {
+		memset(refused, FUZZ_GUARD_BYTE, sizeof(refused));
+		assert(ntfs_security_edit_dacl_size(&input, &required) == decoded);
+		assert(ntfs_security_edit_dacl_encode(&input, refused + FUZZ_SECURITY_GUARD_BYTES,
+		    sizeof(struct security_fuzz_descriptor), &written) == decoded);
+		assert(required == SIZE_MAX && written == SIZE_MAX);
+		security_fuzz_guard(refused, sizeof(refused));
+		return;
+	}
+	copy = malloc(size);
+	assert(copy != NULL);
+	memcpy(copy, data, size);
+	prefix = FUZZ_SECURITY_GUARD_BYTES + data[size - 1] % FUZZ_SECURITY_ALIGNMENT;
+	for (index = 0; index < sizeof(donors) / sizeof(donors[0]); index++) {
+		input.dacl_source = donors[index].bytes;
+		input.dacl_source_bytes = donors[index].size;
+		assert(ntfs_security_edit_dacl_size(&input, &required) == NTFS_OK);
+		assert(required >= sizeof(struct security_fuzz_descriptor));
+		assert(required <= NTFS_SECURITY_MAX_BYTES);
+		allocation = prefix + required + FUZZ_SECURITY_GUARD_BYTES;
+		guarded = malloc(allocation);
+		assert(guarded != NULL);
+		output = guarded + prefix;
+		memset(guarded, FUZZ_GUARD_BYTE, allocation);
+		written = SIZE_MAX;
+		assert(ntfs_security_edit_dacl_encode(&input, output, required - 1, &written) == NTFS_RANGE);
+		assert(written == SIZE_MAX);
+		security_fuzz_guard(guarded, allocation);
+		assert(ntfs_security_edit_dacl_encode(&input, output, required, &written) == NTFS_OK);
+		assert(written == required);
+		security_fuzz_guard(guarded, prefix);
+		security_fuzz_guard(output + required, FUZZ_SECURITY_GUARD_BYTES);
+		security_fuzz_oracle(&input, output, written);
+		assert(ntfs_security_edit_dacl_encode(&input, output, required + 1, &written) == NTFS_OK);
+		assert(written == required);
+		security_fuzz_guard(guarded, prefix);
+		security_fuzz_guard(output + required, FUZZ_SECURITY_GUARD_BYTES);
+		assert(memcmp(data, copy, size) == 0);
+		free(guarded);
+	}
+	free(copy);
+}
 
 static void
 store_integer(uint8_t *out, uint64_t value, size_t bytes)
@@ -284,6 +455,7 @@ exercise(const uint8_t *data, size_t size, size_t fail_allocation, size_t fail_r
 	struct ntfs_ace_info ace;
 	uint8_t *decoded;
 	size_t produced;
+	enum ntfs_result result;
 
 	volume.env = fuzz_environment(&device);
 	ntfs_default_limits(&volume.limits);
@@ -321,9 +493,12 @@ exercise(const uint8_t *data, size_t size, size_t fail_allocation, size_t fail_r
 		(void)ntfs_reparse_decode(data, size, &reparse);
 		break;
 	case NTFS_FUZZ_SECURITY:
-		(void)ntfs_security_decode(data, size, &security);
+		result = ntfs_security_decode(data, size, &security);
 		(void)ntfs_security_ace_decode(data, size, &ace);
 		(void)ntfs_security_sid_decode(data, size, &security.owner);
+		if (fail_allocation == 0 && fail_read == 0) {
+			fuzz_security_edit(data, size, result);
+		}
 		break;
 	}
 	assert(device.memory == 0 && volume.children == 0);

@@ -102,8 +102,16 @@ LZNT1_RAW_PAYLOAD = b'Independent raw chunk\n'
 SECURITY_DESCRIPTOR = struct.Struct('<BBHIIII')
 SECURITY_ACL = struct.Struct('<BBHHH')
 SECURITY_ACE = struct.Struct('<BBHI')
+SECURITY_ACE_HEADER = struct.Struct('<BBH')
 SECURITY_SELF_RELATIVE = 0x8000
 SECURITY_DACL_PRESENT = 0x0004
+SECURITY_SACL_PRESENT = 0x0010
+SECURITY_MANAGER_VALID = 0x4000
+SECURITY_MANAGER_BYTE = 0xa6
+SECURITY_UNKNOWN_ACE = 0xfe
+SECURITY_UNKNOWN_ACE_FLAGS = 0xa1
+SECURITY_OPAQUE_BODY = bytes.fromhex('12345678')
+SECURITY_ACL_FREE_SPACE = bytes.fromhex('9abcde')
 SECURITY_OBJECT_FLAGS = 0x00000003
 SECURITY_OBJECT_CALLBACK = 0x0b
 SECURITY_ALLOW = 0x00
@@ -167,6 +175,31 @@ def security_seeds():
         control = SECURITY_SELF_RELATIVE | (SECURITY_DACL_PRESENT if present else 0)
         output[name] = SECURITY_DESCRIPTOR.pack(SECURITY_REVISION, 0, control,
                                                sid_offset, sid_offset, 0, acl_offset) + sid + acl
+    # Independent storage-preservation cases. Unknown ACE bodies and declared
+    # ACL free space remain opaque; these are framing witnesses, not grants.
+    opaque = SECURITY_ACE_HEADER.pack(SECURITY_UNKNOWN_ACE, SECURITY_UNKNOWN_ACE_FLAGS,
+                                     SECURITY_ACE_HEADER.size + len(SECURITY_OPAQUE_BODY))
+    opaque += SECURITY_OPAQUE_BODY
+    sacl = SECURITY_ACL.pack(SECURITY_ACL_REVISION, 0,
+                            SECURITY_ACL.size + len(opaque) + len(SECURITY_ACL_FREE_SPACE), 1, 0)
+    sacl += opaque + SECURITY_ACL_FREE_SPACE
+    dacl = SECURITY_ACL.pack(SECURITY_ACL_REVISION, 0,
+                            SECURITY_ACL.size + len(ace) + len(SECURITY_ACL_FREE_SPACE), 1, 0)
+    dacl += ace + SECURITY_ACL_FREE_SPACE
+    sid_offset = SECURITY_DESCRIPTOR.size
+    sacl_offset = sid_offset + len(sid)
+    dacl_offset = sacl_offset + len(sacl)
+    control = SECURITY_SELF_RELATIVE | SECURITY_DACL_PRESENT | SECURITY_SACL_PRESENT | SECURITY_MANAGER_VALID
+    output['opaque-sacl-free-space'] = SECURITY_DESCRIPTOR.pack(
+        SECURITY_REVISION, SECURITY_MANAGER_BYTE, control, sid_offset, sid_offset,
+        sacl_offset, dacl_offset) + sid + sacl + dacl
+    shared_acl = SECURITY_ACL.pack(SECURITY_ACL_REVISION, 0,
+                                  SECURITY_ACL.size + len(SECURITY_ACL_FREE_SPACE), 0, 0)
+    shared_acl += SECURITY_ACL_FREE_SPACE
+    acl_offset = sid_offset + len(maximum_sid)
+    output['shared-components'] = SECURITY_DESCRIPTOR.pack(
+        SECURITY_REVISION, SECURITY_MANAGER_BYTE, control, sid_offset, sid_offset,
+        acl_offset, acl_offset) + maximum_sid + shared_acl
     return output
 
 
@@ -257,10 +290,13 @@ def generate(output):
                 ('deny-only', ACCESS_USER_DENY_ONLY, ACCESS_DENY_ONLY, SECURITY_BUILTIN_ADMINISTRATORS),
                 ('restricted', ACCESS_RESTRICTED, ACCESS_ENABLED, ACCESS_UNRELATED_RID)):
             # The harness interprets the comparison word as a zero-based budget.
-            header = ACCESS_HEADER.pack(SECURITY_FILE_READ_DATA, ACCESS_COMPARISON_BUDGET - 1, flags,
-                                        attributes, user, SECURITY_BUILTIN_ADMINISTRATORS,
-                                        SECURITY_BUILTIN_ADMINISTRATORS)
-            seeds['access'][f'{name}-{context}'] = header + descriptor
+            for prefix, desired in (('', SECURITY_FILE_READ_DATA),
+                    ('maximum-', access_wire.MAXIMUM_ALLOWED),
+                    ('maximum-required-', access_wire.MAXIMUM_ALLOWED | SECURITY_FILE_READ_DATA)):
+                header = ACCESS_HEADER.pack(desired, ACCESS_COMPARISON_BUDGET - 1, flags,
+                                            attributes, user, SECURITY_BUILTIN_ADMINISTRATORS,
+                                            SECURITY_BUILTIN_ADMINISTRATORS)
+                seeds['access'][f'{prefix}{name}-{context}'] = header + descriptor
     access_user = access_wire.sid(SECURITY_NT_AUTHORITY, SECURITY_BUILTIN_DOMAIN,
                                 SECURITY_BUILTIN_ADMINISTRATORS)
     for name, generic, mapped in (

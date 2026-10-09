@@ -47,7 +47,9 @@ RIGHTS and restricting contexts. Group-owner cases are included when an enabled
 OWNER group exists. Probe SID selection is checked against the original base
 token and group-owner coverage is reported separately.
 
-Restricted-owner combinations and MAXIMUM_ALLOWED probe unsupported core behavior.
+Restricted-owner combinations and MAXIMUM_ALLOWED retain the original `probe`
+scope labels in captured manifests. Their core extensions now require exact
+comparison rather than accepting an unsupported result.
 A mandatory-label SACL case is an explicit boundary observation outside the DACL
 comparison. These cases do not establish integrity or complete authorization.
 Object/callback/conditional ACEs, write-restricted tokens, privileges, parent and
@@ -97,15 +99,16 @@ Per-case native/core outputs and separate counts remain in `report.json`:
 
 Missing work, partial acquisition, errors and unsupported/out-of-plane cases keep
 the overall result `gaps` and CLI exit status nonzero. The current matrix includes
-such probes intentionally. `native_dacl_vectors_verified` requires a complete
-Windows capture, every discretionary vector matching, and unchanged original
+the mandatory-plane probes intentionally. `native_dacl_vectors_verified` requires a complete
+Windows capture, every discretionary vector including the original owner/maximum
+probes matching, and unchanged original
 input. This qualifies only this matrix. Synthetic provenance keeps it false.
 `full_authorization_qualified` remains false. Provenance metadata states how the
 capture was acquired; it is not a cryptographic attestation of an external run.
 
 Hosted CI may select `--require-native-dacl`. This requires complete native
-acquisition and supported DACL agreement while allowing only the explicitly
-declared unsupported probes and mandatory-plane boundaries. It retains the
+acquisition and DACL agreement while allowing only the declared mandatory-plane
+boundaries. Unsupported owner/maximum results now fail this gate. It retains the
 original `gaps` report, rejects every API/comparison error and cannot pass a
 synthetic capture. See [fresh cloud execution](WINDOWS-CLOUD.md) for the exact
 commands, scratch-VHD guards and independent native input continuation.
@@ -158,7 +161,12 @@ v1 captures remain verifiable. Comparison of the unchanged original v1 capture
 now passes 117 decisions with zero failures, retaining 21 unsupported probes and
 six out-of-plane observations. Local child diagnostics require a retained
 LeakSanitizer-only wrapper under the traced executor; the fatal ASan/UBSan and
-hosted settings remain unchanged. Additional v2 native observations are pending.
+hosted settings remain unchanged. The [completed v2 acquisition](https://github.com/machlin-project/ntfs/actions/runs/37859802008)
+contains 282 original observations. Its 111 owner/maximum probes distinguish
+ownership intersection, ordered maximum grants and required-specific masks.
+The extended core matches all 276 discretionary decisions, with zero failures,
+unsupported cases or API errors; six mandatory-plane observations remain outside
+this evaluator. Every original probe must now match to pass the native gate.
 FSKit has not adopted the evaluator or diagnostic token
 projection. Do not use these tools as a native authenticator or expose their
 transport as a product API.

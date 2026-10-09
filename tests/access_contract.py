@@ -2,12 +2,14 @@
 """Offline contracts for transport, SDK buffer ownership and truthful oracle reports."""
 from copy import deepcopy
 import ctypes as ct
+import hashlib
 import json
 import os
 from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -57,14 +59,15 @@ def rewrite_header(packet, **changes):
 def core_contract(evaluator, directory):
     request = directory / 'request.bin'
 
-    def evaluate(context, descriptor, desired, allowed, code=wire.NTFS_OK, mapped=None):
+    def evaluate(context, descriptor, desired, allowed, code=wire.NTFS_OK, mapped=None, granted=None):
         packet = wire.request(context, descriptor, desired)
         request.write_bytes(packet)
         result = verifier.decision(run_tool([str(evaluator), str(request)]))
         check(result['code'] == code and result['allowed'] == allowed)
         if code == wire.NTFS_OK:
             mapped = desired if mapped is None else mapped
-            check(result['requested'] == mapped and result['granted'] == (mapped if allowed else 0))
+            expected_grant = (mapped if allowed else 0) if granted is None else granted
+            check(result['requested'] == mapped and result['granted'] == expected_grant)
         check(bounded_read(request, wire.REQUEST_BYTES_MAX) == packet)
         return result
 
@@ -122,8 +125,13 @@ def core_contract(evaluator, directory):
                  [wire.ace(wire.ACE_ALLOW, read, wire.OWNER_RIGHTS)]), 0, False)
     evaluate(plain, wire.descriptor(TEST_USER, [wire.ace(wire.ACE_DENY, controls, wire.OWNER_RIGHTS)]), controls, False)
     evaluate(token(restricting=[TEST_USER], restricted=True), wire.descriptor(TEST_USER, []), controls,
-             False, code=wire.NTFS_UNSUPPORTED)
-    evaluate(plain, wire.descriptor(TEST_OTHER, [allow]), wire.MAXIMUM_ALLOWED, False, code=wire.NTFS_UNSUPPORTED)
+             True)
+    evaluate(token(restricting=[wire.WORLD], restricted=True), wire.descriptor(TEST_USER, []), controls,
+             False)
+    evaluate(plain, wire.descriptor(TEST_OTHER, [allow]), wire.MAXIMUM_ALLOWED, True, granted=read)
+    evaluate(plain, wire.descriptor(TEST_OTHER, [allow]), wire.MAXIMUM_ALLOWED | write, False)
+    evaluate(plain, wire.descriptor(TEST_OTHER, [allow, deny]), wire.MAXIMUM_ALLOWED, True, granted=read)
+    evaluate(plain, wire.descriptor(TEST_OTHER, [deny, allow]), wire.MAXIMUM_ALLOWED, False)
     evaluate(token(groups=[{'sid': wire.WORLD, 'attributes': TEST_UNKNOWN_ATTRIBUTE}]),
              wire.descriptor(TEST_OTHER, [allow]), read, False, code=wire.NTFS_UNSUPPORTED)
     evaluate(plain, b'', read, False, code=wire.NTFS_CORRUPT)
@@ -156,6 +164,22 @@ def core_contract(evaluator, directory):
     rejected(lambda: bounded_read(fifo, wire.REQUEST_BYTES_MAX))
     request.write_bytes(bytes(wire.REQUEST_BYTES_MAX + 1))
     rejected(lambda: run_tool([str(evaluator), str(request)]), (RuntimeError,))
+
+
+def decision_contract():
+    maximum = dict(schema_version=wire.SCHEMA_VERSION, code=wire.NTFS_OK, result='success',
+                   allowed=True, requested=wire.MAXIMUM_ALLOWED | wire.FILE_READ_DATA,
+                   granted=wire.FILE_READ_DATA | wire.FILE_WRITE_DATA, sid_comparisons=0)
+    check(verifier.decision(json.dumps(maximum)) == maximum)
+    for changes in ({'granted': wire.MAXIMUM_ALLOWED | wire.FILE_READ_DATA},
+                    {'granted': wire.FILE_WRITE_DATA}, {'granted': 0}, {'allowed': False},
+                    {'requested': wire.FILE_READ_DATA},
+                    {'requested': wire.MAXIMUM_ALLOWED | wire.GENERIC_READ},
+                    {'code': wire.NTFS_UNSUPPORTED}):
+        invalid = dict(maximum, **changes)
+        rejected(lambda: verifier.decision(json.dumps(invalid)))
+    denied = dict(maximum, allowed=False, granted=0)
+    check(verifier.decision(json.dumps(denied)) == denied)
 
 
 def sdk_contract():
@@ -327,6 +351,38 @@ class FakeAPI:
 
 
 def corpus_contract(evaluator, directory):
+    # Acquisition-failure reports reuse identical immutable requests. Evaluate
+    # every distinct packet with the real diagnostic, but avoid paying native
+    # sanitizer/dynamic-loader startup again for the same pure decision. This
+    # cache exists only inside these synthetic report tests, never in the
+    # production verifier or process/error/deadline contracts.
+    original_run = verifier.run_tool
+    binary_hash = hashlib.sha256(evaluator.read_bytes()).digest()
+    observed = {}
+    executions, hits = 0, 0
+
+    def evaluate_once(arguments, **options):
+        nonlocal executions, hits
+        check(len(arguments) == 2 and Path(arguments[0]) == evaluator)
+        request = Path(arguments[1])
+        encoded = bounded_read(request, wire.REQUEST_BYTES_MAX)
+        if encoded not in observed:
+            result = original_run(arguments, **options)
+            check(bounded_read(request, wire.REQUEST_BYTES_MAX) == encoded)
+            observed[encoded] = result
+            executions += 1
+        else:
+            hits += 1
+        return observed[encoded]
+
+    with patch.object(verifier, 'run_tool', evaluate_once):
+        corpus_report_contract(evaluator, directory)
+    check(executions == len(observed) and executions > 0 and hits > 0)
+    check(hashlib.sha256(evaluator.read_bytes()).digest() == binary_hash)
+    print(f'Corpus reports: {executions} real distinct evaluations, {hits} identical requests reused')
+
+
+def corpus_report_contract(evaluator, directory):
     fake = FakeAPI()
     rejected(lambda: collector.capture(fake, directory / 'false-native'))
     check(not (directory / 'false-native').exists())
@@ -352,7 +408,7 @@ def corpus_contract(evaluator, directory):
     check(report['status'] == 'gaps' and not report['native_dacl_vectors_verified'] and
           not report['full_authorization_qualified'] and report['manifest_unchanged'])
     check(report['counts']['passed'] > 0 and report['counts']['failed'] > 0 and
-          report['counts']['unsupported'] > 0 and report['counts']['out_of_plane'] == len(collector.CONTEXT_IDS))
+          report['counts']['unsupported'] == 0 and report['counts']['out_of_plane'] == len(collector.CONTEXT_IDS))
     check(sum(report['counts'].values()) == len(manifest['cases']) and path.read_bytes() == original)
     rejected(lambda: verifier.verify(path, evaluator, directory / 'report'), (OSError,))
 
@@ -404,7 +460,7 @@ def native_gate_contract():
     report = dict(native_dacl_vectors_verified=True, manifest_unchanged=True,
                   acquisition_status='complete', missing_cases=[], missing_contexts=[],
                   acquisition_errors=[], cases=[dict(scope='dacl', status='passed'),
-                  dict(scope='probe', status='unsupported'),
+                  dict(scope='probe', status='passed'),
                   dict(scope='boundary', status='out_of_plane')])
     check(verifier.native_dacl_gate(report))
     for field, value in (('native_dacl_vectors_verified', False), ('manifest_unchanged', False),
@@ -418,7 +474,7 @@ def native_gate_contract():
         for status in ('failed', 'oracle_errors', 'unsupported', 'out_of_plane'):
             altered = deepcopy(report)
             altered['cases'].append(dict(scope=scope, status=status))
-            expected = (scope, status) in (('probe', 'unsupported'), ('boundary', 'out_of_plane'))
+            expected = (scope, status) == ('boundary', 'out_of_plane')
             check(verifier.native_dacl_gate(altered) == expected)
 
 
@@ -427,6 +483,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ntfs-access-contract-') as temporary:
         directory = Path(temporary)
         core_contract(evaluator, directory)
+        decision_contract()
         sdk_contract()
         corpus_contract(evaluator, directory)
         subprocess_contract()

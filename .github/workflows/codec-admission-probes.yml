@@ -1,0 +1,72 @@
+name: Isolated codec admission comparisons
+on:
+  push:
+    branches: [development]
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  empty-encoding:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[codec-admission-probe]') }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, name: linux-x86-clang, compiler: clang}
+          - {os: ubuntu-24.04-arm, name: linux-arm-gcc, compiler: gcc}
+          - {os: macos-latest, name: macos-xcode, compiler: ''}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compare post-admission empty return with immutable current encoder
+        env:
+          PROBE_COMPILER: ${{ matrix.compiler }}
+        run: |
+          mkdir -p artifacts/ci
+          compiler=()
+          if [[ -n "$PROBE_COMPILER" ]]; then compiler=(--compiler "$PROBE_COMPILER"); fi
+          python3 scripts/probe_lznt1_empty.py "${compiler[@]}" --reference 8b63aadfef7ccd814f93d73583da1e43e6485919 --output artifacts/lznt1-empty-probe --repetitions 13 --sample-ms 250 2>&1 | tee artifacts/ci/lznt1-empty-probe.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lznt1-empty-probe-${{ matrix.name }}
+          path: |
+            artifacts/lznt1-empty-probe
+            artifacts/ci/lznt1-empty-probe.log
+          if-no-files-found: error
+          retention-days: 14
+  xpress-nine:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[codec-admission-probe]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compare validated nine-bit return with immutable current decoder
+        run: |
+          mkdir -p artifacts/ci
+          python3 scripts/probe_xpress_nine.py --compiler clang --reference 8b63aadfef7ccd814f93d73583da1e43e6485919 --output artifacts/xpress-nine-probe --repetitions 13 --sample-ms 250 2>&1 | tee artifacts/ci/xpress-nine-probe.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xpress-nine-probe-linux-x86-clang
+          path: |
+            artifacts/xpress-nine-probe
+            artifacts/ci/xpress-nine-probe.log
+          if-no-files-found: error
+          retention-days: 14

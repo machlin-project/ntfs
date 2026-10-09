@@ -107,7 +107,7 @@ bounded error contracts.
 
 `tests/fuzz_write_lznt1.c` adds an original arbitrary-plaintext encoder/decode
 oracle, deterministic repeat checking, output-capacity refusal and exact input/
-workspace/decoded allocation ends. Its standalone mode runs 512 deterministic
+workspace/decoded allocation ends. Its standalone mode runs 514 deterministic
 inputs; the libFuzzer entry point can run under fatal ASan/UBSan without importing
 an external codec.
 
@@ -186,15 +186,17 @@ successfully before claiming Windows compatibility for the generated packets.
 Even successful native decompression does not qualify compressed NTFS storage,
 Windows recovery, FSKit mutation or release readiness.
 
-The optimized source at `9581ad8100e31b80b96ef211e4ffdbde2d22be6d` passes the
-[fresh hosted Windows oracle](https://github.com/machlin-project/ntfs/actions/runs/37860226468):
+The selected classic-width/single-pass source at `8b63aad` passes the
+[fresh hosted Windows oracle](https://github.com/machlin-project/ntfs/actions/runs/37866655342):
 all 295 generated nonempty pairs return native status zero, exact output lengths
 and original content, intact output guards, unchanged input buffers and unchanged
 source files. The actual provider is Windows Server 2025's
 `ntdll!RtlDecompressBuffer`; corpus bytes total 11,048,128. The collector source
 hash matches the repository script with Windows checkout CRLF line endings.
 The retained ZIP's independent hash check and complete row review are under
-`artifacts/dots-codec-hosted/9581ad8/windows-lznt1-observations/` and
-`artifacts/dots-codec-hosted/9581ad8/native-codec-review.json`. This qualifies
-these optimized byte packets on that native API, within the storage/admission
+`artifacts/dots-codec-hosted/8b63aad/windows-lznt1-observations/` and
+`artifacts/dots-codec-hosted/8b63aad/native-codec-review.json`. The prior
+[`9581ad8` run](https://github.com/machlin-project/ntfs/actions/runs/37860226468)
+is retained separately; all original and encoded pair hashes match exactly.
+This qualifies these optimized byte packets on that native API, within the storage/admission
 boundary above.

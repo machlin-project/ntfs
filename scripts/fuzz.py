@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 from environment import sanitizer_environment
-from fuzz_seeds import generate, journal_volume_images
+from fuzz_seeds import generate, journal_volume_images, lznt1_unit_seeds, LZNT1_UNIT_SELECTOR
 from directory_fuzz_seeds import generate as generate_directory
 from usn_fuzz_seeds import generate as generate_usn
 
@@ -33,6 +33,7 @@ STRUCTURE_INPUT_BYTES = 32768
 SECURITY_INPUT_BYTES = 1024 * 1024
 COMPRESSION_INPUT_BYTES = 128 * 1024
 ENCODER_INPUT_BYTES = 16 * 4096
+ENCODER_UNIT_INPUT_BYTES = ENCODER_INPUT_BYTES + LZNT1_UNIT_SELECTOR.size
 LOGFILE_INPUT_BYTES = 2 * 1024 * 1024
 TARGETS = ('image', 'validation', 'mapping-pairs', 'attribute-list', 'index-root', 'index-block', 'directory-mutation', 'lznt1', 'lznt1-encode', 'reparse', 'security', 'access', 'wof', 'logfile', 'usn')
 
@@ -73,7 +74,7 @@ try:
         if target in ('wof', 'usn'):
             maximum = COMPRESSION_INPUT_BYTES
         if target == 'lznt1-encode':
-            maximum = ENCODER_INPUT_BYTES
+            maximum = ENCODER_UNIT_INPUT_BYTES
         if target == 'logfile':
             maximum = LOGFILE_INPUT_BYTES
         if target in ('image', 'validation'):
@@ -113,6 +114,7 @@ try:
                         'alphabet': (b'abcdefghijklmnopqrstuvwxyz' * ENCODER_INPUT_BYTES)[:ENCODER_INPUT_BYTES],
                         'byte-ramp': bytes(range(256)) * (ENCODER_INPUT_BYTES // 256),
                         'random': random.Random(20261008).randbytes(ENCODER_INPUT_BYTES)}
+            authored.update(lznt1_unit_seeds())
             paths = []
             for name, data in authored.items():
                 path = seeds / (name + '.seed')

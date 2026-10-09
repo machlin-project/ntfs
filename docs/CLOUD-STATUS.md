@@ -43,16 +43,17 @@ limits. Wider qualification of the corrected source is still pending.
 
 ## Workstreams
 
-| Stream | Current source work | Remaining verification/work |
+| Stream | Verified cloud boundary | Remaining bounded work |
 | --- | --- | --- |
-| Pipeline | Full GCC sanitized build; isolated compiler selection; x86/ARM GCC/Clang/Xcode matrix | Exact-revision full hosted suites, strict objects and selected-Xcode style |
-| Directory | Unicode/case-policy queries added; independent expected keys cached without dropping any complete flat/wire/reachability check | 256 deterministic cases, 900-second campaign, synthetic/native complete-image qualification |
-| Core/recovery | Checked restart payload limits, small journal counters, scratch ownership, zero-byte resident reads; 32-ancestor/five-dimension governor regression | Full malformed, allocation, WAL and fresh-owner recovery boundaries |
-| Remaining features | [Timestamp, reparse and sparse preparation; retirement model](PORTABLE-FEATURES.md) pass local focused checks | Complete coupled media operations and precise independent/native facts remain explicit; no admission widened |
-| Independent oracles | [Guarded Windows bootstrap/replay](WINDOWS-CLOUD.md), AccessCheck and [pinned external tools](EXTERNAL-ORACLES.md) prepared; portable contracts pass | Actual Windows and standalone-tool results, fresh C/native recovery inputs |
-| FSKit | Lazy immutable-view teardown/reply ordering fixed with four prepared deterministic cases; suitable legacy SDK work kept separate from modern SDK requirement | Hosted component/app outcomes; installed behavior still needs signed native environment |
-| Fuzz/performance/reproducibility | All-target fixed seed replay, explicit Linux/Xcode matched benchmark tooling, relocated Release path; 18 helper/six reproducibility regressions pass | All campaigns, measured comparisons, relocated/packaging results |
-| Tooling/docs | Bounded commands, provenance, original failure/input retention and current capability map | Final clean-clone/release preparation and per-contract residual handoff |
+| Pipeline | Four Linux compiler/architecture jobs pass on 8b63aad; macOS passes 247 tests and both eight-product Release comparisons | Apply retained Xcode style; final exact-source full matrix after connected changes |
+| Directory | Fifteen fuzz targets, 900-second directory campaign and deterministic stress pass; f415c6b completes all 803 native-source operations, C recovery cuts and packaging | Diagnose the first retained Windows replay failure in group 00, then qualify fresh candidates without retrying completed ones |
+| Core/recovery | Fatal hosted sanitizers, budgets, whole-image publication checks, independent recovery and quiet reopen; native checkpoint reserve pressure is handled before freezing the next predecessor | Wider new-family crash and native postimage evidence; preserve resource and physical-space bounds |
+| Features | Private timestamp, reparse, sparse, lifetime, security-edit and USN boundaries; compression-unit ownership and complete hardlink C qualification have focused checks | [Each owning family](PORTABLE-FEATURES.md) retains its specific media/index/lifetime/native dependency; missing coupling remains implementation work |
+| Independent oracles | Pinned external-tool comparison, native 276-vector DACL decisions, 28-case corpus, 295 codec pairs and 1024-link limit observations pass | Native directory/hardlink recovery, 175 new unit packets and corrected metadata cache/handle observations |
+| FSKit | Hosted component/app-support groups and strict context objects pass; both unsigned universal builds/packages and UUID bindings pass | Full app linker-path reproducibility and usable dSYMs; SDK 27 and installed signed execution remain explicit unavailable gates |
+| Fuzz/performance/reproducibility | All fifteen campaigns pass; five-platform matched codec evidence retains gains and regressions; core Release relocation passes | Decide bounded empty-encoder/XPRESS probes, verify new unit fuzz coverage, then freeze final measured/native source |
+| Tooling/docs | Guarded scratch acquisition/transport, immutable original failures, bounded commands, provenance and per-family capability map | Complete fresh postimage review and final clean-clone/source-bound residual handoff |
+
 
 This is an intermediate checkpoint. All feasible cloud work is **not complete**.
 Portable, external-tool, Windows API/VHD, macOS component, unsigned-app, installed
@@ -143,6 +144,44 @@ report harness reuses only identical immutable packets after evaluating every
 distinct request; it retains every report assertion and the 120-second deadline.
 
 ## Reproduce and request the wider gates
+
+### Exact-source checkpoint: 8b63aad
+
+The [full run](https://github.com/machlin-project/ntfs/actions/runs/37866655275)
+passes all four Linux GCC/Clang and x86-64/ARM64 core jobs, every one of the fifteen
+fuzz campaigns, deterministic directory stress, standalone interoperability,
+Windows acquisition/corpus/Access comparison, and serial portable performance.
+The macOS core suite passes all 247 tests; its remaining job failure is formatting.
+The retained selected-Xcode patch is applied with C-token and adjacent-string
+equivalence checked. Both same-path and relocated core Release builds produce
+eight identical products. This does not qualify the unsigned app comparison.
+
+Fresh Windows Access observations again match all 276 in-plane vectors; six
+mandatory-plane boundaries remain distinct. The original corpus passes 28/28.
+The full native-source directory sequence completes 287 operations before the
+next execution preparation refuses with no writes. Its retained history crosses
+the existing checkpoint-reserve allocation threshold. On a fresh copy, querying
+that existing pressure signal before freezing the next predecessor, checkpointing,
+and executing the original operation once passes the independent 288-object
+model, whole-image publication comparison, full validator and quiet recovery.
+The complete 803-operation and Windows replay verdicts remain pending.
+
+Both unsigned universal app builds, dSYM UUID bindings and packages pass. The
+strict relocated comparison still differs in linker UUIDs and the arm64 ad-hoc
+signature page hashes containing them; code, data and symbols otherwise match.
+Release compiler path mapping and a separate retained linker diagnostic are
+prepared. Actual SDK 27 compilation remains explicitly unexecuted on the available
+SDK 26.5/runtime 26.6, and installed signed behavior remains separate.
+
+The [five-platform codec run](https://github.com/machlin-project/ntfs/actions/runs/37866655284)
+passes all differential and timing jobs, and the
+[fresh native decoder](https://github.com/machlin-project/ntfs/actions/runs/37866655342)
+passes the 295 original pairs. Classic encoder widths remove the earlier measured
+nonempty Clang regression while retaining the single-pass bound-capacity gain.
+Empty calls still show a measured regression and remain under investigation;
+successful CI is not a claim that every timing case improved. The new compression
+unit owner and complete hard-link persistence harness have separate qualification
+work and do not widen filesystem admission.
 
 Use separate build directories for different compilers:
 

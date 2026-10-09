@@ -74,6 +74,19 @@ class Contracts(unittest.TestCase):
         (self.corpus / 'case-0000.data').unlink()
         self.assertFalse(self.collect()['passed'])
 
+    def test_unit_and_packet_ordinals_are_independent(self):
+        (self.corpus / 'unit-0000.data').write_bytes(b'CAT')
+        (self.corpus / 'unit-0000.packed').write_bytes(b'\x02\x30CAT')
+        report = self.collect()
+        self.assertTrue(report['passed'] and report['complete'])
+        self.assertEqual([row['case'] for row in report['cases']], ['0000', 'unit-0000'])
+
+    def test_cross_family_members_cannot_form_a_pair(self):
+        (self.corpus / 'case-0000.packed').rename(self.corpus / 'unit-0000.packed')
+        report = self.collect()
+        self.assertFalse(report['passed'] or report['complete'])
+        self.assertEqual(report['cases'], [])
+
     def test_empty_rejected(self):
         (self.corpus / 'case-0000.data').write_bytes(b'')
         self.assertFalse(self.collect()['passed'])

@@ -34,6 +34,39 @@ static const uint8_t triple_golden[] = {0x05, 0xb0, 0x08, 'A', 'B', 'C', 0x06, 0
 static const uint8_t tie_golden[] = {0x03, 0x30, 'A', 'A', 'A', 'A'};
 
 static void
+empty_admission(void)
+{
+	union {
+		size_t alignment;
+		uint8_t bytes[64];
+	} storage;
+	uint8_t original[sizeof(storage)];
+	size_t written = SIZE_MAX;
+	void *wrapped = (void *)(uintptr_t)(UINTPTR_MAX - sizeof(size_t) + 1);
+
+	memset(&storage, TEST_SENTINEL, sizeof(storage));
+	memcpy(original, &storage, sizeof(storage));
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 1, NULL, 0, &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, NULL, 1, &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, NULL, 0, NULL) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, wrapped, sizeof(size_t), NULL, 0, &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, wrapped, sizeof(size_t), &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, NULL, 0, wrapped) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, storage.bytes, sizeof(storage), storage.bytes,
+	    1, &written) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, storage.bytes, sizeof(storage), NULL,
+	    0, &storage.alignment) == NTFS_INVALID);
+	assert(ntfs_write_lznt1_encode(NULL, 0, NULL, 0, storage.bytes,
+	    sizeof(storage), &storage.alignment) == NTFS_INVALID);
+	assert(written == SIZE_MAX && memcmp(original, &storage, sizeof(storage)) == 0);
+	/* Empty input still admits short nonzero workspace and disjoint output.
+	 * Neither declared buffer may be touched, even though capacity is unused. */
+	assert(ntfs_write_lznt1_encode(NULL, 0, storage.bytes, 1, storage.bytes + 1,
+	    sizeof(storage) - 1, &written) == NTFS_OK && written == 0);
+	assert(memcmp(original, &storage, sizeof(storage)) == 0);
+}
+
+static void
 sentinel(const uint8_t *bytes, size_t count)
 {
 	size_t index;
@@ -406,6 +439,7 @@ main(int argc, char **argv)
 	input = malloc(NTFS_WRITE_LZNT1_MAX_BYTES);
 	assert(input);
 	admission();
+	empty_admission();
 	malformed_goldens();
 	exact_allocation_ends();
 	for (alignment = 0; alignment < TEST_ALIGNMENTS; alignment++) {

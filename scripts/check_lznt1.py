@@ -51,8 +51,14 @@ def main():
                                    [*flags, target, '-fsanitize=address,undefined'],
                                    f'{context}-encode', env)
         encoded = command([binary], output, f'{context}-encode-check', sanitizer_environment())
-        results.append(dict(context=context, decoder=decoded.strip(), encoder=encoded.strip()))
-        print(context, decoded.strip(), encoded.strip(), flush=True)
+        binary, _ = build_encoder(ROOT, output, ROOT / 'tests/write_lznt1.c',
+                                   [*flags, ROOT / 'core/lznt1.c', '-fsanitize=address,undefined'],
+                                   f'{context}-independent-encode', env)
+        independent = command([binary], output, f'{context}-independent-encode-check',
+                              sanitizer_environment())
+        results.append(dict(context=context, decoder=decoded.strip(), encoder=encoded.strip(),
+                            independentEncoder=independent.strip()))
+        print(context, decoded.strip(), encoded.strip(), independent.strip(), flush=True)
     report = dict(complete=True, reference=str(reference), fixtures=str(fixtures), toolchain=toolchain,
                   fatalSanitizers=True, kernelLoaded=False, results=results)
     (output / 'result.json').write_text(json.dumps(report, indent=2) + '\n')

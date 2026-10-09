@@ -134,6 +134,52 @@ ACCESS_DENY_ONLY = 0x00000010
 ACCESS_RESTRICTED = 0x01
 ACCESS_USER_DENY_ONLY = 0x02
 ACCESS_UNRELATED_RID = 1001
+LZNT1_UNIT_SELECTOR = struct.Struct('<BBHH')
+LZNT1_UNIT_FULL_LOGICAL = 1
+LZNT1_UNIT_FULL_INITIALIZED = 2
+LZNT1_UNIT_ALLOCATION_REFUSAL = 4
+LZNT1_UNIT_MIN_CLUSTER = 512
+LZNT1_UNIT_MAX_CLUSTER = 4096
+LZNT1_UNIT_CLUSTERS = 16
+
+
+def lznt1_unit_seeds():
+    """Original plaintext and selectors for owned unit padding/EOF/VDL tests."""
+    size = LZNT1_UNIT_MIN_CLUSTER * LZNT1_UNIT_CLUSTERS
+    state = 0x4c5a4e54
+    noise = bytearray()
+    full_size = LZNT1_UNIT_MAX_CLUSTER * LZNT1_UNIT_CLUSTERS
+    for _ in range(full_size):
+        state ^= (state << 13) & 0xffffffff
+        state ^= state >> 17
+        state ^= (state << 5) & 0xffffffff
+        noise.append(state & 0xff)
+    full = LZNT1_UNIT_FULL_LOGICAL | LZNT1_UNIT_FULL_INITIALIZED
+    output = {}
+    # Fixed plaintext found by the separately retained bounded fixture search.
+    # Encoded lengths 510/511/512/7679 cover two-byte padding, expansion,
+    # exact-boundary/no-marker, and expansion to raw fallback respectively.
+    for name, leading, prefix in (('two-pad', 0, 156), ('one-pad', 0, 157),
+                                   ('exact', 4, 161), ('raw-fallback', 0, 7168)):
+        source = bytearray(noise[:size])
+        for chunk in range(0, size, LZNT_UNIT):
+            source[chunk:chunk + leading] = b'A' * leading
+        source[prefix:] = bytes(size - prefix)
+        output['unit-' + name] = LZNT1_UNIT_SELECTOR.pack(0, full, 0, 0) + source
+        output['unit-refuse-' + name] = LZNT1_UNIT_SELECTOR.pack(
+            0, full | LZNT1_UNIT_ALLOCATION_REFUSAL, 0, 0) + source
+    for geometry in range(4):
+        cluster = LZNT1_UNIT_MIN_CLUSTER << geometry
+        output[f'unit-{cluster}-vdl-poison'] = LZNT1_UNIT_SELECTOR.pack(
+            geometry, 0, cluster + 1, cluster - 1) + bytes(noise[:size])
+        output[f'unit-{cluster}-sparse'] = LZNT1_UNIT_SELECTOR.pack(
+            geometry, LZNT1_UNIT_FULL_LOGICAL, 0, 0) + bytes(noise[:size])
+        output[f'unit-{cluster}-empty'] = LZNT1_UNIT_SELECTOR.pack(
+            geometry, 0, 0, 0) + bytes(noise[:size])
+    output['unit-full-65536-noise'] = LZNT1_UNIT_SELECTOR.pack(3, full, 0, 0) + bytes(noise)
+    output['unit-full-65536-period3'] = LZNT1_UNIT_SELECTOR.pack(3, full, 0, 0) + bytes(
+        index % 3 for index in range(full_size))
+    return output
 
 
 def journal_volume_images(output, image_bytes):

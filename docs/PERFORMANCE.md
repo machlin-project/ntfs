@@ -286,9 +286,11 @@ passes all 295 optimized encoder packet pairs, with exact bytes/lengths, guards
 and unchanged inputs. No compressed-storage write admission follows.
 
 Each hosted job retains all 68 decoder and 108 encoder configurations, nine
-alternating pairs and 100-ms samples: **880 configurations and 7,920 paired
+alternating pairs and a 100-ms sample target: **880 configurations and 7,920 paired
 measurements** overall. Independent review verifies frozen source/harness/input
 hashes, candidate binary hashes, exact output fields and raw sample counts.
+Pilot calibration caps work at 10,000,000 iterations, so very short calls can
+finish below the requested sample duration; actual CPU/wall durations are retained.
 The following values are median paired CPU ratios, shown as userspace/GPR.
 
 | Platform/toolchain | LZNT1 literals | XPRESS long codes | LZX long codes | Encoder raw-bound 64-KiB zeros |
@@ -372,6 +374,85 @@ The retained Clang assembly shows the persistent-state encoder walk growing
 its local frame from 0x38 to 0x48 bytes and increasing live-register/spill work;
 the controlled source comparison, rather than assembly inspection alone,
 establishes the selected strategy's measured effect.
+
+### Published classic-width five-platform qualification
+
+The selected source at `8b63aad` passes the complete
+[five-platform comparison](https://github.com/machlin-project/ntfs/actions/runs/37866655284)
+and the [native Windows encoder check](https://github.com/machlin-project/ntfs/actions/runs/37866655342).
+All three contexts on every platform again pass 82,614 decoder checks, 2,978
+encoder capacity checks and 229,388 Huffman checks, with Linux full LSan and the
+distinct macOS ASan/UBSan boundary. Windows passes 295/295 original packet pairs;
+their original and encoded hashes match the preceding corpus exactly. This
+qualification precedes the new private unit-packet owner and its padded corpus.
+
+Independent review verifies all frozen inputs, source and harness hashes,
+candidate source and binary hashes, outputs and all 7,920 pairs across 880
+configurations. The table reports median paired CPU ratios as userspace/GPR,
+against the same pre-optimization source. It does not divide separate medians.
+The 100-ms pilot target retains the same iteration cap described above; for
+example, x86 Clang copy-64 samples last about 24 ms at that cap.
+
+| Platform/toolchain | LZNT1 literals | XPRESS long codes | LZX long codes | Encoder raw-bound 64-KiB zeros |
+| --- | ---: | ---: | ---: | ---: |
+| Linux x86-64 GCC | 1.676 / 2.239 | 1.656 / 1.667 | 1.679 / 1.676 | 1.993 / 1.994 |
+| Linux x86-64 Clang | 4.709 / 4.336 | 1.107 / 1.107 | 1.475 / 1.453 | 1.993 / 1.988 |
+| Linux ARM64 GCC | 2.066 / 3.521 | 1.410 / 1.419 | 1.514 / 1.513 | 1.998 / 1.997 |
+| Linux ARM64 Clang | 3.990 / 4.530 | 1.158 / 1.157 | 1.687 / 1.683 | 2.000 / 1.998 |
+| macOS ARM64 Xcode | 4.269 / 4.712 | 1.128 / 1.148 | 1.637 / 1.597 | 2.046 / 2.062 |
+
+The prior Clang x86 userspace nonempty encoder loss is absent: 4-KiB zero
+measurement is 0.999× (paired range 0.996–1.043), exact period-3 is 1.000×
+(0.920–1.073), and 64-KiB noise measurement is 1.000× (0.998–1.003).
+Their GPR medians are 1.000×, 1.000× and 1.002×. The same six ARM measurement/
+exact controls are approximately 0.999–1.000×. Raw-bound 64-KiB noise and mixed
+inputs are about 1.96–2.00× on Linux and 1.94–1.99× on macOS. Across all
+nonempty raw-bound workloads and both contexts, paired CPU medians span
+1.784–2.084×. The selected strategy preserves the dominant saved encoder pass.
+
+**Empty-call and decoder/control regressions remain visible.** Empty encode
+on macOS is 0.595× (0.592–0.612) userspace and 0.735× (0.700–0.796) GPR for
+exact capacity; raw-bound empty is 0.619×/0.740×. Separate CPU medians per empty
+exact call are 10.95 to 18.40 ns and 11.17 to 15.04 ns respectively. ARM GCC
+empty exact/bound is approximately 0.910× and x86 GCC 0.961×. An isolated
+post-admission empty return is under investigation; no result from that candidate
+is included in this checkpoint.
+
+The unchanged decoder strategy has different x86 Clang nine-bit results in this
+run: 1.079× (0.984–1.091) userspace and 0.986× (0.883–0.996) GPR. The earlier
+0.923× userspace result remains retained; it was not repaired by changing encoder
+widths. Current Clang x86 short-code GPR is 0.946× (0.922–0.963), and mixed-code
+userspace is 0.957× (0.915–0.997). ARM Clang nine-bit literals are 0.984×/0.987×.
+An isolated constant-nine return experiment is separate from this accepted-source
+measurement. Source-expression, compiler-layout and shared-runner variation must
+not be conflated into an unsupported universal speedup claim.
+
+Unchanged memory controls retain the earlier ARM Clang copy-64 losses,
+0.817× (0.816–0.819) / 0.853× (0.847–0.854), and zero-4096 is
+0.939×/0.933×. macOS mixed LZX is 0.925×/0.913× and mixed XPRESS userspace
+0.932× (0.906–0.979). Linux paired wall medians differ from paired CPU medians
+by at most 0.14% across this matrix; macOS reaches 7.09%. For example macOS
+LZNT1 literal wall ratios are 4.270/4.708 versus CPU 4.269/4.712.
+
+All raw reports, paired ranges and separate-median statistics remain under
+`artifacts/dots-codec-hosted/8b63aad/compression-{PLATFORM}/`, including
+`codec-decoder/current/result.json`, `codec-encoder/current/result.json`, both
+differential reports, products and command logs. `matrix-review.json` contains
+the paired CPU/wall review of every configuration; `native-codec-review.json`
+and `windows-lznt1-observations/windows-lznt1/report.json` retain the actual
+Windows verdict and collector/source binding. No samples were discarded.
+
+The separate hosted Clang 18 x86-64 broad preparation check at `8b63aad` uses
+the older `35136fa` reference and five repetitions per variant. Its reported
+speedup is the ratio of separate wall-time medians, not the paired CPU statistic
+above. All paired semantic checksums agree. Core preparation spans 0.990–1.271×
+across ten cases, writer preparation 0.917–1.263× across sixteen, and mutation
+preparation 0.943–1.098× across twenty-two. Regressing controls include large
+stream writer preparation at 0.945× userspace / 0.917× GPR, small stream GPR
+at 0.941×, and small patch mutation at 0.943×/0.952×. These results are broader
+reference comparisons, not isolated codec gains or mounted I/O throughput.
+Complete raw reports are retained as
+`artifacts/dots-portable-performance-8b63aad/cloud-{core,write,mutation}/current/result.json`.
 
 ## Incremental directory and journal preparation
 

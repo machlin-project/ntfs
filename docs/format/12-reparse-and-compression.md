@@ -96,6 +96,35 @@ Compressed DATA does not authorize writing raw decoded bytes into its stored
 extents. A writer would need encoding, unit remapping, size/bitmap changes and
 native recovery; this is outside the current ordinary write family.
 
+### Private unit packet ownership
+
+[The byte encoder](../../core/write_lznt1.c) and
+[unit packet owner](../../core/write_lznt1_unit.c) prepare new content before any
+physical allocation or media operation. The latter admits the reader's four
+cluster sizes, 512 through 4096 bytes, and normalizes a full 16-cluster plaintext
+unit. Logical EOF and initialized-prefix bytes are distinct inputs; bytes after
+initialization, including the tail beyond EOF, are zero. The owned result is
+empty, entirely sparse, raw full-unit plaintext, or a cluster-rounded encoded
+prefix followed by a positive virtual-hole count. These are proposed relative
+unit counts, not native tail highest-VCN or AllocatedSize decisions.
+
+The current reader supplies all physical prefix bytes to the decoder. A packet
+ending exactly at a cluster boundary needs no terminator; padding must contain a
+complete two-byte zero header. An encoded length one byte short of the boundary
+therefore needs an additional cluster. If that would occupy the full unit,
+preparation selects raw storage, because a full physical unit has no compressed
+representation signal. This conservative packet choice is locally tested reader
+compatibility, not a claim about Windows' preferred encoder heuristic.
+
+[Independent unit tests](../../tests/write_lznt1_unit.c) retain exact packet
+lengths 510, 511, 512 and 7679 in an 8192-byte unit, direct raw/sparse oracles,
+separate EOF/VDL cases, ownership/aliasing checks and allocation refusal. The
+[owning contract](../LZNT1-UNIT-PREPARATION.md) records actual execution and native
+boundaries. Before enabling mutation, native observations must resolve tail
+mapping/size fields and truncate/regrow/VDL behavior; allocation provenance,
+before images, WAL publication and fresh-owner recovery still need their higher
+owning operation. No mapping or compressed-write admission follows from this API.
+
 ## WOF file-provider storage
 
 **Implementation lifetime.** A complete offset-table validation may be retained

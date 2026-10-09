@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   original-corpus:
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[cloud-full]') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[cloud-full]') || contains(github.event.head_commit.message, '[codec-oracle]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -24,12 +24,14 @@ jobs:
           mkdir -p artifacts/lznt1-input
           mkdir artifacts/lznt1-input/corpus
           .build/ntfs-write-lznt1-tests artifacts/lznt1-input/corpus
+          .build/ntfs-write-lznt1-unit-tests artifacts/lznt1-input/corpus
           python3 - <<'PY'
           import hashlib, json, subprocess
           from pathlib import Path
           root = Path('artifacts/lznt1-input')
           report = {'source_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
                     'producer_sha256': hashlib.sha256(Path('.build/ntfs-write-lznt1-tests').read_bytes()).hexdigest(),
+                    'unit_producer_sha256': hashlib.sha256(Path('.build/ntfs-write-lznt1-unit-tests').read_bytes()).hexdigest(),
                     'files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((root / 'corpus').iterdir())},
                     'native_observation': False}
           (root / 'producer.json').write_text(json.dumps(report, indent=2) + '\n')

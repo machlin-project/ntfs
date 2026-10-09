@@ -4,7 +4,9 @@
 This is an in-memory codec oracle. It never opens a device, changes a file's
 compression setting, or calls the product decoder. A new report directory keeps
 both successes and the first failure. Missing Windows/native exports are failures,
-not synthetic passes. Corpus pairs come from ntfs-write-lznt1-tests OUTPUT_DIR.
+not synthetic passes. Original packet pairs come from ntfs-write-lznt1-tests;
+cluster-rounded unit pairs come from ntfs-write-lznt1-unit-tests. Both accept an
+OUTPUT_DIR and create disjoint names without replacing existing evidence.
 """
 import argparse
 import ctypes as ct
@@ -26,7 +28,7 @@ MAX_CORPUS_BYTES = 64 * 1024 * 1024
 GUARD_BYTES = 32
 GUARD_VALUE = 0xa5
 COMPRESSION_FORMAT_LZNT1 = 2
-NAME = re.compile(r'case-([0-9]{4})\.(data|packed)')
+NAME = re.compile(r'(case|unit)-([0-9]{4})\.(data|packed)')
 NATIVE_PROVENANCE = 'Windows ntdll RtlDecompressBuffer, COMPRESSION_FORMAT_LZNT1'
 SYNTHETIC_PROVENANCE = 'Synthetic transport contract only; no Windows codec qualification'
 
@@ -62,7 +64,10 @@ def inventory(directory):
         match = NAME.fullmatch(member.name)
         if match is None:
             raise ValueError('Unexpected corpus member')
-        pairs.setdefault(match[1], {})[match[2]] = member
+        # Keep existing case identities stable and unit identities disjoint,
+        # even when the two independent producers use the same ordinal.
+        identity = match[2] if match[1] == 'case' else 'unit-' + match[2]
+        pairs.setdefault(identity, {})[match[3]] = member
     if not pairs or len(pairs) > MAX_CASES:
         raise ValueError('Corpus has no cases or exceeds its case budget')
     if any(set(pair) != {'data', 'packed'} for pair in pairs.values()):
